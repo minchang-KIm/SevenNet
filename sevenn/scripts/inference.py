@@ -1,5 +1,6 @@
 import csv
 import os
+import time
 from typing import Iterable, List, Optional, Union
 
 import numpy as np
@@ -9,6 +10,7 @@ from tqdm import tqdm
 import sevenn._keys as KEY
 import sevenn.util as util
 from sevenn.atom_graph_data import AtomGraphData
+from sevenn.profiling import ModuleProfiler, synchronize_device
 from sevenn.train.graph_dataset import SevenNetGraphDataset
 from sevenn.train.modal_dataset import SevenNetMultiModalDataset
 
@@ -129,6 +131,8 @@ def inference(
     enable_flash: bool = False,
     enable_oeq: bool = False,
     enable_pairaware: bool = False,
+    profile: bool = False,
+    profile_output: Optional[str] = None,
     **data_kwargs,
 ) -> None:
     """
@@ -163,14 +167,15 @@ def inference(
         enable_oeq=enable_oeq or None,
         enable_pairaware=enable_pairaware or None,
     )
-    runtime_config = util.with_runtime_mode(
+    requested_runtime = util.with_runtime_mode(
         config,
         enable_cueq=enable_cueq if enable_cueq else None,
         enable_flash=enable_flash if enable_flash else None,
         enable_oeq=enable_oeq if enable_oeq else None,
         enable_pairaware=enable_pairaware if enable_pairaware else None,
     )
-    print(f'[INFO] Runtime mode: {util.format_runtime_mode(runtime_config)}')
+    effective_runtime = util.runtime_mode_from_model(model, requested_runtime)
+    print(f'[INFO] Runtime mode: {util.format_runtime_mode(effective_runtime)}')
     cutoff = model.cutoff
 
     if modal:
@@ -225,29 +230,83 @@ def inference(
     rec = util.get_error_recorder()
     output_list = []
     pairaware_stats_logged = False
+    device_obj = model.device if hasattr(model, 'device') else None
+    if device_obj is None:
+        import torch
 
-    for batch in tqdm(loader):
-        batch = batch.to(device)
-        output = model(batch).detach().cpu()
-        if (
-            not pairaware_stats_logged
-            and KEY.PAIRAWARE_NUM_EDGES in output
-            and KEY.PAIRAWARE_NUM_PAIRS in output
-            and KEY.PAIRAWARE_REUSE_FACTOR in output
-        ):
-            print(
-                (
-                    '[INFO] Pair-aware stats: '
-                    f'num_edges_directed={int(output[KEY.PAIRAWARE_NUM_EDGES].item())}, '
-                    f'num_pairs_undirected={int(output[KEY.PAIRAWARE_NUM_PAIRS].item())}, '
-                    f'geometry_reuse_factor={float(output[KEY.PAIRAWARE_REUSE_FACTOR].item()):.3f}'
+        device_obj = torch.device(device)
+    profiler = ModuleProfiler(device_obj) if profile else None
+    profile_handles = profiler.register(model) if profiler is not None else []
+    profile_trace_path = profile_output
+    if profile and profile_trace_path is None:
+        profile_trace_path = os.path.join(output_dir, 'inference_profile.json')
+    total_ms = 0.0
+    num_batches = 0
+
+    if profile_trace_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(profile_trace_path)), exist_ok=True)
+
+    try:
+        for batch_idx, batch in enumerate(tqdm(loader)):
+            batch = batch.to(device)
+            synchronize_device(device_obj)
+            start = time.perf_counter()
+            if profile and batch_idx == 0:
+                from torch.profiler import ProfilerActivity, profile as torch_profile
+
+                activities = [ProfilerActivity.CPU]
+                if device_obj.type == 'cuda':
+                    activities.append(ProfilerActivity.CUDA)
+                with torch_profile(activities=activities) as torch_prof:
+                    output = model(batch)
+                assert profile_trace_path is not None
+                torch_prof.export_chrome_trace(profile_trace_path)
+            else:
+                output = model(batch)
+            synchronize_device(device_obj)
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            total_ms += elapsed_ms
+            num_batches += 1
+
+            if profiler is not None:
+                profiler.flush()
+                profiler.timings.total_ms += elapsed_ms
+
+            output = output.detach().cpu()
+            if (
+                not pairaware_stats_logged
+                and KEY.PAIRAWARE_NUM_EDGES in output
+                and KEY.PAIRAWARE_NUM_PAIRS in output
+                and KEY.PAIRAWARE_REUSE_FACTOR in output
+            ):
+                print(
+                    (
+                        '[INFO] Pair-aware stats: '
+                        f'num_edges_directed={int(output[KEY.PAIRAWARE_NUM_EDGES].item())}, '
+                        f'num_pairs_undirected={int(output[KEY.PAIRAWARE_NUM_PAIRS].item())}, '
+                        f'geometry_reuse_factor={float(output[KEY.PAIRAWARE_REUSE_FACTOR].item()):.3f}'
+                    )
                 )
-            )
-            pairaware_stats_logged = True
-        rec.update(output)
-        output_list.extend(util.to_atom_graph_list(output))
+                pairaware_stats_logged = True
+            rec.update(output)
+            output_list.extend(util.to_atom_graph_list(output))
+    finally:
+        for handle in profile_handles:
+            handle.remove()
 
     errors = rec.epoch_forward()
+
+    if profiler is not None and num_batches > 0:
+        print(
+            (
+                '[INFO] Profile timing: '
+                f'avg_total_ms={total_ms / float(num_batches):.3f}, '
+                f'avg_geometry_ms={profiler.timings.geometry_ms / float(num_batches):.3f}, '
+                f'avg_tensor_product_ms={profiler.timings.tensor_product_ms / float(num_batches):.3f}'
+            )
+        )
+        if profile_trace_path is not None:
+            print(f'[INFO] Profile trace: {os.path.abspath(profile_trace_path)}')
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)

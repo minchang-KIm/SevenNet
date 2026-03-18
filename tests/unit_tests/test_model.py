@@ -4,6 +4,7 @@ from ase.build import bulk, molecule
 from ase.data import chemical_symbols
 from torch_geometric.loader.dataloader import Collater
 
+import sevenn._keys as KEY
 import sevenn.train.dataload as dl
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.model_build import build_E3_equivariant_model
@@ -208,6 +209,33 @@ def test_modal_num_params(cf, ref):
     model = get_model(modal_cfg)
     param = sum([p.numel() for p in model.parameters() if p.requires_grad])
     assert param == ref, f'ref: {ref} != given: {param}'
+
+
+def test_flash_fallback_when_unavailable(monkeypatch):
+    import sevenn.nn.flash_helper as flash_helper
+
+    monkeypatch.setattr(flash_helper, 'is_flash_available', lambda: False)
+    with pytest.warns(UserWarning, match='FlashTP is requested'):
+        model = get_model({KEY.USE_FLASH_TP: True})
+    assert model.runtime_info[KEY.USE_FLASH_TP] is False
+
+
+def test_cueq_fallback_when_unavailable(monkeypatch):
+    import sevenn.nn.cue_helper as cue_helper
+
+    monkeypatch.setattr(cue_helper, 'is_cue_available', lambda: False)
+    with pytest.warns(UserWarning, match='cuEquivariance is requested'):
+        model = get_model({KEY.CUEQUIVARIANCE_CONFIG: {'use': True}})
+    assert model.runtime_info['cuequivariance'] is False
+
+
+def test_oeq_fallback_when_unavailable(monkeypatch):
+    import sevenn.nn.oeq_helper as oeq_helper
+
+    monkeypatch.setattr(oeq_helper, 'is_oeq_available', lambda: False)
+    with pytest.warns(UserWarning, match='OpenEquivariance'):
+        model = get_model({KEY.USE_OEQ: True})
+    assert model.runtime_info[KEY.USE_OEQ] is False
 
 
 # TODO: test_irreps, test_gard, test_equivariance

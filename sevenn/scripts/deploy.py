@@ -10,7 +10,12 @@ from ase.data import chemical_symbols
 import sevenn._keys as KEY
 from sevenn import __version__
 from sevenn.model_build import build_E3_equivariant_model
-from sevenn.util import format_runtime_mode, load_checkpoint, with_runtime_mode
+from sevenn.util import (
+    format_runtime_mode,
+    load_checkpoint,
+    runtime_mode_from_model,
+    with_runtime_mode,
+)
 
 
 def deploy(
@@ -44,6 +49,8 @@ def deploy(
         ),
         cp.config,
     )
+    effective_runtime = runtime_mode_from_model(model, runtime_config)
+    print(f'[INFO] Effective export mode: {format_runtime_mode(effective_runtime)}')
 
     model.prepand_module('edge_preprocess', EdgePreprocess(True))
     grad_module = ForceStressOutput()
@@ -76,9 +83,23 @@ def deploy(
     md_configs.update({'chemical_symbols_to_index': chem_list})
     md_configs.update({'cutoff': str(config[KEY.CUTOFF])})
     md_configs.update({'num_species': str(config[KEY.NUM_SPECIES])})
-    md_configs.update({'flashTP': 'yes' if use_flash else 'no'})
-    md_configs.update({'oeq': 'yes' if use_oeq else 'no'})
-    md_configs.update({'pairaware': 'yes' if use_pairaware else 'no'})
+    md_configs.update(
+        {
+            'flashTP': 'yes'
+            if effective_runtime.get(KEY.USE_FLASH_TP, False)
+            else 'no'
+        }
+    )
+    md_configs.update(
+        {'oeq': 'yes' if effective_runtime.get(KEY.USE_OEQ, False) else 'no'}
+    )
+    md_configs.update(
+        {
+            'pairaware': 'yes'
+            if effective_runtime.get(KEY.USE_PAIRAWARE, False)
+            else 'no'
+        }
+    )
     md_configs.update(
         {'model_type': config.pop(KEY.MODEL_TYPE, 'E3_equivariant_model')}
     )
@@ -123,11 +144,13 @@ def deploy_parallel(
         ),
         cp.config,
     )
+    effective_runtime = runtime_mode_from_model(model, runtime_config)
+    print(f'[INFO] Effective export mode: {format_runtime_mode(effective_runtime)}')
     config[KEY.CUEQUIVARIANCE_CONFIG] = {'use': False}
-    config[KEY.USE_FLASH_TP] = use_flash
-    config[KEY.USE_OEQ] = use_oeq
-    config[KEY.USE_PAIRAWARE] = use_pairaware
-    config['_flash_lammps'] = use_flash
+    config[KEY.USE_FLASH_TP] = effective_runtime.get(KEY.USE_FLASH_TP, False)
+    config[KEY.USE_OEQ] = effective_runtime.get(KEY.USE_OEQ, False)
+    config[KEY.USE_PAIRAWARE] = effective_runtime.get(KEY.USE_PAIRAWARE, False)
+    config['_flash_lammps'] = effective_runtime.get(KEY.USE_FLASH_TP, False)
     model_state_dct = model.state_dict()
 
     model_list = build_E3_equivariant_model(config, parallel=True)
@@ -178,9 +201,23 @@ def deploy_parallel(
     md_configs.update({'cutoff': str(config[KEY.CUTOFF])})
     md_configs.update({'num_species': str(config[KEY.NUM_SPECIES])})
     md_configs.update({'comm_size': str(comm_size)})
-    md_configs.update({'flashTP': 'yes' if use_flash else 'no'})
-    md_configs.update({'oeq': 'yes' if use_oeq else 'no'})
-    md_configs.update({'pairaware': 'yes' if use_pairaware else 'no'})
+    md_configs.update(
+        {
+            'flashTP': 'yes'
+            if effective_runtime.get(KEY.USE_FLASH_TP, False)
+            else 'no'
+        }
+    )
+    md_configs.update(
+        {'oeq': 'yes' if effective_runtime.get(KEY.USE_OEQ, False) else 'no'}
+    )
+    md_configs.update(
+        {
+            'pairaware': 'yes'
+            if effective_runtime.get(KEY.USE_PAIRAWARE, False)
+            else 'no'
+        }
+    )
     md_configs.update(
         {'model_type': config.pop(KEY.MODEL_TYPE, 'E3_equivariant_model')}
     )

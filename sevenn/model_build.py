@@ -235,9 +235,14 @@ def patch_modality(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
     return layers
 
 
-def patch_cue(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
+def patch_cue(
+    layers: OrderedDict,
+    config: Dict[str, Any],
+    runtime_info: Dict[str, Any],
+) -> OrderedDict:
     cue_cfg = copy.deepcopy(config.get(KEY.CUEQUIVARIANCE_CONFIG, {}))
     if not cue_cfg.pop('use', False):
+        runtime_info['cuequivariance'] = False
         return layers
 
     import sevenn.nn.cue_helper as cue_helper
@@ -249,9 +254,11 @@ def patch_cue(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
                 + 'Fallback to e3nn.'
             )
         )
+        runtime_info['cuequivariance'] = False
         return layers
 
     if not cue_helper.is_cue_cuda_available_model(config):
+        runtime_info['cuequivariance'] = False
         return layers
 
     use_scatter_fusion = (
@@ -302,13 +309,19 @@ def patch_cue(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
             updates[k] = module_patched
 
     layers.update(updates)
+    runtime_info['cuequivariance'] = True
     return layers
 
 
-def patch_flash_tp(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
+def patch_flash_tp(
+    layers: OrderedDict,
+    config: Dict[str, Any],
+    runtime_info: Dict[str, Any],
+) -> OrderedDict:
     import sevenn.nn.flash_helper as flash_helper
 
     if not config.get('use_flash_tp', False):
+        runtime_info[KEY.USE_FLASH_TP] = False
         return layers
 
     if not flash_helper.is_flash_available():
@@ -318,6 +331,7 @@ def patch_flash_tp(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
                 + 'or GPU not available. Fallback to e3nn.'
             )
         )
+        runtime_info[KEY.USE_FLASH_TP] = False
         return layers
 
     # sevenn/checkpoint.py::build_model
@@ -328,13 +342,19 @@ def patch_flash_tp(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
             updates[k] = flash_helper.patch_convolution(module, _flash_lammps)
 
     layers.update(updates)
+    runtime_info[KEY.USE_FLASH_TP] = True
     return layers
 
 
-def patch_oeq(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
+def patch_oeq(
+    layers: OrderedDict,
+    config: Dict[str, Any],
+    runtime_info: Dict[str, Any],
+) -> OrderedDict:
     import sevenn.nn.oeq_helper as oeq_helper
 
     if not config.get(KEY.USE_OEQ, False):
+        runtime_info[KEY.USE_OEQ] = False
         return layers
 
     if not oeq_helper.is_oeq_available():
@@ -344,6 +364,7 @@ def patch_oeq(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
                 'installed or GPU not available. Fallback to e3nn.'
             )
         )
+        runtime_info[KEY.USE_OEQ] = False
         return layers
 
     updates = {}
@@ -352,15 +373,19 @@ def patch_oeq(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
             updates[k] = oeq_helper.patch_convolution(module)
 
     layers.update(updates)
+    runtime_info[KEY.USE_OEQ] = True
     return layers
 
 
-def patch_modules(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
+def patch_modules(
+    layers: OrderedDict, config: Dict[str, Any]
+) -> Tuple[OrderedDict, Dict[str, Any]]:
+    runtime_info = util.get_runtime_mode_flags(config)
     layers = patch_modality(layers, config)
-    layers = patch_cue(layers, config)
-    layers = patch_flash_tp(layers, config)
-    layers = patch_oeq(layers, config)
-    return layers
+    layers = patch_cue(layers, config, runtime_info)
+    layers = patch_flash_tp(layers, config, runtime_info)
+    layers = patch_oeq(layers, config, runtime_info)
+    return layers, runtime_info
 
 
 def _to_parallel_model(
@@ -633,9 +658,15 @@ def build_E3_equivariant_model(
 
     if parallel:
         layers_list = _to_parallel_model(layers, config)
-        return [
-            AtomGraphSequential(patch_modules(layers, config), **common_args)
-            for layers in layers_list
-        ]
+        models = []
+        for layers in layers_list:
+            layers_patched, runtime_info = patch_modules(layers, config)
+            model = AtomGraphSequential(layers_patched, **common_args)
+            model.runtime_info = runtime_info
+            models.append(model)
+        return models
     else:
-        return AtomGraphSequential(patch_modules(layers, config), **common_args)
+        layers_patched, runtime_info = patch_modules(layers, config)
+        model = AtomGraphSequential(layers_patched, **common_args)
+        model.runtime_info = runtime_info
+        return model

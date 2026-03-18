@@ -71,6 +71,17 @@ See `sevenn inference --help` for more information.
 sevenn inference checkpoint_best.pth path_to_my_structures/* --enable_pairaware
 ```
 
+To collect runtime timing from the actual inference path, add `--profile`.
+This prints average total, geometry, and tensor-product timings and writes a
+Chrome trace for the first batch. Use `--profile_output path/to/trace.json` to
+override the default trace location.
+
+```bash
+sevenn inference checkpoint_best.pth path_to_my_structures/* \
+    --enable_pairaware \
+    --profile
+```
+
 
 (sevenn-get-model)=
 ## `sevenn get_model`

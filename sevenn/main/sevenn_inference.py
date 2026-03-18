@@ -91,6 +91,17 @@ def add_args(parser):
         action='store_true',
     )
     ag.add_argument(
+        '--profile',
+        help='collect inference timing and export a Chrome trace for the first batch',
+        action='store_true',
+    )
+    ag.add_argument(
+        '--profile_output',
+        type=str,
+        default=None,
+        help='optional path for the exported profile trace json',
+    )
+    ag.add_argument(
         '--kwargs',
         nargs=argparse.REMAINDER,
         help='will be passed to reader, or can be used to specify EFS key',
@@ -162,6 +173,8 @@ def run(args):
         enable_flash=args.enable_flash,
         enable_oeq=args.enable_oeq,
         enable_pairaware=args.enable_pairaware,
+        profile=args.profile,
+        profile_output=args.profile_output,
         **fmt_kwargs,
     )
 

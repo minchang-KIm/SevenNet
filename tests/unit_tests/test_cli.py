@@ -6,6 +6,7 @@ from unittest import mock
 import ase.io
 import numpy as np
 import pytest
+import torch
 import yaml
 from ase.build import bulk
 
@@ -161,6 +162,26 @@ def test_inference_unlabeled(atoms_hfo, tmp_path):
         assert reader.line_num == 4
 
 
+def test_inference_profile(tmp_path, capsys):
+    output_dir = tmp_path / 'inference_results'
+    profile_path = tmp_path / 'inference_profile.json'
+    cli_args = [
+        '--output',
+        str(output_dir),
+        '--profile',
+        '--profile_output',
+        str(profile_path),
+        '7net-0',
+        hfo2_path,
+    ]
+    with mock.patch('sys.argv', [f'{main}/sevenn_inference.py'] + cli_args):
+        inference_main()
+    captured = capsys.readouterr()
+    assert profile_path.is_file()
+    assert '[INFO] Profile timing:' in captured.out
+    assert '[INFO] Profile trace:' in captured.out
+
+
 def test_inference_labeled_w_kwargs(atoms_hfo, tmp_path):
     atoms_hfo.info['my_energy'] = 1.0
     atoms_hfo.arrays['my_force'] = np.full((len(atoms_hfo), 3), 7.7)
@@ -234,3 +255,66 @@ def test_sevenn_preset(preset_name, mode, data_path, tmp_path):
     assert (tmp_path / 'lc.csv').is_file() or (tmp_path / 'log.csv').is_file()
     assert (tmp_path / 'log.sevenn').is_file()
     assert (tmp_path / 'checkpoint_best.pth').is_file()
+
+
+def test_sevenn_preset_pairaware(tmp_path):
+    preset_path = os.path.join(preset, 'base.yaml')
+    with open(preset_path, 'r') as f:
+        cfg = yaml.safe_load(f)
+
+    cfg['train']['epoch'] = 1
+    cfg['data']['load_trainset_path'] = hfo2_path
+    cfg['data']['load_validset_path'] = hfo2_path
+    cfg['data'].pop('load_testset_path', None)
+
+    input_yam = str(tmp_path / 'input.yaml')
+    with open(input_yam, 'w') as f:
+        yaml.dump(cfg, f)
+
+    Logger().switch_file(str(tmp_path / 'log.sevenn'))
+    cli_args = [
+        'train',
+        '-w',
+        str(tmp_path),
+        '-m',
+        'train_v2',
+        '--enable_pairaware',
+        input_yam,
+    ]
+    with mock.patch('sys.argv', [f'{main}/sevenn.py'] + cli_args):
+        sevenn_main()
+
+    log_text = (tmp_path / 'log.sevenn').read_text(encoding='utf-8')
+    assert 'use_pairaware=True' in log_text
+    assert 'Pair-aware stats:' in log_text
+
+
+def test_get_model_serial_pairaware_runtime(tmp_path, atoms_hfo):
+    output_file = tmp_path / 'pairaware.pt'
+    cp = pretrained_name_to_path('7net-0')
+    cli_args = ['-o', str(output_file), '--enable_pairaware', cp]
+    with mock.patch('sys.argv', [f'{main}/sevenn_get_model.py'] + cli_args):
+        get_model_main()
+
+    extra_files = {
+        'chemical_symbols_to_index': b'',
+        'cutoff': b'',
+        'num_species': b'',
+        'flashTP': b'',
+        'oeq': b'',
+        'pairaware': b'',
+        'model_type': b'',
+        'version': b'',
+        'dtype': b'',
+        'time': b'',
+    }
+    _ = torch.jit.load(str(output_file), _extra_files=extra_files, map_location='cpu')
+    assert extra_files['pairaware'].decode('utf-8') == 'yes'
+
+    calc = SevenNetCalculator(str(output_file), file_type='torchscript')
+    atoms = atoms_hfo.copy()
+    atoms.calc = calc
+    energy = atoms.get_potential_energy()
+    forces = atoms.get_forces()
+    assert np.isfinite(energy)
+    assert forces.shape == (len(atoms), 3)

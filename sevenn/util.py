@@ -184,6 +184,18 @@ def with_runtime_mode(
     return runtime_config
 
 
+def runtime_mode_from_model(
+    model: torch.nn.Module,
+    fallback: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    runtime_info = getattr(model, 'runtime_info', None)
+    if isinstance(runtime_info, dict) and len(runtime_info) > 0:
+        return runtime_info
+    if fallback is None:
+        return {}
+    return get_runtime_mode_flags(fallback)
+
+
 def unlabeled_atoms_to_input(
     atoms, cutoff: float, grad_key: str = KEY.EDGE_VEC
 ) -> 'AtomGraphData':

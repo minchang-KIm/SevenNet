@@ -9,19 +9,29 @@ WARMUP="${WARMUP:-2}"
 STEPS="${STEPS:-5}"
 BENCH_SIZES="${BENCH_SIZES:-256 2000 20000}"
 BENCH_MODES="${BENCH_MODES:-baseline pairaware flash combined}"
+BENCH_ALLOW_ACCELERATOR_SKIP="${BENCH_ALLOW_ACCELERATOR_SKIP:-1}"
 
 run_mode() {
-  local size="$1"
-  shift
+  local mode="$1"
+  local size="$2"
+  shift 2
   echo "=== target_atoms=${size} args=$* ==="
-  if ! "${PYTHON_BIN}" "${SCRIPT_DIR}/pairaware_bench.py" \
+  if "${PYTHON_BIN}" "${SCRIPT_DIR}/pairaware_bench.py" \
     --checkpoint "${CHECKPOINT}" \
     --device "${DEVICE}" \
     --warmup "${WARMUP}" \
     --steps "${STEPS}" \
     --target-atoms "${size}" \
     "$@"; then
-    echo "SKIP target_atoms=${size} args=$*"
+    :
+  else
+    local status=$?
+    if [[ ("${mode}" == "flash" || "${mode}" == "combined") && "${status}" -eq 2 && "${BENCH_ALLOW_ACCELERATOR_SKIP}" == "1" ]]; then
+      echo "SKIP target_atoms=${size} args=$*"
+    else
+      echo "FAIL target_atoms=${size} args=$* status=${status}" >&2
+      exit "${status}"
+    fi
   fi
   echo
 }
@@ -30,16 +40,16 @@ for size in ${BENCH_SIZES}; do
   for mode in ${BENCH_MODES}; do
     case "${mode}" in
       baseline)
-        run_mode "${size}"
+        run_mode "${mode}" "${size}"
         ;;
       pairaware)
-        run_mode "${size}" --enable_pairaware
+        run_mode "${mode}" "${size}" --enable_pairaware
         ;;
       flash)
-        run_mode "${size}" --enable_flash
+        run_mode "${mode}" "${size}" --enable_flash
         ;;
       combined)
-        run_mode "${size}" --enable_flash --enable_pairaware
+        run_mode "${mode}" "${size}" --enable_flash --enable_pairaware
         ;;
       *)
         echo "Unknown BENCH_MODES entry: ${mode}" >&2

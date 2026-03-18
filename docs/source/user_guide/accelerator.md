@@ -115,7 +115,9 @@ For more information, see [OpenEquivariance](https://github.com/PASSIONLab/OpenE
 After installation, you can enable accelerator backends with `--enable_cueq`,
 `--enable_flash`, or `--enable_oeq`. Pair-aware geometry reuse is controlled
 separately with `--enable_pairaware`, and it composes with each accelerator
-backend because it only changes the geometry/filter preparation path.
+backend because it only changes the geometry/filter preparation path. During
+`sevenn inference`, `--profile` can be combined with any of these modes to
+report effective runtime timings from the real inference code path.
 
 - [Training](./cli.md#sevenn-train)
 - [ASE Calculator](./ase_calculator.md)
