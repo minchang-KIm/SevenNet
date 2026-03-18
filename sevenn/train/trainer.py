@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 import sevenn._keys as KEY
 from sevenn.error_recorder import ErrorRecorder
+from sevenn.logger import Logger
 from sevenn.train.loss import LossDefinition
 
 from .loss import get_loss_functions_from_config
@@ -70,6 +71,7 @@ class Trainer:
 
         self.device = torch.device(device)
         self.distributed = distributed
+        self._pairaware_stats_logged = False
 
         optimizer_args = optimizer_args or {}
         param = [p for p in self.model.parameters() if p.requires_grad]
@@ -160,6 +162,20 @@ class Trainer:
                 self.optimizer.zero_grad()
             batch = batch.to(self.device, non_blocking=True)
             output = self.model(batch)
+            if (
+                not self._pairaware_stats_logged
+                and KEY.PAIRAWARE_NUM_EDGES in output
+                and KEY.PAIRAWARE_NUM_PAIRS in output
+                and KEY.PAIRAWARE_REUSE_FACTOR in output
+                and self.rank == 0
+            ):
+                Logger().writeline(
+                    'Pair-aware stats: '
+                    + f'num_edges_directed={int(output[KEY.PAIRAWARE_NUM_EDGES].item())}, '
+                    + f'num_pairs_undirected={int(output[KEY.PAIRAWARE_NUM_PAIRS].item())}, '
+                    + f'geometry_reuse_factor={float(output[KEY.PAIRAWARE_REUSE_FACTOR].item()):.3f}'
+                )
+                self._pairaware_stats_logged = True
             if error_recorder is not None:
                 error_recorder.update(output)
             if is_train:

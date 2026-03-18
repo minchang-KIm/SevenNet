@@ -96,7 +96,12 @@ def init_edge_embedding(config: Dict[str, Any]) -> EdgeEmbedding:
     _normalize_sph = config[KEY._NORMALIZE_SPH]
     sph = SphericalEncoding(lmax_edge, parity, normalize=_normalize_sph)
 
-    return EdgeEmbedding(basis_module=rbf, cutoff_module=env, spherical_module=sph)
+    return EdgeEmbedding(
+        basis_module=rbf,
+        cutoff_module=env,
+        spherical_module=sph,
+        use_pairaware=config.get(KEY.USE_PAIRAWARE, False),
+    )
 
 
 def init_feature_reduce(config: Dict[str, Any], irreps_x: Irreps) -> OrderedDict:

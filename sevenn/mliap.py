@@ -112,6 +112,7 @@ class SevenNetMLIAPWrapper(MLIAPUnified):
         self.use_cueq = kwargs.get('use_cueq', False)
         self.use_flash = kwargs.get('use_flash', False)
         self.use_oeq = kwargs.get('use_oeq', False)
+        self.use_pairaware = kwargs.get('use_pairaware', False)
         self.modal = kwargs.get('modal', None)
 
         # extract configs
@@ -151,9 +152,18 @@ class SevenNetMLIAPWrapper(MLIAPUnified):
         if self.model is not None:
             return  # Already initialized
         print('[INFO] Lazy initializing SevenNet model...', flush=True)
-        print(f'[INFO] cueq={self.use_cueq}, flashTP={self.use_flash}, oeq={self.use_oeq}', flush=True)  # noqa: E501
+        print(
+            (
+                f'[INFO] cueq={self.use_cueq}, flashTP={self.use_flash}, '
+                f'oeq={self.use_oeq}, pairaware={self.use_pairaware}'
+            ),
+            flush=True,
+        )
         model = self.cp.build_model(
-            enable_cueq=self.use_cueq, enable_flash=self.use_flash, enable_oeq=self.use_oeq  # noqa: E501
+            enable_cueq=self.use_cueq,
+            enable_flash=self.use_flash,
+            enable_oeq=self.use_oeq,
+            enable_pairaware=self.use_pairaware,
         )
 
         for k, module in model._modules.items():

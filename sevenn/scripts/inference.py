@@ -128,6 +128,7 @@ def inference(
     enable_cueq: bool = False,
     enable_flash: bool = False,
     enable_oeq: bool = False,
+    enable_pairaware: bool = False,
     **data_kwargs,
 ) -> None:
     """
@@ -155,12 +156,21 @@ def inference(
 
     """
     # TODO: False as default, priority?
-    model, _ = util.model_from_checkpoint(
+    model, config = util.model_from_checkpoint(
         checkpoint,
         enable_cueq=enable_cueq or None,
         enable_flash=enable_flash or None,
         enable_oeq=enable_oeq or None,
+        enable_pairaware=enable_pairaware or None,
     )
+    runtime_config = util.with_runtime_mode(
+        config,
+        enable_cueq=enable_cueq if enable_cueq else None,
+        enable_flash=enable_flash if enable_flash else None,
+        enable_oeq=enable_oeq if enable_oeq else None,
+        enable_pairaware=enable_pairaware if enable_pairaware else None,
+    )
+    print(f'[INFO] Runtime mode: {util.format_runtime_mode(runtime_config)}')
     cutoff = model.cutoff
 
     if modal:
@@ -214,10 +224,26 @@ def inference(
 
     rec = util.get_error_recorder()
     output_list = []
+    pairaware_stats_logged = False
 
     for batch in tqdm(loader):
         batch = batch.to(device)
         output = model(batch).detach().cpu()
+        if (
+            not pairaware_stats_logged
+            and KEY.PAIRAWARE_NUM_EDGES in output
+            and KEY.PAIRAWARE_NUM_PAIRS in output
+            and KEY.PAIRAWARE_REUSE_FACTOR in output
+        ):
+            print(
+                (
+                    '[INFO] Pair-aware stats: '
+                    f'num_edges_directed={int(output[KEY.PAIRAWARE_NUM_EDGES].item())}, '
+                    f'num_pairs_undirected={int(output[KEY.PAIRAWARE_NUM_PAIRS].item())}, '
+                    f'geometry_reuse_factor={float(output[KEY.PAIRAWARE_REUSE_FACTOR].item()):.3f}'
+                )
+            )
+            pairaware_stats_logged = True
         rec.update(output)
         output_list.extend(util.to_atom_graph_list(output))
 

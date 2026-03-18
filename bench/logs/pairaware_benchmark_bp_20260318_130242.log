@@ -1,0 +1,56 @@
+=== target_atoms=256 args= ===
+mode=baseline
+flags=use_pairaware=False, use_flash_tp=False, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=baseline
+device=cpu
+natoms=432
+num_edges_directed=11232
+num_pairs_undirected=11232
+geometry_reuse_factor=1.000
+avg_step_ms=2744.201
+avg_geometry_ms=2.036
+avg_tensor_product_ms=853.952
+throughput_atoms_per_s=157.423
+throughput_edges_per_s=4092.994
+
+=== target_atoms=256 args=--enable_pairaware ===
+mode=pairaware
+flags=use_pairaware=True, use_flash_tp=False, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=pairaware
+device=cpu
+natoms=432
+num_edges_directed=11232
+num_pairs_undirected=5616
+geometry_reuse_factor=2.000
+avg_step_ms=1126.023
+avg_geometry_ms=17.933
+avg_tensor_product_ms=312.585
+throughput_atoms_per_s=383.651
+throughput_edges_per_s=9974.927
+
+=== target_atoms=2000 args= ===
+mode=baseline
+flags=use_pairaware=False, use_flash_tp=False, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=baseline
+device=cpu
+natoms=2000
+num_edges_directed=52000
+num_pairs_undirected=52000
+geometry_reuse_factor=1.000
+avg_step_ms=5623.968
+avg_geometry_ms=3.430
+avg_tensor_product_ms=1447.080
+throughput_atoms_per_s=355.621
+throughput_edges_per_s=9246.141
+
+=== target_atoms=2000 args=--enable_pairaware ===
+mode=pairaware
+flags=use_pairaware=True, use_flash_tp=False, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=pairaware
+device=cpu
+natoms=2000
+num_edges_directed=52000
+num_pairs_undirected=26000
+geometry_reuse_factor=2.000
+avg_step_ms=8000.302
+avg_geometry_ms=87.051
+avg_tensor_product_ms=2381.961
+throughput_atoms_per_s=249.991
+throughput_edges_per_s=6499.754
+

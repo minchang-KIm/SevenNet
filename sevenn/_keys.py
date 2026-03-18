@@ -223,6 +223,10 @@ TRAIN_AVG_NUM_NEIGH = 'train_avg_num_neigh'  # deprecated
 USE_FLASH_TP = 'use_flash_tp'
 CUEQUIVARIANCE_CONFIG = 'cuequivariance_config'
 USE_OEQ = 'use_oeq'
+USE_PAIRAWARE = 'use_pairaware'
+PAIRAWARE_NUM_EDGES = '_pairaware_num_edges_directed'
+PAIRAWARE_NUM_PAIRS = '_pairaware_num_pairs_undirected'
+PAIRAWARE_REUSE_FACTOR = '_pairaware_geometry_reuse_factor'
 
 _NORMALIZE_SPH = '_normalize_sph'
 OPTIMIZE_BY_REDUCE = 'optimize_by_reduce'

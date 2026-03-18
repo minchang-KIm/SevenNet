@@ -44,10 +44,13 @@ We support multi-GPU training using PyTorch DDP (distributed data parallel) with
 torchrun --standalone --nnodes {number of nodes} --nproc_per_node {number of GPUs} --no_python sevenn input.yaml -d
 ```
 
-Enable cuEquivariance, flashTP, or OpenEquivariance while training by adding the --enable_cueq, --enable_flash, or --enable_oeq.
+Enable cuEquivariance, flashTP, or OpenEquivariance while training by adding
+`--enable_cueq`, `--enable_flash`, or `--enable_oeq`. Pair-aware geometry
+reuse is enabled with `--enable_pairaware` and can be combined with each of
+those backends.
 
 ```bash
-sevenn train input.yaml -s --enable_cueq # or --enable_flash or --enable_oeq
+sevenn train input.yaml -s --enable_pairaware --enable_flash
 ```
 
 Please note that `batch_size` in `input.yaml` refers to the per-GPU batch size.
@@ -63,6 +66,10 @@ sevenn inference checkpoint_best.pth path_to_my_structures/*
 
 This will create the `inference_results` directory, where CSV files contain predicted energy, force, stress, and their references (if available).
 See `sevenn inference --help` for more information.
+
+```bash
+sevenn inference checkpoint_best.pth path_to_my_structures/* --enable_pairaware
+```
 
 
 (sevenn-get-model)=
@@ -80,6 +87,7 @@ sevenn get_model \
     {pretrained_name or checkpoint_path} \
     {--use_mliap} \  # For LAMMPS ML-IAP use.
     {--enable_flash | --enable_cueq | --enable_oeq} \  # For accelerators.
+    {--enable_pairaware} \  # Optional geometry reuse mode.
     {--modal {task_name}} \  # Required when using multi-fidelity model
     {--get_parallel}  # For parallel MD simulations
 ```
@@ -98,7 +106,7 @@ Check {doc}`lammps_mliap` for installation and lammps script in this use case.
 ### Examples
 ```bash
 # deyploy 7net-0 with flashTP enabled for LAMMPS PyTorch (TorchScript) interface
-sevenn get_model 7net-0 --enable_flash
+sevenn get_model 7net-0 --enable_flash --enable_pairaware
 
 # deyploy 7net-0 with flashTP enabled for LAMMPS ML-IAP interface
 sevenn get_model 7net-0 --use_mliap --enable_flash

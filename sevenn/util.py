@@ -101,13 +101,87 @@ def model_from_checkpoint(
     enable_cueq: Optional[bool] = None,
     enable_flash: Optional[bool] = None,
     enable_oeq: Optional[bool] = None,
+    enable_pairaware: Optional[bool] = None,
 ) -> Tuple[torch.nn.Module, Dict[str, Any]]:
     cp = load_checkpoint(checkpoint)
     model = cp.build_model(
-        enable_cueq=enable_cueq, enable_flash=enable_flash, enable_oeq=enable_oeq
+        enable_cueq=enable_cueq,
+        enable_flash=enable_flash,
+        enable_oeq=enable_oeq,
+        enable_pairaware=enable_pairaware,
     )
 
     return model, cp.config
+
+
+def get_runtime_mode_flags(config: Dict[str, Any]) -> Dict[str, Any]:
+    cue_cfg = config.get(KEY.CUEQUIVARIANCE_CONFIG, {})
+    if not isinstance(cue_cfg, dict):
+        cue_cfg = {}
+    return {
+        KEY.USE_PAIRAWARE: bool(config.get(KEY.USE_PAIRAWARE, False)),
+        KEY.USE_FLASH_TP: bool(config.get(KEY.USE_FLASH_TP, False)),
+        'cuequivariance': bool(cue_cfg.get('use', False)),
+        KEY.CUEQUIVARIANCE_CONFIG: cue_cfg,
+        KEY.USE_OEQ: bool(config.get(KEY.USE_OEQ, False)),
+    }
+
+
+def resolve_runtime_mode(config: Dict[str, Any]) -> str:
+    flags = get_runtime_mode_flags(config)
+    modes = []
+    if flags[KEY.USE_PAIRAWARE]:
+        modes.append('pairaware')
+    if flags[KEY.USE_FLASH_TP]:
+        modes.append('flashtp')
+    if flags['cuequivariance']:
+        modes.append('cueq')
+    if flags[KEY.USE_OEQ]:
+        modes.append('oeq')
+    if len(modes) == 0:
+        return 'baseline'
+    return '+'.join(modes)
+
+
+def format_runtime_mode(config: Dict[str, Any]) -> str:
+    flags = get_runtime_mode_flags(config)
+    return (
+        f'use_pairaware={flags[KEY.USE_PAIRAWARE]}, '
+        f'use_flash_tp={flags[KEY.USE_FLASH_TP]}, '
+        f'cuequivariance={flags["cuequivariance"]}, '
+        f'cuequivariance_config={flags[KEY.CUEQUIVARIANCE_CONFIG]}, '
+        f'use_oeq={flags[KEY.USE_OEQ]}, '
+        f'effective_mode={resolve_runtime_mode(config)}'
+    )
+
+
+def with_runtime_mode(
+    config: Dict[str, Any],
+    *,
+    enable_cueq: Optional[bool] = None,
+    enable_flash: Optional[bool] = None,
+    enable_oeq: Optional[bool] = None,
+    enable_pairaware: Optional[bool] = None,
+) -> Dict[str, Any]:
+    runtime_config = dict(config)
+    cue_cfg = runtime_config.get(KEY.CUEQUIVARIANCE_CONFIG, {})
+    if not isinstance(cue_cfg, dict):
+        cue_cfg = {}
+    else:
+        cue_cfg = dict(cue_cfg)
+
+    if enable_cueq is not None:
+        cue_cfg['use'] = enable_cueq
+    runtime_config[KEY.CUEQUIVARIANCE_CONFIG] = cue_cfg
+
+    if enable_flash is not None:
+        runtime_config[KEY.USE_FLASH_TP] = enable_flash
+    if enable_oeq is not None:
+        runtime_config[KEY.USE_OEQ] = enable_oeq
+    if enable_pairaware is not None:
+        runtime_config[KEY.USE_PAIRAWARE] = enable_pairaware
+
+    return runtime_config
 
 
 def unlabeled_atoms_to_input(

@@ -223,6 +223,8 @@ class SevenNetCheckpoint:
             'Elements': len(cfg.get('chemical_species', [])),
             'cuEquivariance used': cp_using_cueq,
             'FlashTP used': self.config.get('use_flash_tp', False),
+            'OpenEquivariance used': self.config.get(KEY.USE_OEQ, False),
+            'Pair-aware geometry used': self.config.get(KEY.USE_PAIRAWARE, False),
         }
         if cfg.get('use_modality', False):
             dct['Modality'] = ', '.join(list(cfg.get('_modal_map', {}).keys()))
@@ -313,6 +315,7 @@ class SevenNetCheckpoint:
         enable_cueq: Optional[bool] = None,
         enable_flash: Optional[bool] = None,
         enable_oeq: Optional[bool] = None,
+        enable_pairaware: Optional[bool] = None,
         _flash_lammps: bool = False,
     ) -> AtomGraphSequential:
         """
@@ -332,6 +335,13 @@ class SevenNetCheckpoint:
         cp_using_oeq = self.config.get(KEY.USE_OEQ, False)
         enable_oeq = cp_using_oeq if enable_oeq is None else enable_oeq
 
+        cp_using_pairaware = self.config.get(KEY.USE_PAIRAWARE, False)
+        enable_pairaware = (
+            cp_using_pairaware
+            if enable_pairaware is None
+            else enable_pairaware
+        )
+
         if sum([enable_cueq, enable_flash, enable_oeq]) > 1:
             raise ValueError('Only one TP accelerator can be enabled.')
 
@@ -339,6 +349,7 @@ class SevenNetCheckpoint:
         cfg_new = self.config
         cfg_new['_flash_lammps'] = _flash_lammps
         cfg_new[KEY.USE_OEQ] = enable_oeq
+        cfg_new[KEY.USE_PAIRAWARE] = enable_pairaware
 
         if (cp_using_cueq, cp_using_flash, cp_using_oeq) \
                 == (enable_cueq, enable_flash, enable_oeq):

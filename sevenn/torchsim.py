@@ -77,6 +77,7 @@ class SevenNetModel(ModelInterface):  # type: ignore[misc,valid-type]
         enable_cueq: bool = False,
         enable_flash: bool = False,
         enable_oeq: bool = False,
+        enable_pairaware: bool = False,
         device: torch.device | str = 'auto',
         dtype: torch.dtype = torch.float32,
     ) -> None:
@@ -96,6 +97,7 @@ class SevenNetModel(ModelInterface):  # type: ignore[misc,valid-type]
             enable_cueq (bool): Enable cuEquivariance backend.
             enable_flash (bool): Enable flashTP backend.
             enable_oeq (bool): Enable OpenEquivariance backend.
+            enable_pairaware (bool): Enable pair-aware geometry reuse.
             neighbor_list_fn (Callable): Neighbor list function to use.
                 Default is torch_nl_linked_cell.
             device (torch.device | str): Device to run the model on
@@ -136,6 +138,7 @@ class SevenNetModel(ModelInterface):  # type: ignore[misc,valid-type]
                 enable_flash=enable_flash,
                 enable_cueq=enable_cueq,
                 enable_oeq=enable_oeq,
+                enable_pairaware=enable_pairaware,
             )
 
         _validate(model, modal)

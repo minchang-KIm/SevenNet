@@ -1,0 +1,124 @@
+=== target_atoms=256 args= ===
+mode=baseline
+flags=use_pairaware=False, use_flash_tp=False, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=baseline
+device=cpu
+natoms=432
+num_edges_directed=11232
+num_pairs_undirected=11232
+geometry_reuse_factor=1.000
+avg_step_ms=1405.496
+avg_geometry_ms=0.969
+avg_tensor_product_ms=354.683
+throughput_atoms_per_s=307.365
+throughput_edges_per_s=7991.484
+
+=== target_atoms=256 args=--enable_pairaware ===
+mode=pairaware
+flags=use_pairaware=True, use_flash_tp=False, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=pairaware
+device=cpu
+natoms=432
+num_edges_directed=11232
+num_pairs_undirected=5616
+geometry_reuse_factor=2.000
+avg_step_ms=1363.710
+avg_geometry_ms=16.786
+avg_tensor_product_ms=360.797
+throughput_atoms_per_s=316.783
+throughput_edges_per_s=8236.357
+
+=== target_atoms=256 args=--enable_flash ===
+/Users/minchang/SevenNet/sevenn/model_build.py:315: UserWarning: FlashTP is requested, but the package is not installed or GPU not available. Fallback to e3nn.
+  warnings.warn(
+Converting model backend...
+mode=flashtp
+flags=use_pairaware=False, use_flash_tp=True, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=flashtp
+device=cpu
+natoms=432
+num_edges_directed=11232
+num_pairs_undirected=11232
+geometry_reuse_factor=1.000
+avg_step_ms=1181.649
+avg_geometry_ms=0.984
+avg_tensor_product_ms=319.587
+throughput_atoms_per_s=365.591
+throughput_edges_per_s=9505.360
+
+=== target_atoms=256 args=--enable_flash --enable_pairaware ===
+/Users/minchang/SevenNet/sevenn/model_build.py:315: UserWarning: FlashTP is requested, but the package is not installed or GPU not available. Fallback to e3nn.
+  warnings.warn(
+Converting model backend...
+mode=pairaware+flashtp
+flags=use_pairaware=True, use_flash_tp=True, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=pairaware+flashtp
+device=cpu
+natoms=432
+num_edges_directed=11232
+num_pairs_undirected=5616
+geometry_reuse_factor=2.000
+avg_step_ms=1202.660
+avg_geometry_ms=16.817
+avg_tensor_product_ms=327.963
+throughput_atoms_per_s=359.204
+throughput_edges_per_s=9339.298
+
+=== target_atoms=2000 args= ===
+mode=baseline
+flags=use_pairaware=False, use_flash_tp=False, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=baseline
+device=cpu
+natoms=2000
+num_edges_directed=52000
+num_pairs_undirected=52000
+geometry_reuse_factor=1.000
+avg_step_ms=8259.274
+avg_geometry_ms=4.490
+avg_tensor_product_ms=2081.718
+throughput_atoms_per_s=242.152
+throughput_edges_per_s=6295.953
+
+=== target_atoms=2000 args=--enable_pairaware ===
+mode=pairaware
+flags=use_pairaware=True, use_flash_tp=False, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=pairaware
+device=cpu
+natoms=2000
+num_edges_directed=52000
+num_pairs_undirected=26000
+geometry_reuse_factor=2.000
+avg_step_ms=9155.998
+avg_geometry_ms=82.246
+avg_tensor_product_ms=2762.329
+throughput_atoms_per_s=218.436
+throughput_edges_per_s=5679.337
+
+=== target_atoms=2000 args=--enable_flash ===
+/Users/minchang/SevenNet/sevenn/model_build.py:315: UserWarning: FlashTP is requested, but the package is not installed or GPU not available. Fallback to e3nn.
+  warnings.warn(
+Converting model backend...
+mode=flashtp
+flags=use_pairaware=False, use_flash_tp=True, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=flashtp
+device=cpu
+natoms=2000
+num_edges_directed=52000
+num_pairs_undirected=52000
+geometry_reuse_factor=1.000
+avg_step_ms=8716.608
+avg_geometry_ms=5.365
+avg_tensor_product_ms=2619.115
+throughput_atoms_per_s=229.447
+throughput_edges_per_s=5965.623
+
+=== target_atoms=2000 args=--enable_flash --enable_pairaware ===
+/Users/minchang/SevenNet/sevenn/model_build.py:315: UserWarning: FlashTP is requested, but the package is not installed or GPU not available. Fallback to e3nn.
+  warnings.warn(
+Converting model backend...
+mode=pairaware+flashtp
+flags=use_pairaware=True, use_flash_tp=True, cuequivariance=False, cuequivariance_config={}, use_oeq=False, effective_mode=pairaware+flashtp
+device=cpu
+natoms=2000
+num_edges_directed=52000
+num_pairs_undirected=26000
+geometry_reuse_factor=2.000
+avg_step_ms=9069.241
+avg_geometry_ms=106.862
+avg_tensor_product_ms=3212.097
+throughput_atoms_per_s=220.526
+throughput_edges_per_s=5733.666
+

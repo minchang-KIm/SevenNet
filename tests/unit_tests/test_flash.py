@@ -70,12 +70,13 @@ def get_model_config():
     return config
 
 
-def get_model(config_overwrite=None, use_flash=False):
+def get_model(config_overwrite=None, use_flash=False, use_pairaware=False):
     cf = get_model_config()
     if config_overwrite is not None:
         cf.update(config_overwrite)
 
     cf['use_flash_tp'] = use_flash
+    cf['use_pairaware'] = use_pairaware
 
     model = build_E3_equivariant_model(cf, parallel=False)
     assert isinstance(model, AtomGraphSequential)
@@ -85,19 +86,22 @@ def get_model(config_overwrite=None, use_flash=False):
 
 @pytest.mark.skipif(not is_flash_available(), reason='flash not available')
 @pytest.mark.parametrize(
-    'cf',
+    'cf,use_pairaware',
     [
-        ({}),
-        ({'lmax': 3}),
-        ({'num_interaction_layer': 2}),
-        ({'num_interaction_layer': 4}),
+        ({}, False),
+        ({}, True),
+        ({'lmax': 3}, False),
+        ({'num_interaction_layer': 2}, False),
+        ({'num_interaction_layer': 4}, False),
     ],
 )
-def test_model_output(cf):
+def test_model_output(cf, use_pairaware):
     torch.manual_seed(777)
-    model_e3nn = get_model(cf)
+    model_e3nn = get_model(cf, use_pairaware=use_pairaware)
     torch.manual_seed(777)
-    model_flash = get_model(cf, use_flash=True)
+    model_flash = get_model(
+        cf, use_flash=True, use_pairaware=use_pairaware
+    )
 
     model_e3nn.set_is_batch_data(True)
     model_flash.set_is_batch_data(True)

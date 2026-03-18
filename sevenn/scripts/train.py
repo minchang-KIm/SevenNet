@@ -6,6 +6,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch_geometric.loader import DataLoader
 
 import sevenn._keys as KEY
+import sevenn.util as util
 from sevenn.logger import Logger
 from sevenn.model_build import build_E3_equivariant_model
 from sevenn.scripts.processing_continue import (
@@ -76,6 +77,7 @@ def train_v2(config: Dict[str, Any], working_dir: str) -> None:
 
     log.write('\nModel building...\n')
     model = build_E3_equivariant_model(config)
+    log.writeline(f'Runtime mode: {util.format_runtime_mode(config)}')
     log.print_model_info(model, config)
 
     trainer = Trainer.from_config(model, config)
@@ -117,6 +119,7 @@ def train(config, working_dir: str):
 
     log.write('\nModel building...\n')
     model = build_E3_equivariant_model(config)
+    log.writeline(f'Runtime mode: {util.format_runtime_mode(config)}')
 
     log.write('Model building was successful\n')
 

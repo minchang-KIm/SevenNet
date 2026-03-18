@@ -33,6 +33,7 @@ def run(args):
     import torch.distributed as dist
 
     import sevenn._keys as KEY
+    import sevenn.util as util
     from sevenn.logger import Logger
     from sevenn.parse_input import read_config_yaml
     from sevenn.scripts.train import train, train_v2
@@ -48,6 +49,7 @@ def run(args):
     use_cue = args.enable_cueq
     use_flash = args.enable_flash
     use_oeq = args.enable_oeq
+    use_pairaware = args.enable_pairaware
 
     if use_cue:
         import sevenn.nn.cue_helper
@@ -128,6 +130,10 @@ def run(args):
         if use_oeq:
             model_config[KEY.USE_OEQ] = True
 
+        if use_pairaware:
+            model_config[KEY.USE_PAIRAWARE] = True
+
+        logger.writeline(f'Runtime mode: {util.format_runtime_mode(model_config)}')
         logger.print_config(model_config, data_config, train_config)
         # don't have to distinguish configs inside program
         global_config.update(model_config)
@@ -179,6 +185,11 @@ def cmd_parser_train(parser):
         '-oeq',
         '--enable_oeq',
         help='use OpenEquivariance accelerations for training',
+        action='store_true',
+    )
+    ag.add_argument(
+        '--enable_pairaware',
+        help='use pair-aware geometry reuse for training',
         action='store_true',
     )
     ag.add_argument(

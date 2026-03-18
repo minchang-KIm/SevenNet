@@ -10,7 +10,7 @@ from ase.data import chemical_symbols
 import sevenn._keys as KEY
 from sevenn import __version__
 from sevenn.model_build import build_E3_equivariant_model
-from sevenn.util import load_checkpoint
+from sevenn.util import format_runtime_mode, load_checkpoint, with_runtime_mode
 
 
 def deploy(
@@ -19,17 +19,27 @@ def deploy(
     modal: Optional[str] = None,
     use_flash: bool = False,
     use_oeq: bool = False,
+    use_pairaware: bool = False,
 ) -> None:
     from sevenn.nn.edge_embedding import EdgePreprocess
     from sevenn.nn.force_output import ForceStressOutput
 
     cp = load_checkpoint(checkpoint)
+    runtime_config = with_runtime_mode(
+        cp.config,
+        enable_cueq=False,
+        enable_flash=use_flash,
+        enable_oeq=use_oeq,
+        enable_pairaware=use_pairaware,
+    )
+    print(f'[INFO] Export mode: {format_runtime_mode(runtime_config)}')
 
     model, config = (
         cp.build_model(
             enable_cueq=False,
             enable_flash=use_flash,
             enable_oeq=use_oeq,
+            enable_pairaware=use_pairaware,
             _flash_lammps=use_flash,
         ),
         cp.config,
@@ -68,6 +78,7 @@ def deploy(
     md_configs.update({'num_species': str(config[KEY.NUM_SPECIES])})
     md_configs.update({'flashTP': 'yes' if use_flash else 'no'})
     md_configs.update({'oeq': 'yes' if use_oeq else 'no'})
+    md_configs.update({'pairaware': 'yes' if use_pairaware else 'no'})
     md_configs.update(
         {'model_type': config.pop(KEY.MODEL_TYPE, 'E3_equivariant_model')}
     )
@@ -87,17 +98,27 @@ def deploy_parallel(
     modal: Optional[str] = None,
     use_flash: bool = False,
     use_oeq: bool = False,
+    use_pairaware: bool = False,
 ) -> None:
     # Additional layer for ghost atom (and copy parameters from original)
     GHOST_LAYERS_KEYS = ['onehot_to_feature_x', '0_self_interaction_1']
 
     cp = load_checkpoint(checkpoint)
+    runtime_config = with_runtime_mode(
+        cp.config,
+        enable_cueq=False,
+        enable_flash=use_flash,
+        enable_oeq=use_oeq,
+        enable_pairaware=use_pairaware,
+    )
+    print(f'[INFO] Export mode: {format_runtime_mode(runtime_config)}')
 
     model, config = (
         cp.build_model(
             enable_cueq=False,
             enable_flash=use_flash,
             enable_oeq=use_oeq,
+            enable_pairaware=use_pairaware,
             _flash_lammps=use_flash,
         ),
         cp.config,
@@ -105,6 +126,7 @@ def deploy_parallel(
     config[KEY.CUEQUIVARIANCE_CONFIG] = {'use': False}
     config[KEY.USE_FLASH_TP] = use_flash
     config[KEY.USE_OEQ] = use_oeq
+    config[KEY.USE_PAIRAWARE] = use_pairaware
     config['_flash_lammps'] = use_flash
     model_state_dct = model.state_dict()
 
@@ -158,6 +180,7 @@ def deploy_parallel(
     md_configs.update({'comm_size': str(comm_size)})
     md_configs.update({'flashTP': 'yes' if use_flash else 'no'})
     md_configs.update({'oeq': 'yes' if use_oeq else 'no'})
+    md_configs.update({'pairaware': 'yes' if use_pairaware else 'no'})
     md_configs.update(
         {'model_type': config.pop(KEY.MODEL_TYPE, 'E3_equivariant_model')}
     )

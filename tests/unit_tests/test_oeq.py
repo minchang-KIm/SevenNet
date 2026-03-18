@@ -70,12 +70,13 @@ def get_model_config():
     return config
 
 
-def get_model(config_overwrite=None, use_oeq=False):
+def get_model(config_overwrite=None, use_oeq=False, use_pairaware=False):
     cf = get_model_config()
     if config_overwrite is not None:
         cf.update(config_overwrite)
 
     cf['use_oeq'] = use_oeq
+    cf['use_pairaware'] = use_pairaware
 
     model = build_E3_equivariant_model(cf, parallel=False)
     assert isinstance(model, AtomGraphSequential)
@@ -85,19 +86,20 @@ def get_model(config_overwrite=None, use_oeq=False):
 
 @pytest.mark.skipif(not is_oeq_available(), reason='oeq not available')
 @pytest.mark.parametrize(
-    'cf',
+    'cf,use_pairaware',
     [
-        ({}),
-        ({'lmax': 3}),
-        ({'num_interaction_layer': 2}),
-        ({'num_interaction_layer': 4}),
+        ({}, False),
+        ({}, True),
+        ({'lmax': 3}, False),
+        ({'num_interaction_layer': 2}, False),
+        ({'num_interaction_layer': 4}, False),
     ],
 )
-def test_model_output(cf):
+def test_model_output(cf, use_pairaware):
     torch.manual_seed(777)
-    model_e3nn = get_model(cf)
+    model_e3nn = get_model(cf, use_pairaware=use_pairaware)
     torch.manual_seed(777)
-    model_oeq = get_model(cf, use_oeq=True)
+    model_oeq = get_model(cf, use_oeq=True, use_pairaware=use_pairaware)
 
     model_e3nn.set_is_batch_data(True)
     model_oeq.set_is_batch_data(True)

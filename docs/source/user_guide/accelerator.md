@@ -112,7 +112,10 @@ True
 For more information, see [OpenEquivariance](https://github.com/PASSIONLab/OpenEquivariance).
 
 ## Usage
-After the installation, you can leverage the accelerator with appropriate flag (`--enable_cueq`), (`--enable_flash`), or (`--enable_oeq`) options
+After installation, you can enable accelerator backends with `--enable_cueq`,
+`--enable_flash`, or `--enable_oeq`. Pair-aware geometry reuse is controlled
+separately with `--enable_pairaware`, and it composes with each accelerator
+backend because it only changes the geometry/filter preparation path.
 
 - [Training](./cli.md#sevenn-train)
 - [ASE Calculator](./ase_calculator.md)

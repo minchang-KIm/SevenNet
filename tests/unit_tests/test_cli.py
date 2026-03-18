@@ -81,14 +81,15 @@ def test_graph_build(source, tmp_path):
 
 
 @pytest.mark.parametrize(
-    'batch,device,save_graph',
+    'batch,device,save_graph,pairaware',
     [
-        (1, 'cpu', False),
-        (2, 'cpu', False),
-        (1, 'cpu', True),
+        (1, 'cpu', False, False),
+        (1, 'cpu', False, True),
+        (2, 'cpu', False, False),
+        (1, 'cpu', True, False),
     ],
 )
-def test_inference(batch, device, save_graph, tmp_path):
+def test_inference(batch, device, save_graph, pairaware, tmp_path):
     checkpoint = '7net-0'
     target = hfo2_path
     ref_path = hfo2_7net_0_inference_path
@@ -107,6 +108,8 @@ def test_inference(batch, device, save_graph, tmp_path):
     ]
     if save_graph:
         cli_args.append('--save_graph')
+    if pairaware:
+        cli_args.append('--enable_pairaware')
     with mock.patch('sys.argv', [f'{main}/sevenn_inference.py'] + cli_args):
         inference_main()
 
