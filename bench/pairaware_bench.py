@@ -57,6 +57,7 @@ def validate_effective_mode(requested_runtime, effective_runtime):
     effective_flags = util.get_runtime_mode_flags(effective_runtime)
     missing = []
     for key, label in (
+        (KEY.USE_PAIRAWARE, 'pairaware'),
         (KEY.USE_FLASH_TP, 'flashtp'),
         ('cuequivariance', 'cueq'),
         (KEY.USE_OEQ, 'oeq'),
@@ -131,7 +132,7 @@ def main():
         Path(args.profile_dir).mkdir(parents=True, exist_ok=True)
         profile_path = (
             Path(args.profile_dir)
-            / f'{util.resolve_runtime_mode(runtime_config)}-{int(time.time())}.json'
+            / f'{util.resolve_runtime_mode(effective_runtime)}-{int(time.time())}.json'
         )
         with profile(
             activities=[ProfilerActivity.CPU]

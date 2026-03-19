@@ -361,6 +361,11 @@ If any step fails, Codex MUST:
 ---
 
 ## 10. Notes / Known Issues (append during implementation)
-- (Codex: append here while debugging)
-
-](#)
+- 2026-03-19: Validation on this workspace confirmed CPU correctness but not the CPU performance target. Pair-aware numerical tests, CLI/export checks, and profile output checks passed after installing the missing Python deps into `/tmp/sevenn-pairaware-venv`.
+- 2026-03-19: `bench/pairaware_bench.py` had a profile-path bug (`runtime_config` was undefined). It was fixed during validation, and the harness now also checks requested `pairaware` activation explicitly.
+- 2026-03-19: CPU benchmark results show the geometry stage regressing instead of improving with pair-aware enabled:
+  - 256 atoms: `67.588 ms -> 78.585 ms`
+  - 2000 atoms: `65.571 ms -> 123.951 ms`
+  - 21296 atoms: `53.144 ms -> 773.454 ms`
+- 2026-03-19: The current likely bottleneck is pair construction via `torch.unique(..., dim=0, return_inverse=True)` in `sevenn/nn/edge_embedding.py`. Correctness is strong, but the current CPU implementation is not performance-positive.
+- 2026-03-19: FlashTP / cuEq / OpenEquivariance remain unverified on this machine because `torch.cuda.is_available()` is `False`, and all three availability probes returned `False`; the corresponding test suites skipped cleanly.
