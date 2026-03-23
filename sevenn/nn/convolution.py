@@ -191,19 +191,23 @@ class PairFusedIrrepsConvolution(IrrepsConvolution):
         self._out_dim: int = self.convolution_kwargs['irreps_out'].dim
 
     def forward(self, data: AtomGraphDataType) -> AtomGraphDataType:
-        assert self.convolution is not None, 'Convolution is not instantiated'
-        assert self.weight_nn is not None, 'Weight_nn is not instantiated'
-
-        if (
-            KEY.PAIR_IDX not in data
-            or KEY.PAIR_ATTR not in data
-            or KEY.PAIR_EMBEDDING not in data
-        ):
-            return super().forward(data)
         if self.is_parallel:
             raise RuntimeError(
                 'PairFusedIrrepsConvolution does not support parallel models'
             )
+        if KEY.PAIR_EMBEDDING not in data or KEY.EDGE_TO_PAIR not in data:
+            return super().forward(data)
+
+        # Pair-level weight reuse is still valid here, but one large TP call over
+        # directed edges is faster on GPU than two half-sized TP launches.
+        if self.key_filter in data:
+            return IrrepsConvolution.forward(self, data)
+
+        assert self.convolution is not None, 'Convolution is not instantiated'
+        assert self.weight_nn is not None, 'Weight_nn is not instantiated'
+
+        if KEY.PAIR_IDX not in data or KEY.PAIR_ATTR not in data:
+            return super().forward(data)
 
         x = data[self.key_x]
         pair_index = data[KEY.PAIR_IDX]
@@ -216,22 +220,22 @@ class PairFusedIrrepsConvolution(IrrepsConvolution):
             x = x.new_zeros(x.shape[0], self._out_dim)
             x = x + (pair_attr.sum() + pair_weight.sum()) * 0
         else:
-            reverse_attr = pair_attr * self.pair_parity_sign.to(
+            parity_sign = self.pair_parity_sign.to(
                 device=pair_attr.device,
                 dtype=pair_attr.dtype,
             )
-            message_to_dst = self.convolution(
-                x.index_select(0, pair_src),
-                pair_attr,
-                pair_weight,
+            edge_src = torch.cat((pair_src, pair_dst), dim=0)
+            edge_dst = torch.cat((pair_dst, pair_src), dim=0)
+            edge_attr = torch.cat(
+                (pair_attr, pair_attr * parity_sign), dim=0
             )
-            message_to_src = self.convolution(
-                x.index_select(0, pair_dst),
-                reverse_attr,
-                pair_weight,
+            edge_weight = torch.cat((pair_weight, pair_weight), dim=0)
+            message = self.convolution(
+                x.index_select(0, edge_src),
+                edge_attr,
+                edge_weight,
             )
-            x = message_gather(x, pair_dst, message_to_dst)
-            x = x + message_gather(x, pair_src, message_to_src)
+            x = message_gather(x, edge_dst, message)
 
         x = x.div(self.denominator)
         data[self.key_x] = x

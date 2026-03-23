@@ -77,6 +77,12 @@ class ModuleTimer:
             self.counts[key] = self.counts.get(key, 0) + 1
         self._pending.clear()
 
+    def reset(self) -> None:
+        self.flush()
+        self.totals_ms.clear()
+        self.counts.clear()
+        self._starts.clear()
+
     def make_pre_hook(self, key: str):
         def hook(_module, _inputs):
             self._start(key)
@@ -200,6 +206,7 @@ def benchmark_mode(
 
     for _ in range(warmup):
         run_once()
+    timer.reset()
     for step_idx in range(steps):
         step_times.append(run_once(with_profile=profile and step_idx == steps - 1))
 
