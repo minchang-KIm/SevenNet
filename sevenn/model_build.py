@@ -190,13 +190,124 @@ def init_shift_scale(
     return rescale_module
 
 
-def use_pair_fused_convolution(config: Dict[str, Any], parallel: bool) -> bool:
-    if parallel or not config.get(KEY.USE_PAIRGEOM, False):
-        return False
-    if config.get(KEY.USE_FLASH_TP, False) or config.get(KEY.USE_OEQ, False):
-        return False
+def normalize_pairgeom_backend(backend: Any) -> str:
+    if backend is None:
+        return 'auto'
+    backend = str(backend).lower()
+    if backend not in ('auto', 'reference', 'flash', 'disabled'):
+        raise ValueError(f'Unknown pairgeom_backend: {backend}')
+    return backend
+
+
+def resolve_pairgeom_execution(
+    config: Dict[str, Any], parallel: bool
+) -> Dict[str, Any]:
+    requested = normalize_pairgeom_backend(config.get(KEY.PAIRGEOM_BACKEND, 'auto'))
+    pairgeom_enabled = bool(config.get(KEY.USE_PAIRGEOM, False))
     cue_cfg = config.get(KEY.CUEQUIVARIANCE_CONFIG, {})
-    return not cue_cfg.get('use', False)
+    cue_enabled = cue_cfg.get('use', False)
+    flash_enabled = bool(config.get(KEY.USE_FLASH_TP, False))
+    oeq_enabled = bool(config.get(KEY.USE_OEQ, False))
+
+    flash_available = False
+    if flash_enabled or requested == 'flash':
+        try:
+            import sevenn.nn.flash_helper as flash_helper
+
+            flash_available = flash_helper.is_flash_available()
+        except ImportError:
+            flash_available = False
+
+    if not pairgeom_enabled or requested == 'disabled':
+        return {
+            'enabled': False,
+            'requested_backend': requested,
+            'effective_backend': 'disabled',
+            'reason': 'pair-invariant execution is disabled',
+        }
+
+    effective = 'standard'
+    reason = 'pair-aware edge preprocessing with standard directed-edge convolution'
+
+    if requested == 'reference':
+        if parallel:
+            reason = 'reference backend is serial-only; using standard convolution'
+        elif cue_enabled or oeq_enabled or (flash_enabled and flash_available):
+            reason = (
+                'reference backend is incompatible with accelerator backends; '
+                'using standard directed-edge convolution'
+            )
+        else:
+            effective = 'reference'
+            reason = 'serial reference pair-fused convolution selected'
+    elif requested == 'flash':
+        if not flash_enabled:
+            reason = (
+                'flash backend requested but FlashTP accelerator is disabled; '
+                'falling back to the serial reference backend'
+            )
+            if parallel or cue_enabled or oeq_enabled:
+                reason = (
+                    'flash backend requested but FlashTP accelerator is disabled; '
+                    'using standard directed-edge convolution'
+                )
+            else:
+                effective = 'reference'
+        elif not flash_available:
+            reason = (
+                'flash backend requested but FlashTP is unavailable; '
+                'falling back to the serial reference backend'
+            )
+            if parallel or cue_enabled or oeq_enabled:
+                reason = (
+                    'flash backend requested but FlashTP is unavailable; '
+                    'using standard directed-edge convolution'
+                )
+            else:
+                effective = 'reference'
+        else:
+            effective = 'flash'
+            reason = 'pair-aware FlashTP adapter selected'
+    else:  # auto
+        if flash_enabled and flash_available:
+            effective = 'flash'
+            reason = 'auto-selected pair-aware FlashTP adapter'
+        elif parallel:
+            reason = (
+                'auto-selected standard directed-edge convolution for '
+                'parallel execution'
+            )
+        elif cue_enabled or oeq_enabled:
+            reason = (
+                'auto-selected standard directed-edge convolution under the '
+                'active accelerator backend'
+            )
+        else:
+            effective = 'reference'
+            if flash_enabled and not flash_available:
+                reason = (
+                    'FlashTP is unavailable; auto-selected serial reference '
+                    'pair-fused convolution'
+                )
+            elif flash_enabled and not parallel:
+                reason = (
+                    'FlashTP accelerator is disabled at runtime; auto-selected '
+                    'serial reference pair-fused convolution'
+                )
+            else:
+                reason = 'auto-selected serial reference pair-fused convolution'
+
+    return {
+        'enabled': True,
+        'requested_backend': requested,
+        'effective_backend': effective,
+        'reason': reason,
+    }
+
+
+def use_pair_fused_convolution(config: Dict[str, Any], parallel: bool) -> bool:
+    pairgeom_plan = resolve_pairgeom_execution(config, parallel)
+    return pairgeom_plan['effective_backend'] == 'reference'
 
 
 def patch_modality(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
@@ -475,6 +586,27 @@ def build_E3_equivariant_model(
 
     for data w/o cell volume, pred_stress has garbage values
     """
+    config = copy.deepcopy(config)
+    pairgeom_plan = resolve_pairgeom_execution(config, parallel)
+    config[KEY.USE_PAIRGEOM] = bool(pairgeom_plan['enabled'])
+    config[KEY.PAIRGEOM_BACKEND] = pairgeom_plan['requested_backend']
+    config['_pairgeom_effective_backend'] = pairgeom_plan['effective_backend']
+    config['_pairgeom_execution_reason'] = pairgeom_plan['reason']
+
+    if (
+        pairgeom_plan['enabled']
+        and pairgeom_plan['requested_backend'] not in ('auto', pairgeom_plan['effective_backend'])
+    ):
+        warnings.warn(
+            (
+                'pairgeom_backend='
+                f"{pairgeom_plan['requested_backend']} is not available in the "
+                f'current build path; using '
+                f"{pairgeom_plan['effective_backend']} instead"
+            ),
+            UserWarning,
+        )
+
     layers = OrderedDict()
 
     cutoff = config[KEY.CUTOFF]
@@ -551,6 +683,7 @@ def build_E3_equivariant_model(
         if use_pair_fused_convolution(config, parallel)
         else IrrepsConvolution,
         'parallel': parallel,
+        'pairgeom_backend': pairgeom_plan['effective_backend'],
     }
 
     interaction_builder = None
@@ -648,9 +781,18 @@ def build_E3_equivariant_model(
 
     if parallel:
         layers_list = _to_parallel_model(layers, config)
-        return [
+        model_list = [
             AtomGraphSequential(patch_modules(layers, config), **common_args)
             for layers in layers_list
         ]
+        for model in model_list:
+            model.pairgeom_requested_backend = pairgeom_plan['requested_backend']
+            model.pairgeom_backend = pairgeom_plan['effective_backend']
+            model.pairgeom_reason = pairgeom_plan['reason']
+        return model_list
     else:
-        return AtomGraphSequential(patch_modules(layers, config), **common_args)
+        model = AtomGraphSequential(patch_modules(layers, config), **common_args)
+        model.pairgeom_requested_backend = pairgeom_plan['requested_backend']
+        model.pairgeom_backend = pairgeom_plan['effective_backend']
+        model.pairgeom_reason = pairgeom_plan['reason']
+        return model

@@ -9,7 +9,7 @@ from ase.build import bulk, molecule
 from sevenn.calculator import D3Calculator, SevenNetCalculator
 from sevenn.nn.cue_helper import is_cue_available
 from sevenn.nn.flash_helper import is_flash_available
-from sevenn.nn.pairgeom import build_pair_metadata
+from sevenn.nn.pairgeom import build_pair_metadata_dict
 from sevenn.scripts.deploy import deploy
 from sevenn.util import model_from_checkpoint, pretrained_name_to_path
 
@@ -154,7 +154,8 @@ def test_sevennet_calculator_pairgeom_reuses_topology_cache(atoms_pbc):
     atoms_pbc.calc = calc
 
     with mock.patch(
-        'sevenn.calculator.build_pair_metadata', wraps=build_pair_metadata
+        'sevenn.calculator.build_pair_metadata_dict',
+        wraps=build_pair_metadata_dict,
     ) as build_pair_metadata_spy:
         atoms_pbc.get_potential_energy()
         atoms_pbc.positions += 1e-4

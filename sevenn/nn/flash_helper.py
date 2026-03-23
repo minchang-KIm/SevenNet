@@ -33,13 +33,19 @@ def flash_needed(func: Callable) -> Callable:
 def patch_convolution(
     irreps_convolution: IrrepsConvolution, _flash_lammps: bool = False
 ):
-    from sevenn.nn.convolution import IrrepsScatterGatterFusedConvolution
+    from sevenn.nn.convolution import (
+        IrrepsScatterGatterFusedConvolution,
+        PairAwareFlashTPConvolution,
+    )
 
     assert not irreps_convolution.layer_instantiated
 
-    ret = IrrepsScatterGatterFusedConvolution.from_irreps_convolution(
-        irreps_convolution
+    convolution_cls = (
+        PairAwareFlashTPConvolution
+        if getattr(irreps_convolution, 'pairgeom_backend', 'disabled') == 'flash'
+        else IrrepsScatterGatterFusedConvolution
     )
+    ret = convolution_cls.from_irreps_convolution(irreps_convolution)
     ret.convolution_cls = uvu_TP  # type: ignore
     ret.convolution_kwargs['use_lammps'] = _flash_lammps
     del ret.convolution_kwargs['shared_weights']

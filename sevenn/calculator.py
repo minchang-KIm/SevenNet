@@ -16,7 +16,7 @@ from ase.data import chemical_symbols
 import sevenn._keys as KEY
 import sevenn.util as util
 from sevenn.atom_graph_data import AtomGraphData
-from sevenn.nn.pairgeom import build_pair_metadata
+from sevenn.nn.pairgeom import build_pair_metadata_dict
 from sevenn.nn.sequential import AtomGraphSequential
 from sevenn.train.dataload import unlabeled_atoms_to_graph
 
@@ -42,6 +42,7 @@ class SevenNetCalculator(Calculator):
         enable_flash: Optional[bool] = False,
         enable_oeq: Optional[bool] = False,
         enable_pairgeom: Optional[bool] = False,
+        pairgeom_backend: Optional[str] = None,
         sevennet_config: Optional[Dict] = None,  # Not used in logic, just meta info
         **kwargs,
     ) -> None:
@@ -91,6 +92,12 @@ class SevenNetCalculator(Calculator):
         enable_pairgeom = (
             os.getenv('SEVENNET_ENABLE_PAIRGEOM') == '1' or enable_pairgeom
         )
+        pairgeom_backend = (
+            os.getenv('SEVENNET_PAIRGEOM_BACKEND') or pairgeom_backend
+        )
+        enable_pairgeom = bool(
+            enable_pairgeom or pairgeom_backend not in (None, 'disabled')
+        )
 
         if enable_cueq and file_type in ['model_instance', 'torchscript']:
             warnings.warn(
@@ -130,6 +137,7 @@ class SevenNetCalculator(Calculator):
                 enable_flash=enable_flash,
                 enable_oeq=enable_oeq,
                 enable_pairgeom=enable_pairgeom,
+                pairgeom_backend=pairgeom_backend,
             )
             model_loaded.set_is_batch_data(False)
 
@@ -244,6 +252,8 @@ class SevenNetCalculator(Calculator):
                 and np.array_equal(cell_shift, cache[KEY.CELL_SHIFT]):
             for key in (
                 KEY.PAIR_IDX,
+                KEY.PAIR_SRC,
+                KEY.PAIR_DST,
                 KEY.PAIR_SHIFT,
                 KEY.EDGE_TO_PAIR,
                 KEY.EDGE_IS_REVERSED,
@@ -252,17 +262,11 @@ class SevenNetCalculator(Calculator):
                 graph_dct[key] = cache[key]
             return
 
-        pair_metadata = build_pair_metadata(
+        pair_metadata = build_pair_metadata_dict(
             torch.from_numpy(edge_index).to(torch.int64),
             torch.from_numpy(cell_shift).to(torch.int64),
         )
-        metadata_np = {
-            KEY.PAIR_IDX: pair_metadata[0].cpu().numpy(),
-            KEY.PAIR_SHIFT: pair_metadata[1].cpu().numpy(),
-            KEY.EDGE_TO_PAIR: pair_metadata[2].cpu().numpy(),
-            KEY.EDGE_IS_REVERSED: pair_metadata[3].cpu().numpy(),
-            KEY.PAIR_OWNER: pair_metadata[4].cpu().numpy(),
-        }
+        metadata_np = {key: value.cpu().numpy() for key, value in pair_metadata.items()}
         graph_dct.update(metadata_np)
         self._pair_metadata_cache = {
             KEY.EDGE_IDX: edge_index.copy(),
@@ -316,6 +320,7 @@ class SevenNetD3Calculator(SumCalculator):
         enable_flash: Optional[bool] = False,
         enable_oeq: Optional[bool] = False,
         enable_pairgeom: Optional[bool] = False,
+        pairgeom_backend: Optional[str] = None,
         sevennet_config: Optional[Any] = None,
         damping_type: str = 'damp_bj',
         functional_name: str = 'pbe',
@@ -376,6 +381,7 @@ class SevenNetD3Calculator(SumCalculator):
             enable_flash=enable_flash,
             enable_oeq=enable_oeq,
             enable_pairgeom=enable_pairgeom,
+            pairgeom_backend=pairgeom_backend,
             sevennet_config=sevennet_config,
             **kwargs,
         )

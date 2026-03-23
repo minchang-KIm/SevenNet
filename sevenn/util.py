@@ -102,6 +102,7 @@ def model_from_checkpoint(
     enable_flash: Optional[bool] = None,
     enable_oeq: Optional[bool] = None,
     enable_pairgeom: Optional[bool] = None,
+    pairgeom_backend: Optional[str] = None,
 ) -> Tuple[torch.nn.Module, Dict[str, Any]]:
     cp = load_checkpoint(checkpoint)
     model = cp.build_model(
@@ -109,9 +110,21 @@ def model_from_checkpoint(
         enable_flash=enable_flash,
         enable_oeq=enable_oeq,
         enable_pairgeom=enable_pairgeom,
+        pairgeom_backend=pairgeom_backend,
     )
 
     return model, cp.config
+
+
+def get_pairgeom_runtime_metadata(model: torch.nn.Module) -> Dict[str, Any]:
+    requested = getattr(model, 'pairgeom_requested_backend', 'disabled')
+    effective = getattr(model, 'pairgeom_backend', 'disabled')
+    reason = getattr(model, 'pairgeom_reason', '')
+    return {
+        'pairgeom_requested_backend': requested,
+        'pairgeom_effective_backend': effective,
+        'pairgeom_reason': reason,
+    }
 
 
 def unlabeled_atoms_to_input(
