@@ -74,6 +74,7 @@ calc = SevenNetCalculator(
     model="path/to/checkpoint_best.pth",
     file_type="checkpoint",
     enable_pairgeom=True,
+    pairgeom_backend="auto",
 )
 ```
 
@@ -82,6 +83,15 @@ This path is:
 - inference-only
 - checkpoint-only
 - not a deployment mode
+
+Experimental backend options:
+
+- `pairgeom_backend="auto"`: choose the pair-aware FlashTP adapter only when FlashTP is enabled and available; otherwise use the serial reference backend when that path is valid
+- `pairgeom_backend="reference"`: serial reference pair-fused path
+- `pairgeom_backend="flash"`: pair-aware FlashTP adapter
+- `pairgeom_backend="disabled"`: disable pairgeom explicitly
+
+If the requested pairgeom backend is unavailable for the current calculator path, SevenNet falls back to the validated checkpoint runtime path and records the effective selection on the loaded model.
 
 For the exact scope and constraints, see {ref}`pairgeom-experimental`.
 
@@ -96,3 +106,4 @@ calc = SevenNetD3Calculator(model="7net-0", device="cuda")
 ```
 
 CPU-only D3 is not provided by this implementation.
+The D3 extension is JIT-built through PyTorch and requires a working CUDA toolchain together with `ninja` on `PATH`.

@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 from ase import Atoms
 from ase.build import bulk, molecule
+from torch.utils.cpp_extension import is_ninja_available
 
 from sevenn.calculator import D3Calculator, SevenNetCalculator
 from sevenn.nn.cue_helper import is_cue_available
@@ -50,9 +51,11 @@ def sevennet_0_flash_cal():
 
 @pytest.fixture(scope='module')
 def d3_cal():
+    if not is_ninja_available():
+        pytest.skip('Ninja is required to JIT build the D3 extension')
     try:
         return D3Calculator()
-    except NotImplementedError as e:
+    except (NotImplementedError, RuntimeError) as e:
         pytest.skip(f'{e}')
 
 

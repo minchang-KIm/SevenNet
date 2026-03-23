@@ -116,6 +116,7 @@ Key options:
 - `--enable_flash`
 - `--enable_oeq`
 - `--enable_pairgeom` (experimental; see Section 7.1)
+- `--pairgeom_backend {auto,reference,flash,disabled}` (experimental; see Section 7.1)
 
 `--save_graph` and `--allow_unlabeled` are mutually exclusive.
 
@@ -191,7 +192,7 @@ Optional fields used only when needed:
 | Field | Meaning |
 | --- | --- |
 | `cell_lattice_vectors`, `pbc_shift` | Required when runtime geometry must be reconstructed from positions and periodic images |
-| `pair_index`, `pair_shift`, `edge_to_pair`, `edge_is_reversed`, `pair_owner` | Pair-level metadata used by experimental pairgeom |
+| `pair_index`, `pair_src`, `pair_dst`, `pair_shift`, `edge_to_pair`, `edge_is_reversed`, `pair_owner` | Pair-level metadata used by experimental pairgeom |
 
 `graph_build` performs offline snapshot preprocessing:
 
@@ -278,9 +279,10 @@ Standard output directory contents:
 | File | Content |
 | --- | --- |
 | `errors.txt` | Aggregate error metrics over labeled targets |
-| `info.csv` | Per-structure metadata such as source file paths |
+| `info.csv` | Per-structure metadata such as source file paths, plus runtime pairgeom backend metadata |
 | `per_graph.csv` | Per-structure references and predictions |
 | `per_atom.csv` | Per-atom positions, references, predictions, and atomic energies |
+| `runtime_metadata.yaml` | Runtime pairgeom backend selection metadata for the evaluated model |
 | `sevenn_data/saved_graph.pt` and `.yaml` | Optional saved preprocessed graphs when `--save_graph` is used |
 
 Stable inference behavior:
@@ -372,8 +374,12 @@ Correct scope of reuse:
 
 Current execution paths:
 
-- Serial e3nn inference can use a reference pair-fused convolution path.
-- FlashTP, cuEquivariance, and OpenEquivariance backends still execute their directed-edge tensor-product path even when pairgeom is enabled.
+- `pairgeom_backend=reference` selects the serial reference pair-fused e3nn path.
+- `pairgeom_backend=flash` selects the pair-aware FlashTP adapter only when FlashTP is both enabled and available.
+- `pairgeom_backend=auto` selects `flash` when FlashTP is enabled and available, otherwise selects `reference` in serial non-cuEquivariance/non-OpenEquivariance execution, and otherwise keeps the standard directed-edge convolution path.
+- `pairgeom_backend=disabled` disables pairgeom even if `--enable_pairgeom` is present.
+- FlashTP still executes its directed-edge tensor-product and scatter/gather path; pairgeom only changes how pair-invariant inputs are prepared before that path.
+- cuEquivariance and OpenEquivariance currently keep the standard directed-edge convolution path even when pairgeom preprocessing is enabled.
 
 Performance implication:
 
@@ -385,3 +391,4 @@ Additional note for ASE:
 
 - The ASE calculator may cache pair metadata such as pair ownership when `edge_index` and `pbc_shift` are unchanged.
 - That cache is topology metadata reuse only. It is not timestep-to-timestep geometry reuse.
+- Runtime backend selection is reported in both `info.csv` and `runtime_metadata.yaml`.

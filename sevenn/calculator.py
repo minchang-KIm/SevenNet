@@ -488,6 +488,8 @@ class D3Calculator(Calculator):
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
+        self._lib = None
+        self.pair = None
 
         if not torch.cuda.is_available():
             raise NotImplementedError('CPU + D3 is not implemented yet')
@@ -687,7 +689,7 @@ class D3Calculator(Calculator):
         }
 
     def __del__(self):
-        if self._lib is not None:
+        if self._lib is not None and self.pair is not None:
             self._lib.pair_fin(self.pair)
             self._lib = None
             self.pair = None

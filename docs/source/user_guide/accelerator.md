@@ -94,6 +94,12 @@ sevenn inference checkpoint_best.pth structures/*.extxyz --enable_cueq
 sevenn inference checkpoint_best.pth structures/*.extxyz --enable_oeq
 ```
 
+Experimental pairgeom + FlashTP inference:
+
+```bash
+sevenn inference checkpoint_best.pth structures/*.extxyz --enable_flash --enable_pairgeom --pairgeom_backend flash
+```
+
 ASE calculator:
 
 ```python
@@ -102,9 +108,23 @@ from sevenn.calculator import SevenNetCalculator
 calc = SevenNetCalculator("7net-0", enable_flash=True)
 ```
 
+Experimental checkpoint-backed ASE calculator with pairgeom + FlashTP:
+
+```python
+from sevenn.calculator import SevenNetCalculator
+
+calc = SevenNetCalculator(
+    "path/to/checkpoint_best.pth",
+    file_type="checkpoint",
+    enable_flash=True,
+    enable_pairgeom=True,
+    pairgeom_backend="flash",
+)
+```
+
 LAMMPS export:
 
 - TorchScript export supports FlashTP and OpenEquivariance.
 - ML-IAP export supports FlashTP, cuEquivariance, and OpenEquivariance.
 
-`pairgeom` is not an accelerator backend. It is an experimental inference-only reuse path with separate constraints and should not be grouped with the stable accelerator backends.
+`pairgeom` is not an accelerator backend. It is an experimental inference-only reuse path with separate constraints. When `pairgeom_backend="flash"` is selected successfully, SevenNet still uses FlashTP's directed-edge kernel path; pairgeom only changes the pair-invariant preprocessing that feeds that path.
