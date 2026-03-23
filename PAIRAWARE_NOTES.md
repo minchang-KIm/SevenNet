@@ -74,3 +74,40 @@
 - The benchmark harness had a real bug before validation: profile trace naming referenced `runtime_config`, which did not exist. This was fixed in `bench/pairaware_bench.py`, and the harness now also validates requested `pairaware` mode activation explicitly.
 - CPU performance is currently the main blocker. On this machine, pair-aware reduces the pair count exactly as expected, but the measured geometry phase is slower than baseline at every tested size.
 - The most likely cause is the correctness-oriented pair construction path built on `torch.unique(..., dim=0, return_inverse=True)` in `sevenn/nn/edge_embedding.py`. The correctness story is strong; the current bottleneck is the pair construction overhead.
+
+## Execution Comparison Analysis
+- Additional CPU microbenchmark on the same checkpoint (`7net-0`) and the same synthetic NaCl workloads:
+
+| target_atoms | realized_atoms | baseline model ms | pairaware model ms | baseline edge_embedding ms | pairaware edge_embedding ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 256 | 432 | 605.551 | 600.987 | 11.741 | 13.958 |
+| 2000 | 2000 | 3019.577 | 2963.403 | 1.215 | 62.728 |
+| 20000 | 21296 | 34900.821 | 34921.227 | 6.729 | 652.323 |
+
+- Interpretation:
+  - End-to-end model time is noisy on CPU because `edge_embedding` is still a small fraction of the full model wall time.
+  - The direct `edge_embedding` comparison is much clearer: pair-aware overhead grows rapidly with system size.
+
+- Pair-aware path breakdown (single run, CPU):
+
+| target_atoms | realized_atoms | mapping ms | pair_reduce ms | pair_geom ms | gather ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 256 | 432 | 13.248 | 0.395 | 0.432 | 0.132 |
+| 2000 | 2000 | 57.552 | 1.465 | 0.715 | 0.234 |
+| 20000 | 21296 | 606.233 | 4.578 | 2.665 | 3.126 |
+
+- Baseline path breakdown (single run, CPU):
+
+| target_atoms | realized_atoms | norm ms | radial ms | spherical ms |
+| --- | ---: | ---: | ---: | ---: |
+| 256 | 432 | 0.131 | 0.256 | 0.521 |
+| 2000 | 2000 | 0.105 | 0.428 | 0.747 |
+| 20000 | 21296 | 0.226 | 2.491 | 2.548 |
+
+- CPU profiler on `edge_embedding` for the 2000-atom case:
+  - Baseline top ops are the expected geometry kernels (`linalg_norm`, spherical harmonics, basis math) with total self CPU time around `5.472 ms`.
+  - Pair-aware is dominated by `aten::unique_dim` (`137.096 ms` total) plus the internal `select`, `unbind`, and `equal` work that `torch.unique(..., dim=0)` triggers.
+
+- Practical conclusion:
+  - The current pair-aware implementation is correctness-first and likely GPU-safe, but it is not CPU-performance-positive.
+  - The next optimization target is pair construction, not SH/radial reuse. Replacing the float-descriptor `torch.unique(..., dim=0)` path with a sort/segment or integer-key path that still preserves periodic-image correctness is the highest-value follow-up.
