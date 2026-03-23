@@ -1,5 +1,5 @@
 import os
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple, Type
 
 from e3nn.o3 import Irreps
 from torch.nn import Module
@@ -28,6 +28,7 @@ def NequIP_interaction_block(
     t: int,   # interaction layer index
     data_key_x: str = KEY.NODE_FEATURE,
     data_key_weight_input: str = KEY.EDGE_EMBEDDING,
+    convolution_cls: Type[IrrepsConvolution] = IrrepsConvolution,
     parallel: bool = False,
     **conv_kwargs,
 ) -> Dict[str, Module]:
@@ -51,7 +52,7 @@ def NequIP_interaction_block(
     )
 
     # convolution part, l>lmax is dropped as defined in irreps_out
-    block[f'{t}_convolution'] = IrrepsConvolution(
+    block[f'{t}_convolution'] = convolution_cls(
         irreps_x=irreps_x,
         irreps_filter=irreps_filter,
         irreps_out=irreps_out_tp,

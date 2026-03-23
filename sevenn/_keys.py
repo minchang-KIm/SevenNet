@@ -37,6 +37,7 @@ PAIR_OWNER: Final[str] = 'pair_owner'  # (N_pair)
 EDGE_TO_PAIR: Final[str] = 'edge_to_pair'  # (N_edge)
 EDGE_IS_REVERSED: Final[str] = 'edge_is_reversed'  # (N_edge)
 PAIR_EMBEDDING: Final[str] = 'pair_embedding'  # (N_pair, basis_num)
+PAIR_ATTR: Final[str] = 'pair_attr'  # (from spherical harmonics, pair dir)
 
 # some primary data of graph
 EDGE_IDX: Final[str] = 'edge_index'  # (2, N_edge) PyG

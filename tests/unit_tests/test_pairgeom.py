@@ -13,6 +13,7 @@ import sevenn._keys as KEY
 import sevenn.train.dataload as dl
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.model_build import build_E3_equivariant_model
+from sevenn.nn.convolution import PairFusedIrrepsConvolution
 from sevenn.nn.edge_embedding import (
     BesselBasis,
     EdgeEmbedding,
@@ -176,6 +177,15 @@ def test_pairaware_edge_embedding_matches_baseline():
     assert torch.allclose(
         out_baseline[KEY.EDGE_ATTR], out_pairaware[KEY.EDGE_ATTR], atol=1e-6, rtol=1e-6
     )
+    assert torch.allclose(
+        out_pairaware[KEY.PAIR_ATTR]
+        .index_select(0, out_pairaware[KEY.EDGE_TO_PAIR])[
+            ~out_pairaware[KEY.EDGE_IS_REVERSED]
+        ],
+        out_baseline[KEY.EDGE_ATTR][~out_pairaware[KEY.EDGE_IS_REVERSED]],
+        atol=1e-6,
+        rtol=1e-6,
+    )
 
 
 def test_pairaware_edge_embedding_uses_precomputed_metadata():
@@ -255,6 +265,41 @@ def test_pairgeom_full_model_matches_baseline():
         out_pairgeom[KEY.PRED_STRESS],
         atol=1e-6,
         rtol=1e-5,
+    )
+
+
+def test_pairgeom_serial_model_uses_pair_fused_convolution():
+    config = _make_model_config()
+    config[KEY.USE_PAIRGEOM] = True
+    model = build_E3_equivariant_model(config, parallel=False)
+    assert isinstance(model, AtomGraphSequential)
+
+    conv_modules = [
+        module
+        for name, module in model._modules.items()
+        if name.endswith('_convolution')
+    ]
+    assert conv_modules
+    assert all(
+        isinstance(module, PairFusedIrrepsConvolution) for module in conv_modules
+    )
+
+
+def test_pairgeom_accelerated_model_skips_pair_fused_convolution():
+    config = _make_model_config()
+    config[KEY.USE_PAIRGEOM] = True
+    config[KEY.USE_FLASH_TP] = True
+    model = build_E3_equivariant_model(config, parallel=False)
+    assert isinstance(model, AtomGraphSequential)
+
+    conv_modules = [
+        module
+        for name, module in model._modules.items()
+        if name.endswith('_convolution')
+    ]
+    assert conv_modules
+    assert not any(
+        isinstance(module, PairFusedIrrepsConvolution) for module in conv_modules
     )
 
 

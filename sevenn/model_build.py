@@ -10,7 +10,7 @@ import sevenn._const as _const
 import sevenn._keys as KEY
 import sevenn.util as util
 
-from .nn.convolution import IrrepsConvolution
+from .nn.convolution import IrrepsConvolution, PairFusedIrrepsConvolution
 from .nn.edge_embedding import (
     BesselBasis,
     EdgeEmbedding,
@@ -188,6 +188,15 @@ def init_shift_scale(
         raise ValueError('shift, scale should be list of float or float')
 
     return rescale_module
+
+
+def use_pair_fused_convolution(config: Dict[str, Any], parallel: bool) -> bool:
+    if parallel or not config.get(KEY.USE_PAIRGEOM, False):
+        return False
+    if config.get(KEY.USE_FLASH_TP, False) or config.get(KEY.USE_OEQ, False):
+        return False
+    cue_cfg = config.get(KEY.CUEQUIVARIANCE_CONFIG, {})
+    return not cue_cfg.get('use', False)
 
 
 def patch_modality(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
@@ -538,6 +547,9 @@ def build_E3_equivariant_model(
         'act_radial': act_radial,
         'bias_in_linear': use_bias_in_linear,
         'num_species': num_species,
+        'convolution_cls': PairFusedIrrepsConvolution
+        if use_pair_fused_convolution(config, parallel)
+        else IrrepsConvolution,
         'parallel': parallel,
     }
 

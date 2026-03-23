@@ -11,6 +11,7 @@ import sevenn._keys as KEY
 from sevenn._const import AtomGraphDataType
 
 from .activation import ShiftedSoftPlus
+from .pairgeom import build_spherical_harmonic_parity_sign
 from .util import broadcast
 
 
@@ -141,6 +142,98 @@ class IrrepsConvolution(nn.Module):
         if self.is_parallel:
             x = torch.tensor_split(x, data[KEY.NLOCAL])[0]
 
+        data[self.key_x] = x
+        return data
+
+
+@compile_mode('script')
+class PairFusedIrrepsConvolution(IrrepsConvolution):
+    """
+    Reference pair-fused convolution for serial e3nn pairgeom models.
+    """
+
+    def __init__(
+        self,
+        irreps_x: Irreps,
+        irreps_filter: Irreps,
+        irreps_out: Irreps,
+        weight_layer_input_to_hidden: List[int],
+        weight_layer_act=ShiftedSoftPlus,
+        denominator: float = 1.0,
+        train_denominator: bool = False,
+        data_key_x: str = KEY.NODE_FEATURE,
+        data_key_filter: str = KEY.EDGE_ATTR,
+        data_key_weight_input: str = KEY.EDGE_EMBEDDING,
+        data_key_edge_idx: str = KEY.EDGE_IDX,
+        lazy_layer_instantiate: bool = True,
+        is_parallel: bool = False,
+    ) -> None:
+        super().__init__(
+            irreps_x=irreps_x,
+            irreps_filter=irreps_filter,
+            irreps_out=irreps_out,
+            weight_layer_input_to_hidden=weight_layer_input_to_hidden,
+            weight_layer_act=weight_layer_act,
+            denominator=denominator,
+            train_denominator=train_denominator,
+            data_key_x=data_key_x,
+            data_key_filter=data_key_filter,
+            data_key_weight_input=data_key_weight_input,
+            data_key_edge_idx=data_key_edge_idx,
+            lazy_layer_instantiate=lazy_layer_instantiate,
+            is_parallel=is_parallel,
+        )
+        self.register_buffer(
+            'pair_parity_sign',
+            build_spherical_harmonic_parity_sign(irreps_filter),
+            persistent=False,
+        )
+        self._out_dim: int = self.convolution_kwargs['irreps_out'].dim
+
+    def forward(self, data: AtomGraphDataType) -> AtomGraphDataType:
+        assert self.convolution is not None, 'Convolution is not instantiated'
+        assert self.weight_nn is not None, 'Weight_nn is not instantiated'
+
+        if (
+            KEY.PAIR_IDX not in data
+            or KEY.PAIR_ATTR not in data
+            or KEY.PAIR_EMBEDDING not in data
+        ):
+            return super().forward(data)
+        if self.is_parallel:
+            raise RuntimeError(
+                'PairFusedIrrepsConvolution does not support parallel models'
+            )
+
+        x = data[self.key_x]
+        pair_index = data[KEY.PAIR_IDX]
+        pair_dst = pair_index[0]
+        pair_src = pair_index[1]
+        pair_attr = data[KEY.PAIR_ATTR]
+        pair_weight = self.weight_nn(data[KEY.PAIR_EMBEDDING])
+
+        if pair_src.numel() == 0:
+            x = x.new_zeros(x.shape[0], self._out_dim)
+            x = x + (pair_attr.sum() + pair_weight.sum()) * 0
+        else:
+            reverse_attr = pair_attr * self.pair_parity_sign.to(
+                device=pair_attr.device,
+                dtype=pair_attr.dtype,
+            )
+            message_to_dst = self.convolution(
+                x.index_select(0, pair_src),
+                pair_attr,
+                pair_weight,
+            )
+            message_to_src = self.convolution(
+                x.index_select(0, pair_dst),
+                reverse_attr,
+                pair_weight,
+            )
+            x = message_gather(x, pair_dst, message_to_dst)
+            x = x + message_gather(x, pair_src, message_to_src)
+
+        x = x.div(self.denominator)
         data[self.key_x] = x
         return data
 

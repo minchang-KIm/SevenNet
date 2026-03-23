@@ -174,6 +174,7 @@ class PairAwareEdgeEmbedding(EdgeEmbedding):
     def forward(self, data: AtomGraphDataType) -> AtomGraphDataType:
         if (
             KEY.PAIR_EMBEDDING in data
+            and KEY.PAIR_ATTR in data
             and KEY.EDGE_LENGTH in data
             and KEY.EDGE_EMBEDDING in data
             and KEY.EDGE_ATTR in data
@@ -193,6 +194,7 @@ class PairAwareEdgeEmbedding(EdgeEmbedding):
         pair_attr = self.spherical(pair_vec)
 
         data[KEY.PAIR_EMBEDDING] = pair_embedding
+        data[KEY.PAIR_ATTR] = pair_attr
         data[KEY.EDGE_LENGTH] = pair_r.index_select(0, edge_to_pair)
         data[KEY.EDGE_EMBEDDING] = pair_embedding.index_select(0, edge_to_pair)
         edge_attr = pair_attr.index_select(0, edge_to_pair)
