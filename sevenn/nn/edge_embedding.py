@@ -171,7 +171,9 @@ class SphericalEncoding(nn.Module):
     ) -> None:
         super().__init__()
         self.lmax = lmax
+        self.parity = parity
         self.normalization = normalization
+        self.normalize = normalize
         self.irreps_in = Irreps('1x1o') if parity == -1 else Irreps('1x1e')
         self.irreps_out = Irreps.spherical_harmonics(lmax, parity)
         self.sph = SphericalHarmonics(
@@ -183,6 +185,16 @@ class SphericalEncoding(nn.Module):
 
     def forward(self, r: torch.Tensor) -> torch.Tensor:
         return self.sph(r)
+
+    def __deepcopy__(self, memo):
+        copied = type(self)(
+            lmax=self.lmax,
+            parity=self.parity,
+            normalization=self.normalization,
+            normalize=self.normalize,
+        )
+        memo[id(self)] = copied
+        return copied
 
 
 @compile_mode('script')
