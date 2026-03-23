@@ -215,6 +215,12 @@ def test_inference_pairgeom(tmp_path):
     with mock.patch('sys.argv', [f'{main}/sevenn_inference.py'] + cli_args):
         inference_main()
 
+    assert (pairgeom_dir / 'runtime_metadata.yaml').is_file()
+    with open(pairgeom_dir / 'runtime_metadata.yaml', 'r', encoding='utf-8') as f:
+        runtime_meta = yaml.safe_load(f)
+    assert runtime_meta['pairgeom_requested_backend'] == 'auto'
+    assert runtime_meta['pairgeom_effective_backend'] in ('reference', 'standard', 'flash')
+
     with open(baseline_dir / 'errors.txt', 'r', encoding='utf-8') as f:
         errors_ref = [float(ll.split(':')[-1].strip()) for ll in f.readlines()]
     with open(pairgeom_dir / 'errors.txt', 'r', encoding='utf-8') as f:

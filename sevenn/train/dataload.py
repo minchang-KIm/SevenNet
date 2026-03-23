@@ -26,7 +26,7 @@ from tqdm import tqdm
 import sevenn._keys as KEY
 from sevenn._const import LossType
 from sevenn.atom_graph_data import AtomGraphData
-from sevenn.nn.pairgeom import build_pair_metadata
+from sevenn.nn.pairgeom import build_pair_metadata_dict
 
 from .dataset import AtomGraphDataset
 
@@ -104,14 +104,9 @@ def _correct_scalar(v):
 def _attach_pair_metadata(data: Dict[str, np.ndarray]) -> None:
     edge_index = torch.from_numpy(data[KEY.EDGE_IDX]).to(torch.int64)
     cell_shift = torch.from_numpy(data[KEY.CELL_SHIFT]).to(torch.int64)
-    pair_index, pair_shift, edge_to_pair, edge_is_reversed, pair_owner = (
-        build_pair_metadata(edge_index, cell_shift)
-    )
-    data[KEY.PAIR_IDX] = pair_index.cpu().numpy()
-    data[KEY.PAIR_SHIFT] = pair_shift.cpu().numpy()
-    data[KEY.EDGE_TO_PAIR] = edge_to_pair.cpu().numpy()
-    data[KEY.EDGE_IS_REVERSED] = edge_is_reversed.cpu().numpy()
-    data[KEY.PAIR_OWNER] = pair_owner.cpu().numpy()
+    pair_metadata = build_pair_metadata_dict(edge_index, cell_shift)
+    for key, value in pair_metadata.items():
+        data[key] = value.cpu().numpy()
 
 
 def unlabeled_atoms_to_graph(

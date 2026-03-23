@@ -127,11 +127,33 @@ def build_pair_metadata(
     return pair_index, pair_shift, edge_to_pair, edge_is_reversed, pair_owner
 
 
+def build_pair_metadata_dict(
+    edge_index: torch.Tensor,
+    cell_shift: Optional[torch.Tensor] = None,
+) -> dict:
+    pair_index, pair_shift, edge_to_pair, edge_is_reversed, pair_owner = (
+        build_pair_metadata(edge_index, cell_shift)
+    )
+    pair_src = pair_index[0]
+    pair_dst = pair_index[1]
+    return {
+        KEY.PAIR_IDX: pair_index,
+        KEY.PAIR_SRC: pair_src,
+        KEY.PAIR_DST: pair_dst,
+        KEY.PAIR_SHIFT: pair_shift,
+        KEY.EDGE_TO_PAIR: edge_to_pair,
+        KEY.EDGE_IS_REVERSED: edge_is_reversed,
+        KEY.PAIR_OWNER: pair_owner,
+    }
+
+
 def ensure_pair_metadata(
     data: AtomGraphDataType,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     keys = (
         KEY.PAIR_IDX,
+        KEY.PAIR_SRC,
+        KEY.PAIR_DST,
         KEY.PAIR_SHIFT,
         KEY.EDGE_TO_PAIR,
         KEY.EDGE_IS_REVERSED,
@@ -146,14 +168,18 @@ def ensure_pair_metadata(
             data[KEY.PAIR_OWNER],
         )
 
-    pair_metadata = build_pair_metadata(data[KEY.EDGE_IDX], data.get(KEY.CELL_SHIFT))
-    (
-        data[KEY.PAIR_IDX],
-        data[KEY.PAIR_SHIFT],
-        data[KEY.EDGE_TO_PAIR],
-        data[KEY.EDGE_IS_REVERSED],
-        data[KEY.PAIR_OWNER],
-    ) = pair_metadata
+    pair_metadata_dict = build_pair_metadata_dict(
+        data[KEY.EDGE_IDX],
+        data.get(KEY.CELL_SHIFT),
+    )
+    data.update(pair_metadata_dict)
+    pair_metadata = (
+        pair_metadata_dict[KEY.PAIR_IDX],
+        pair_metadata_dict[KEY.PAIR_SHIFT],
+        pair_metadata_dict[KEY.EDGE_TO_PAIR],
+        pair_metadata_dict[KEY.EDGE_IS_REVERSED],
+        pair_metadata_dict[KEY.PAIR_OWNER],
+    )
     return pair_metadata
 
 

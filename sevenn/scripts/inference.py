@@ -1,8 +1,10 @@
 import csv
 import os
+from pathlib import Path
 from typing import Iterable, List, Optional, Union
 
 import numpy as np
+import yaml
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
@@ -129,6 +131,7 @@ def inference(
     enable_flash: bool = False,
     enable_oeq: bool = False,
     enable_pairgeom: bool = False,
+    pairgeom_backend: Optional[str] = None,
     **data_kwargs,
 ) -> None:
     """
@@ -162,6 +165,7 @@ def inference(
         enable_flash=enable_flash or None,
         enable_oeq=enable_oeq or None,
         enable_pairgeom=enable_pairgeom or None,
+        pairgeom_backend=pairgeom_backend,
     )
     cutoff = model.cutoff
 
@@ -231,8 +235,17 @@ def inference(
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    runtime_metadata = util.get_pairgeom_runtime_metadata(model)
+    for output in output_list:
+        if KEY.INFO not in output or not isinstance(output[KEY.INFO], dict):
+            output[KEY.INFO] = {}
+        output[KEY.INFO].update(runtime_metadata)
     with open(os.path.join(output_dir, 'errors.txt'), 'w', encoding='utf-8') as f:
         for key, val in errors.items():
             f.write(f'{key}: {val}\n')
+
+    runtime_path = Path(output_dir) / 'runtime_metadata.yaml'
+    with open(runtime_path, 'w', encoding='utf-8') as f:
+        yaml.safe_dump(runtime_metadata, f, sort_keys=False)
 
     write_inference_csv(output_list, output_dir)

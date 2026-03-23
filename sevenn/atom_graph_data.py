@@ -58,6 +58,8 @@ class AtomGraphData(torch_geometric.data.Data):
             return int(self[KEY.EDGE_IDX].shape[1])
         if key == KEY.PAIR_IDX:
             return int(self[KEY.ATOMIC_NUMBERS].shape[0])
+        if key in (KEY.PAIR_SRC, KEY.PAIR_DST):
+            return int(self[KEY.ATOMIC_NUMBERS].shape[0])
         return super().__inc__(key, value, *args, **kwargs)
 
     def fit_dimension(self) -> 'AtomGraphData':

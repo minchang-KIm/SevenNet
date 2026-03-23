@@ -48,6 +48,7 @@ class IrrepsConvolution(nn.Module):
         data_key_edge_idx: str = KEY.EDGE_IDX,
         lazy_layer_instantiate: bool = True,
         is_parallel: bool = False,
+        pairgeom_backend: str = 'disabled',
     ) -> None:
         super().__init__()
         self.denominator = nn.Parameter(
@@ -58,6 +59,7 @@ class IrrepsConvolution(nn.Module):
         self.key_weight_input = data_key_weight_input
         self.key_edge_idx = data_key_edge_idx
         self.is_parallel = is_parallel
+        self.pairgeom_backend = pairgeom_backend
 
         instructions = []
         irreps_mid = []
@@ -167,6 +169,7 @@ class PairFusedIrrepsConvolution(IrrepsConvolution):
         data_key_edge_idx: str = KEY.EDGE_IDX,
         lazy_layer_instantiate: bool = True,
         is_parallel: bool = False,
+        pairgeom_backend: str = 'disabled',
     ) -> None:
         super().__init__(
             irreps_x=irreps_x,
@@ -182,6 +185,7 @@ class PairFusedIrrepsConvolution(IrrepsConvolution):
             data_key_edge_idx=data_key_edge_idx,
             lazy_layer_instantiate=lazy_layer_instantiate,
             is_parallel=is_parallel,
+            pairgeom_backend=pairgeom_backend,
         )
         self.register_buffer(
             'pair_parity_sign',
@@ -263,6 +267,7 @@ class IrrepsScatterGatterFusedConvolution(nn.Module):
         data_key_edge_idx: str = KEY.EDGE_IDX,
         lazy_layer_instantiate: bool = True,
         is_parallel: bool = False,
+        pairgeom_backend: str = 'disabled',
     ) -> None:
         super().__init__()
         self.denominator = nn.Parameter(
@@ -273,6 +278,7 @@ class IrrepsScatterGatterFusedConvolution(nn.Module):
         self.key_weight_input = data_key_weight_input
         self.key_edge_idx = data_key_edge_idx
         self.is_parallel = is_parallel
+        self.pairgeom_backend = pairgeom_backend
 
         instructions = []
         irreps_mid = []
@@ -384,4 +390,126 @@ class IrrepsScatterGatterFusedConvolution(nn.Module):
             x = torch.tensor_split(x, data[KEY.NLOCAL])[0]
         data[self.key_x] = x
 
+        return data
+
+
+@compile_mode('script')
+class PairAwareFlashTPConvolution(IrrepsScatterGatterFusedConvolution):
+    """
+    Pair-aware adapter for directed-edge FlashTP-style convolutions.
+
+    The underlying TP/scatter kernel still consumes directed-edge tensors.
+    This wrapper only materializes directed-edge weights/filters from the
+    pair-invariant contract when possible.
+    """
+
+    def __init__(
+        self,
+        irreps_x: Irreps,
+        irreps_filter: Irreps,
+        irreps_out: Irreps,
+        weight_layer_input_to_hidden: List[int],
+        weight_layer_act=ShiftedSoftPlus,
+        denominator: float = 1.0,
+        train_denominator: bool = False,
+        data_key_x: str = KEY.NODE_FEATURE,
+        data_key_filter: str = KEY.EDGE_ATTR,
+        data_key_weight_input: str = KEY.EDGE_EMBEDDING,
+        data_key_edge_idx: str = KEY.EDGE_IDX,
+        lazy_layer_instantiate: bool = True,
+        is_parallel: bool = False,
+        pairgeom_backend: str = 'flash',
+    ) -> None:
+        super().__init__(
+            irreps_x=irreps_x,
+            irreps_filter=irreps_filter,
+            irreps_out=irreps_out,
+            weight_layer_input_to_hidden=weight_layer_input_to_hidden,
+            weight_layer_act=weight_layer_act,
+            denominator=denominator,
+            train_denominator=train_denominator,
+            data_key_x=data_key_x,
+            data_key_filter=data_key_filter,
+            data_key_weight_input=data_key_weight_input,
+            data_key_edge_idx=data_key_edge_idx,
+            lazy_layer_instantiate=lazy_layer_instantiate,
+            is_parallel=is_parallel,
+            pairgeom_backend=pairgeom_backend,
+        )
+        self.register_buffer(
+            'pair_parity_sign',
+            build_spherical_harmonic_parity_sign(irreps_filter),
+            persistent=False,
+        )
+
+    @classmethod
+    def from_irreps_convolution(cls, src: IrrepsConvolution):
+        ret = super().from_irreps_convolution(src)
+        assert isinstance(ret, PairAwareFlashTPConvolution)
+        ret.register_buffer(
+            'pair_parity_sign',
+            build_spherical_harmonic_parity_sign(
+                ret.convolution_kwargs['irreps_in2']
+            ),
+            persistent=False,
+        )
+        return ret
+
+    def forward(self, data: AtomGraphDataType) -> AtomGraphDataType:
+        assert self.convolution is not None, 'Convolution is not instantiated'
+        assert self.weight_nn is not None, 'Weight_nn is not instantiated'
+
+        x = data[self.key_x]
+        if KEY.PAIR_EMBEDDING in data and KEY.EDGE_TO_PAIR in data:
+            pair_weight = self.weight_nn(data[KEY.PAIR_EMBEDDING])
+            weight = pair_weight.index_select(0, data[KEY.EDGE_TO_PAIR])
+        else:
+            weight = self.weight_nn(data[self.key_weight_input])
+
+        if self.is_parallel:
+            x = torch.cat([x, data[KEY.NODE_FEATURE_GHOST]])
+
+        edge_src = data[self.key_edge_idx][1]
+        edge_dst = data[self.key_edge_idx][0]
+
+        if self.key_filter in data:
+            edge_filter = data[self.key_filter]
+        elif (
+            KEY.PAIR_ATTR in data
+            and KEY.EDGE_TO_PAIR in data
+            and KEY.EDGE_IS_REVERSED in data
+        ):
+            edge_filter = data[KEY.PAIR_ATTR].index_select(0, data[KEY.EDGE_TO_PAIR])
+            parity_sign = self.pair_parity_sign.to(
+                device=edge_filter.device,
+                dtype=edge_filter.dtype,
+            )
+            edge_filter = torch.where(
+                data[KEY.EDGE_IS_REVERSED].unsqueeze(-1),
+                edge_filter * parity_sign,
+                edge_filter,
+            )
+        else:
+            raise KeyError(
+                'PairAwareFlashTPConvolution requires edge_attr or pair_attr '
+                'with pair metadata'
+            )
+
+        if edge_src.numel() == 0:
+            x = x.new_zeros(x.shape[0], self._out_dim)
+            x = x + (edge_filter.sum() + weight.sum()) * 0
+        else:
+            x = self.convolution(
+                x,
+                edge_filter,
+                weight,
+                edge_src.to(torch.int32),
+                edge_dst.to(torch.int32),
+            )
+
+        x = x.div(self.denominator)
+
+        if self.is_parallel:
+            x = torch.tensor_split(x, data[KEY.NLOCAL])[0]
+        data[self.key_x] = x
         return data

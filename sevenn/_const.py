@@ -132,6 +132,8 @@ DEFAULT_E3_EQUIVARIANT_MODEL_CONFIG = {
     KEY.USE_FLASH_TP: False,
     KEY.CUEQUIVARIANCE_CONFIG: {},
     KEY.USE_OEQ: False,
+    KEY.USE_PAIRGEOM: False,
+    KEY.PAIRGEOM_BACKEND: 'auto',
 }
 
 
@@ -180,6 +182,8 @@ MODEL_CONFIG_CONDITION = {
     KEY.USE_FLASH_TP: bool,
     KEY.CUEQUIVARIANCE_CONFIG: dict,
     KEY.USE_OEQ: bool,
+    KEY.USE_PAIRGEOM: bool,
+    KEY.PAIRGEOM_BACKEND: lambda x: x in ['auto', 'reference', 'flash', 'disabled'],
 }
 
 

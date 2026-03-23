@@ -314,6 +314,7 @@ class SevenNetCheckpoint:
         enable_flash: Optional[bool] = None,
         enable_oeq: Optional[bool] = None,
         enable_pairgeom: Optional[bool] = None,
+        pairgeom_backend: Optional[str] = None,
         _flash_lammps: bool = False,
     ) -> AtomGraphSequential:
         """
@@ -334,9 +335,22 @@ class SevenNetCheckpoint:
         enable_oeq = cp_using_oeq if enable_oeq is None else enable_oeq
 
         cp_using_pairgeom = self.config.get(KEY.USE_PAIRGEOM, False)
+        cp_pairgeom_backend = self.config.get(KEY.PAIRGEOM_BACKEND, 'auto')
+        enable_pairgeom_given = enable_pairgeom is not None
+        pairgeom_backend_given = pairgeom_backend is not None
         enable_pairgeom = (
-            cp_using_pairgeom if enable_pairgeom is None else enable_pairgeom
+            cp_using_pairgeom
+            if enable_pairgeom is None
+            else enable_pairgeom
         )
+        pairgeom_backend = (
+            cp_pairgeom_backend if pairgeom_backend is None else pairgeom_backend
+        )
+        if pairgeom_backend_given and pairgeom_backend != 'disabled' \
+                and not enable_pairgeom_given:
+            enable_pairgeom = True
+        if not enable_pairgeom:
+            pairgeom_backend = 'disabled'
 
         if sum([enable_cueq, enable_flash, enable_oeq]) > 1:
             raise ValueError('Only one TP accelerator can be enabled.')
@@ -346,6 +360,7 @@ class SevenNetCheckpoint:
         cfg_new['_flash_lammps'] = _flash_lammps
         cfg_new[KEY.USE_OEQ] = enable_oeq
         cfg_new[KEY.USE_PAIRGEOM] = enable_pairgeom
+        cfg_new[KEY.PAIRGEOM_BACKEND] = pairgeom_backend
 
         if (cp_using_cueq, cp_using_flash, cp_using_oeq) \
                 == (enable_cueq, enable_flash, enable_oeq):
@@ -365,6 +380,7 @@ class SevenNetCheckpoint:
             cfg_new[KEY.USE_FLASH_TP] = enable_flash
             cfg_new[KEY.USE_OEQ] = enable_oeq
             cfg_new[KEY.USE_PAIRGEOM] = enable_pairgeom
+            cfg_new[KEY.PAIRGEOM_BACKEND] = pairgeom_backend
             model = build_E3_equivariant_model(cfg_new)
             stct_src = compat.patch_state_dict_if_old(
                 self.model_state_dict, self.config, model

@@ -98,6 +98,13 @@ def add_args(parser):
         action='store_true',
     )
     ag.add_argument(
+        '--pairgeom_backend',
+        type=str,
+        choices=['auto', 'reference', 'flash', 'disabled'],
+        default=None,
+        help='pair-invariant execution backend selection',
+    )
+    ag.add_argument(
         '--kwargs',
         nargs=argparse.REMAINDER,
         help='will be passed to reader, or can be used to specify EFS key',
@@ -168,7 +175,8 @@ def run(args):
         enable_cueq=args.enable_cueq,
         enable_flash=args.enable_flash,
         enable_oeq=args.enable_oeq,
-        enable_pairgeom=args.enable_pairgeom,
+        enable_pairgeom=args.enable_pairgeom or args.pairgeom_backend not in (None, 'disabled'),
+        pairgeom_backend=args.pairgeom_backend,
         **fmt_kwargs,
     )
 

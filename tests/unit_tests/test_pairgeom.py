@@ -7,13 +7,17 @@ import numpy as np
 import pytest
 import torch
 from ase.build import bulk
+from e3nn.o3 import Irreps
 from torch_geometric.loader import DataLoader
 
 import sevenn._keys as KEY
 import sevenn.train.dataload as dl
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.model_build import build_E3_equivariant_model
-from sevenn.nn.convolution import PairFusedIrrepsConvolution
+from sevenn.nn.convolution import (
+    PairAwareFlashTPConvolution,
+    PairFusedIrrepsConvolution,
+)
 from sevenn.nn.edge_embedding import (
     BesselBasis,
     EdgeEmbedding,
@@ -105,6 +109,29 @@ def _make_model_config():
     }
     config.update(**chemical_species_preprocess(sorted(set(atoms.get_chemical_symbols()))))
     return config
+
+
+class _DummyFlashTP(torch.nn.Module):
+    def __init__(
+        self,
+        irreps_in1,
+        irreps_in2,
+        irreps_out,
+        instructions,
+        shared_weights: bool = False,
+        internal_weights: bool = False,
+        **kwargs,
+    ) -> None:
+        super().__init__()
+
+    def forward(self, x, edge_filter, weight, edge_src, edge_dst):
+        edge_src = edge_src.to(torch.int64)
+        edge_dst = edge_dst.to(torch.int64)
+        scale = edge_filter.sum(dim=1, keepdim=True) * weight.sum(dim=1, keepdim=True)
+        msg = x.index_select(0, edge_src) * scale
+        out = x.new_zeros((x.shape[0], msg.shape[1]))
+        out.index_add_(0, edge_dst, msg)
+        return out
 
 
 def test_pair_mapping_correctness():
@@ -232,6 +259,14 @@ def test_pair_metadata_batch_offsets():
         assert torch.equal(graph[KEY.PAIR_OWNER], graph_a[KEY.PAIR_OWNER])
 
 
+def test_pair_metadata_contract_contains_pair_index_fields():
+    graph = _make_pair_graph()
+    ensure_pair_metadata(graph)
+
+    assert torch.equal(graph[KEY.PAIR_SRC], graph[KEY.PAIR_IDX][0])
+    assert torch.equal(graph[KEY.PAIR_DST], graph[KEY.PAIR_IDX][1])
+
+
 def test_pairgeom_full_model_matches_baseline():
     cp = load_checkpoint(cp_0_path)
     atoms = ase.io.read(hfo2_path)
@@ -298,8 +333,137 @@ def test_pairgeom_accelerated_model_skips_pair_fused_convolution():
         if name.endswith('_convolution')
     ]
     assert conv_modules
-    assert not any(
-        isinstance(module, PairFusedIrrepsConvolution) for module in conv_modules
+    if is_flash_available():
+        assert not any(
+            isinstance(module, PairFusedIrrepsConvolution) for module in conv_modules
+        )
+    else:
+        assert all(
+            isinstance(module, PairFusedIrrepsConvolution) for module in conv_modules
+        )
+
+
+def test_pairgeom_parallel_model_uses_standard_backend():
+    config = _make_model_config()
+    config[KEY.USE_PAIRGEOM] = True
+    models = build_E3_equivariant_model(config, parallel=True)
+    assert isinstance(models, list)
+    assert models
+
+    for model in models:
+        conv_modules = [
+            module
+            for name, module in model._modules.items()
+            if name.endswith('_convolution')
+        ]
+        assert conv_modules
+        assert model.pairgeom_backend == 'standard'
+        assert not any(
+            isinstance(module, PairFusedIrrepsConvolution)
+            for module in conv_modules
+        )
+
+
+def test_pairgeom_reference_request_falls_back_under_flash_flag():
+    config = _make_model_config()
+    config[KEY.USE_PAIRGEOM] = True
+    config[KEY.USE_FLASH_TP] = True
+    config[KEY.PAIRGEOM_BACKEND] = 'reference'
+    model = build_E3_equivariant_model(config, parallel=False)
+    assert isinstance(model, AtomGraphSequential)
+    assert model.pairgeom_requested_backend == 'reference'
+    assert model.pairgeom_backend == 'reference'
+
+
+def test_pairgeom_flash_request_falls_back_to_reference_when_flash_unavailable():
+    config = _make_model_config()
+    config[KEY.USE_PAIRGEOM] = True
+    config[KEY.USE_FLASH_TP] = True
+    config[KEY.PAIRGEOM_BACKEND] = 'flash'
+    model = build_E3_equivariant_model(config, parallel=False)
+    assert isinstance(model, AtomGraphSequential)
+    assert model.pairgeom_requested_backend == 'flash'
+    if is_flash_available():
+        assert model.pairgeom_backend == 'flash'
+    else:
+        assert model.pairgeom_backend == 'reference'
+
+
+def test_pairgeom_auto_uses_reference_when_flash_requested_but_unavailable():
+    config = _make_model_config()
+    config[KEY.USE_PAIRGEOM] = True
+    config[KEY.USE_FLASH_TP] = True
+    model = build_E3_equivariant_model(config, parallel=False)
+    assert isinstance(model, AtomGraphSequential)
+    if is_flash_available():
+        assert model.pairgeom_backend == 'flash'
+    else:
+        assert model.pairgeom_backend == 'reference'
+
+
+def test_pairaware_flashtp_convolution_reconstructs_edge_attr_from_pair_attr():
+    module = PairAwareFlashTPConvolution(
+        irreps_x=Irreps('1x0e'),
+        irreps_filter=Irreps('1x0e + 1x1o'),
+        irreps_out=Irreps('1x0e'),
+        weight_layer_input_to_hidden=[2],
+        lazy_layer_instantiate=True,
+    )
+    module.convolution_cls = _DummyFlashTP
+    module.instantiate()
+
+    pair_attr = torch.tensor([[1.0, 0.25, -0.5, 0.75]], dtype=torch.float32)
+    pair_embedding = torch.tensor([[0.4, 0.7]], dtype=torch.float32)
+    pair_data = {
+        KEY.NODE_FEATURE: torch.tensor([[2.0], [3.0]], dtype=torch.float32),
+        KEY.EDGE_IDX: torch.tensor([[0, 1], [1, 0]], dtype=torch.int64),
+        KEY.PAIR_ATTR: pair_attr,
+        KEY.PAIR_EMBEDDING: pair_embedding,
+        KEY.EDGE_TO_PAIR: torch.tensor([0, 0], dtype=torch.int64),
+        KEY.EDGE_IS_REVERSED: torch.tensor([False, True]),
+    }
+    parity_sign = build_spherical_harmonic_parity_sign(Irreps('1x0e + 1x1o'))
+    edge_attr = apply_spherical_harmonic_parity(
+        pair_attr.index_select(0, pair_data[KEY.EDGE_TO_PAIR]),
+        parity_sign,
+        pair_data[KEY.EDGE_IS_REVERSED],
+    )
+    edge_data = dict(pair_data)
+    edge_data[KEY.EDGE_ATTR] = edge_attr
+
+    out_pair = module(dict(pair_data))[KEY.NODE_FEATURE]
+    out_edge = module(dict(edge_data))[KEY.NODE_FEATURE]
+    assert torch.allclose(out_pair, out_edge, atol=1e-6, rtol=1e-6)
+
+
+def test_pairgeom_flash_backend_selects_pairaware_wrapper(monkeypatch):
+    import sevenn.nn.flash_helper as flash_helper
+
+    config = _make_model_config()
+    config[KEY.USE_PAIRGEOM] = True
+    config[KEY.USE_FLASH_TP] = True
+    config[KEY.PAIRGEOM_BACKEND] = 'flash'
+
+    def _fake_patch(module, _flash_lammps=False):
+        patched = PairAwareFlashTPConvolution.from_irreps_convolution(module)
+        patched.convolution_cls = _DummyFlashTP
+        return patched
+
+    monkeypatch.setattr(flash_helper, 'is_flash_available', lambda: True)
+    monkeypatch.setattr(flash_helper, 'patch_convolution', _fake_patch)
+
+    model = build_E3_equivariant_model(config, parallel=False)
+    assert isinstance(model, AtomGraphSequential)
+    conv_modules = [
+        module
+        for name, module in model._modules.items()
+        if name.endswith('_convolution')
+    ]
+    assert conv_modules
+    assert model.pairgeom_backend == 'flash'
+    assert all(
+        isinstance(module, PairAwareFlashTPConvolution)
+        for module in conv_modules
     )
 
 
