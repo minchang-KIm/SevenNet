@@ -123,3 +123,27 @@ After the installation, you can leverage the accelerator with appropriate flag (
 SevenNet also provides an experimental `--enable_pairgeom` option for inference-only pair-centric geometry reuse.
 This option is currently checkpoint-only at runtime and is intended for ASE/CLI benchmarking.
 It does not apply to `sevenn train`, `sevenn get_model`, or LAMMPS deployment in v1.
+
+### What pairgeom currently optimizes
+
+When reverse directed edges are present, `pairgeom` canonicalizes them into undirected pairs and reuses the pair geometry across the two directions.
+The current implementation performs the following optimizations:
+
+- Builds and reuses pair metadata such as `edge_to_pair`, reverse-edge flags, and canonical pair ownership.
+- Computes radial basis, cutoff, and spherical harmonics once per undirected pair instead of once per directed edge.
+- Reuses the convolution weight-network output per pair, then maps the pair weights back to the directed edges consumed by the existing interaction layers.
+- Reuses cached pair topology in repeated ASE calculator evaluations when the neighbor topology does not change.
+
+This keeps the model output identical to the baseline path while reducing duplicate pair-invariant work.
+
+### Current scope and limitations
+
+The current `pairgeom` path is still an edge-based message-passing model.
+Only geometry generation and the per-layer weight MLP reuse pair-level data.
+The tensor product, directional message construction, and scatter/gather stages still run on directed edges.
+
+In other words, the current implementation is not a fully pair-fused convolution backend.
+Performance gains therefore depend on how much of the runtime is spent in geometry and weight generation versus tensor products.
+
+`pairgeom` currently assumes that each undirected pair appears as exactly two directed edges.
+For periodic systems, the graph must carry `cell_shift` information so that reverse periodic edges can be paired correctly.

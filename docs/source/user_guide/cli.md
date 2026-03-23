@@ -66,6 +66,7 @@ See `sevenn inference --help` for more information.
 
 For experimental geometry reuse benchmarking, `sevenn inference` also accepts `--enable_pairgeom`.
 This option is inference-only, only works when loading from a checkpoint, and is not supported by `sevenn get_model` or LAMMPS deployment in v1.
+With this flag, SevenNet reuses pair-level geometry and per-layer weight-network outputs when reverse edges are available, but the interaction layers still execute directed-edge tensor products.
 
 
 (sevenn-get-model)=
