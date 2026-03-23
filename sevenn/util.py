@@ -101,10 +101,14 @@ def model_from_checkpoint(
     enable_cueq: Optional[bool] = None,
     enable_flash: Optional[bool] = None,
     enable_oeq: Optional[bool] = None,
+    enable_pairgeom: Optional[bool] = None,
 ) -> Tuple[torch.nn.Module, Dict[str, Any]]:
     cp = load_checkpoint(checkpoint)
     model = cp.build_model(
-        enable_cueq=enable_cueq, enable_flash=enable_flash, enable_oeq=enable_oeq
+        enable_cueq=enable_cueq,
+        enable_flash=enable_flash,
+        enable_oeq=enable_oeq,
+        enable_pairgeom=enable_pairgeom,
     )
 
     return model, cp.config
@@ -160,9 +164,13 @@ def dtype_correct(
             return torch.from_numpy(v).to(float_dtype)
         elif np.issubdtype(v.dtype, np.integer):
             return torch.from_numpy(v).to(int_dtype)
+        elif np.issubdtype(v.dtype, np.bool_):
+            return torch.from_numpy(v).to(torch.bool)
     elif isinstance(v, torch.Tensor):
         if v.dtype.is_floating_point:
             return v.to(float_dtype)  # convert to specified float dtype
+        elif v.dtype == torch.bool:
+            return v
         else:  # assuming non-floating point tensors are integers
             return v.to(int_dtype)  # convert to specified int dtype
     else:  # scalar values

@@ -411,12 +411,24 @@ class SevenNetGraphDataset(InMemoryDataset):
 
     @staticmethod
     def _read_structure_list(
-        filename: str, cutoff: float, num_cores: int = 1
+        filename: str,
+        cutoff: float,
+        num_cores: int = 1,
+        allow_unlabeled: bool = False,
+        with_shift: bool = False,
+        with_pair_metadata: bool = False,
     ) -> List[AtomGraphData]:
         datadct = dataload.structure_list_reader(filename)
         graph_list = []
         for tag, atoms_list in datadct.items():
-            tmp = dataload.graph_build(atoms_list, cutoff, num_cores)
+            tmp = dataload.graph_build(
+                atoms_list,
+                cutoff,
+                num_cores,
+                allow_unlabeled=allow_unlabeled,
+                with_shift=with_shift,
+                with_pair_metadata=with_pair_metadata,
+            )
             graph_list.extend(_tag_graphs(tmp, tag))
         return graph_list
 
@@ -428,6 +440,8 @@ class SevenNetGraphDataset(InMemoryDataset):
         tag: str = '',
         transfer_info: bool = True,
         allow_unlabeled: bool = False,
+        with_shift: bool = False,
+        with_pair_metadata: bool = False,
         **ase_kwargs,
     ) -> List[AtomGraphData]:
         pbc_override = ase_kwargs.pop('pbc', None)
@@ -441,6 +455,8 @@ class SevenNetGraphDataset(InMemoryDataset):
             num_cores,
             transfer_info=transfer_info,
             allow_unlabeled=allow_unlabeled,
+            with_shift=with_shift,
+            with_pair_metadata=with_pair_metadata,
         )
         if tag != '':
             graph_list = _tag_graphs(graph_list, tag)
@@ -482,6 +498,9 @@ class SevenNetGraphDataset(InMemoryDataset):
         data_dict: dict,
         cutoff: float,
         num_cores: int = 1,
+        allow_unlabeled: bool = False,
+        with_shift: bool = False,
+        with_pair_metadata: bool = False,
     ) -> List[AtomGraphData]:
         # logic same as the dataload dict_reader, but handles graphs
         data_dict_cp = deepcopy(data_dict)
@@ -514,7 +533,16 @@ class SevenNetGraphDataset(InMemoryDataset):
             graph[KEY.INFO].update({KEY.DATA_WEIGHT: data_weight})
 
         atoms_list = dataload.dict_reader(data_dict)
-        graph_list.extend(dataload.graph_build(atoms_list, cutoff, num_cores))
+        graph_list.extend(
+            dataload.graph_build(
+                atoms_list,
+                cutoff,
+                num_cores,
+                allow_unlabeled=allow_unlabeled,
+                with_shift=with_shift,
+                with_pair_metadata=with_pair_metadata,
+            )
+        )
         return graph_list
 
     @staticmethod
@@ -540,7 +568,7 @@ class SevenNetGraphDataset(InMemoryDataset):
             cutoff = cutoff_other
         elif 'structure_list' in file:
             graph_list = SevenNetGraphDataset._read_structure_list(
-                file, cutoff, num_cores
+                file, cutoff, num_cores, **kwargs
             )
         else:
             graph_list = SevenNetGraphDataset._read_ase_readable(

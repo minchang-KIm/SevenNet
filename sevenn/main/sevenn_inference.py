@@ -86,6 +86,18 @@ def add_args(parser):
         action='store_true',
     )
     ag.add_argument(
+        '--enable_pairgeom',
+        dest='enable_pairgeom',
+        help='use pair-centric geometry reuse for checkpoint inference',
+        action='store_true',
+    )
+    ag.add_argument(
+        '--enable_pairaware',
+        dest='enable_pairgeom',
+        help=argparse.SUPPRESS,
+        action='store_true',
+    )
+    ag.add_argument(
         '--kwargs',
         nargs=argparse.REMAINDER,
         help='will be passed to reader, or can be used to specify EFS key',
@@ -156,6 +168,7 @@ def run(args):
         enable_cueq=args.enable_cueq,
         enable_flash=args.enable_flash,
         enable_oeq=args.enable_oeq,
+        enable_pairgeom=args.enable_pairgeom,
         **fmt_kwargs,
     )
 

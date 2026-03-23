@@ -5,6 +5,7 @@ dist
 sevenn.egg-info
 *.swp
 __pycache__/
+.DS_Store
 
 # from uv
 uv.lock
@@ -21,3 +22,6 @@ sevenn/pretrained_potentials/SevenNet_omni_i12
 sevenn/pair_d3*
 *ninja*
 *libpaird3*
+
+# generated benchmark outputs
+bench/results/

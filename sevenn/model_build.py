@@ -22,6 +22,7 @@ from .nn.force_output import ForceStressOutputFromEdge
 from .nn.interaction_blocks import NequIP_interaction_block
 from .nn.linear import AtomReduce, FCN_e3nn, IrrepsLinear
 from .nn.node_embedding import OnehotEmbedding
+from .nn.pairgeom import PairAwareEdgeEmbedding
 from .nn.scale import ModalWiseRescale, Rescale, SpeciesWiseRescale
 from .nn.self_connection import (
     SelfConnectionIntro,
@@ -96,7 +97,14 @@ def init_edge_embedding(config: Dict[str, Any]) -> EdgeEmbedding:
     _normalize_sph = config[KEY._NORMALIZE_SPH]
     sph = SphericalEncoding(lmax_edge, parity, normalize=_normalize_sph)
 
-    return EdgeEmbedding(basis_module=rbf, cutoff_module=env, spherical_module=sph)
+    edge_embedding_cls = (
+        PairAwareEdgeEmbedding
+        if config.get(KEY.USE_PAIRGEOM, False)
+        else EdgeEmbedding
+    )
+    return edge_embedding_cls(
+        basis_module=rbf, cutoff_module=env, spherical_module=sph
+    )
 
 
 def init_feature_reduce(config: Dict[str, Any], irreps_x: Irreps) -> OrderedDict:

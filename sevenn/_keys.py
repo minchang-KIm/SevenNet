@@ -31,6 +31,12 @@ CELL_VOLUME: Final[str] = 'cell_volume'
 
 EDGE_VEC: Final[str] = 'edge_vec'  # (N_edge, 3)
 EDGE_LENGTH: Final[str] = 'edge_length'  # (N_edge, 1)
+PAIR_IDX: Final[str] = 'pair_index'  # (2, N_pair)
+PAIR_SHIFT: Final[str] = 'pair_shift'  # (N_pair, 3)
+PAIR_OWNER: Final[str] = 'pair_owner'  # (N_pair)
+EDGE_TO_PAIR: Final[str] = 'edge_to_pair'  # (N_edge)
+EDGE_IS_REVERSED: Final[str] = 'edge_is_reversed'  # (N_edge)
+PAIR_EMBEDDING: Final[str] = 'pair_embedding'  # (N_pair, basis_num)
 
 # some primary data of graph
 EDGE_IDX: Final[str] = 'edge_index'  # (2, N_edge) PyG
@@ -223,6 +229,7 @@ TRAIN_AVG_NUM_NEIGH = 'train_avg_num_neigh'  # deprecated
 USE_FLASH_TP = 'use_flash_tp'
 CUEQUIVARIANCE_CONFIG = 'cuequivariance_config'
 USE_OEQ = 'use_oeq'
+USE_PAIRGEOM = 'use_pairgeom'
 
 _NORMALIZE_SPH = '_normalize_sph'
 OPTIMIZE_BY_REDUCE = 'optimize_by_reduce'

@@ -117,3 +117,9 @@ After the installation, you can leverage the accelerator with appropriate flag (
 - [Training](./cli.md#sevenn-train)
 - [ASE Calculator](./ase_calculator.md)
 - [LAMMPS](./cli.md#sevenn-get-model)
+
+## Experimental pairgeom
+
+SevenNet also provides an experimental `--enable_pairgeom` option for inference-only pair-centric geometry reuse.
+This option is currently checkpoint-only at runtime and is intended for ASE/CLI benchmarking.
+It does not apply to `sevenn train`, `sevenn get_model`, or LAMMPS deployment in v1.

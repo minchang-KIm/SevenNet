@@ -7,6 +7,7 @@ from typing import Callable, Dict, List, Optional
 import ase
 import ase.io
 import numpy as np
+import torch
 import torch.multiprocessing as mp
 from ase.io.vasp_parsers.vasp_outcar_parsers import (
     Cell,
@@ -25,6 +26,7 @@ from tqdm import tqdm
 import sevenn._keys as KEY
 from sevenn._const import LossType
 from sevenn.atom_graph_data import AtomGraphData
+from sevenn.nn.pairgeom import build_pair_metadata
 
 from .dataset import AtomGraphDataset
 
@@ -99,9 +101,26 @@ def _correct_scalar(v):
         assert False, f'{type(v)} is not expected'
 
 
+def _attach_pair_metadata(data: Dict[str, np.ndarray]) -> None:
+    edge_index = torch.from_numpy(data[KEY.EDGE_IDX]).to(torch.int64)
+    cell_shift = torch.from_numpy(data[KEY.CELL_SHIFT]).to(torch.int64)
+    pair_index, pair_shift, edge_to_pair, edge_is_reversed, pair_owner = (
+        build_pair_metadata(edge_index, cell_shift)
+    )
+    data[KEY.PAIR_IDX] = pair_index.cpu().numpy()
+    data[KEY.PAIR_SHIFT] = pair_shift.cpu().numpy()
+    data[KEY.EDGE_TO_PAIR] = edge_to_pair.cpu().numpy()
+    data[KEY.EDGE_IS_REVERSED] = edge_is_reversed.cpu().numpy()
+    data[KEY.PAIR_OWNER] = pair_owner.cpu().numpy()
+
+
 def unlabeled_atoms_to_graph(
-    atoms: ase.Atoms, cutoff: float, with_shift: bool = False
+    atoms: ase.Atoms,
+    cutoff: float,
+    with_shift: bool = False,
+    with_pair_metadata: bool = False,
 ):
+    with_shift = with_shift or with_pair_metadata
     pos = atoms.get_positions()
     cell = np.array(atoms.get_cell())
     pbc = atoms.get_pbc()
@@ -125,6 +144,8 @@ def unlabeled_atoms_to_graph(
     if with_shift:
         data[KEY.CELL_SHIFT] = shift
         data[KEY.CELL] = cell
+    if with_pair_metadata:
+        _attach_pair_metadata(data)
     data[KEY.INFO] = {}
     return data
 
@@ -136,6 +157,7 @@ def atoms_to_graph(
     y_from_calc: bool = False,
     allow_unlabeled: bool = False,
     with_shift: bool = False,
+    with_pair_metadata: bool = False,
 ):
     """
     From ase atoms, return AtomGraphData as graph based on cutoff radius
@@ -156,6 +178,7 @@ def atoms_to_graph(
         , for scalar, its shape is (), and types are np.ndarray
     Requires grad is handled by 'dataset' not here.
     """
+    with_shift = with_shift or with_pair_metadata
     if not y_from_calc:
         y_energy = atoms.info['y_energy']
         y_force = atoms.arrays['y_force']
@@ -209,6 +232,8 @@ def atoms_to_graph(
     if with_shift:
         data[KEY.CELL_SHIFT] = shift
         data[KEY.CELL] = cell
+    if with_pair_metadata:
+        _attach_pair_metadata(data)
 
     if transfer_info and atoms.info is not None:
         info = copy.deepcopy(atoms.info)
@@ -230,6 +255,8 @@ def graph_build(
     transfer_info: bool = True,
     y_from_calc: bool = False,
     allow_unlabeled: bool = False,
+    with_shift: bool = False,
+    with_pair_metadata: bool = False,
 ) -> List[AtomGraphData]:
     """
     parallel version of graph_build
@@ -246,7 +273,15 @@ def graph_build(
     """
     serial = num_cores == 1
     inputs = [
-        (atoms, cutoff, transfer_info, y_from_calc, allow_unlabeled)
+        (
+            atoms,
+            cutoff,
+            transfer_info,
+            y_from_calc,
+            allow_unlabeled,
+            with_shift,
+            with_pair_metadata,
+        )
         for atoms in atoms_list
     ]
 

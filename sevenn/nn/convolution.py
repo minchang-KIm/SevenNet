@@ -118,7 +118,11 @@ class IrrepsConvolution(nn.Module):
     def forward(self, data: AtomGraphDataType) -> AtomGraphDataType:
         assert self.convolution is not None, 'Convolution is not instantiated'
         assert self.weight_nn is not None, 'Weight_nn is not instantiated'
-        weight = self.weight_nn(data[self.key_weight_input])
+        if KEY.PAIR_EMBEDDING in data and KEY.EDGE_TO_PAIR in data:
+            pair_weight = self.weight_nn(data[KEY.PAIR_EMBEDDING])
+            weight = pair_weight.index_select(0, data[KEY.EDGE_TO_PAIR])
+        else:
+            weight = self.weight_nn(data[self.key_weight_input])
 
         x = data[self.key_x]
 
@@ -251,9 +255,11 @@ class IrrepsScatterGatterFusedConvolution(nn.Module):
         assert self.weight_nn is not None, 'Weight_nn is not instantiated'
 
         x = data[self.key_x]
-        weight_input = data[self.key_weight_input]
-
-        weight = self.weight_nn(weight_input)
+        if KEY.PAIR_EMBEDDING in data and KEY.EDGE_TO_PAIR in data:
+            pair_weight = self.weight_nn(data[KEY.PAIR_EMBEDDING])
+            weight = pair_weight.index_select(0, data[KEY.EDGE_TO_PAIR])
+        else:
+            weight = self.weight_nn(data[self.key_weight_input])
 
         if self.is_parallel:
             x = torch.cat([x, data[KEY.NODE_FEATURE_GHOST]])

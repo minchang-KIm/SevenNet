@@ -313,6 +313,7 @@ class SevenNetCheckpoint:
         enable_cueq: Optional[bool] = None,
         enable_flash: Optional[bool] = None,
         enable_oeq: Optional[bool] = None,
+        enable_pairgeom: Optional[bool] = None,
         _flash_lammps: bool = False,
     ) -> AtomGraphSequential:
         """
@@ -332,13 +333,19 @@ class SevenNetCheckpoint:
         cp_using_oeq = self.config.get(KEY.USE_OEQ, False)
         enable_oeq = cp_using_oeq if enable_oeq is None else enable_oeq
 
+        cp_using_pairgeom = self.config.get(KEY.USE_PAIRGEOM, False)
+        enable_pairgeom = (
+            cp_using_pairgeom if enable_pairgeom is None else enable_pairgeom
+        )
+
         if sum([enable_cueq, enable_flash, enable_oeq]) > 1:
             raise ValueError('Only one TP accelerator can be enabled.')
 
         assert not _flash_lammps or enable_flash
-        cfg_new = self.config
+        cfg_new = deepcopy(self.config)
         cfg_new['_flash_lammps'] = _flash_lammps
         cfg_new[KEY.USE_OEQ] = enable_oeq
+        cfg_new[KEY.USE_PAIRGEOM] = enable_pairgeom
 
         if (cp_using_cueq, cp_using_flash, cp_using_oeq) \
                 == (enable_cueq, enable_flash, enable_oeq):
@@ -357,6 +364,7 @@ class SevenNetCheckpoint:
             cfg_new[KEY.CUEQUIVARIANCE_CONFIG] = {'use': enable_cueq}
             cfg_new[KEY.USE_FLASH_TP] = enable_flash
             cfg_new[KEY.USE_OEQ] = enable_oeq
+            cfg_new[KEY.USE_PAIRGEOM] = enable_pairgeom
             model = build_E3_equivariant_model(cfg_new)
             stct_src = compat.patch_state_dict_if_old(
                 self.model_state_dict, self.config, model

@@ -64,6 +64,9 @@ sevenn inference checkpoint_best.pth path_to_my_structures/*
 This will create the `inference_results` directory, where CSV files contain predicted energy, force, stress, and their references (if available).
 See `sevenn inference --help` for more information.
 
+For experimental geometry reuse benchmarking, `sevenn inference` also accepts `--enable_pairgeom`.
+This option is inference-only, only works when loading from a checkpoint, and is not supported by `sevenn get_model` or LAMMPS deployment in v1.
+
 
 (sevenn-get-model)=
 ## `sevenn get_model`

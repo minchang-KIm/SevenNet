@@ -196,6 +196,32 @@ def test_inference_labeled_w_kwargs(atoms_hfo, tmp_path):
     assert np.allclose(float(per_graph['stress_xy']), 6 * stress_coeff)
 
 
+def test_inference_pairgeom(tmp_path):
+    checkpoint = cp_0_path
+    baseline_dir = tmp_path / 'inference_baseline_results'
+    pairgeom_dir = tmp_path / 'inference_pairgeom_results'
+
+    cli_args = ['--output', str(baseline_dir), checkpoint, hfo2_path]
+    with mock.patch('sys.argv', [f'{main}/sevenn_inference.py'] + cli_args):
+        inference_main()
+
+    cli_args = [
+        '--output',
+        str(pairgeom_dir),
+        '--enable_pairgeom',
+        checkpoint,
+        hfo2_path,
+    ]
+    with mock.patch('sys.argv', [f'{main}/sevenn_inference.py'] + cli_args):
+        inference_main()
+
+    with open(baseline_dir / 'errors.txt', 'r', encoding='utf-8') as f:
+        errors_ref = [float(ll.split(':')[-1].strip()) for ll in f.readlines()]
+    with open(pairgeom_dir / 'errors.txt', 'r', encoding='utf-8') as f:
+        errors = [float(ll.split(':')[-1].strip()) for ll in f.readlines()]
+    assert np.allclose(np.array(errors), np.array(errors_ref), atol=1e-5, rtol=1e-5)
+
+
 @pytest.mark.parametrize(
     'preset_name,mode,data_path',
     [

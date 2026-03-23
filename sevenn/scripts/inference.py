@@ -128,6 +128,7 @@ def inference(
     enable_cueq: bool = False,
     enable_flash: bool = False,
     enable_oeq: bool = False,
+    enable_pairgeom: bool = False,
     **data_kwargs,
 ) -> None:
     """
@@ -160,6 +161,7 @@ def inference(
         enable_cueq=enable_cueq or None,
         enable_flash=enable_flash or None,
         enable_oeq=enable_oeq or None,
+        enable_pairgeom=enable_pairgeom or None,
     )
     cutoff = model.cutoff
 
@@ -181,6 +183,8 @@ def inference(
             files=targets,
             process_num_cores=num_workers,
             processed_name='saved_graph.pt',
+            with_shift=enable_pairgeom,
+            with_pair_metadata=enable_pairgeom,
             **data_kwargs,
         )
         full_file_list = dataset.full_file_list  # TODO: not used currently
@@ -192,6 +196,8 @@ def inference(
                 cutoff=cutoff,
                 num_cores=num_workers,
                 allow_unlabeled=allow_unlabeled,
+                with_shift=enable_pairgeom,
+                with_pair_metadata=enable_pairgeom,
                 **data_kwargs,
             )
             dataset.extend(tmplist)
