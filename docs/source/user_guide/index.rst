@@ -1,7 +1,7 @@
 User Guide
 ==========
 
-SevenNet offers various pretrained models, MD engines (ASE, LAMMPS), and user interfaces (CLI, Python). For more information, please see the documentation below.
+SevenNet provides a technical reference for the stable preprocessing, training, inference, and deployment surface, together with installation notes for optional backends and runtime integrations.
 
 .. toctree::
    :maxdepth: 1
@@ -12,7 +12,14 @@ SevenNet offers various pretrained models, MD engines (ASE, LAMMPS), and user in
 
 .. toctree::
    :maxdepth: 1
-   :caption: Installation
+   :caption: Core Reference
+
+   cli
+
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Installation and Deployment
 
    accelerator
    lammps_mliap
@@ -21,10 +28,9 @@ SevenNet offers various pretrained models, MD engines (ASE, LAMMPS), and user in
 
 .. toctree::
    :maxdepth: 1
-   :caption: Features
+   :caption: Additional Features
 
    ase_calculator
    torchsim
-   cli
    d3
    note_book

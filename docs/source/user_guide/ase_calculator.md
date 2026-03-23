@@ -1,32 +1,98 @@
 (ase_calculator)=
-# ASE calculator
+# ASE Calculator
 
-SevenNet provides an ASE interface via the ASE calculator. Models can be loaded using the following Python code:
+SevenNet provides an ASE calculator through `sevenn.calculator`.
+
+## Stable calculator classes
+
+- `SevenNetCalculator`: SevenNet energy, force, stress, and atomic energies
+- `SevenNetD3Calculator`: `SevenNetCalculator` plus the CUDA D3 correction
+
+## Loading a model
+
+Stable inputs for `SevenNetCalculator`:
+
+- pretrained keyword
+- checkpoint path
+- in-memory `AtomGraphSequential` model instance
+- deployed TorchScript model, when `file_type="torchscript"`
+
+Examples:
+
 ```python
 from sevenn.calculator import SevenNetCalculator
-# The 'modal' argument is required if the model is trained with multi-fidelity learning enabled.
-calc_omni = SevenNetCalculator(model='7net-omni', modal='mpa')
+
+calc = SevenNetCalculator(model="7net-0")
 ```
-SevenNet also supports CUDA-accelerated D3 calculations.
-For more information about D3, follow [here](../user_guide/d3.md))
+
+```python
+from sevenn.calculator import SevenNetCalculator
+
+calc = SevenNetCalculator(model="path/to/checkpoint_best.pth", file_type="checkpoint")
+```
+
+## Multi-modal checkpoints
+
+If the checkpoint carries a modality map, `modal` is required:
+
+```python
+from sevenn.calculator import SevenNetCalculator
+
+calc = SevenNetCalculator(model="7net-mf-ompa", modal="mpa")
+```
+
+## Accelerator backends
+
+Stable accelerator flags:
+
+- `enable_flash=True`
+- `enable_cueq=True`
+- `enable_oeq=True`
+
+Use at most one accelerator backend at a time.
+
+```python
+from sevenn.calculator import SevenNetCalculator
+
+calc = SevenNetCalculator(model="7net-0", enable_flash=True)
+```
+
+Important limits:
+
+- Accelerator selection is supported on checkpoint-backed calculator loading.
+- cuEquivariance, OpenEquivariance, and pairgeom are disabled automatically for `file_type="model_instance"` and `file_type="torchscript"`.
+- `device="auto"` selects CUDA when available, otherwise CPU.
+
+## Experimental pairgeom
+
+`enable_pairgeom=True` is experimental and only applies to checkpoint-backed calculator use:
+
+```python
+from sevenn.calculator import SevenNetCalculator
+
+calc = SevenNetCalculator(
+    model="path/to/checkpoint_best.pth",
+    file_type="checkpoint",
+    enable_pairgeom=True,
+)
+```
+
+This path is:
+
+- inference-only
+- checkpoint-only
+- not a deployment mode
+
+For the exact scope and constraints, see {ref}`pairgeom-experimental`.
+
+## D3 calculator
+
+`SevenNetD3Calculator` combines SevenNet with the CUDA D3 implementation:
+
 ```python
 from sevenn.calculator import SevenNetD3Calculator
-calc = SevenNetD3Calculator(model='7net-0', device='cuda')
+
+calc = SevenNetD3Calculator(model="7net-0", device="cuda")
 ```
 
-Use enable_cueq, enable_flash, or enable_oeq to use cuEquivariance, flashTP, or OpenEquivariance for faster inference.
-For more information about accelerators, follow [here](./accelerator.md)
-```python
-from sevenn.calculator import SevenNetCalculator
-calc = SevenNetCalculator(model='7net-0', enable_cueq=True) # or enable_flash=True or enable_oeq=True
-```
-
-If you encounter the error `CUDA is not installed or nvcc is not available`, please ensure the `nvcc` compiler is available. Currently, CPU + D3 is not supported.
-
-Various pretrained SevenNet models can be accessed by setting the model variable to predefined keywords like `7net-omni`, `7net-mf-ompa`, `7net-omat`, `7net-l3i5`, and `7net-0`.
-
-User-trained models can be applied with the ASE calculator. In this case, the `model` parameter should be set to the checkpoint path from training.
-
-:::{tip}
-When 'auto' is passed to the `device` parameter (the default setting), SevenNet utilizes GPU acceleration if available.
-:::
+CPU-only D3 is not provided by this implementation.

@@ -1,7 +1,7 @@
 (torchsim)=
 # TorchSim
 
-[TorchSim](https://github.com/TorchSim/torch-sim) is a GPU-native atomistic simulation engine built on PyTorch. It provides batched MD, relaxation, and more with significant speedups over ASE. See the [TorchSim documentation](https://torchsim.github.io/torch-sim/) for full details.
+[TorchSim](https://github.com/TorchSim/torch-sim) is a GPU-native atomistic simulation engine built on PyTorch. It provides batched MD, relaxation, and related workflows. See the [TorchSim documentation](https://torchsim.github.io/torch-sim/) for full details.
 
 SevenNet provides its own `SevenNetModel` wrapper for TorchSim, located in `sevenn.torchsim`.
 

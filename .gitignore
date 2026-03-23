@@ -10,6 +10,8 @@ __pycache__/
 # from uv
 uv.lock
 .python-version
+.venv/
+.venv-docs-test/
 
 # downloaded models
 sevenn/pretrained_potentials/SevenNet_MF_ompa
@@ -25,3 +27,6 @@ sevenn/pair_d3*
 
 # generated benchmark outputs
 bench/results/
+
+# generated docs outputs
+docs/_build/

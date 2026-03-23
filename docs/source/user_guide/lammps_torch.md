@@ -4,7 +4,7 @@
 - LAMMPS version of `stable_2Aug2023_update3`
 - [`CUDA-aware OpenMPI`](https://www.open-mpi.org/faq/?category=buildcuda) for faster parallel MD (optional)
 
-CUDA-aware OpenMPI is optional but recommended for parallel MD. If it is not available, GPUs will communicate via the CPU when running in parallel mode. It is still faster than using only one GPU, but its efficiency is lower.
+CUDA-aware OpenMPI is optional but recommended for parallel MD. If it is not available, GPUs will communicate via the CPU when running in parallel mode, which increases communication overhead and can reduce scaling efficiency.
 
 :::{note}
 CUDA-aware OpenMPI does not support NVIDIA gaming GPUs. Since the software is closely tied to hardware specifications, please consult your server administrator if CUDA-aware OpenMPI is unavailable.
@@ -64,7 +64,7 @@ This allows you to run the binary using `lmp -in my_lammps_script.lmp`.
 
 ## Usage
 ### Potential deployment
-Please check [sevenn graph_build](./cli.md#sevenn-graph-build) for detail.
+Please check {ref}`sevenn-graph-build` for detail.
 
 To deploy LAMMPS models from checkpoints for both serial and parallel execution, use {ref}`sevenn get_model<sevenn-get-model>`.
 
