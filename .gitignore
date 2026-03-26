@@ -21,3 +21,6 @@ sevenn/pretrained_potentials/SevenNet_omni_i12
 sevenn/pair_d3*
 *ninja*
 *libpaird3*
+
+# local benchmark artifacts
+bench/logs/*.log

@@ -2,7 +2,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON_BIN="${PYTHON_BIN:-$SCRIPT_DIR/../.venv/bin/python}"
+DEFAULT_VENV_PYTHON="$SCRIPT_DIR/../.venv/bin/python"
+
+if [[ -n "${PYTHON_BIN:-}" ]]; then
+  PYTHON_BIN="${PYTHON_BIN}"
+elif [[ -x "${DEFAULT_VENV_PYTHON}" ]]; then
+  PYTHON_BIN="${DEFAULT_VENV_PYTHON}"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="$(command -v python)"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="$(command -v python3)"
+else
+  echo "Python interpreter not found. Set PYTHON_BIN explicitly." >&2
+  exit 1
+fi
+
 CHECKPOINT="${CHECKPOINT:-7net-0}"
 DEVICE="${DEVICE:-auto}"
 WARMUP="${WARMUP:-2}"
