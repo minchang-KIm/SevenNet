@@ -230,6 +230,18 @@ def patch_modality(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
     return layers
 
 
+def _assert_single_tp_accelerator(config: Dict[str, Any]) -> None:
+    cue_cfg = config.get(KEY.CUEQUIVARIANCE_CONFIG, {})
+    enabled = [
+        bool(cue_cfg.get('use', False)),
+        bool(config.get(KEY.USE_FLASH_TP, False)),
+        bool(config.get(KEY.USE_SWIFT_TP, False)),
+        bool(config.get(KEY.USE_OEQ, False)),
+    ]
+    if sum(enabled) > 1:
+        raise ValueError('Only one TP accelerator can be enabled.')
+
+
 def patch_cue(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
     cue_cfg = copy.deepcopy(config.get(KEY.CUEQUIVARIANCE_CONFIG, {}))
     if not cue_cfg.pop('use', False):
@@ -326,6 +338,30 @@ def patch_flash_tp(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
     return layers
 
 
+def patch_swift_tp(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
+    import sevenn.nn.swift_helper as swift_helper
+
+    if not config.get(KEY.USE_SWIFT_TP, False):
+        return layers
+
+    if not swift_helper.is_swift_available():
+        warnings.warn(
+            (
+                'SWIFT-TP is requested, but CUDA is not available. '
+                + 'Fallback to e3nn.'
+            )
+        )
+        return layers
+
+    updates = {}
+    for k, module in layers.items():
+        if isinstance(module, IrrepsConvolution):
+            updates[k] = swift_helper.patch_convolution(module)
+
+    layers.update(updates)
+    return layers
+
+
 def patch_oeq(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
     import sevenn.nn.oeq_helper as oeq_helper
 
@@ -351,9 +387,11 @@ def patch_oeq(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
 
 
 def patch_modules(layers: OrderedDict, config: Dict[str, Any]) -> OrderedDict:
+    _assert_single_tp_accelerator(config)
     layers = patch_modality(layers, config)
     layers = patch_cue(layers, config)
     layers = patch_flash_tp(layers, config)
+    layers = patch_swift_tp(layers, config)
     layers = patch_oeq(layers, config)
     return layers
 

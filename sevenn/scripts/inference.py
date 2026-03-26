@@ -127,6 +127,7 @@ def inference(
     modal: Optional[str] = None,
     enable_cueq: bool = False,
     enable_flash: bool = False,
+    enable_swift: bool = False,
     enable_oeq: bool = False,
     **data_kwargs,
 ) -> None:
@@ -159,6 +160,7 @@ def inference(
         checkpoint,
         enable_cueq=enable_cueq or None,
         enable_flash=enable_flash or None,
+        enable_swift=enable_swift or None,
         enable_oeq=enable_oeq or None,
     )
     cutoff = model.cutoff

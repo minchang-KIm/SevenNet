@@ -80,6 +80,12 @@ def add_args(parser):
         action='store_true',
     )
     ag.add_argument(
+        '-swiftTP',
+        '--enable_swift',
+        help='use the experimental SWIFT-TP backend for inference',
+        action='store_true',
+    )
+    ag.add_argument(
         '-oeq',
         '--enable_oeq',
         help='use OpenEquivariance to accelerate inference',
@@ -138,6 +144,12 @@ def run(args):
         if not is_flash_available():
             raise ImportError('FlashTP not installed or no GPU found.')
 
+    if args.enable_swift:
+        from sevenn.nn.swift_helper import is_swift_available
+
+        if not is_swift_available():
+            raise ImportError('SWIFT-TP not available or no GPU found.')
+
     if args.enable_oeq:
         from sevenn.nn.oeq_helper import is_oeq_available
         if not is_oeq_available():
@@ -155,6 +167,7 @@ def run(args):
         args.modal,
         enable_cueq=args.enable_cueq,
         enable_flash=args.enable_flash,
+        enable_swift=args.enable_swift,
         enable_oeq=args.enable_oeq,
         **fmt_kwargs,
     )

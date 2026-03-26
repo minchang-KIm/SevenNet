@@ -39,6 +39,7 @@ class SevenNetCalculator(Calculator):
         modal: Optional[str] = None,
         enable_cueq: Optional[bool] = False,
         enable_flash: Optional[bool] = False,
+        enable_swift: Optional[bool] = False,
         enable_oeq: Optional[bool] = False,
         sevennet_config: Optional[Dict] = None,  # Not used in logic, just meta info
         **kwargs,
@@ -65,6 +66,8 @@ class SevenNetCalculator(Calculator):
             if True, use cuEquivariant to accelerate inference.
         enable_flash: bool, default=None (use the checkpoint's backend)
             if True, use FlashTP to accelerate inference.
+        enable_swift: bool, default=None (use the checkpoint's backend)
+            if True, use the experimental SWIFT-TP backend for inference.
         enable_oeq: bool, default=False
             if True, use OpenEquivariance to accelerate inference.
         sevennet_config: dict | None, default=None
@@ -83,6 +86,7 @@ class SevenNetCalculator(Calculator):
 
         enable_cueq = os.getenv('SEVENNET_ENABLE_CUEQ') == '1' or enable_cueq
         enable_flash = os.getenv('SEVENNET_ENABLE_FLASH') == '1' or enable_flash
+        enable_swift = os.getenv('SEVENNET_ENABLE_SWIFT') == '1' or enable_swift
         enable_oeq = os.getenv('SEVENNET_ENABLE_OEQ') == '1' or enable_oeq
 
         if enable_cueq and file_type in ['model_instance', 'torchscript']:
@@ -90,6 +94,13 @@ class SevenNetCalculator(Calculator):
                 'file_type should be checkpoint to enable cueq. cueq set to False'
             )
             enable_cueq = False
+
+        if enable_swift and file_type in ['model_instance', 'torchscript']:
+            warnings.warn(
+                'file_type should be checkpoint to enable swift. swift set to '
+                'False'
+            )
+            enable_swift = False
 
         # TODO: not verified this line
         if enable_oeq and file_type in ['model_instance', 'torchscript']:
@@ -112,7 +123,10 @@ class SevenNetCalculator(Calculator):
             cp = util.load_checkpoint(model)
 
             model_loaded = cp.build_model(
-                enable_cueq=enable_cueq, enable_flash=enable_flash, enable_oeq=enable_oeq  # noqa: E501
+                enable_cueq=enable_cueq,
+                enable_flash=enable_flash,
+                enable_swift=enable_swift,
+                enable_oeq=enable_oeq,
             )
             model_loaded.set_is_batch_data(False)
 

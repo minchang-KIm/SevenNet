@@ -221,6 +221,7 @@ INTERACTION_TYPE = 'interaction_type'
 TRAIN_AVG_NUM_NEIGH = 'train_avg_num_neigh'  # deprecated
 
 USE_FLASH_TP = 'use_flash_tp'
+USE_SWIFT_TP = 'use_swift_tp'
 CUEQUIVARIANCE_CONFIG = 'cuequivariance_config'
 USE_OEQ = 'use_oeq'
 

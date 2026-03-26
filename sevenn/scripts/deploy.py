@@ -29,6 +29,7 @@ def deploy(
         cp.build_model(
             enable_cueq=False,
             enable_flash=use_flash,
+            enable_swift=False,
             enable_oeq=use_oeq,
             _flash_lammps=use_flash,
         ),
@@ -97,6 +98,7 @@ def deploy_parallel(
         cp.build_model(
             enable_cueq=False,
             enable_flash=use_flash,
+            enable_swift=False,
             enable_oeq=use_oeq,
             _flash_lammps=use_flash,
         ),
@@ -104,6 +106,7 @@ def deploy_parallel(
     )
     config[KEY.CUEQUIVARIANCE_CONFIG] = {'use': False}
     config[KEY.USE_FLASH_TP] = use_flash
+    config[KEY.USE_SWIFT_TP] = False
     config[KEY.USE_OEQ] = use_oeq
     config['_flash_lammps'] = use_flash
     model_state_dct = model.state_dict()
