@@ -3,6 +3,11 @@ import glob
 import os
 import sys
 
+from sevenn.pair_runtime import (
+    add_pair_execution_args,
+    pair_execution_overrides_from_args,
+)
+
 description = (
     'evaluate sevenn_data/ase readable with a model (checkpoint).'
 )
@@ -85,6 +90,7 @@ def add_args(parser):
         help='use OpenEquivariance to accelerate inference',
         action='store_true',
     )
+    add_pair_execution_args(ag)
     ag.add_argument(
         '--kwargs',
         nargs=argparse.REMAINDER,
@@ -143,6 +149,8 @@ def run(args):
         if not is_oeq_available():
             raise ImportError('OpenEquivariance not installed or no GPU found.')
 
+    pair_overrides = pair_execution_overrides_from_args(args)
+
     inference(
         cp,
         targets,
@@ -156,6 +164,7 @@ def run(args):
         enable_cueq=args.enable_cueq,
         enable_flash=args.enable_flash,
         enable_oeq=args.enable_oeq,
+        **pair_overrides,
         **fmt_kwargs,
     )
 

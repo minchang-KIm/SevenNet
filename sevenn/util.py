@@ -101,10 +101,18 @@ def model_from_checkpoint(
     enable_cueq: Optional[bool] = None,
     enable_flash: Optional[bool] = None,
     enable_oeq: Optional[bool] = None,
+    enable_pair_execution: Optional[bool] = None,
+    pair_execution_policy: Optional[str] = None,
+    disable_topology_cache: Optional[bool] = None,
 ) -> Tuple[torch.nn.Module, Dict[str, Any]]:
     cp = load_checkpoint(checkpoint)
     model = cp.build_model(
-        enable_cueq=enable_cueq, enable_flash=enable_flash, enable_oeq=enable_oeq
+        enable_cueq=enable_cueq,
+        enable_flash=enable_flash,
+        enable_oeq=enable_oeq,
+        enable_pair_execution=enable_pair_execution,
+        pair_execution_policy=pair_execution_policy,
+        disable_topology_cache=disable_topology_cache,
     )
 
     return model, cp.config

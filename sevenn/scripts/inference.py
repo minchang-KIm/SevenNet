@@ -1,5 +1,6 @@
 import csv
 import os
+from functools import partial
 from typing import Iterable, List, Optional, Union
 
 import numpy as np
@@ -7,6 +8,7 @@ from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
 import sevenn._keys as KEY
+import sevenn.pair_runtime as pair_runtime
 import sevenn.util as util
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.train.graph_dataset import SevenNetGraphDataset
@@ -128,6 +130,9 @@ def inference(
     enable_cueq: bool = False,
     enable_flash: bool = False,
     enable_oeq: bool = False,
+    enable_pair_execution: Optional[bool] = None,
+    pair_execution_policy: Optional[str] = None,
+    disable_topology_cache: Optional[bool] = None,
     **data_kwargs,
 ) -> None:
     """
@@ -155,13 +160,22 @@ def inference(
 
     """
     # TODO: False as default, priority?
-    model, _ = util.model_from_checkpoint(
+    model, model_config = util.model_from_checkpoint(
         checkpoint,
         enable_cueq=enable_cueq or None,
         enable_flash=enable_flash or None,
         enable_oeq=enable_oeq or None,
+        enable_pair_execution=enable_pair_execution,
+        pair_execution_policy=pair_execution_policy,
+        disable_topology_cache=disable_topology_cache,
     )
     cutoff = model.cutoff
+    pair_cfg = pair_runtime.resolve_pair_execution_config(
+        model_config,
+        enable_pair_execution=enable_pair_execution,
+        pair_execution_policy=pair_execution_policy,
+        disable_topology_cache=disable_topology_cache,
+    )
 
     if modal:
         if model.modal_map is None:
@@ -175,12 +189,19 @@ def inference(
 
     full_file_list = []
     if save_graph:
+        pre_transform = None
+        if pair_cfg['resolved_policy'] != 'baseline':
+            pre_transform = partial(
+                pair_runtime.ensure_pair_metadata_graph, pair_cfg=pair_cfg
+            )
         dataset = SevenNetGraphDataset(
             cutoff=cutoff,
             root=output_dir,
             files=targets,
             process_num_cores=num_workers,
             processed_name='saved_graph.pt',
+            pre_transform=pre_transform,
+            transform=pre_transform,
             **data_kwargs,
         )
         full_file_list = dataset.full_file_list  # TODO: not used currently
@@ -196,6 +217,11 @@ def inference(
             )
             dataset.extend(tmplist)
             full_file_list.extend([os.path.abspath(file)] * len(tmplist))
+        if pair_cfg['resolved_policy'] != 'baseline':
+            dataset = [
+                pair_runtime.ensure_pair_metadata_graph(graph, pair_cfg)
+                for graph in dataset
+            ]
     if (
         full_file_list is not None
         and len(full_file_list) == len(dataset)

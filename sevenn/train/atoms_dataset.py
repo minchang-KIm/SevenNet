@@ -2,6 +2,7 @@ import os
 import random
 import warnings
 from collections import Counter
+from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
@@ -12,6 +13,7 @@ from ase.io import write
 from tqdm import tqdm
 
 import sevenn._keys as KEY
+import sevenn.pair_runtime as pair_runtime
 import sevenn.train.dataload as dataload
 import sevenn.util as util
 from sevenn._const import NUM_UNIV_ELEMENT
@@ -88,7 +90,11 @@ class SevenNetAtomsDataset(torch.utils.data.Dataset):
 
     def _graph_build(self, atoms: Atoms) -> Dict[str, Any]:
         return dataload.atoms_to_graph(
-            atoms, self.cutoff, transfer_info=False, y_from_calc=False
+            atoms,
+            self.cutoff,
+            transfer_info=False,
+            y_from_calc=False,
+            with_shift=True,
         )
 
     def __len__(self):
@@ -255,6 +261,11 @@ def from_config(
         'use_data_weight': config.get(KEY.USE_WEIGHT, False),
         **config[KEY.DATA_FORMAT_ARGS],
     }
+    pair_cfg = pair_runtime.resolve_pair_execution_config(config)
+    if pair_cfg['resolved_policy'] != 'baseline':
+        dataset_args['transform'] = partial(
+            pair_runtime.ensure_pair_metadata_graph, pair_cfg=pair_cfg
+        )
 
     datasets = {}
     for dk in dataset_keys:

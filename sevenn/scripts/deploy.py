@@ -8,6 +8,7 @@ import torch
 from ase.data import chemical_symbols
 
 import sevenn._keys as KEY
+import sevenn.pair_runtime as pair_runtime
 from sevenn import __version__
 from sevenn.model_build import build_E3_equivariant_model
 from sevenn.util import load_checkpoint
@@ -19,6 +20,9 @@ def deploy(
     modal: Optional[str] = None,
     use_flash: bool = False,
     use_oeq: bool = False,
+    enable_pair_execution: Optional[bool] = None,
+    pair_execution_policy: Optional[str] = None,
+    disable_topology_cache: Optional[bool] = None,
 ) -> None:
     from sevenn.nn.edge_embedding import EdgePreprocess
     from sevenn.nn.force_output import ForceStressOutput
@@ -30,9 +34,18 @@ def deploy(
             enable_cueq=False,
             enable_flash=use_flash,
             enable_oeq=use_oeq,
+            enable_pair_execution=enable_pair_execution,
+            pair_execution_policy=pair_execution_policy,
+            disable_topology_cache=disable_topology_cache,
             _flash_lammps=use_flash,
         ),
         cp.config,
+    )
+    pair_cfg = pair_runtime.resolve_pair_execution_config(
+        config,
+        enable_pair_execution=enable_pair_execution,
+        pair_execution_policy=pair_execution_policy,
+        disable_topology_cache=disable_topology_cache,
     )
 
     model.prepand_module('edge_preprocess', EdgePreprocess(True))
@@ -69,6 +82,14 @@ def deploy(
     md_configs.update({'flashTP': 'yes' if use_flash else 'no'})
     md_configs.update({'oeq': 'yes' if use_oeq else 'no'})
     md_configs.update(
+        {'pair_execution': 'yes' if pair_cfg['resolved_policy'] != 'baseline' else 'no'}
+    )
+    md_configs.update({'pair_execution_policy': pair_cfg['resolved_policy']})
+    md_configs.update(
+        {'topology_cache': 'yes' if pair_cfg['use_topology_cache'] else 'no'}
+    )
+    md_configs.update({'distributed_schedule': pair_cfg['distributed_schedule']})
+    md_configs.update(
         {'model_type': config.pop(KEY.MODEL_TYPE, 'E3_equivariant_model')}
     )
     md_configs.update({'version': __version__})
@@ -87,6 +108,9 @@ def deploy_parallel(
     modal: Optional[str] = None,
     use_flash: bool = False,
     use_oeq: bool = False,
+    enable_pair_execution: Optional[bool] = None,
+    pair_execution_policy: Optional[str] = None,
+    disable_topology_cache: Optional[bool] = None,
 ) -> None:
     # Additional layer for ghost atom (and copy parameters from original)
     GHOST_LAYERS_KEYS = ['onehot_to_feature_x', '0_self_interaction_1']
@@ -98,14 +122,24 @@ def deploy_parallel(
             enable_cueq=False,
             enable_flash=use_flash,
             enable_oeq=use_oeq,
+            enable_pair_execution=enable_pair_execution,
+            pair_execution_policy=pair_execution_policy,
+            disable_topology_cache=disable_topology_cache,
             _flash_lammps=use_flash,
         ),
         cp.config,
+    )
+    pair_cfg = pair_runtime.resolve_pair_execution_config(
+        config,
+        enable_pair_execution=enable_pair_execution,
+        pair_execution_policy=pair_execution_policy,
+        disable_topology_cache=disable_topology_cache,
     )
     config[KEY.CUEQUIVARIANCE_CONFIG] = {'use': False}
     config[KEY.USE_FLASH_TP] = use_flash
     config[KEY.USE_OEQ] = use_oeq
     config['_flash_lammps'] = use_flash
+    config[KEY.PAIR_EXECUTION_CONFIG] = pair_cfg
     model_state_dct = model.state_dict()
 
     model_list = build_E3_equivariant_model(config, parallel=True)
@@ -158,6 +192,14 @@ def deploy_parallel(
     md_configs.update({'comm_size': str(comm_size)})
     md_configs.update({'flashTP': 'yes' if use_flash else 'no'})
     md_configs.update({'oeq': 'yes' if use_oeq else 'no'})
+    md_configs.update(
+        {'pair_execution': 'yes' if pair_cfg['resolved_policy'] != 'baseline' else 'no'}
+    )
+    md_configs.update({'pair_execution_policy': pair_cfg['resolved_policy']})
+    md_configs.update(
+        {'topology_cache': 'yes' if pair_cfg['use_topology_cache'] else 'no'}
+    )
+    md_configs.update({'distributed_schedule': pair_cfg['distributed_schedule']})
     md_configs.update(
         {'model_type': config.pop(KEY.MODEL_TYPE, 'E3_equivariant_model')}
     )

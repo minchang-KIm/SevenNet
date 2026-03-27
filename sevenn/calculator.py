@@ -14,6 +14,7 @@ from ase.calculators.mixing import SumCalculator
 from ase.data import chemical_symbols
 
 import sevenn._keys as KEY
+import sevenn.pair_runtime as pair_runtime
 import sevenn.util as util
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.nn.sequential import AtomGraphSequential
@@ -40,6 +41,9 @@ class SevenNetCalculator(Calculator):
         enable_cueq: Optional[bool] = False,
         enable_flash: Optional[bool] = False,
         enable_oeq: Optional[bool] = False,
+        enable_pair_execution: Optional[bool] = None,
+        pair_execution_policy: Optional[str] = None,
+        disable_topology_cache: Optional[bool] = None,
         sevennet_config: Optional[Dict] = None,  # Not used in logic, just meta info
         **kwargs,
     ) -> None:
@@ -72,6 +76,7 @@ class SevenNetCalculator(Calculator):
         """
         super().__init__(**kwargs)
         self.sevennet_config = None
+        self._pair_topology_cache: Dict[str, Any] = {}
 
         if isinstance(model, pathlib.PurePath):
             model = str(model)
@@ -112,7 +117,12 @@ class SevenNetCalculator(Calculator):
             cp = util.load_checkpoint(model)
 
             model_loaded = cp.build_model(
-                enable_cueq=enable_cueq, enable_flash=enable_flash, enable_oeq=enable_oeq  # noqa: E501
+                enable_cueq=enable_cueq,
+                enable_flash=enable_flash,
+                enable_oeq=enable_oeq,
+                enable_pair_execution=enable_pair_execution,
+                pair_execution_policy=pair_execution_policy,
+                disable_topology_cache=disable_topology_cache,
             )
             model_loaded.set_is_batch_data(False)
 
@@ -131,6 +141,10 @@ class SevenNetCalculator(Calculator):
                 'version': b'',
                 'dtype': b'',
                 'time': b'',
+                'pair_execution': b'',
+                'pair_execution_policy': b'',
+                'topology_cache': b'',
+                'distributed_schedule': b'',
             }
             model_loaded = torch.jit.load(
                 model, _extra_files=extra_dict, map_location=self.device
@@ -141,6 +155,25 @@ class SevenNetCalculator(Calculator):
                 sym_to_num[sym]: i for i, sym in enumerate(chem_symbols.split())
             }
             self.cutoff = float(extra_dict['cutoff'].decode('utf-8'))
+            self.sevennet_config = {
+                KEY.PAIR_EXECUTION_CONFIG: pair_runtime.normalize_pair_execution_config(
+                    {
+                        'use': extra_dict['pair_execution'].decode('utf-8') == 'yes',
+                        'policy': extra_dict[
+                            'pair_execution_policy'
+                        ].decode('utf-8')
+                        or 'baseline',
+                        'use_topology_cache': extra_dict[
+                            'topology_cache'
+                        ].decode('utf-8')
+                        != 'no',
+                        'distributed_schedule': extra_dict[
+                            'distributed_schedule'
+                        ].decode('utf-8')
+                        or 'baseline',
+                    }
+                )
+            }
 
         elif isinstance(model, AtomGraphSequential):
             if model.type_map is None:
@@ -154,6 +187,12 @@ class SevenNetCalculator(Calculator):
             model_loaded = model
             self.type_map = model.type_map
             self.cutoff = model.cutoff
+            if hasattr(model, 'pair_execution_config'):
+                self.sevennet_config = {
+                    KEY.PAIR_EXECUTION_CONFIG: getattr(
+                        model, 'pair_execution_config'
+                    )
+                }
         else:
             raise ValueError('Unexpected input combinations')
 
@@ -161,6 +200,12 @@ class SevenNetCalculator(Calculator):
             self.sevennet_config = sevennet_config
 
         self.model = model_loaded
+        self.pair_execution_config = pair_runtime.resolve_pair_execution_config(
+            self.sevennet_config or {},
+            enable_pair_execution=enable_pair_execution,
+            pair_execution_policy=pair_execution_policy,
+            disable_topology_cache=disable_topology_cache,
+        )
 
         self.modal = None
         if isinstance(self.model, AtomGraphSequential):
@@ -224,10 +269,22 @@ class SevenNetCalculator(Calculator):
         if atoms is None:
             raise ValueError('No atoms to evaluate')
         data = AtomGraphData.from_numpy_dict(
-            unlabeled_atoms_to_graph(atoms, self.cutoff, with_shift=is_ts_type)
+            unlabeled_atoms_to_graph(
+                atoms,
+                self.cutoff,
+                with_shift=is_ts_type
+                or self.pair_execution_config['resolved_policy'] != 'baseline',
+            )
         )
         if self.modal:
             data[KEY.DATA_MODALITY] = self.modal
+
+        data, self._pair_topology_cache = pair_runtime.prepare_pair_metadata(
+            data,
+            self.pair_execution_config,
+            cache_state=self._pair_topology_cache,
+            num_atoms=len(atoms),
+        )
 
         data.to(self.device)  # type: ignore
 
@@ -255,6 +312,9 @@ class SevenNetD3Calculator(SumCalculator):
         enable_cueq: Optional[bool] = False,
         enable_flash: Optional[bool] = False,
         enable_oeq: Optional[bool] = False,
+        enable_pair_execution: Optional[bool] = None,
+        pair_execution_policy: Optional[str] = None,
+        disable_topology_cache: Optional[bool] = None,
         sevennet_config: Optional[Any] = None,
         damping_type: str = 'damp_bj',
         functional_name: str = 'pbe',
@@ -312,6 +372,9 @@ class SevenNetD3Calculator(SumCalculator):
             enable_cueq=enable_cueq,
             enable_flash=enable_flash,
             enable_oeq=enable_oeq,
+            enable_pair_execution=enable_pair_execution,
+            pair_execution_policy=pair_execution_policy,
+            disable_topology_cache=disable_topology_cache,
             sevennet_config=sevennet_config,
             **kwargs,
         )

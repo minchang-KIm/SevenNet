@@ -3,6 +3,7 @@ import warnings
 from collections import Counter
 from copy import deepcopy
 from datetime import datetime
+from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -16,6 +17,7 @@ from torch_geometric.data.in_memory_dataset import InMemoryDataset
 from tqdm import tqdm
 
 import sevenn._keys as KEY
+import sevenn.pair_runtime as pair_runtime
 import sevenn.train.dataload as dataload
 import sevenn.util as util
 from sevenn import __version__
@@ -613,6 +615,15 @@ def _chain_data_weight_override(transform_func, data_weight):
     return chained_transform
 
 
+def _chain_optional_transform(transform_func, next_transform):
+    def chained_transform(graph):
+        if transform_func is not None:
+            graph = transform_func(graph)
+        return next_transform(graph)
+
+    return chained_transform
+
+
 # script, return dict of SevenNetGraphDataset
 def from_config(
     config: Dict[str, Any],
@@ -637,6 +648,17 @@ def from_config(
         'use_data_weight': config.get(KEY.USE_WEIGHT, False),
         **config.get(KEY.DATA_FORMAT_ARGS, {}),
     }
+    pair_cfg = pair_runtime.resolve_pair_execution_config(config)
+    if pair_cfg['resolved_policy'] != 'baseline':
+        pair_transform = partial(
+            pair_runtime.ensure_pair_metadata_graph, pair_cfg=pair_cfg
+        )
+        dataset_args['transform'] = _chain_optional_transform(
+            dataset_args.get('transform'), pair_transform
+        )
+        dataset_args['pre_transform'] = _chain_optional_transform(
+            dataset_args.get('pre_transform'), pair_transform
+        )
 
     datasets = {}
     for dk in dataset_keys:

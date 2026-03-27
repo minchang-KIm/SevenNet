@@ -198,15 +198,64 @@ class EdgeEmbedding(nn.Module):
         basis_module: nn.Module,
         cutoff_module: nn.Module,
         spherical_module: nn.Module,
+        pair_execution_policy: str = 'baseline',
     ) -> None:
         super().__init__()
         self.basis_function = basis_module
         self.cutoff_function = cutoff_module
         self.spherical = spherical_module
+        self.pair_execution_policy = pair_execution_policy
+        reverse_sign = []
+        for mul, ir in self.spherical.irreps_out:
+            reverse_sign.extend([float((-1) ** ir.l)] * (mul * ir.dim))
+        self.register_buffer(
+            'reverse_sh_sign',
+            torch.tensor(reverse_sign, dtype=torch.float32),
+            persistent=False,
+        )
+
+    def _pair_embedding(
+        self, data: AtomGraphDataType
+    ) -> AtomGraphDataType:
+        pair_rvec = data[KEY.PAIR_EDGE_VEC]
+        if KEY.PAIR_EDGE_FORWARD_INDEX in data and KEY.EDGE_VEC in data:
+            pair_rvec = data[KEY.EDGE_VEC].index_select(
+                0, data[KEY.PAIR_EDGE_FORWARD_INDEX]
+            )
+            data[KEY.PAIR_EDGE_VEC] = pair_rvec
+        pair_r = torch.linalg.norm(pair_rvec, dim=-1)
+        pair_embedding = self.basis_function(pair_r)
+        pair_embedding = pair_embedding * self.cutoff_function(pair_r).unsqueeze(-1)
+        pair_attr = self.spherical(pair_rvec)
+
+        data[KEY.PAIR_EDGE_EMBEDDING] = pair_embedding
+        data[KEY.PAIR_EDGE_ATTR] = pair_attr
+        data[KEY.EDGE_LENGTH] = pair_r.index_select(0, data[KEY.EDGE_PAIR_MAP])
+
+        edge_embedding = pair_embedding.index_select(0, data[KEY.EDGE_PAIR_MAP])
+        edge_attr = pair_attr.index_select(0, data[KEY.EDGE_PAIR_MAP])
+
+        reverse_mask = data[KEY.EDGE_PAIR_REVERSE].to(edge_attr.dtype).unsqueeze(-1)
+        sign = 1.0 + reverse_mask * (
+            self.reverse_sh_sign.to(edge_attr.dtype).unsqueeze(0) - 1.0
+        )
+        data[KEY.EDGE_EMBEDDING] = edge_embedding
+        data[KEY.EDGE_ATTR] = edge_attr * sign
+        return data
 
     def forward(self, data: AtomGraphDataType) -> AtomGraphDataType:
+        if (
+            self.pair_execution_policy != 'baseline'
+            and KEY.PAIR_EDGE_VEC in data
+            and KEY.EDGE_PAIR_MAP in data
+            and KEY.EDGE_PAIR_REVERSE in data
+        ):
+            return self._pair_embedding(data)
+
         rvec = data[KEY.EDGE_VEC]
-        r = torch.linalg.norm(data[KEY.EDGE_VEC], dim=-1)
+        r = data[KEY.EDGE_LENGTH] if KEY.EDGE_LENGTH in data else torch.linalg.norm(
+            data[KEY.EDGE_VEC], dim=-1
+        )
         data[KEY.EDGE_LENGTH] = r
 
         data[KEY.EDGE_EMBEDDING] = self.basis_function(

@@ -4,6 +4,11 @@ import sys
 import time
 
 from sevenn import __version__
+from sevenn.pair_runtime import (
+    add_pair_execution_args,
+    pair_execution_overrides_from_args,
+    resolve_pair_execution_config,
+)
 
 description = 'train a model given the input.yaml'
 
@@ -48,6 +53,7 @@ def run(args):
     use_cue = args.enable_cueq
     use_flash = args.enable_flash
     use_oeq = args.enable_oeq
+    pair_overrides = pair_execution_overrides_from_args(args)
 
     if use_cue:
         import sevenn.nn.cue_helper
@@ -127,6 +133,9 @@ def run(args):
 
         if use_oeq:
             model_config[KEY.USE_OEQ] = True
+        model_config[KEY.PAIR_EXECUTION_CONFIG] = resolve_pair_execution_config(
+            model_config, **pair_overrides
+        )
 
         logger.print_config(model_config, data_config, train_config)
         # don't have to distinguish configs inside program
@@ -181,6 +190,7 @@ def cmd_parser_train(parser):
         help='use OpenEquivariance accelerations for training',
         action='store_true',
     )
+    add_pair_execution_args(ag)
     ag.add_argument(
         '-w',
         '--working_dir',
