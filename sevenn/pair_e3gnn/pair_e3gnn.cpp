@@ -18,7 +18,10 @@
 #include <ATen/ops/from_blob.h>
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
+#include <cstring>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <torch/script.h>
 #include <torch/torch.h>
@@ -41,6 +44,69 @@ extern void pair_e3gnn_oeq_register_autograd();
 
 #define INTEGER_TYPE torch::TensorOptions().dtype(torch::kInt64)
 #define FLOAT_TYPE torch::TensorOptions().dtype(torch::kFloat)
+
+namespace {
+std::vector<torch::Tensor> build_pair_metadata_serial(
+    const torch::Tensor &edge_index_cpu, const torch::Tensor &cell_shift_cpu) {
+  auto edge_src = edge_index_cpu[0].accessor<long, 1>();
+  auto edge_dst = edge_index_cpu[1].accessor<long, 1>();
+  auto shift = cell_shift_cpu.accessor<long, 2>();
+  const auto nedges = edge_index_cpu.size(1);
+
+  std::unordered_map<std::string, long> lookup;
+  std::vector<std::string> keys;
+  keys.reserve(nedges);
+
+  auto make_key = [](long dst, long src, long sx, long sy, long sz) {
+    return std::to_string(dst) + "|" + std::to_string(src) + "|" +
+           std::to_string(sx) + "|" + std::to_string(sy) + "|" +
+           std::to_string(sz);
+  };
+
+  for (long e = 0; e < nedges; ++e) {
+    auto key = make_key(edge_src[e], edge_dst[e], shift[e][0], shift[e][1],
+                        shift[e][2]);
+    keys.push_back(key);
+    lookup.emplace(key, e);
+  }
+
+  std::vector<long> edge_pair_map(nedges, -1);
+  std::vector<uint8_t> edge_pair_reverse(nedges, 0);
+  std::vector<long> pair_forward_index;
+  std::vector<long> pair_backward_index;
+  std::vector<uint8_t> pair_has_reverse;
+
+  for (long e = 0; e < nedges; ++e) {
+    if (edge_pair_map[e] != -1)
+      continue;
+    const long pair_idx = pair_forward_index.size();
+    edge_pair_map[e] = pair_idx;
+    pair_forward_index.push_back(e);
+
+    auto rev_key = make_key(edge_dst[e], edge_src[e], -shift[e][0], -shift[e][1],
+                            -shift[e][2]);
+    auto it = lookup.find(rev_key);
+    if (it != lookup.end() && it->second != e && edge_pair_map[it->second] == -1) {
+      edge_pair_map[it->second] = pair_idx;
+      edge_pair_reverse[it->second] = 1;
+      pair_backward_index.push_back(it->second);
+      pair_has_reverse.push_back(1);
+    } else {
+      pair_backward_index.push_back(e);
+      pair_has_reverse.push_back(0);
+    }
+  }
+
+  return {
+      torch::tensor(edge_pair_map, INTEGER_TYPE),
+      torch::tensor(edge_pair_reverse, torch::TensorOptions().dtype(torch::kBool)),
+      torch::tensor(pair_forward_index, INTEGER_TYPE),
+      torch::tensor(pair_backward_index, INTEGER_TYPE),
+      torch::tensor(pair_has_reverse,
+                    torch::TensorOptions().dtype(torch::kBool)),
+  };
+}
+} // namespace
 
 PairE3GNN::PairE3GNN(LAMMPS *lmp) : Pair(lmp) {
   // constructor
@@ -215,17 +281,58 @@ void PairE3GNN::compute(int eflag, int vflag) {
   torch::Tensor inp_cell_shift =
       torch::bmm(cell_inv_tensor.expand({nedges, 3, 3}), pbc_shift_tmp_tensor)
           .view({nedges, 3});
+  auto inp_cell_shift_cpu =
+      torch::round(inp_cell_shift.detach().cpu()).to(torch::kInt64);
 
   inp_pos.set_requires_grad(true);
+  auto inp_pos_device = inp_pos.to(device);
+  auto inp_edge_vec = inp_pos_device.index_select(0, edge_idx_dst_tensor.to(device)) -
+                      inp_pos_device.index_select(0, edge_idx_src_tensor.to(device)) +
+                      torch::matmul(inp_cell_shift, inp_cell.to(device));
 
   c10::Dict<std::string, torch::Tensor> input_dict;
   input_dict.insert("x", inp_node_type.to(device));
-  input_dict.insert("pos", inp_pos.to(device));
+  input_dict.insert("pos", inp_pos_device);
   input_dict.insert("edge_index", inp_edge_index.to(device));
   input_dict.insert("num_atoms", inp_num_atoms.to(device));
   input_dict.insert("cell_lattice_vectors", inp_cell.to(device));
   input_dict.insert("cell_volume", inp_cell_volume.to(device));
   input_dict.insert("pbc_shift", inp_cell_shift);
+  input_dict.insert("edge_vec", inp_edge_vec);
+
+  if (pair_execution) {
+    bool cache_hit = false;
+    if (topology_cache && pair_cache_valid &&
+        torch::equal(cached_edge_index_cpu, inp_edge_index.cpu()) &&
+        torch::equal(cached_cell_shift_cpu, inp_cell_shift_cpu)) {
+      cache_hit = true;
+    }
+
+    if (!cache_hit) {
+      auto meta = build_pair_metadata_serial(inp_edge_index.cpu(), inp_cell_shift_cpu);
+      cached_edge_index_cpu = inp_edge_index.cpu().clone();
+      cached_cell_shift_cpu = inp_cell_shift_cpu.clone();
+      cached_edge_pair_map_cpu = meta[0].clone();
+      cached_edge_pair_reverse_cpu = meta[1].clone();
+      cached_pair_forward_index_cpu = meta[2].clone();
+      cached_pair_backward_index_cpu = meta[3].clone();
+      cached_pair_has_reverse_cpu = meta[4].clone();
+      pair_cache_valid = true;
+    }
+
+    input_dict.insert("edge_pair_map", cached_edge_pair_map_cpu.to(device));
+    input_dict.insert("edge_pair_reverse",
+                      cached_edge_pair_reverse_cpu.to(device));
+    input_dict.insert("pair_edge_forward_index",
+                      cached_pair_forward_index_cpu.to(device));
+    input_dict.insert("pair_edge_backward_index",
+                      cached_pair_backward_index_cpu.to(device));
+    input_dict.insert("pair_edge_has_reverse",
+                      cached_pair_has_reverse_cpu.to(device));
+    input_dict.insert("pair_edge_vec",
+                      inp_edge_vec.index_select(
+                          0, cached_pair_forward_index_cpu.to(device)));
+  }
 
   std::vector<torch::IValue> input(1, input_dict);
   auto output = model.forward(input).toGenericDict();
@@ -313,6 +420,10 @@ void PairE3GNN::coeff(int narg, char **arg) {
       {"model_type", ""},
       {"version", ""},
       {"dtype", ""},
+      {"pair_execution", ""},
+      {"pair_execution_policy", "baseline"},
+      {"topology_cache", "yes"},
+      {"distributed_schedule", "baseline"},
       {"flashTP", "version mismatch"},
       {"oeq", "version mismatch"},
       {"time", ""}};
@@ -334,6 +445,9 @@ void PairE3GNN::coeff(int narg, char **arg) {
 
   cutoff = std::stod(meta_dict["cutoff"]);
   cutoff_square = cutoff * cutoff;
+  pair_execution = meta_dict["pair_execution"] == "yes";
+  pair_execution_policy = meta_dict["pair_execution_policy"];
+  topology_cache = meta_dict["topology_cache"] != "no";
 
   // to make torch::autograd::grad() works
   if (meta_dict["oeq"] == "yes") {
@@ -395,6 +509,10 @@ void PairE3GNN::coeff(int narg, char **arg) {
             meta_dict["flashTP"].c_str());
     fprintf(lmp->logfile, "OEQ: %s\n",
             meta_dict["oeq"].c_str());
+    fprintf(lmp->logfile, "Pair execution: %s (%s)\n",
+            pair_execution ? "yes" : "no", pair_execution_policy.c_str());
+    fprintf(lmp->logfile, "Topology cache: %s\n",
+            topology_cache ? "yes" : "no");
   }
 }
 

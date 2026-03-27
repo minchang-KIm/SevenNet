@@ -32,8 +32,19 @@ private:
   torch::Device device = torch::kCPU;
   int nelements;
   bool print_info = false;
+  bool pair_execution = false;
+  bool topology_cache = true;
+  std::string pair_execution_policy = "baseline";
 
   int nedges_bound = -1;
+  bool pair_cache_valid = false;
+  torch::Tensor cached_edge_index_cpu;
+  torch::Tensor cached_cell_shift_cpu;
+  torch::Tensor cached_edge_pair_map_cpu;
+  torch::Tensor cached_edge_pair_reverse_cpu;
+  torch::Tensor cached_pair_forward_index_cpu;
+  torch::Tensor cached_pair_backward_index_cpu;
+  torch::Tensor cached_pair_has_reverse_cpu;
 
 public:
   PairE3GNN(class LAMMPS *);

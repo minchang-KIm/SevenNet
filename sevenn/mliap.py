@@ -18,6 +18,7 @@ except ModuleNotFoundError:
     )
 
 import sevenn._keys as KEY
+import sevenn.pair_runtime as pair_runtime
 from sevenn._const import AtomGraphDataType
 from sevenn.nn._ghost_exchange import MLIAPGhostExchangeModule
 from sevenn.util import load_checkpoint, pretrained_name_to_path
@@ -113,6 +114,10 @@ class SevenNetMLIAPWrapper(MLIAPUnified):
         self.use_flash = kwargs.get('use_flash', False)
         self.use_oeq = kwargs.get('use_oeq', False)
         self.modal = kwargs.get('modal', None)
+        self.enable_pair_execution = kwargs.get('enable_pair_execution', None)
+        self.pair_execution_policy = kwargs.get('pair_execution_policy', None)
+        self.disable_topology_cache = kwargs.get('disable_topology_cache', None)
+        self._pair_topology_cache: dict[str, Any] = {}
 
         # extract configs
         config = self.cp.config
@@ -153,7 +158,18 @@ class SevenNetMLIAPWrapper(MLIAPUnified):
         print('[INFO] Lazy initializing SevenNet model...', flush=True)
         print(f'[INFO] cueq={self.use_cueq}, flashTP={self.use_flash}, oeq={self.use_oeq}', flush=True)  # noqa: E501
         model = self.cp.build_model(
-            enable_cueq=self.use_cueq, enable_flash=self.use_flash, enable_oeq=self.use_oeq  # noqa: E501
+            enable_cueq=self.use_cueq,
+            enable_flash=self.use_flash,
+            enable_oeq=self.use_oeq,
+            enable_pair_execution=self.enable_pair_execution,
+            pair_execution_policy=self.pair_execution_policy,
+            disable_topology_cache=self.disable_topology_cache,
+        )
+        self.pair_execution_config = pair_runtime.resolve_pair_execution_config(
+            self.cp.config,
+            enable_pair_execution=self.enable_pair_execution,
+            pair_execution_policy=self.pair_execution_policy,
+            disable_topology_cache=self.disable_topology_cache,
         )
 
         for k, module in model._modules.items():
@@ -224,6 +240,13 @@ class SevenNetMLIAPWrapper(MLIAPUnified):
             KEY.LAMMPS_DATA: lmp_data,
             KEY.USE_MLIAP: torch.as_tensor(True, dtype=torch.bool),
         }
+        data, self._pair_topology_cache = pair_runtime.prepare_pair_metadata(
+            data,
+            getattr(self, 'pair_execution_config', None),
+            cache_state=self._pair_topology_cache,
+            nlocal=nlocal,
+            num_atoms=nlocal,
+        )
 
         # infer
         output = self.model(data)
