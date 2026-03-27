@@ -46,3 +46,4 @@ Contents
 
    changelog
    research_gnn_ip_execution_optimization
+   research_gnn_ip_todo_driven_optimization_ideas
