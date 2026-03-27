@@ -45,3 +45,4 @@ Contents
    :caption: Misc
 
    changelog
+   research_gnn_ip_execution_optimization

@@ -21,3 +21,10 @@ sevenn/pretrained_potentials/SevenNet_omni_i12
 sevenn/pair_d3*
 *ninja*
 *libpaird3*
+
+# bench outputs
+bench/results/
+bench/__pycache__/
+
+# benchmark outputs
+bench/results/
