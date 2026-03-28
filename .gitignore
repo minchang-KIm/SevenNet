@@ -28,6 +28,5 @@ sevenn/pair_d3*
 # generated benchmark outputs
 bench/results/
 external_bench_data/
-
 # generated docs outputs
 docs/_build/
