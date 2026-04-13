@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,n_warmup,n_repeat,device,resolved_policy,abs_energy_diff_mean,abs_energy_diff_std,abs_energy_diff_max,max_force_diff_mean,max_force_diff_std,max_force_diff_max,mean_force_diff_mean,mean_force_diff_std,mean_force_diff_max
+rmd17,rmd17_azobenzene,spice,24,e3nn_baseline,2,10,cuda,baseline,0.0,0.0,0.0,1.2531876564025878e-06,4.1297728823370824e-07,2.3245811462402344e-06,2.634918530475261e-07,4.6034498628493405e-08,3.5338518955541076e-07
+rmd17,rmd17_azobenzene,spice,24,e3nn_pair_full,2,10,cuda,full,0.0,0.0,0.0,1.5631318092346192e-06,3.8377072061417614e-07,2.205371856689453e-06,3.2678557033705146e-07,2.7302363023607975e-08,3.7824631249350205e-07

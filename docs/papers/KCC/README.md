@@ -21,6 +21,8 @@
   - 전체 31개 데이터셋 통합 메트릭
 - `metrics/pair_end_to_end/`
   - SevenNet baseline vs proposal-only non-intrusive repeated timing
+- `metrics/pair_accuracy/`
+  - SevenNet baseline 기준 출력 대비 반복 정확도 측정
 - `metrics/four_case/`
   - `옵션 없음 / FlashTP / 제안기법만 / 둘 다` intrusive stage profiling
 - `metrics/per_dataset/<dataset>/`
@@ -36,7 +38,10 @@
 
 - `metrics/pair_end_to_end/global/pair_end_to_end_summary.csv`
 - `metrics/pair_end_to_end/global/pair_end_to_end_comparison.csv`
+- `metrics/pair_accuracy/global/pair_accuracy_summary.csv`
+- `metrics/pair_accuracy/global/pair_accuracy_raw_repeats.csv`
 - `reports/pair_end_to_end_condition_analysis.md`
+- `reports/pair_accuracy_repeat_report.md`
 - `metrics/global/dataset_manifest.csv`
 - `metrics/global/reference_e3nn.csv`
 - `metrics/global/flash_end_to_end_summary.csv`
@@ -93,6 +98,13 @@ python -u docs/papers/KCC/scripts/kcc_pair_end_to_end.py --output-root docs/pape
 python docs/papers/KCC/scripts/kcc_build_pair_end_to_end_assets.py --output-root docs/papers/KCC
 ```
 
+정확도 반복 검증:
+
+```bash
+python -u docs/papers/KCC/scripts/kcc_pair_accuracy_repeats.py --warmup 2 --repeat 10
+python docs/papers/KCC/scripts/kcc_build_accuracy_assets.py
+```
+
 ## Measurement Families
 
 - `e3nn baseline detailed`
@@ -116,6 +128,7 @@ python docs/papers/KCC/scripts/kcc_build_pair_end_to_end_assets.py --output-root
 - `tables/table_02_pair_end_to_end_summary.md`
 - `tables/table_03_pair_condition_summary.md`
 - `tables/table_04_pair_accuracy_summary.md`
+- `tables/table_04a_pair_accuracy_compact.md`
 - `tables/table_05_representative_stage_summary.md`
 
 보조 표:
@@ -146,7 +159,10 @@ baseline-vs-proposal end-to-end 산출물:
 - `figures/pair_end_to_end/pair_speedup_vs_avg_neighbors.png`
 - `figures/pair_end_to_end/pair_speedup_by_bucket.png`
 - `figures/pair_end_to_end/pair_speedup_size_density_map.png`
+- `figures/pair_accuracy/pair_accuracy_energy_errorbar.png`
+- `figures/pair_accuracy/pair_accuracy_force_errorbar.png`
 - `reports/pair_end_to_end_condition_analysis.md`
+- `reports/pair_accuracy_repeat_report.md`
 
 ## Writing Rule
 

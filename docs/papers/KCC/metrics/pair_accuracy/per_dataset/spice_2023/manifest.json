@@ -1,0 +1,9 @@
+{
+  "dataset": "spice_2023",
+  "sample_id": "hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49",
+  "modal": "spice",
+  "natoms": 89,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/spice_2023"
+}

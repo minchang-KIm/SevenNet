@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+oc22_s2ef_train,s2ef_train_0,oc22,228,e3nn_baseline,-1551.4423828125,cuda,baseline

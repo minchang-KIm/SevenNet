@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+ani1x,ani1x-release_416625,spice,63,molecular,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/ani1x

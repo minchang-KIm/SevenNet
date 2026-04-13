@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+md22_stachyose,md22_stachyose_10546,spice,87,molecular,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_stachyose

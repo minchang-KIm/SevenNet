@@ -1,0 +1,9 @@
+{
+  "dataset": "oc22_s2ef_train",
+  "sample_id": "s2ef_train_0",
+  "modal": "oc22",
+  "natoms": 228,
+  "category": "catalysis",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc22_s2ef_train"
+}

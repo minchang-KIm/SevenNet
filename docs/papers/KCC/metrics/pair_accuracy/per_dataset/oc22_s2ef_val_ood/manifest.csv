@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+oc22_s2ef_val_ood,is2re_val_ood_43,oc22,216,catalysis,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc22_s2ef_val_ood

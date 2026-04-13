@@ -1,0 +1,4 @@
+| case | median energy diff mean (eV) | worst energy diff max (eV) | median force diff mean (eV/A) | worst force diff max (eV/A) |
+| --- | --- | --- | --- | --- |
+| e3nn_baseline | 0.000e+00 | 1.221e-04 | 1.204e-06 | 1.526e-04 |
+| e3nn_pair_full | 0.000e+00 | 1.221e-04 | 1.867e-06 | 2.441e-04 |

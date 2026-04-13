@@ -6,6 +6,7 @@
 - `tables/table_02_pair_end_to_end_summary.md`
 - `tables/table_03_pair_condition_summary.md`
 - `tables/table_04_pair_accuracy_summary.md`
+- `tables/table_04a_pair_accuracy_compact.md`
 - `tables/table_05_representative_stage_summary.md`
 
 ## Supplementary Tables
@@ -18,6 +19,8 @@
 - `figure_00_comparability_diagram`: 계측 family 간 직접 비교 가능 범위 설명
 - `pair_latency_all`: 31개 데이터셋 SevenNet baseline vs proposal-only latency mean±std
 - `pair_speedup_all`: baseline 대비 proposal-only speedup
+- `pair_accuracy_energy_errorbar`: baseline 기준 절대 에너지 차이 mean±std
+- `pair_accuracy_force_errorbar`: baseline 기준 최대 절대 힘 차이 mean±std
 - `pair_speedup_vs_num_edges`: 그래프 크기와 speedup 관계
 - `pair_speedup_vs_avg_neighbors`: 평균 이웃 수와 speedup 관계
 - `pair_speedup_by_bucket`: size-density bucket별 speedup

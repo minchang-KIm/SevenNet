@@ -1,0 +1,9 @@
+{
+  "dataset": "omol25_validation",
+  "sample_id": "OMol25_validation_data0012_18589",
+  "modal": "omol25_low",
+  "natoms": 350,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/omol25_validation"
+}
