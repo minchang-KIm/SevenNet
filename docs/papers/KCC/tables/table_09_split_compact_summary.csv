@@ -1,0 +1,3 @@
+mode,baseline_vs_geometry_only_median,baseline_vs_full_legacy_median,baseline_vs_full_no_expand_median,full_legacy_vs_full_no_expand_median
+step_force,0.684x,0.696x,0.694x,0.998x
+forward_energy,0.977x,0.865x,0.862x,0.996x

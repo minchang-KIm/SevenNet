@@ -1,0 +1,4 @@
+dataset,sample_id,modal,natoms,method,timing_ms_mean,timing_ms_std,timing_ms_median,timing_ms_p95
+omol25_train_neutral,OMol25_train_neutral_data0063_395425,omol25_low,181,cpu_original,67.0860820170492,0.29371481166296554,67.0678784372285,67.61136020068079
+omol25_train_neutral,OMol25_train_neutral_data0063_395425,omol25_low,181,cpu_vectorized,11.827697118278593,0.09526830525728402,11.840255465358496,11.932474770583212
+omol25_train_neutral,OMol25_train_neutral_data0063_395425,omol25_low,181,gpu_vectorized_kernel_only,0.7537262118421495,0.012323753197844902,0.7528954884037375,0.7757638464681804

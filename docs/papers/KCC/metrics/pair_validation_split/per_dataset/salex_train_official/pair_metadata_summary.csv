@@ -1,0 +1,4 @@
+dataset,sample_id,modal,natoms,method,timing_ms_mean,timing_ms_std,timing_ms_median,timing_ms_p95
+salex_train_official,alex_go_aao_005:4493,omat24,132,cpu_original,67.19022392993793,0.4369186527827846,67.07115191966295,68.13412810442969
+salex_train_official,alex_go_aao_005:4493,omat24,132,cpu_vectorized,11.974114011973143,0.4377443790976238,11.929362546652555,12.050668115261942
+salex_train_official,alex_go_aao_005:4493,omat24,132,gpu_vectorized_kernel_only,0.7554454309865832,0.01214223371399184,0.7539845537394285,0.7770127733238041

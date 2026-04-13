@@ -1,0 +1,262 @@
+dataset,natoms,case,mode,op,cpu_time_total_us,device_time_total_us,self_cpu_time_total_us,count
+qm9_hf,29,baseline,force_model,aten::mm,3361.468999999981,5199.638000000034,2267.7320000001,412
+qm9_hf,29,baseline,force_model,forward,11273.167,4627.732000000009,829.7269999999942,32
+qm9_hf,29,baseline,force_model,aten::tensordot,3256.1780000000035,3404.442000000003,411.8089999999945,199
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: SliceBackward0,6437.362000000028,2625.033000000016,1020.6450000000023,404
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: MulBackward0,5384.0689999999595,2584.1409999999432,997.837000000065,329
+qm9_hf,29,baseline,force_model,aten::mul,6016.6820000000625,2388.3639999999796,3960.288000000032,1249
+qm9_hf,29,baseline,force_model,ampere_sgemm_64x64_nn,0.0,2280.102,0.0,50
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: MmBackward0,2441.2290000000376,1958.7530000000243,421.3680000000404,198
+qm9_hf,29,baseline,force_model,MmBackward0,2006.640000000003,1953.9220000000332,194.71100000002662,198
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",0.0,1866.5019999999286,0.0,835
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul> >(int, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul>)",0.0,1705.8150000000023,0.0,597
+qm9_hf,29,baseline,force_model,aten::add_,1539.3780000000388,1476.8150000000423,742.3450000000284,511
+qm9_hf,29,baseline,force_model,aten::slice_backward,4285.32099999998,1450.3589999999913,408.6539999999568,404
+qm9_hf,29,baseline,force_model,SliceBackward0,4431.420999999971,1450.3589999999913,146.09999999999127,404
+qm9_hf,29,baseline,force_model,MulBackward0,2920.544999999969,1322.3919999999289,336.3869999999006,329
+qm9_hf,29,baseline,force_model,aten::sum,1505.2859999999255,1273.302000000016,1012.344999999923,306
+qm9_hf,29,baseline,force_model,"void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4, 4>)",0.0,1249.2060000000129,0.0,300
+qm9_hf,29,baseline,force_model,aten::copy_,2737.963999999948,1148.8249999999825,1168.2089999999343,687
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1})",0.0,1031.284999999976,0.0,603
+qm9_hf,29,baseline,force_model,aten::fill_,1284.5620000000388,897.8719999999952,532.3870000000289,463
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, std::array<char*, 1ul> >(int, at::native::FillFunctor<float>, std::array<char*, 1ul>)",0.0,896.0479999999951,0.0,459
+qm9_hf,29,baseline,force_model,aten::zero_,1590.7870000000098,893.4559999999917,324.5659999999698,458
+qm9_hf,29,baseline,force_model,aten::zeros,2321.0950000000958,858.9259999999974,254.07800000016323,417
+qm9_hf,29,baseline,force_model,aten::einsum,3627.6240000000107,707.0269999999998,770.0960000000211,308
+qm9_hf,29,baseline,force_model,ampere_sgemm_64x64_tn,0.0,604.075000000008,0.0,29
+qm9_hf,29,baseline,force_model,ampere_sgemm_128x64_tn,0.0,595.914000000008,0.0,28
+qm9_hf,29,baseline,force_model,aten::clone,1755.9180000000174,448.1379999999883,177.11599999997276,205
+qm9_hf,29,baseline,force_model,aten::reshape,3622.867000000005,392.9399999999853,1213.5589999998397,2822
+qm9_hf,29,baseline,force_model,ampere_sgemm_32x128_nn,0.0,379.9119999999971,0.0,70
+qm9_hf,29,baseline,force_model,ampere_sgemm_32x128_tn,0.0,317.40899999999965,0.0,70
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: PermuteBackward0,2623.236000000041,302.50299999998606,1306.3830000000835,893
+qm9_hf,29,baseline,force_model,"void cublasLt::splitKreduce_kernel<32, 16, int, float, float, float, false, float, float, float, true, false, false>(cublasLt::cublasSplitKParams<float>, float const*, float const*, float*, float*, float const*, float const*, float const*, float const*, float*, void*, long, float*, int*, float*, float const*, float const*, float const*, float const*)",0.0,272.73800000001825,0.0,125
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul>)",0.0,268.642000000052,0.0,247
+qm9_hf,29,baseline,force_model,aten::add,535.9059999999834,265.86499999997716,313.0509999999896,107
+qm9_hf,29,baseline,force_model,aten::bmm,517.7560000000253,254.566999999995,385.14500000003227,78
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",0.0,226.53199999999333,0.0,145
+qm9_hf,29,baseline,force_model,ampere_sgemm_32x32_sliced1x4_tn,0.0,198.91700000000856,0.0,51
+qm9_hf,29,baseline,force_model,aten::cat,431.92299999999705,194.24799999999937,345.6899999999853,43
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: UnsqueezeBackward0,1723.4200000000674,181.72600000002058,783.6560000000281,455
+qm9_hf,29,baseline,force_model,ampere_sgemm_128x128_nn,0.0,179.5899999999965,0.0,20
+qm9_hf,29,baseline,force_model,"void at::native::(anonymous namespace)::CatArrayBatchedCopy_aligned16_contig<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 2, 128, 1>(at::native::(anonymous namespace)::OpaqueType<4u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 128, 1>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int)",0.0,168.67899999999668,0.0,32
+qm9_hf,29,baseline,force_model,ampere_sgemm_32x32_sliced1x4_nn,0.0,164.54600000000005,0.0,43
+qm9_hf,29,baseline,force_model,BmmBackward0,379.3749999999891,143.26899999999296,42.06399999999485,30
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: BmmBackward0,447.74400000002424,143.26899999999296,68.36900000003516,30
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: MulBackward1,761.3310000000056,121.98100000006889,176.10500000001957,98
+qm9_hf,29,baseline,force_model,ampere_sgemm_64x32_sliced1x4_nn,0.0,113.60500000000252,0.0,36
+qm9_hf,29,baseline,force_model,Memcpy DtoD (Device -> Device),0.0,113.41200000000663,0.0,79
+qm9_hf,29,baseline,force_model,MulBackward1,551.3349999999828,108.73500000006243,41.15399999999863,98
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: torch::autograd::CopySlices,616.2679999999891,95.65099999999438,58.477999999984604,27
+qm9_hf,29,baseline,force_model,torch::autograd::CopySlices,557.7900000000045,95.65099999999438,67.3359999999484,27
+qm9_hf,29,baseline,force_model,aten::scatter_reduce_,157.3280000000068,92.96200000001136,66.00300000002085,8
+qm9_hf,29,baseline,force_model,"void at::native::_scatter_gather_elementwise_kernel<128, 8, at::native::_cuda_scatter_gather_internal_kernel<true, float>::operator()<at::native::ReduceAdd>(at::TensorIterator&, long, long, long, at::native::ReduceAdd const&)::{lambda(int)#1}>(int, at::native::_cuda_scatter_gather_internal_kernel<true, float>::operator()<at::native::ReduceAdd>(at::TensorIterator&, long, long, long, at::native::ReduceAdd const&)::{lambda(int)#1})",0.0,80.44900000001189,0.0,8
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: IndexBackward0,232.08900000000722,77.5989999999947,11.019000000007509,4
+qm9_hf,29,baseline,force_model,IndexBackward0,221.0699999999997,77.5989999999947,9.77900000000227,4
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: torch::jit::(anonymous namespace)::DifferentiableGraphBackward,582.4569999999967,76.06799999998111,80.75099999999838,30
+qm9_hf,29,baseline,force_model,ampere_sgemm_128x128_nt,0.0,74.6559999999995,0.0,12
+qm9_hf,29,baseline,force_model,aten::_index_put_impl_,186.0689999999995,74.01499999999942,49.31000000000495,4
+qm9_hf,29,baseline,force_model,aten::matmul,136.01,72.12900000000013,11.671000000000276,15
+qm9_hf,29,baseline,force_model,ScatterReduceBackward0,49.34099999999853,67.16899999999623,9.646999999995387,5
+qm9_hf,29,baseline,force_model,"void at::native::_scatter_gather_elementwise_kernel<128, 8, at::native::_cuda_scatter_gather_internal_kernel<false, at::native::OpaqueType<4> >::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1}>(int, at::native::_cuda_scatter_gather_internal_kernel<false, at::native::OpaqueType<4> >::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1})",0.0,67.16899999999623,0.0,5
+qm9_hf,29,baseline,force_model,aten::gather,39.69400000000314,67.16899999999623,27.086000000022977,5
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: ScatterReduceBackward0,71.24800000000323,67.16899999999623,21.9070000000047,5
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: SiluBackward0,241.78699999997843,61.313000000012835,69.11399999997047,33
+qm9_hf,29,baseline,force_model,aten::silu_backward,152.48900000000322,61.313000000012835,96.13700000001154,33
+qm9_hf,29,baseline,force_model,SiluBackward0,172.67300000000796,61.313000000012835,20.184000000004744,33
+qm9_hf,29,baseline,force_model,ampere_sgemm_64x32_sliced1x4_tn,0.0,60.031999999993786,0.0,18
+qm9_hf,29,baseline,force_model,aten::div,215.32000000000812,59.99899999999502,147.36200000001975,38
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: ReshapeAliasBackward0,1158.808999999961,58.11499999997977,546.0849999999427,391
+qm9_hf,29,baseline,force_model,ReshapeAliasBackward0,612.7240000000183,58.11499999997977,110.49500000002627,391
+qm9_hf,29,baseline,force_model,ViewBackward0,1228.3109999999942,51.96900000000096,270.99599999998645,873
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: ViewBackward0,2397.749000000089,51.96900000000096,1169.4380000000947,873
+qm9_hf,29,baseline,force_model,<backward op>,383.98000000000684,50.65900000000329,76.74800000000505,30
+qm9_hf,29,baseline,force_model,torch::jit::(anonymous namespace)::DifferentiableGraphBackward,432.5399999999936,50.65900000000329,48.55999999998676,30
+qm9_hf,29,baseline,force_model,aten::silu,172.7069999999983,47.68199999999479,113.56700000000023,33
+qm9_hf,29,baseline,force_model,Memset (Device),0.0,45.95399999999381,0.0,100
+qm9_hf,29,baseline,force_model,"void (anonymous namespace)::indexing_backward_kernel<float, 4>(long const*, long const*, float const*, float*, long, long, long, long, bool)",0.0,38.62399999999616,0.0,4
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::silu_backward_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::silu_backward_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::silu_backward_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::silu_backward_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1} const&)::{lambda(int)#1})",0.0,37.88800000000265,0.0,19
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::DivFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::DivFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::DivFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::DivFunctor<float> > const&)::{lambda(int)#1})",0.0,37.503999999990924,0.0,21
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<float> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<float> const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<float> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<float> const&)::{lambda(int)#1})",0.0,36.73700000001554,0.0,21
+qm9_hf,29,baseline,force_model,<forward op>,322.5760000000014,32.60899999999799,40.458999999996195,30
+qm9_hf,29,baseline,force_model,"std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, float, float, float, float, false, true, false, false, 5, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>)",0.0,31.80799999998999,0.0,18
+qm9_hf,29,baseline,force_model,"void gemmk1_kernel<int, float, 256, 5, false, false, true, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float, 0>(cublasGemmk1Params<float, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float, biasType<cublasGemvTensorStridedBatched<float>::value_type, float>::type>)",0.0,31.617000000009284,0.0,18
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::silu_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::silu_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::silu_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::silu_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1})",0.0,28.608999999995376,0.0,19
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: DivBackward0,117.45000000000073,27.295999999989363,17.56000000000313,8
+qm9_hf,29,baseline,force_model,ampere_sgemm_128x32_nn,0.0,26.367999999998574,0.0,3
+qm9_hf,29,baseline,force_model,"void at::native::(anonymous namespace)::CatArrayBatchedCopy<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 2, 64, 64>(at::native::(anonymous namespace)::OpaqueType<4u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 64, 64>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int)",0.0,25.56900000000269,0.0,11
+qm9_hf,29,baseline,force_model,DivBackward0,94.91699999999946,25.37599999999111,12.89499999999498,8
+qm9_hf,29,baseline,force_model,aten::index,69.23300000000017,24.256999999997333,48.16900000000555,7
+qm9_hf,29,baseline,force_model,"void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_kernel_impl<at::native::OpaqueType<4> >(at::TensorIteratorBase&, c10::ArrayRef<long>, c10::ArrayRef<long>)::{lambda(char*, char const*, long)#1}>(at::TensorIteratorBase&, c10::ArrayRef<long>, c10::ArrayRef<long>, at::native::index_kernel_impl<at::native::OpaqueType<4> >(at::TensorIteratorBase&, c10::ArrayRef<long>, c10::ArrayRef<long>)::{lambda(char*, char const*, long)#1} const&)::{lambda(int)#1}>(long, at::native::gpu_index_kernel<at::native::index_kernel_impl<at::native::OpaqueType<4> >(at::TensorIteratorBase&, c10::ArrayRef<long>, c10::ArrayRef<long>)::{lambda(char*, char const*, long)#1}>(at::TensorIteratorBase&, c10::ArrayRef<long>, c10::ArrayRef<long>, at::native::index_kernel_impl<at::native::OpaqueType<4> >(at::TensorIteratorBase&, c10::ArrayRef<long>, c10::ArrayRef<long>)::{lambda(char*, char const*, long)#1} const&)::{lambda(int)#1})",0.0,24.256999999997333,0.0,7
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::silu_backward_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1}, std::array<char*, 3ul> >(int, at::native::(anonymous namespace)::silu_backward_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1}, std::array<char*, 3ul>)",0.0,23.425000000010186,0.0,14
+qm9_hf,29,baseline,force_model,fallback_function,296.4730000000027,22.593000000007464,72.209000000007,18
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::BUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul> >(int, at::native::BUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul>)",0.0,22.495000000004097,0.0,17
+qm9_hf,29,baseline,force_model,aten::new_zeros,171.36799999999675,21.440999999994347,28.697999999999183,26
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 3ul> >(int, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 3ul>)",0.0,21.312000000005582,0.0,18
+qm9_hf,29,baseline,force_model,void cutlass::Kernel2<cutlass_80_simt_sgemm_128x32_8x5_nn_align1>(cutlass_80_simt_sgemm_128x32_8x5_nn_align1::Params),0.0,21.024000000001024,0.0,2
+qm9_hf,29,baseline,force_model,"std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, float, float, float, float, false, true, true, false, 6, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>)",0.0,20.099000000000615,0.0,12
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::silu_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::(anonymous namespace)::silu_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>)",0.0,19.07299999999941,0.0,14
+qm9_hf,29,baseline,force_model,"void at::native::reduce_kernel<128, 4, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4, 4>)",0.0,18.495999999995547,0.0,4
+qm9_hf,29,baseline,force_model,_spherical_harmonics,281.504,17.281000000000404,44.780999999999835,1
+qm9_hf,29,baseline,force_model,"std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, float, float, float, float, false, true, true, false, 5, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>)",0.0,16.54300000000194,0.0,6
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: LinalgVectorNormBackward0,71.17700000000332,13.473000000005413,6.529999999998836,2
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: ExpandBackward0,95.16099999999278,13.344999999997526,45.20100000000821,27
+qm9_hf,29,baseline,force_model,torch::autograd::CopyBackwards,115.11100000002625,13.088999999999942,29.1890000000094,28
+qm9_hf,29,baseline,force_model,aten::zeros_like,84.06500000002052,13.088999999999942,9.39200000001074,15
+qm9_hf,29,baseline,force_model,"void at_cuda_detail::cub::DeviceRadixSortSingleTileKernel<at_cuda_detail::cub::DeviceRadixSortPolicy<long, at::cuda::cub::detail::OpaqueType<8>, unsigned long long>::Policy900, false, long, at::cuda::cub::detail::OpaqueType<8>, unsigned long long, at_cuda_detail::cub::detail::identity_decomposer_t>(long const*, long*, at::cuda::cub::detail::OpaqueType<8> const*, at::cuda::cub::detail::OpaqueType<8>*, unsigned long long, int, int, at_cuda_detail::cub::detail::identity_decomposer_t)",0.0,11.935999999997875,0.0,4
+qm9_hf,29,baseline,force_model,LinalgVectorNormBackward0,58.70900000000256,11.233000000000175,7.762000000009721,2
+qm9_hf,29,baseline,force_model,aten::where,75.69699999999443,10.271999999985837,25.696000000004574,5
+qm9_hf,29,baseline,force_model,ampere_sgemm_128x32_tn,0.0,9.184000000001106,0.0,1
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: SelectBackward0,51.295000000012806,9.089000000007218,7.908000000010361,3
+qm9_hf,29,baseline,force_model,aten::arange,52.50299999999697,7.360000000000582,13.427999999996246,8
+qm9_hf,29,baseline,force_model,aten::remainder,27.330999999998312,7.264000000002852,19.36699999999837,4
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<2, at::native::BUnaryFunctor<long, long, long, at::native::remainder_kernel_cuda(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, long)#1}>, std::array<char*, 2ul> >(int, at::native::BUnaryFunctor<long, long, long, at::native::remainder_kernel_cuda(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, long)#1}>, std::array<char*, 2ul>)",0.0,7.264000000002852,0.0,4
+qm9_hf,29,baseline,force_model,fused_mul_mul,59.02499999999611,7.263999999994212,45.44899999999723,6
+qm9_hf,29,baseline,force_model,fused_mul_mul,0.0,7.263999999994212,0.0,6
+qm9_hf,29,baseline,force_model,aten::divide_,23.9629999999961,7.135000000002037,2.072999999996682,4
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<2, at::native::BUnaryFunctor<long, long, long, at::native::binary_internal::div_trunc_kernel_cuda(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, long)#1}>, std::array<char*, 2ul> >(int, at::native::BUnaryFunctor<long, long, long, at::native::binary_internal::div_trunc_kernel_cuda(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, long)#1}>, std::array<char*, 2ul>)",0.0,7.135000000002037,0.0,4
+qm9_hf,29,baseline,force_model,aten::div_,21.889999999999418,7.135000000002037,13.887000000002445,4
+qm9_hf,29,baseline,force_model,ampere_sgemm_128x32_sliced1x4_nn,0.0,7.10399999999936,0.0,1
+qm9_hf,29,baseline,force_model,aten::select_backward,35.33299999999144,6.753000000004249,4.1529999999838765,3
+qm9_hf,29,baseline,force_model,SelectBackward0,37.45699999999488,6.753000000004249,2.1240000000034343,3
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<2, at::native::AUnaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> >, std::array<char*, 2ul>)",0.0,5.376000000000204,0.0,4
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#11}::operator()() const::{lambda(bool, float, float)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#11}::operator()() const::{lambda(bool, float, float)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#11}::operator()() const::{lambda(bool, float, float)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#11}::operator()() const::{lambda(bool, float, float)#1} const&)::{lambda(int)#1})",0.0,5.119999999990341,0.0,3
+qm9_hf,29,baseline,force_model,aten::one_hot,38.468000000000075,4.7680000000002565,3.7759999999996126,2
+qm9_hf,29,baseline,force_model,aten::linalg_vector_norm,27.73599999999999,4.6400000000001,20.938000000000102,2
+qm9_hf,29,baseline,force_model,"void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::NormTwoOps<float, float, float>, unsigned int, float, 4, 4> >(at::native::ReduceOp<float, at::native::NormTwoOps<float, float, float>, unsigned int, float, 4, 4>)",0.0,4.6400000000001,0.0,2
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::neg_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::neg_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>)",0.0,4.288000000007742,0.0,4
+qm9_hf,29,baseline,force_model,aten::neg,22.177999999992608,4.288000000007742,13.767999999989115,4
+qm9_hf,29,baseline,force_model,aten::to,43.201999999996815,4.128000000000043,7.061999999996715,51
+qm9_hf,29,baseline,force_model,aten::_to_copy,36.1400000000001,4.128000000000043,5.624000000000024,4
+qm9_hf,29,baseline,force_model,ClampMinBackward0,31.245999999999185,3.9679999999934807,3.3000000000029104,1
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: ClampMinBackward0,33.546000000002095,3.9679999999934807,2.3000000000029104,1
+qm9_hf,29,baseline,force_model,"void (anonymous namespace)::elementwise_kernel_with_index<int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>(int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}, function_traits<at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>::result_type*)",0.0,3.680000000000291,0.0,4
+qm9_hf,29,baseline,force_model,aten::item,55.37900000000627,3.5829999999950815,6.785000000014406,4
+qm9_hf,29,baseline,force_model,aten::_local_scalar_dense,48.593999999991865,3.5829999999950815,16.62599999999111,4
+qm9_hf,29,baseline,force_model,Memcpy DtoH (Device -> Pinned),0.0,3.5829999999950815,0.0,4
+qm9_hf,29,baseline,force_model,"void at::native::reduce_kernel<256, 2, at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4, 4> >(at::native::ReduceOp<float, at::native::func_wrapper_t<float, at::native::sum_functor<float, float, float>::operator()(at::TensorIterator&)::{lambda(float, float)#1}>, unsigned int, float, 4, 4>)",0.0,3.3920000000071013,0.0,1
+qm9_hf,29,baseline,force_model,"void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>, 4, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1> >(int, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<1>, at::native::memory::StoreWithCast<1>)",0.0,3.3920000000000528,0.0,2
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: PowBackward0,25.427999999999884,3.3280000000086147,2.4649999999965075,1
+qm9_hf,29,baseline,force_model,PowBackward0,22.963000000003376,3.3280000000086147,2.312000000005355,1
+qm9_hf,29,baseline,force_model,aten::sub,18.621000000002823,3.2009999999983165,12.688000000003285,3
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#7}::operator()() const::{lambda(float, bool)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#7}::operator()() const::{lambda(float, bool)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#7}::operator()() const::{lambda(float, bool)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#7}::operator()() const::{lambda(float, bool)#1} const&)::{lambda(int)#1})",0.0,3.072999999996682,0.0,2
+qm9_hf,29,baseline,force_model,aten::masked_fill_,15.81199999999808,3.072999999996682,9.374999999992724,2
+qm9_hf,29,baseline,force_model,SinBackward0,13.230999999999767,2.9760000000023865,1.723999999994703,1
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: SinBackward0,15.486999999993714,2.9760000000023865,2.2559999999939464,1
+qm9_hf,29,baseline,force_model,"void at::native::_scatter_gather_elementwise_kernel<128, 8, at::native::_cuda_scatter_fill_internal_kernel<at::native::OpaqueType<8> >::operator()<at::native::TensorAssign>(at::TensorIterator&, at::native::OpaqueType<8>, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1}>(int, at::native::_cuda_scatter_fill_internal_kernel<at::native::OpaqueType<8> >::operator()<at::native::TensorAssign>(at::TensorIterator&, at::native::OpaqueType<8>, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1})",0.0,2.9440000000001874,0.0,2
+qm9_hf,29,baseline,force_model,aten::scatter_,12.481000000000222,2.9440000000001874,7.9500000000000455,2
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::compare_scalar_kernel<float>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, float)::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::compare_scalar_kernel<float>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, float)::{lambda(float)#1}, std::array<char*, 2ul>)",0.0,2.6559999999965385,0.0,2
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: WhereBackward0,17.875999999996566,2.6559999999954016,2.4219999999986612,1
+qm9_hf,29,baseline,force_model,WhereBackward0,15.453999999997905,2.6559999999954016,1.2739999999976135,1
+qm9_hf,29,baseline,force_model,aten::scalar_tensor,19.63200000000063,2.62400000000207,3.8429999999924576,3
+qm9_hf,29,baseline,force_model,fused_mul_mul_add_mul,0.0,2.529000000004544,0.0,2
+qm9_hf,29,baseline,force_model,fused_mul_mul_add_mul,18.00000000000432,2.529000000004544,13.822000000001253,2
+qm9_hf,29,baseline,force_model,aten::linalg_norm,21.007999999999925,2.400000000000091,1.419999999999959,1
+qm9_hf,29,baseline,force_model,aten::eq,15.734999999993306,2.3360000000029686,11.503999999993539,2
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<float, float, bool, at::native::(anonymous namespace)::CompareEqFunctor<float> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<float, float, bool, at::native::(anonymous namespace)::CompareEqFunctor<float> >, std::array<char*, 2ul>)",0.0,2.3360000000029686,0.0,2
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: RsubBackward1,10.875,2.2400000000052387,2.815999999991618,1
+qm9_hf,29,baseline,force_model,aten::pow,22.689999999995052,2.240000000002624,12.353999999990947,2
+qm9_hf,29,baseline,force_model,ExpandBackward0,11.981999999996333,2.208999999995285,5.082999999998719,27
+qm9_hf,29,baseline,force_model,"void at::native::reduce_kernel<512, 1, at::native::ReduceOp<long, at::native::func_wrapper_t<long, at::native::sum_functor<long, long, long>::operator()(at::TensorIterator&)::{lambda(long, long)#1}>, unsigned int, long, 4, 4> >(at::native::ReduceOp<long, at::native::func_wrapper_t<long, at::native::sum_functor<long, long, long>::operator()(at::TensorIterator&)::{lambda(long, long)#1}>, unsigned int, long, 4, 4>)",0.0,2.2080000000005384,0.0,1
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOnSelf_add<float>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnSelf_add<float>, std::array<char*, 2ul>)",0.0,2.20799999999997,0.0,2
+qm9_hf,29,baseline,force_model,"void at::native::(anonymous namespace)::indexSelectLargeIndex<long, long, unsigned int, 1, 1, -2, true>(at::cuda::detail::TensorInfo<long, unsigned int>, at::cuda::detail::TensorInfo<long const, unsigned int>, at::cuda::detail::TensorInfo<long const, unsigned int>, int, int, unsigned int, unsigned int, long)",0.0,1.9519999999999982,0.0,1
+qm9_hf,29,baseline,force_model,aten::index_select,17.127000000000066,1.9519999999999982,8.32500000000016,1
+qm9_hf,29,baseline,force_model,aten::cos,7.626000000003842,1.8879999999990105,4.589000000007218,1
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::cos_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::cos_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>)",0.0,1.8879999999990105,0.0,1
+qm9_hf,29,baseline,force_model,aten::stack,23.2829999999999,1.8559999999999945,7.652000000000498,1
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<2, at::native::FillFunctor<long>, std::array<char*, 1ul> >(int, at::native::FillFunctor<long>, std::array<char*, 1ul>)",0.0,1.8240000000000691,0.0,2
+qm9_hf,29,baseline,force_model,aten::ones_like,15.803000000000793,1.7920000000013943,2.898000000001275,2
+qm9_hf,29,baseline,force_model,aten::sin,8.530000000000086,1.79200000000003,5.587000000000103,1
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::sin_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::sin_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>)",0.0,1.79200000000003,0.0,1
+qm9_hf,29,baseline,force_model,"std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, float, float, float, float, false, true, true, false, 7, false, cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float> >(cublasGemvParamsEx<int, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>)",0.0,1.7600000000002183,0.0,1
+qm9_hf,29,baseline,force_model,aten::tanh,8.971999999999753,1.5360000000000582,6.144000000000233,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_add_mul_neg_mul_mul,12.228000000002794,1.5360000000000582,9.812000000005355,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_add_mul_neg_mul_mul,0.0,1.5360000000000582,0.0,1
+qm9_hf,29,baseline,force_model,"void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::tanh_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::tanh_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::tanh_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::tanh_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1})",0.0,1.5360000000000582,0.0,1
+qm9_hf,29,baseline,force_model,fused_pow_pow_mul_ne_3547759108918770167,0.0,1.408000000003085,0.0,1
+qm9_hf,29,baseline,force_model,fused_pow_pow_mul_ne_3547759108918770167,11.280999999995402,1.408000000003085,8.935999999994237,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_neg_mul_mul,27.790000000000873,1.3760000000038417,24.135000000002037,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_neg_mul_mul,0.0,1.3760000000038417,0.0,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_mul_mul,0.0,1.3759999999965657,0.0,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_mul_mul,13.279999999998836,1.3759999999965657,10.973999999994703,1
+qm9_hf,29,baseline,force_model,aten::ge,9.148999999997613,1.3759999999965657,6.458999999995285,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_mul_neg_mul,11.37999999999738,1.3440000000045984,9.283000000003085,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_mul_neg_mul,0.0,1.3440000000045984,0.0,1
+qm9_hf,29,baseline,force_model,aten::lt,8.331999999999994,1.2799999999999727,5.996999999999957,1
+qm9_hf,29,baseline,force_model,aten::clamp_min,8.683999999999969,1.2490000000000236,5.968999999999937,1
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::launch_clamp_scalar(at::TensorIteratorBase&, c10::Scalar, c10::Scalar, at::native::detail::ClampLimits)::{lambda()#1}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::(anonymous namespace)::launch_clamp_scalar(at::TensorIteratorBase&, c10::Scalar, c10::Scalar, at::native::detail::ClampLimits)::{lambda()#1}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>)",0.0,1.2490000000000236,0.0,1
+qm9_hf,29,baseline,force_model,"void gemmk1_kernel<int, float, 256, 5, false, false, false, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float, 0>(cublasGemmk1Params<float, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float, biasType<cublasGemvTensorStridedBatched<float>::value_type, float>::type>)",0.0,1.2480000000014115,0.0,1
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: TanhBackward0,10.495999999999185,1.2160000000003492,2.0,1
+qm9_hf,29,baseline,force_model,aten::tanh_backward,6.619999999998981,1.2160000000003492,4.117999999998574,1
+qm9_hf,29,baseline,force_model,TanhBackward0,8.495999999999185,1.2160000000003492,1.8760000000002037,1
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::tanh_backward_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1}, std::array<char*, 3ul> >(int, at::native::tanh_backward_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1}, std::array<char*, 3ul>)",0.0,1.2160000000003492,0.0,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_sub_mul,8.638999999999896,1.1840000000001965,6.33199999999988,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_sub_mul_mul_mul,0.0,1.1840000000001965,0.0,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_sub_mul,0.0,1.1840000000001965,0.0,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_sub_mul_mul_mul,15.404999999999973,1.1840000000001965,13.19399999999996,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_sub_mul,0.0,1.1520000000000437,0.0,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul_sub_mul,11.659000000000106,1.1520000000000437,9.756000000000085,1
+qm9_hf,29,baseline,force_model,aten::rsub,8.98599999999999,1.120999999999981,2.243000000000052,1
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOnOther_add<float>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnOther_add<float>, std::array<char*, 2ul>)",0.0,1.120999999999981,0.0,1
+qm9_hf,29,baseline,force_model,RsubBackward1,4.905000000006112,1.1200000000026193,0.6010000000096625,1
+qm9_hf,29,baseline,force_model,fused_pow_pow_pow_a_12986487486746149047,0.0,1.1200000000001182,0.0,1
+qm9_hf,29,baseline,force_model,fused_pow_pow_pow_a_12986487486746149047,14.009999999999991,1.1200000000001182,11.768000000000029,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul,0.0,1.1200000000000045,0.0,1
+qm9_hf,29,baseline,force_model,"void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::pow_tensor_scalar_kernel_impl<float, float>(at::TensorIteratorBase&, float)::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::(anonymous namespace)::pow_tensor_scalar_kernel_impl<float, float>(at::TensorIteratorBase&, float)::{lambda(float)#1}, std::array<char*, 2ul>)",0.0,1.1200000000000045,0.0,1
+qm9_hf,29,baseline,force_model,fused_mul_mul_mul,21.567000000000007,1.1200000000000045,19.109000000000037,1
+qm9_hf,29,baseline,force_model,Memcpy HtoD (Pageable -> Device),0.0,0.73599999999999,0.0,2
+qm9_hf,29,baseline,force_model,aten::empty,1007.4919999999343,0.0,1007.4919999999343,669
+qm9_hf,29,baseline,force_model,aten::resize_,10.781000000000631,0.0,10.781000000000631,8
+qm9_hf,29,baseline,force_model,cudaLaunchKernel,6831.425999999989,0.0,6831.425999999989,4066
+qm9_hf,29,baseline,force_model,cudaMemcpyAsync,510.9979999999625,0.0,510.9979999999625,86
+qm9_hf,29,baseline,force_model,Unrecognized,197.784,0.0,197.784,1
+qm9_hf,29,baseline,force_model,aten::empty_strided,284.65100000000854,0.0,86.86700000000855,47
+qm9_hf,29,baseline,force_model,cudaStreamSynchronize,20.4609999999999,0.0,20.4609999999999,6
+qm9_hf,29,baseline,force_model,aten::lift_fresh,0.1069999999999709,0.0,0.1069999999999709,1
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: AddBackward0,29.2870000000039,0.0,25.090000000000146,17
+qm9_hf,29,baseline,force_model,SumBackward0,8.196000000001732,0.0,2.199000000000524,2
+qm9_hf,29,baseline,force_model,aten::_unsafe_view,72.2230000000186,0.0,72.2230000000186,164
+qm9_hf,29,baseline,force_model,AddBackward0,4.197000000003754,0.0,4.197000000003754,17
+qm9_hf,29,baseline,force_model,SubBackward0,0.4580000000059954,0.0,0.4580000000059954,1
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: SubBackward0,1.7809999999954016,0.0,1.3229999999894062,1
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: SumBackward0,15.916999999997643,0.0,7.720999999995911,2
+qm9_hf,29,baseline,force_model,aten::narrow,614.6239999999334,0.0,184.16299999995908,503
+qm9_hf,29,baseline,force_model,aten::new_empty,52.49199999999337,0.0,9.663999999994985,26
+qm9_hf,29,baseline,force_model,cudaDeviceGetAttribute,1.1110000000001037,0.0,1.1110000000001037,2
+qm9_hf,29,baseline,force_model,aten::_reshape_alias,424.4230000000846,0.0,424.4230000000846,874
+qm9_hf,29,baseline,force_model,cudaMemsetAsync,139.17099999999618,0.0,139.17099999999618,100
+qm9_hf,29,baseline,force_model,aten::permute,1725.3510000000465,0.0,1378.8910000001488,2080
+qm9_hf,29,baseline,force_model,aten::view,1034.3590000000238,0.0,1034.3590000000238,2020
+qm9_hf,29,baseline,force_model,PermuteBackward0,970.4199999999564,0.0,295.6569999998883,893
+qm9_hf,29,baseline,force_model,aten::detach,27.17500000000348,0.0,11.744999999998754,48
+qm9_hf,29,baseline,force_model,aten::empty_like,419.386000000056,0.0,81.55300000005661,216
+qm9_hf,29,baseline,force_model,aten::select,50.32600000004561,0.0,40.33200000004001,42
+qm9_hf,29,baseline,force_model,aten::expand,69.17299999999886,0.0,56.51800000000537,57
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: torch::autograd::CopyBackwards,3.335000000000946,0.0,1.5460000000002765,1
+qm9_hf,29,baseline,force_model,aten::expand_as,16.114999999993074,0.0,4.596999999999184,9
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: CatBackward0,511.34899999998925,0.0,120.38199999999415,39
+qm9_hf,29,baseline,force_model,CatBackward0,390.9669999999951,0.0,82.68100000006234,39
+qm9_hf,29,baseline,force_model,aten::transpose,136.0269999999764,0.0,93.12300000000687,246
+qm9_hf,29,baseline,force_model,aten::t,224.4659999999967,0.0,124.53699999999662,198
+qm9_hf,29,baseline,force_model,aten::broadcast_tensors,11.943000000001575,0.0,11.943000000001575,14
+qm9_hf,29,baseline,force_model,aten::slice,1055.0909999999624,0.0,821.1110000000588,1257
+qm9_hf,29,baseline,force_model,cudaOccupancyMaxActiveBlocksPerMultiprocessor,62.09299999996415,0.0,62.09299999996415,244
+qm9_hf,29,baseline,force_model,aten::result_type,0.32299999999759166,0.0,0.32299999999759166,2
+qm9_hf,29,baseline,force_model,detach,15.430000000004725,0.0,15.430000000004725,48
+qm9_hf,29,baseline,force_model,cuLaunchKernel,45.7459999999968,0.0,45.7459999999968,20
+qm9_hf,29,baseline,force_model,StackBackward0,37.838000000003376,0.0,25.341999999975087,1
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: StackBackward0,42.94499999999971,0.0,5.106999999996333,1
+qm9_hf,29,baseline,force_model,aten::new_empty_strided,51.97500000000946,0.0,10.532000000002881,27
+qm9_hf,29,baseline,force_model,CloneBackward0,7.845999999994092,0.0,7.845999999994092,72
+qm9_hf,29,baseline,force_model,cudaPeekAtLastError,0.49099999999816646,0.0,0.49099999999816646,8
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: UnsafeViewBackward0,185.0200000000077,0.0,95.3510000000133,72
+qm9_hf,29,baseline,force_model,UnsafeViewBackward0,89.66899999999441,0.0,21.520999999989726,72
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: CloneBackward0,93.28199999997742,0.0,85.43599999998332,72
+qm9_hf,29,baseline,force_model,UnsqueezeBackward0,481.928000000069,0.0,146.5910000000622,455
+qm9_hf,29,baseline,force_model,aten::squeeze,335.3370000000068,0.0,265.9289999999892,455
+qm9_hf,29,baseline,force_model,detach_,0.42000000000007276,0.0,0.42000000000007276,1
+qm9_hf,29,baseline,force_model,aten::as_strided,829.4849999997792,0.0,829.4849999997792,4713
+qm9_hf,29,baseline,force_model,aten::unsqueeze,436.92200000000423,0.0,345.50800000000174,509
+qm9_hf,29,baseline,force_model,aten::detach_,1.23599999999999,0.0,0.8159999999999172,1
+qm9_hf,29,baseline,force_model,autograd::engine::evaluate_function: torch::autograd::AccumulateGrad,1.7229999999981374,0.0,1.7229999999981374,1
+qm9_hf,29,baseline,force_model,cudaDeviceSynchronize,4.330000000001746,0.0,4.330000000001746,1

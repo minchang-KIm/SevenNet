@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,materials,url,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/figshare/phonondb_pbe.extxyz.zip

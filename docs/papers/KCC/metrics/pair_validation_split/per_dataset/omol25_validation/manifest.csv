@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+omol25_validation,OMol25_validation_data0012_18589,omol25_low,350,molecular,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/omol25_validation

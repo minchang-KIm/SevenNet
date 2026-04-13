@@ -1,0 +1,9 @@
+{
+  "dataset": "md22_double_walled_nanotube",
+  "sample_id": "md22_double-walled_nanotube_1987",
+  "modal": "spice",
+  "natoms": 370,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_double_walled_nanotube"
+}

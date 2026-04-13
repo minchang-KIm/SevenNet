@@ -61,6 +61,7 @@ class IrrepsConvolution(nn.Module):
         self.is_parallel = is_parallel
         self.pair_execution_policy = pair_execution_policy
         self.fuse_reduction = fuse_reduction
+        self.expand_full_edges = True
 
         instructions = []
         irreps_mid = []
@@ -134,18 +135,29 @@ class IrrepsConvolution(nn.Module):
 
         src_forward = edge_src.index_select(0, pair_forward_index)
         dst_forward = edge_dst.index_select(0, pair_forward_index)
+        if not self.expand_full_edges and KEY.PAIR_EDGE_ATTR in data:
+            forward_filter = data[KEY.PAIR_EDGE_ATTR]
+        else:
+            forward_filter = data[self.key_filter].index_select(0, pair_forward_index)
         msg_forward = self.convolution(
             x.index_select(0, src_forward),
-            data[self.key_filter].index_select(0, pair_forward_index),
+            forward_filter,
             pair_weight,
         )
         out = message_gather(x, dst_forward, msg_forward)
 
         rev_index = pair_backward_index[pair_has_reverse]
         if rev_index.numel() > 0:
+            if (
+                not self.expand_full_edges
+                and KEY.PAIR_EDGE_REVERSE_ATTR in data
+            ):
+                reverse_filter = data[KEY.PAIR_EDGE_REVERSE_ATTR][pair_has_reverse]
+            else:
+                reverse_filter = data[self.key_filter].index_select(0, rev_index)
             msg_reverse = self.convolution(
                 x.index_select(0, edge_src.index_select(0, rev_index)),
-                data[self.key_filter].index_select(0, rev_index),
+                reverse_filter,
                 pair_weight[pair_has_reverse],
             )
             out = out + message_gather(
@@ -239,6 +251,7 @@ class IrrepsScatterGatterFusedConvolution(nn.Module):
         self.is_parallel = is_parallel
         self.pair_execution_policy = pair_execution_policy
         self.fuse_reduction = fuse_reduction
+        self.expand_full_edges = True
 
         instructions = []
         irreps_mid = []

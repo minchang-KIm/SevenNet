@@ -13,6 +13,10 @@
 
 - `tables/table_s01_flash_summary.md`
 - `tables/table_s02_nsys_kernel_groups.md`
+- `tables/table_06_force_step_split_summary.md`
+- `tables/table_07_forward_only_split_summary.md`
+- `tables/table_08_pair_metadata_method_summary.md`
+- `tables/table_09_split_compact_summary.md`
 
 ## Main Figures
 
@@ -33,6 +37,14 @@
 - `figure_02_flash_speedup_all`: Flash baseline 대비 flash pair auto speedup
 - `figure_03_dataset_map`: 데이터셋 size-density map
 - `figure_05_sh_share_vs_intrusive_pair_speedup`: SH share와 intrusive pair speedup 관계
+- `pair_validation_step_force_latency_all`: `baseline / geometry_only / full_legacy / full_no_expand`의 force 포함 추론 시간 mean±std
+- `pair_validation_forward_energy_latency_all`: 같은 네 case의 순수 forward 에너지 시간 mean±std
+- `pair_validation_step_force_speedup_geometry_only`: force 포함 경로에서 `baseline / geometry_only` speedup
+- `pair_validation_forward_energy_speedup_geometry_only`: pure forward에서 `baseline / geometry_only` speedup
+- `pair_validation_step_force_patch_delta`: `full_legacy / full_no_expand` 비교
+- `pair_validation_forward_energy_patch_delta`: pure forward에서의 patch 효과 비교
+- `pair_validation_pair_metadata_methods`: 기존 CPU pair metadata와 벡터화/GPU 실험 비교
+- `pair_validation_case_median_speedups`: case별 중앙값 speedup 요약
 - `figures/four_case/stage_breakdown_all_option_none.png`
 - `figures/four_case/stage_breakdown_all_flashtp_only.png`
 - `figures/four_case/stage_breakdown_all_proposal_only.png`

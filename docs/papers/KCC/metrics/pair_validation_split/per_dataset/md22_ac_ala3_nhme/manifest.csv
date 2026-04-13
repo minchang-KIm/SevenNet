@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+md22_ac_ala3_nhme,md22_Ac-Ala3-NHMe_4756,spice,42,molecular,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_ac_ala3_nhme

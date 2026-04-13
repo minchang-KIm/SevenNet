@@ -23,6 +23,11 @@
   - SevenNet baseline vs proposal-only non-intrusive repeated timing
 - `metrics/pair_accuracy/`
   - SevenNet baseline 기준 출력 대비 반복 정확도 측정
+- `metrics/pair_validation_split/`
+  - `baseline / geometry_only / full_legacy / full_no_expand`
+  - `forward_energy`와 `step_force`를 분리한 100회 반복 검증
+- `metrics/pair_profiler/`
+  - small/large representative `torch.profiler` 결과
 - `metrics/four_case/`
   - `옵션 없음 / FlashTP / 제안기법만 / 둘 다` intrusive stage profiling
 - `metrics/per_dataset/<dataset>/`
@@ -42,6 +47,8 @@
 - `metrics/pair_accuracy/global/pair_accuracy_raw_repeats.csv`
 - `reports/pair_end_to_end_condition_analysis.md`
 - `reports/pair_accuracy_repeat_report.md`
+- `reports/pair_validation_split_report.md`
+- `reports/pair_validation_interpretation.md`
 - `metrics/global/dataset_manifest.csv`
 - `metrics/global/reference_e3nn.csv`
 - `metrics/global/flash_end_to_end_summary.csv`
@@ -105,6 +112,14 @@ python -u docs/papers/KCC/scripts/kcc_pair_accuracy_repeats.py --warmup 2 --repe
 python docs/papers/KCC/scripts/kcc_build_accuracy_assets.py
 ```
 
+분리 검증:
+
+```bash
+python -u docs/papers/KCC/scripts/kcc_pair_validation_suite.py --output-root docs/papers/KCC --warmup 5 --repeat 100
+python docs/papers/KCC/scripts/kcc_build_pair_validation_assets.py --output-root docs/papers/KCC
+python docs/papers/KCC/scripts/kcc_pair_profiler_representatives.py --output-root docs/papers/KCC
+```
+
 ## Measurement Families
 
 - `e3nn baseline detailed`
@@ -120,6 +135,13 @@ python docs/papers/KCC/scripts/kcc_build_accuracy_assets.py
 - `Four-case intrusive stage profiling`
   - `e3nn_baseline`, `flash_baseline`, `e3nn_pair_full`, `flash_pair_auto`
   - step-by-step stage timing for each representative dataset
+- `Pair validation split`
+  - `baseline`, `geometry_only`, `full_legacy`, `full_no_expand`
+  - `forward_energy`: 입력 그래프를 미리 만든 뒤 순수 에너지 forward만 측정
+  - `step_force`: 그래프 생성, pair metadata, device 이동, 힘 계산을 포함한 실제 추론 경로
+- `Representative torch.profiler`
+  - `qm9_hf`, `mptrj`
+  - `force_model`, `forward_energy`
 
 직접 비교 규칙은 `metrics/global/comparability_legend.csv`와 `tables/table_01_comparability.md`를 기준으로 한다.
 
@@ -135,6 +157,10 @@ python docs/papers/KCC/scripts/kcc_build_accuracy_assets.py
 
 - `tables/table_s01_flash_summary.md`
 - `tables/table_s02_nsys_kernel_groups.md`
+- `tables/table_06_force_step_split_summary.md`
+- `tables/table_07_forward_only_split_summary.md`
+- `tables/table_08_pair_metadata_method_summary.md`
+- `tables/table_09_split_compact_summary.md`
 
 4-case profiling 산출물:
 
@@ -163,6 +189,24 @@ baseline-vs-proposal end-to-end 산출물:
 - `figures/pair_accuracy/pair_accuracy_force_errorbar.png`
 - `reports/pair_end_to_end_condition_analysis.md`
 - `reports/pair_accuracy_repeat_report.md`
+
+분리 검증 산출물:
+
+- `summary_pair_validation_split.md`
+- `metrics/pair_validation_split/global/pair_validation_summary.csv`
+- `metrics/pair_validation_split/global/pair_validation_raw.csv`
+- `metrics/pair_validation_split/global/pair_metadata_summary.csv`
+- `metrics/pair_profiler/pair_profiler_summary.csv`
+- `tables/table_06_force_step_split_summary.md`
+- `tables/table_07_forward_only_split_summary.md`
+- `tables/table_08_pair_metadata_method_summary.md`
+- `tables/table_09_split_compact_summary.md`
+- `figures/pair_validation_split/pair_validation_step_force_latency_all.png`
+- `figures/pair_validation_split/pair_validation_forward_energy_latency_all.png`
+- `figures/pair_validation_split/pair_validation_pair_metadata_methods.png`
+- `figures/pair_validation_split/pair_validation_case_median_speedups.png`
+- `reports/pair_validation_split_report.md`
+- `reports/pair_validation_interpretation.md`
 
 ## Writing Rule
 

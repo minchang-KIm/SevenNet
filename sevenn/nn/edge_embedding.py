@@ -205,6 +205,7 @@ class EdgeEmbedding(nn.Module):
         self.cutoff_function = cutoff_module
         self.spherical = spherical_module
         self.pair_execution_policy = pair_execution_policy
+        self.expand_full_edges = True
         reverse_sign = []
         for mul, ir in self.spherical.irreps_out:
             reverse_sign.extend([float((-1) ** ir.l)] * (mul * ir.dim))
@@ -230,7 +231,13 @@ class EdgeEmbedding(nn.Module):
 
         data[KEY.PAIR_EDGE_EMBEDDING] = pair_embedding
         data[KEY.PAIR_EDGE_ATTR] = pair_attr
+        data[KEY.PAIR_EDGE_REVERSE_ATTR] = pair_attr * self.reverse_sh_sign.to(
+            pair_attr.dtype
+        ).unsqueeze(0)
         data[KEY.EDGE_LENGTH] = pair_r.index_select(0, data[KEY.EDGE_PAIR_MAP])
+
+        if self.pair_execution_policy == 'full' and not self.expand_full_edges:
+            return data
 
         edge_embedding = pair_embedding.index_select(0, data[KEY.EDGE_PAIR_MAP])
         edge_attr = pair_attr.index_select(0, data[KEY.EDGE_PAIR_MAP])

@@ -1,0 +1,4 @@
+dataset,sample_id,modal,natoms,method,timing_ms_mean,timing_ms_std,timing_ms_median,timing_ms_p95
+md22_ac_ala3_nhme,md22_Ac-Ala3-NHMe_4756,spice,42,cpu_original,8.0641501233913,0.05563600634264302,8.058284991420805,8.173090522177517
+md22_ac_ala3_nhme,md22_Ac-Ala3-NHMe_4756,spice,42,cpu_vectorized,1.4857463212683797,0.028328854985122418,1.4856514753773808,1.5105695463716984
+md22_ac_ala3_nhme,md22_Ac-Ala3-NHMe_4756,spice,42,gpu_vectorized_kernel_only,0.6040578568354249,0.014492045440038168,0.6014815298840404,0.6186709622852504
