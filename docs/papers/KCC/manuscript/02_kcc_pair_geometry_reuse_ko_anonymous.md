@@ -56,7 +56,7 @@ FlashTP는 tensor product, gather, scatter를 fused kernel로 실행함으로써
 
 본 논문은 네 가지 계측 family를 구분하되, 메인 성능 비교는 하나만 사용한다. 첫째, `SevenNet baseline vs proposal-only end-to-end`는 `e3nn_baseline`과 `e3nn_pair_full`에 대해 non-intrusive repeated wall-clock timing을 측정하는 family이며, 본 논문의 headline latency 결과는 전부 이 family에 기반한다. 둘째, `e3nn baseline detailed profile`은 intrusive synchronized stage timing으로 SH, radial basis, cutoff, `weight_nn`, TP, aggregation, force/stress output 등을 분해한다. 셋째, `e3nn pair detailed profile`은 같은 intrusive 조건에서 pair-aware 실행의 stage 변화를 측정한다. 넷째, `FlashTP end-to-end`와 representative Nsight는 후속 결합 가능성을 이해하기 위한 보조 family이다.
 
-이들 family는 서로 역할이 다르다. `SevenNet baseline vs proposal-only end-to-end`는 headline latency 비교에 직접 사용할 수 있다. `e3nn baseline detailed`와 `e3nn pair detailed`는 stage share와 오버헤드 해석에 직접 사용할 수 있다. 반면 intrusive detailed time을 non-intrusive end-to-end latency와 직접 비교해서는 안 되며, representative Nsight 역시 kernel mix 검증용이지 본 논문의 headline latency 근거가 아니다.
+이들 family는 서로 역할이 다르다. `SevenNet baseline vs proposal-only end-to-end`는 headline latency 비교에 직접 사용할 수 있다. `e3nn baseline detailed`와 `e3nn pair detailed`는 stage share와 오버헤드 해석에 직접 사용할 수 있다. 반면 intrusive detailed time을 non-intrusive end-to-end latency와 직접 비교해서는 안 되며, representative Nsight 역시 kernel mix 검증용이지 본 논문의 headline latency 근거가 아니다. 이러한 직접 비교 가능 범위와 금지 범위는 표 1에 정리하였다.
 
 ### 4.3 반복 측정과 통계
 
@@ -72,6 +72,8 @@ Nsight Systems는 kernel-level 구조를 확인하는 데 유용하지만, 31개
 
 본 논문의 메인 성능 결과는 `SevenNet baseline`과 `SevenNet + 제안기법`의 non-intrusive repeated end-to-end 비교이다. 31개 데이터셋 전체에서 `SevenNet + 제안기법`은 median `1.010x`의 speedup을 보였고, 31개 중 18개에서 baseline보다 빨랐다. 다만 geometric mean은 `0.857x`로 전체 분포가 한쪽으로만 개선되지는 않았으며, 성능은 데이터셋의 graph 규모와 밀도에 강하게 의존했다. 정확도는 유지되었다. 제안기법 적용 시 worst absolute energy delta는 `6.104e-05 eV`, worst force delta는 `1.831e-04 eV/A`였고, 모두 `omat24_1m_official`에서 관측되었다.
 
+전 데이터셋에 대한 `mean ± std` latency, speedup, graph 통계는 표 2에, baseline 대비 수치 오차 요약은 표 4에 정리하였다. 즉 본 논문의 메인 비교는 개별 best case가 아니라 전수 repeated measurement의 분포와 정확도 유지 여부를 동시에 기준으로 해석한다.
+
 ![그림 1](../figures/pair_end_to_end/pair_latency_all.png)
 
 ![그림 2](../figures/pair_end_to_end/pair_speedup_all.png)
@@ -81,6 +83,8 @@ best case는 `md22_buckyball_catcher (1.067x)`였고, `oc20_s2ef_val_ood_ads (1.
 ### 5.2 제안기법이 유리해지는 조건
 
 이번 전수 실험에서 가장 강한 분리 변수는 graph 크기와 이웃 밀도였다. `num_edges >= 3000`인 그래프의 승률은 `90%`였고 median speedup은 `1.013x`였다. 반대로 `num_edges < 3000`인 그래프의 승률은 `0%`였고 median speedup은 `0.613x`였다. 이웃 밀도 기준으로 보아도 `avg_neighbors_directed >= 40`에서는 승률이 `94.1%`, median speedup이 `1.013x`였고, 그보다 낮은 구간에서는 승률이 `14.3%`, median speedup이 `0.615x`에 그쳤다. Spearman 상관도 `num_edges`와 speedup 사이 `0.594`, `avg_neighbors_directed`와 speedup 사이 `0.629`, `natoms`와 speedup 사이 `0.681`로 모두 양의 방향을 보였다.
+
+이 조건 분해 결과는 표 3에 요약하였다. 표 3은 단순 평균이 아니라 승률, median, standard deviation을 함께 제시해, 제안기법이 어떤 workload regime에서 안정적으로 유리해지는지를 보여준다.
 
 ![그림 3](../figures/pair_end_to_end/pair_speedup_vs_num_edges.png)
 
@@ -93,6 +97,8 @@ bucket별로 보면 `large_dense`는 17개 중 16개에서 승리했고 median s
 ### 5.3 Detailed profile과 오버헤드 해석
 
 end-to-end 결과가 어디에서 오는지를 이해하기 위해 `e3nn baseline detailed`와 `e3nn pair detailed`를 같은 intrusive 조건에서 비교하였다. 이 결과는 absolute latency claim용이 아니라 stage decomposition용이다. 이 기준에서 `e3nn_pair_full`은 `e3nn_baseline` 대비 model-total 기준 median `1.318x`의 감소를 보였다. measured `conv_message_tp_ms`는 median `55.7 ms` 감소했고, `conv_weight_nn_ms`도 소폭 줄었다. 반면 명시적으로 추가되는 오버헤드는 작았다. `pair_indexing_ms`는 median 약 `0.51 ms`, `pair_expand_ms`는 median 약 `0.084 ms` 수준이었다.
+
+대표 workload에 대한 stage별 `mean ± std`는 표 5에 정리하였다. 표 5는 small sparse와 large dense 양쪽을 함께 포함해, 제안기법이 어디에서 절감량을 만들고 어디에서 force/backward가 여전히 지배적인지를 비교할 수 있게 구성하였다.
 
 ![그림 6](../figures/figure_04_representative_stage_breakdown.png)
 
