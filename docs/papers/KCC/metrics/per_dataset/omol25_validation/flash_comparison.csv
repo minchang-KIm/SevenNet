@@ -1,0 +1,2 @@
+dataset,flash_baseline_mean_ms,flash_baseline_std_ms,flash_pair_auto_mean_ms,flash_pair_auto_std_ms,flash_speedup_baseline_over_pair
+omol25_validation,28.440270596183836,2.0352160945694555,27.997032273560762,0.684599180281044,1.0158316180905236

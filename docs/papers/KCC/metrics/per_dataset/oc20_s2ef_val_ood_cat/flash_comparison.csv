@@ -1,0 +1,2 @@
+dataset,flash_baseline_mean_ms,flash_baseline_std_ms,flash_pair_auto_mean_ms,flash_pair_auto_std_ms,flash_speedup_baseline_over_pair
+oc20_s2ef_val_ood_cat,17.020408110693097,0.27291846096923056,25.620360882021487,3.349019600854904,0.6643313179338074

@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+oc22_s2ef_val_ood,280.3009585943073,0.09874459662493398,277.4118079803884,0.24150386416606304,1.0104146634382742

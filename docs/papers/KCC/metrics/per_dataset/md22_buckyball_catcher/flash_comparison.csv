@@ -1,0 +1,2 @@
+dataset,flash_baseline_mean_ms,flash_baseline_std_ms,flash_pair_auto_mean_ms,flash_pair_auto_std_ms,flash_speedup_baseline_over_pair
+md22_buckyball_catcher,14.518173690885305,0.20474801010430355,23.74802448321134,2.672738579752494,0.6113423750741425

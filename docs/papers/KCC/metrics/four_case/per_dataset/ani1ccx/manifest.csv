@@ -1,0 +1,2 @@
+dataset,sample_id,natoms,modal,loader,category,source_kind,local_path,num_edges,num_pairs,avg_neighbors_directed,pair_reuse_factor,reverse_pair_fraction,baseline_edge_embedding_evals,pair_edge_embedding_evals,baseline_weight_nn_rows_total,pair_weight_nn_rows_total,baseline_tp_rows_total,pair_tp_rows_total,baseline_scatter_rows_total,pair_scatter_rows_total
+ani1ccx,055:0,55,spice,ani1ccx_h5,molecular,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/ani1ccx,2042,1021,37.127272727272725,2.0,1.0,2042,1021,10210,5105,10210,10210,10210,10210

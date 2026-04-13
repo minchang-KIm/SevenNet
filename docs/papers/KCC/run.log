@@ -1,0 +1,62 @@
+[dataset] ani1ccx :: 055:0 :: natoms=55
+[done] ani1ccx
+[dataset] ani1x :: ani1x-release_416625 :: natoms=63
+[done] ani1x
+[dataset] iso17 :: iso17 :: natoms=19
+[done] iso17
+[dataset] md22_ac_ala3_nhme :: md22_Ac-Ala3-NHMe_4756 :: natoms=42
+[done] md22_ac_ala3_nhme
+[dataset] md22_at_at :: md22_AT-AT_12521 :: natoms=60
+[done] md22_at_at
+[dataset] md22_at_at_cg_cg :: md22_AT-AT-CG-CG_3798 :: natoms=118
+[done] md22_at_at_cg_cg
+[dataset] md22_buckyball_catcher :: md22_buckyball-catcher_1114 :: natoms=148
+[done] md22_buckyball_catcher
+[dataset] md22_dha :: md22_DHA_45597 :: natoms=56
+[done] md22_dha
+[dataset] md22_double_walled_nanotube :: md22_double-walled_nanotube_1987 :: natoms=370
+[done] md22_double_walled_nanotube
+[dataset] md22_stachyose :: md22_stachyose_10546 :: natoms=87
+[done] md22_stachyose
+[dataset] mptrj :: mp-1204603 :: natoms=444
+[done] mptrj
+[dataset] oc20_s2ef_train_20m :: OC20_S2EF_train_20M__file_0444__config_1055 :: natoms=225
+[done] oc20_s2ef_train_20m
+[dataset] oc20_s2ef_train_2m :: frame27 :: natoms=225
+[done] oc20_s2ef_train_2m
+[dataset] oc20_s2ef_val_id :: OC20_S2EF_val_id__file_0049__config_3636 :: natoms=225
+[done] oc20_s2ef_val_id
+[dataset] oc20_s2ef_val_ood_ads :: OC20_S2EF_val_ood_ads__file_0071__config_1575 :: natoms=225
+[done] oc20_s2ef_val_ood_ads
+[dataset] oc20_s2ef_val_ood_both :: OC20_S2EF_val_ood_both__file_0113__config_496 :: natoms=223
+[done] oc20_s2ef_val_ood_both
+[dataset] oc20_s2ef_val_ood_cat :: OC20_S2EF_val_ood_cat__file_0023__config_854 :: natoms=225
+[done] oc20_s2ef_val_ood_cat
+[dataset] oc22_s2ef_train :: s2ef_train_0 :: natoms=228
+[done] oc22_s2ef_train
+[dataset] oc22_s2ef_val_id :: s2ef_val_id_0 :: natoms=200
+[done] oc22_s2ef_val_id
+[dataset] oc22_s2ef_val_ood :: is2re_val_ood_43 :: natoms=216
+[done] oc22_s2ef_val_ood
+[dataset] omat24_1m_official :: train:106751 :: natoms=160
+[done] omat24_1m_official
+[dataset] omol25_train_4m :: OMol25_train_4M_data0016_18415 :: natoms=350
+[done] omol25_train_4m
+[dataset] omol25_train_neutral :: OMol25_train_neutral_data0063_395425 :: natoms=181
+[done] omol25_train_neutral
+[dataset] omol25_validation :: OMol25_validation_data0012_18589 :: natoms=350
+[done] omol25_validation
+[dataset] phonondb_pbe :: phonondb_pbe.extxyz:0 :: natoms=8
+[done] phonondb_pbe
+[dataset] qm9_hf :: 0_3057 :: natoms=29
+[done] qm9_hf
+[dataset] rmd17 :: rmd17_azobenzene :: natoms=24
+[done] rmd17
+[dataset] salex_train_official :: alex_go_aao_005:4493 :: natoms=132
+[done] salex_train_official
+[dataset] salex_val_official :: alex_go_aao_006:1039 :: natoms=128
+[done] salex_val_official
+[dataset] spice_2023 :: hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49 :: natoms=89
+[done] spice_2023
+[dataset] wbm_initial :: wbm_initial:23057 :: natoms=100
+[done] wbm_initial

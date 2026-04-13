@@ -1,0 +1,23 @@
+{
+  "dataset": "md22_stachyose",
+  "sample_id": "md22_stachyose_10546",
+  "natoms": 87,
+  "modal": "spice",
+  "loader": "colabfit",
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_stachyose",
+  "num_edges": 3532,
+  "num_pairs": 1766,
+  "avg_neighbors_directed": 40.59770114942529,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 3532,
+  "pair_edge_embedding_evals": 1766,
+  "baseline_weight_nn_rows_total": 17660,
+  "pair_weight_nn_rows_total": 8830,
+  "baseline_tp_rows_total": 17660,
+  "pair_tp_rows_total": 17660,
+  "baseline_scatter_rows_total": 17660,
+  "pair_scatter_rows_total": 17660
+}

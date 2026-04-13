@@ -1,0 +1,23 @@
+{
+  "dataset": "md22_at_at",
+  "sample_id": "md22_AT-AT_12521",
+  "natoms": 60,
+  "modal": "spice",
+  "loader": "colabfit",
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_at_at",
+  "num_edges": 1312,
+  "num_pairs": 656,
+  "avg_neighbors_directed": 21.866666666666667,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 1312,
+  "pair_edge_embedding_evals": 656,
+  "baseline_weight_nn_rows_total": 6560,
+  "pair_weight_nn_rows_total": 3280,
+  "baseline_tp_rows_total": 6560,
+  "pair_tp_rows_total": 6560,
+  "baseline_scatter_rows_total": 6560,
+  "pair_scatter_rows_total": 6560
+}

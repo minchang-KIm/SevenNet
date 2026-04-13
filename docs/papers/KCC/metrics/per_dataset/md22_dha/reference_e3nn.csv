@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+md22_dha,md22_DHA_45597,spice,e3nn_baseline,baseline,-27440.89453125

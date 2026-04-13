@@ -1,0 +1,9 @@
+| group | count | wins | win_rate | mean_speedup | median_speedup | std_speedup |
+| --- | --- | --- | --- | --- | --- | --- |
+| num_edges >= 3000 | 20 | 18 | 0.900 | 1.019 | 1.013 | 0.021 |
+| num_edges < 3000 | 11 | 0 | 0.000 | 0.626 | 0.613 | 0.032 |
+| avg_neighbors_directed >= 40 | 17 | 16 | 0.941 | 1.016 | 1.013 | 0.017 |
+| avg_neighbors_directed < 40 | 14 | 2 | 0.143 | 0.715 | 0.615 | 0.172 |
+| small_sparse | 11 | 0 | 0.000 | 0.626 | 0.613 | 0.032 |
+| large_sparse | 3 | 2 | 0.667 | 1.039 | 1.055 | 0.030 |
+| large_dense | 17 | 16 | 0.941 | 1.016 | 1.013 | 0.017 |

@@ -1,0 +1,23 @@
+{
+  "dataset": "md22_buckyball_catcher",
+  "sample_id": "md22_buckyball-catcher_1114",
+  "natoms": 148,
+  "modal": "spice",
+  "loader": "colabfit",
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_buckyball_catcher",
+  "num_edges": 6872,
+  "num_pairs": 3436,
+  "avg_neighbors_directed": 46.432432432432435,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 6872,
+  "pair_edge_embedding_evals": 3436,
+  "baseline_weight_nn_rows_total": 34360,
+  "pair_weight_nn_rows_total": 17180,
+  "baseline_tp_rows_total": 34360,
+  "pair_tp_rows_total": 34360,
+  "baseline_scatter_rows_total": 34360,
+  "pair_scatter_rows_total": 34360
+}

@@ -1,0 +1,2 @@
+dataset,sample_id,natoms,modal,loader,category,source_kind,local_path,num_edges,num_pairs,avg_neighbors_directed,pair_reuse_factor,reverse_pair_fraction,baseline_edge_embedding_evals,pair_edge_embedding_evals,baseline_weight_nn_rows_total,pair_weight_nn_rows_total,baseline_tp_rows_total,pair_tp_rows_total,baseline_scatter_rows_total,pair_scatter_rows_total,density_bucket
+qm9_hf,0_3057,29,qcml,qm9_like,molecular,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/qm9_hf,570,285,19.655172413793103,2.0,1.0,570,285,2850,1425,2850,2850,2850,2850,small_sparse

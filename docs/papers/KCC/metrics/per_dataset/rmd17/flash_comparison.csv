@@ -1,0 +1,2 @@
+dataset,flash_baseline_mean_ms,flash_baseline_std_ms,flash_pair_auto_mean_ms,flash_pair_auto_std_ms,flash_speedup_baseline_over_pair
+rmd17,13.609649357385933,0.2595560153709537,14.502284699119627,0.32997661526096905,0.9384486403174885

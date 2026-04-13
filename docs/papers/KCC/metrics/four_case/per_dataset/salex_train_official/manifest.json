@@ -1,0 +1,23 @@
+{
+  "dataset": "salex_train_official",
+  "sample_id": "alex_go_aao_005:4493",
+  "natoms": 132,
+  "modal": "omat24",
+  "loader": "tar_aselmdb",
+  "category": "materials",
+  "source_kind": "url",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/fairchem/salex/train.tar.gz",
+  "num_edges": 9932,
+  "num_pairs": 4966,
+  "avg_neighbors_directed": 75.24242424242425,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 9932,
+  "pair_edge_embedding_evals": 4966,
+  "baseline_weight_nn_rows_total": 49660,
+  "pair_weight_nn_rows_total": 24830,
+  "baseline_tp_rows_total": 49660,
+  "pair_tp_rows_total": 49660,
+  "baseline_scatter_rows_total": 49660,
+  "pair_scatter_rows_total": 49660
+}

@@ -1,0 +1,23 @@
+{
+  "dataset": "phonondb_pbe",
+  "sample_id": "phonondb_pbe.extxyz:0",
+  "natoms": 8,
+  "modal": "matpes_r2scan",
+  "loader": "extxyz_file",
+  "category": "materials",
+  "source_kind": "url",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/figshare/phonondb_pbe.extxyz.zip",
+  "num_edges": 208,
+  "num_pairs": 104,
+  "avg_neighbors_directed": 26.0,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 208,
+  "pair_edge_embedding_evals": 104,
+  "baseline_weight_nn_rows_total": 1040,
+  "pair_weight_nn_rows_total": 520,
+  "baseline_tp_rows_total": 1040,
+  "pair_tp_rows_total": 1040,
+  "baseline_scatter_rows_total": 1040,
+  "pair_scatter_rows_total": 1040
+}

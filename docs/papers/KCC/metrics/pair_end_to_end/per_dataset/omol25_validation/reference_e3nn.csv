@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+omol25_validation,OMol25_validation_data0012_18589,omol25_low,e3nn_baseline,baseline,-210737.5625

@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,e3nn_baseline,baseline,-124958.640625

@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+omat24_1m_official,train:106751,omat24,e3nn_baseline,baseline,-532.0814819335938

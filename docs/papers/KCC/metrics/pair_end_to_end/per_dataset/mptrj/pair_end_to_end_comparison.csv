@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+mptrj,425.4814149811864,0.136312547353129,420.71126175578684,0.23763271338445394,1.0113383064800592

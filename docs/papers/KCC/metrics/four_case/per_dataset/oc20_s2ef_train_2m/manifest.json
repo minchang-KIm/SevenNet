@@ -1,0 +1,23 @@
+{
+  "dataset": "oc20_s2ef_train_2m",
+  "sample_id": "frame27",
+  "natoms": 225,
+  "modal": "oc20",
+  "loader": "oc20_like",
+  "category": "catalysis",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc20_s2ef_train_2m",
+  "num_edges": 10738,
+  "num_pairs": 5369,
+  "avg_neighbors_directed": 47.724444444444444,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 10738,
+  "pair_edge_embedding_evals": 5369,
+  "baseline_weight_nn_rows_total": 53690,
+  "pair_weight_nn_rows_total": 26845,
+  "baseline_tp_rows_total": 53690,
+  "pair_tp_rows_total": 53690,
+  "baseline_scatter_rows_total": 53690,
+  "pair_scatter_rows_total": 53690
+}

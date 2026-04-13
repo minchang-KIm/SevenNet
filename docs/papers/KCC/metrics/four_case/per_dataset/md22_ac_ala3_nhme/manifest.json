@@ -1,0 +1,23 @@
+{
+  "dataset": "md22_ac_ala3_nhme",
+  "sample_id": "md22_Ac-Ala3-NHMe_4756",
+  "natoms": 42,
+  "modal": "spice",
+  "loader": "colabfit",
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_ac_ala3_nhme",
+  "num_edges": 1142,
+  "num_pairs": 571,
+  "avg_neighbors_directed": 27.19047619047619,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 1142,
+  "pair_edge_embedding_evals": 571,
+  "baseline_weight_nn_rows_total": 5710,
+  "pair_weight_nn_rows_total": 2855,
+  "baseline_tp_rows_total": 5710,
+  "pair_tp_rows_total": 5710,
+  "baseline_scatter_rows_total": 5710,
+  "pair_scatter_rows_total": 5710
+}

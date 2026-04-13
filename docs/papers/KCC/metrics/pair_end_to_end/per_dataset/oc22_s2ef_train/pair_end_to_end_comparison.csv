@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+oc22_s2ef_train,216.1639423109591,0.11484698884683922,213.47033116035163,0.21806601697149589,1.0126181991472347

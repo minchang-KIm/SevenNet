@@ -1,0 +1,2 @@
+dataset,flash_baseline_mean_ms,flash_baseline_std_ms,flash_pair_auto_mean_ms,flash_pair_auto_std_ms,flash_speedup_baseline_over_pair
+md22_dha,13.51375998929143,0.08554241342770633,15.977893793024123,0.27350119178507337,0.8457785590733791

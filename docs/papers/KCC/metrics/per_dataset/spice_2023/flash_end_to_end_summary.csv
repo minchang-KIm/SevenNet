@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,resolved_policy,n_warmup,n_repeat,device,mean_ms,std_ms,median_ms,p95_ms,warmup_mean_ms,warmup_std_ms,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+spice_2023,hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49,spice,89,flash_baseline,baseline,3,10,cuda,14.489521295763552,0.18072089423484494,14.415961573831737,14.836126298177987,62.24926142022014,15.531382324200537,0.0,9.5367431640625e-07
+spice_2023,hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49,spice,89,flash_pair_auto,geometry_only,3,10,cuda,26.650120480917394,2.855263886026043,27.702079387381673,27.94799596304074,66.04157605518897,14.396697286498481,0.0,1.430511474609375e-06
