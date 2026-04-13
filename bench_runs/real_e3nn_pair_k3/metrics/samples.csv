@@ -1,0 +1,43 @@
+dataset,description,modal,sample_id,natoms,case,cold_ms,steady_median_ms,steady_p95_ms,resolved_policy,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+mptrj_val,MPtrj validation split,mpa,mp-1197409,426,e3nn_baseline,699.4415269582532,696.1453635012731,738.4172623511404,baseline,0.0,0.0
+mptrj_val,MPtrj validation split,mpa,mp-1197409,426,e3nn_pair_full,773.3640850055963,613.1219475064427,759.0507325250655,full,0.0,2.9802322387695312e-06
+mptrj_val,MPtrj validation split,mpa,mp-1205212,320,e3nn_baseline,349.41646800143644,515.3394140070304,719.3062385020312,baseline,0.0,0.0
+mptrj_val,MPtrj validation split,mpa,mp-1205212,320,e3nn_pair_full,543.8376889796928,308.75415552873164,328.6940492806025,full,0.0,2.425163984298706e-06
+mptrj_val,MPtrj validation split,mpa,mp-1205237,300,e3nn_baseline,303.30439005047083,282.9520574887283,324.47631734539755,baseline,0.0,0.0
+mptrj_val,MPtrj validation split,mpa,mp-1205237,300,e3nn_pair_full,472.07407199312,258.0818235001061,279.42981582309585,full,0.0,3.6656856536865234e-06
+salex_validation,sAlex validation,mpa,sAlex__agm005259073_2_51__id_482978,168,e3nn_baseline,299.12276001414284,279.9887180153746,321.51811102812644,baseline,0.0,0.0
+salex_validation,sAlex validation,mpa,sAlex__agm005259073_2_51__id_482978,168,e3nn_pair_full,467.54201501607895,255.16323451302014,276.85315934650134,full,0.0,1.2936070561408997e-06
+salex_validation,sAlex validation,mpa,sAlex__agm005259073_0_0__id_482977,168,e3nn_baseline,302.5373889831826,280.90685748611577,322.5263571628602,baseline,0.0,0.0
+salex_validation,sAlex validation,mpa,sAlex__agm005259073_0_0__id_482977,168,e3nn_pair_full,470.88894998887554,256.0046895232517,277.61336416879203,full,0.0,1.3187527656555176e-06
+salex_validation,sAlex validation,mpa,sAlex__agm005273855_0_0__id_484208,156,e3nn_baseline,225.81214498495683,201.4017779729329,247.64247387065552,baseline,0.0,0.0
+salex_validation,sAlex validation,mpa,sAlex__agm005273855_0_0__id_484208,156,e3nn_pair_full,350.497038976755,171.8636435107328,195.4963191819843,full,0.0,3.6116689443588257e-06
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm005231400_AB2C5D6_8_spg14_4_0_rattled-1000-subsampled_z8rquh__file_ix_23803,112,e3nn_baseline,168.822415987961,142.62992300791666,192.00899183633737,baseline,0.0,0.0
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm005231400_AB2C5D6_8_spg14_4_0_rattled-1000-subsampled_z8rquh__file_ix_23803,112,e3nn_pair_full,262.93769100448117,116.5487059915904,137.0289124926785,full,0.0,3.0517578125e-05
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm005231400_AB2C5D6_8_spg14_1_0_rattled-1000-subsampled_i32xdf__file_ix_26036,112,e3nn_baseline,158.03992102155462,131.5071654971689,181.02823492372409,baseline,0.0,0.0
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm005231400_AB2C5D6_8_spg14_1_0_rattled-1000-subsampled_i32xdf__file_ix_26036,112,e3nn_pair_full,248.31924500176683,110.05258598015644,129.24117546353955,full,3.0517578125e-05,9.1552734375e-05
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm003278654_A6B8C39_0_spg193_4_0_rattled-1000-subsampled_6u1x7v__file_ix_26415,106,e3nn_baseline,147.23191899247468,119.07206851174124,168.81518867157865,baseline,0.0,0.0
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm003278654_A6B8C39_0_spg193_4_0_rattled-1000-subsampled_6u1x7v__file_ix_26415,106,e3nn_pair_full,232.67106502316892,105.23242151248269,122.57637329457793,full,0.0,1.1444091796875e-05
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0020_65,110,e3nn_baseline,148.50088901584968,120.53051247494295,170.0244100240525,baseline,0.0,0.0
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0020_65,110,e3nn_pair_full,235.07877701194957,103.858554008184,121.95115862705279,full,0.0,2.1457672119140625e-06
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0033_190,110,e3nn_baseline,140.22219204343855,114.11637801211327,162.870287935948,baseline,0.0,0.0
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0033_190,110,e3nn_pair_full,225.20210302900523,101.19520002626814,119.4227200205205,full,0.0,1.6689300537109375e-06
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0057_281,110,e3nn_baseline,142.13691296754405,114.53582299873233,164.45164821343496,baseline,0.0,0.0
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0057_281,110,e3nn_pair_full,229.16284098755568,101.67551849735901,119.56202985020354,full,0.0,1.9073486328125e-06
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0049__config_3636,225,e3nn_baseline,305.23712100693956,285.1094290090259,327.1683118218789,baseline,0.0,0.0
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0049__config_3636,225,e3nn_pair_full,478.6038200254552,260.40342697524466,282.01395606447477,full,0.0,1.9073486328125e-06
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0190__config_1269,225,e3nn_baseline,303.27383801341057,284.92171550169587,327.63891547801904,baseline,0.0,0.0
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0190__config_1269,225,e3nn_pair_full,475.3329359809868,258.7775445135776,279.92051056062337,full,0.0,1.9222497940063477e-06
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0032__config_1191,225,e3nn_baseline,303.73923399019986,284.3574404541869,326.8070064979838,baseline,0.0,0.0
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0032__config_1191,225,e3nn_pair_full,476.80337098427117,258.6982550274115,280.19059881044086,full,6.103515625e-05,1.7881393432617188e-06
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_0,200,e3nn_baseline,260.7983080088161,237.30524600250646,282.2739215102047,baseline,0.0,0.0
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_0,200,e3nn_pair_full,406.5205929800868,210.5957235035021,233.27003952872474,full,0.0,7.62939453125e-06
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_1,200,e3nn_baseline,255.29785599792376,233.41891201562248,278.3755419164663,baseline,0.0,0.0
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_1,200,e3nn_pair_full,399.09968100255355,206.78188200690784,229.48913582076784,full,0.0,2.6702880859375e-05
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_3,200,e3nn_baseline,254.37233498087153,232.39342751912773,277.4643371521961,baseline,0.0,0.0
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_3,200,e3nn_pair_full,397.32529898174107,205.5697180039715,228.5319265240105,full,0.0,0.00018310546875
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:0,8,e3nn_baseline,122.8080700384453,108.29748050309718,152.46547596761957,baseline,0.0,0.0
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:0,8,e3nn_pair_full,199.46617598179728,98.0376125080511,115.81878874567337,full,0.0,1.0471273981238483e-07
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:1,8,e3nn_baseline,122.42903199512511,108.228171011433,152.3927235044539,baseline,0.0,0.0
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:1,8,e3nn_pair_full,203.1431130017154,97.96744349296205,116.07482383551542,full,0.0,2.150142250911813e-07
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:2,8,e3nn_baseline,121.88820401206613,108.64065247005783,152.77720283193048,baseline,0.0,0.0
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:2,8,e3nn_pair_full,198.17165995482355,98.33262249594554,116.90374134923331,full,0.0,8.56414104077885e-08

@@ -1,0 +1,5 @@
+dataset,sample_id,natoms,num_edges,avg_neighbors_directed,baseline_steady_median_ms,pair_steady_median_ms,steady_speedup_baseline_over_pair,structure_class,source,quadrant,friendly_name
+spice_2023,hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_34,89,772,8.674157303370787,60.45603100210428,81.38583198888227,0.7428323766520306,molecule_or_bulk_local,local_pair_size_main,Small Sparse,SPICE 2023
+phonondb_pbe,phonondb_pbe:1,8,640,80.0,108.29748050309718,98.0376125080511,1.1046523648686724,bulk_like,real_e3nn_pair_k3,Small Dense,phononDB PBE
+omol25_validation,OMol25_neutral_validation_data0020_65,110,3826,34.78181818181818,114.53582299873231,101.675518497359,1.126483785786717,molecule_like,real_e3nn_pair_k3,Large Sparse,OMol25 validation
+mptrj_val,mp-1197409,426,28964,67.9906103286385,515.3394140070304,308.75415552873164,1.6690930462928608,bulk_like,real_e3nn_pair_k3,Large Dense,MPtrj validation

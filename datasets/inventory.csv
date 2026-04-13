@@ -1,0 +1,41 @@
+name,category,source_kind,source,local_path,approx_size_gib,representative_papers,large,gated,status,message,downloaded_size_bytes,notes
+qm9_hf,molecular,hf,nimashoghi/qm9,datasets/raw/hf/qm9_hf,0.05,"SchNet, DimeNet, PaiNN, GemNet-QM9",False,False,exists,found on disk,48647546,Equilibrium small-molecule property dataset often used in atomistic GNN pretraining/validation.
+md17_aspirin,molecular,hf,graphs-datasets/MD17-aspirin,datasets/raw/hf/md17_aspirin,0.01,"SchNet, DimeNet, PaiNN, TorchMD-NET",False,False,exists,found on disk,11113623,Original MD17 subset mirror.
+md17_benzene,molecular,hf,graphs-datasets/MD17-benzene,datasets/raw/hf/md17_benzene,0.01,"SchNet, DimeNet, PaiNN, TorchMD-NET",False,False,exists,found on disk,5978026,Original MD17 subset mirror.
+md17_ethanol,molecular,hf,graphs-datasets/MD17-ethanol,datasets/raw/hf/md17_ethanol,0.01,"SchNet, DimeNet, PaiNN, TorchMD-NET",False,False,exists,found on disk,7180,Original MD17 subset mirror.
+md17_malonaldehyde,molecular,hf,graphs-datasets/MD17-malonaldehyde,datasets/raw/hf/md17_malonaldehyde,0.01,"SchNet, DimeNet, PaiNN, TorchMD-NET",False,False,exists,found on disk,4693276,Original MD17 subset mirror.
+md17_naphthalene,molecular,hf,graphs-datasets/MD17-naphthalene,datasets/raw/hf/md17_naphthalene,0.01,"SchNet, DimeNet, PaiNN, TorchMD-NET",False,False,exists,found on disk,7503495,Original MD17 subset mirror.
+md17_salicylic_acid,molecular,hf,graphs-datasets/MD17-salicylic_acid,datasets/raw/hf/md17_salicylic_acid,0.01,"SchNet, DimeNet, PaiNN, TorchMD-NET",False,False,exists,found on disk,4377750,Original MD17 subset mirror.
+md17_toluene,molecular,hf,graphs-datasets/MD17-toluene,datasets/raw/hf/md17_toluene,0.01,"SchNet, DimeNet, PaiNN, TorchMD-NET",False,False,exists,found on disk,9332304,Original MD17 subset mirror.
+md17_uracil,molecular,hf,graphs-datasets/MD17-uracil,datasets/raw/hf/md17_uracil,0.01,"SchNet, DimeNet, PaiNN, TorchMD-NET",False,False,exists,found on disk,1236380,Original MD17 subset mirror.
+rmd17,molecular,hf,colabfit/rMD17,datasets/raw/hf/rmd17,0.98,"NequIP, MACE, Allegro",False,False,exists,found on disk,1057464506,Revised MD17 mirror on ColabFit.
+iso17,molecular,hf,colabfit/ISO17_NC_2017,datasets/raw/hf/iso17,0.68,"SchNet, NequIP, MACE",False,False,exists,found on disk,733391338,ISO17 force-field benchmark mirror.
+md22_at_at,molecular,hf,colabfit/MD22_AT_AT,datasets/raw/hf/md22_at_at,0.04,"MD22 benchmark, MACE molecular benchmarks",False,False,exists,found on disk,47400486,
+md22_at_at_cg_cg,molecular,hf,colabfit/MD22_AT_AT_CG_CG,datasets/raw/hf/md22_at_at_cg_cg,0.04,"MD22 benchmark, MACE molecular benchmarks",False,False,exists,found on disk,44750281,
+md22_ac_ala3_nhme,molecular,hf,colabfit/MD22_Ac_Ala3_NHMe,datasets/raw/hf/md22_ac_ala3_nhme,0.14,"MD22 benchmark, MACE molecular benchmarks",False,False,exists,found on disk,146052491,
+md22_dha,molecular,hf,colabfit/MD22_DHA,datasets/raw/hf/md22_dha,0.14,"MD22 benchmark, MACE molecular benchmarks",False,False,exists,found on disk,154641408,
+md22_double_walled_nanotube,molecular,hf,colabfit/MD22_double_walled_nanotube,datasets/raw/hf/md22_double_walled_nanotube,0.06,"MD22 benchmark, MACE molecular benchmarks",False,False,exists,found on disk,65922605,
+md22_stachyose,molecular,hf,colabfit/MD22_stachyose,datasets/raw/hf/md22_stachyose,0.08,"MD22 benchmark, MACE molecular benchmarks",False,False,exists,found on disk,88264359,
+md22_buckyball_catcher,molecular,hf,colabfit/MD22_buckyball_catcher,datasets/raw/hf/md22_buckyball_catcher,0.03,"MD22 benchmark, MACE molecular benchmarks",False,False,exists,found on disk,33411051,
+ani1x,molecular,hf,colabfit/ANI-1x,datasets/raw/hf/ani1x,0.3,"TorchANI, ANI family, MatterSim molecular evaluations",False,False,exists,found on disk,319428914,
+ani1ccx,molecular,hf,roitberg-group/ani1ccx,datasets/raw/hf/ani1ccx,0.25,"ANI-1ccx benchmark, TorchANI",False,False,exists,found on disk,271625047,
+spice_2023,molecular,hf,colabfit/SPICE_2023,datasets/raw/hf/spice_2023,2.41,"SPICE / SPICE2, modern molecular foundation-model evaluations",False,False,exists,found on disk,2592824146,
+mptrj,materials,hf,nimashoghi/mptrj,datasets/raw/hf/mptrj,1.63,"CHGNet, M3GNet, MACE-MP",False,False,exists,found on disk,1748148566,
+wbm_initial,materials,url,https://ndownloader.figshare.com/files/48169597,datasets/raw/figshare/wbm_initial.extxyz.zip,0.0,"Matbench Discovery, OMat24",False,False,exists,found on disk,98164028,Matbench Discovery benchmark structures archive.
+phonondb_pbe,materials,url,https://ndownloader.figshare.com/files/52179965,datasets/raw/figshare/phonondb_pbe.extxyz.zip,0.0,"Matbench Discovery, phonon benchmark subsets",False,False,exists,found on disk,76121,phononDB benchmark extxyz archive.
+omat24_1m_official,materials,url,https://dl.fbaipublicfiles.com/opencatalystproject/data/omat/251210/omat24_1M_251210.tar.gz,datasets/raw/fairchem/omat24_1m/omat24_1M_251210.tar.gz,2.12,OMat24,False,False,exists,found on disk,2274568000,Official 1M OMat24 subsplit tarball.
+salex_train_official,materials,url,https://dl.fbaipublicfiles.com/opencatalystproject/data/omat/241018/sAlex/train.tar.gz,datasets/raw/fairchem/salex/train.tar.gz,7.52,"OMat24, UMA inorganic fine-tuning",False,False,exists,found on disk,8071921954,Official sAlex train tarball.
+salex_val_official,materials,url,https://dl.fbaipublicfiles.com/opencatalystproject/data/omat/241018/sAlex/val.tar.gz,datasets/raw/fairchem/salex/val.tar.gz,0.4,"OMat24, UMA inorganic fine-tuning",False,False,exists,found on disk,428336358,Official sAlex validation tarball.
+omol25_train_4m,molecular,hf,colabfit/OMol25_train_4M,datasets/raw/hf/omol25_train_4m,11.49,OMol25,False,False,exists,found on disk,12337524173,Public 4M training subset mirror.
+omol25_validation,molecular,hf,colabfit/OMol25_validation,datasets/raw/hf/omol25_validation,13.62,OMol25,False,False,exists,found on disk,14621150030,Public validation mirror.
+oc20_s2ef_train_2m,catalysis,hf,nimashoghi/oc20_s2ef_train_2M,datasets/raw/hf/oc20_s2ef_train_2m,4.74,"GemNet, Allegro, FairChem OC20 baselines",False,False,exists,found on disk,5092400723,Public 2M train subset mirror.
+oc20_s2ef_val_id,catalysis,hf,colabfit/OC20_S2EF_val_id,datasets/raw/hf/oc20_s2ef_val_id,3.0,"GemNet, Allegro, FairChem OC20 baselines",False,False,exists,found on disk,3219889278,
+oc20_s2ef_val_ood_ads,catalysis,hf,colabfit/OC20_S2EF_val_ood_ads,datasets/raw/hf/oc20_s2ef_val_ood_ads,3.13,"GemNet, Allegro, FairChem OC20 baselines",False,False,exists,found on disk,3355908506,
+oc20_s2ef_val_ood_cat,catalysis,hf,colabfit/OC20_S2EF_val_ood_cat,datasets/raw/hf/oc20_s2ef_val_ood_cat,3.11,"GemNet, Allegro, FairChem OC20 baselines",False,False,exists,found on disk,3344529848,
+oc20_s2ef_val_ood_both,catalysis,hf,colabfit/OC20_S2EF_val_ood_both,datasets/raw/hf/oc20_s2ef_val_ood_both,3.31,"GemNet, Allegro, FairChem OC20 baselines",False,False,exists,found on disk,3551370165,
+oc22_s2ef_train,catalysis,hf,colabfit/OC22-S2EF-Train,datasets/raw/hf/oc22_s2ef_train,30.13,"SevenNet, UMA catalyst models, OC22 baselines",False,False,exists,found on disk,32354315287,
+oc22_s2ef_val_id,catalysis,hf,colabfit/OC22-S2EF-Validation-in-domain,datasets/raw/hf/oc22_s2ef_val_id,1.39,"SevenNet, UMA catalyst models, OC22 baselines",False,False,exists,found on disk,1493594323,
+oc22_s2ef_val_ood,catalysis,hf,colabfit/OC22-S2EF-Validation-out-of-domain,datasets/raw/hf/oc22_s2ef_val_ood,1.61,"SevenNet, UMA catalyst models, OC22 baselines",False,False,exists,found on disk,1727994371,
+oc20_s2ef_train_20m,catalysis,hf,colabfit/OC20_S2EF_train_20M,datasets/raw/hf/oc20_s2ef_train_20m,76.22,"GemNet-OC, EquiformerV2, Allegro full OC20-scale training",True,False,exists,found on disk,81840167587,Very large public train subset mirror.
+omol25_train_neutral,molecular,hf,colabfit/OMol25_train_neutral,datasets/raw/hf/omol25_train_neutral,59.51,OMol25,True,False,exists,found on disk,63897996989,Large public neutral-train mirror.
+omol25_official_gated,molecular,hf,facebook/OMol25,datasets/raw/hf/omol25_official_gated,0.0,OMol25,False,True,gated,not downloaded,0,Official HF dataset repo is gated; login-required.

@@ -2,6 +2,7 @@ import ctypes
 import os
 import pathlib
 import warnings
+from copy import deepcopy
 from typing import Any, Dict, Optional, Union
 
 import numpy as np
@@ -129,6 +130,15 @@ class SevenNetCalculator(Calculator):
             self.type_map = cp.config[KEY.TYPE_MAP]
             self.cutoff = cp.config[KEY.CUTOFF]
             self.sevennet_config = cp.config
+            self.sevennet_config[KEY.CUEQUIVARIANCE_CONFIG] = {
+                'use': bool(enable_cueq)
+            }
+            self.sevennet_config[KEY.USE_FLASH_TP] = bool(enable_flash)
+            self.sevennet_config[KEY.USE_OEQ] = bool(enable_oeq)
+            if hasattr(model_loaded, 'pair_execution_config'):
+                self.sevennet_config[KEY.PAIR_EXECUTION_CONFIG] = deepcopy(
+                    getattr(model_loaded, 'pair_execution_config')
+                )
 
         elif file_type == 'torchscript' and isinstance(model, str):
             if modal:

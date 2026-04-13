@@ -1,5 +1,12 @@
 # GNN-IP Pair Execution 제안 세미나 스크립트
 
+## 2026-04-03 Note
+
+- 현재 canonical repository state는 exact runtime reconstruction의 첫 단계로 보는 것이 맞다.
+- 실제 구현된 것은 `pair-major TP`가 아니라 `pair-aware geometry-side reuse`다.
+- `pair-major TP`, backend co-design, distributed exact pruning은 아직 future work다.
+- 최신 canonical status는 `docs/papers/icpp_pair_execution/` 아래 문서들을 따른다.
+
 ## Slide 1. 제목
 오늘 세미나는 구현 결과 보고가 아니라, GNN-IP 추론 실행 구조를 어떻게 다시 정의할지에 대한 제안 세미나입니다. 핵심 문제는 directed edge 기준 실행이 실제 물리적 상호작용 구조와 맞지 않아 중복 계산과 집계 오버헤드를 만든다는 점입니다.
 

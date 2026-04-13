@@ -28,3 +28,13 @@ bench/__pycache__/
 
 # benchmark outputs
 bench/results/
+
+# local benchmark caches and downloads
+bench_runs/**/downloads
+bench_runs/**/downloads/
+bench_runs/*_smoke/
+bench_runs/*patchcheck*/
+
+# local dataset cache
+datasets/raw/
+datasets/logs/

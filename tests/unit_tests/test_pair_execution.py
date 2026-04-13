@@ -17,8 +17,9 @@ from sevenn.calculator import SevenNetCalculator
 from sevenn.main.sevenn_get_model import add_args as add_get_model_args
 from sevenn.main.sevenn_inference import add_args as add_inference_args
 from sevenn.model_build import build_E3_equivariant_model
+from sevenn.nn.flash_helper import is_flash_available
 from sevenn.scripts import deploy as deploy_mod
-from sevenn.util import chemical_species_preprocess
+from sevenn.util import chemical_species_preprocess, load_checkpoint
 
 
 def _manual_graph(edge_vec_scale: float = 1.0) -> AtomGraphData:
@@ -83,6 +84,20 @@ def _model_cfg():
         '_normalize_sph': True,
     }
     cfg.update(chemical_species_preprocess(['Na', 'Cl']))
+    return cfg
+
+
+def _flash_checkpoint_cfg():
+    cfg = _model_cfg()
+    cfg.update(
+        {
+            'channel': 32,
+            'lmax': 2,
+            'num_convolution_layer': 3,
+            'weight_nn_hidden_neurons': [64, 64],
+            'conv_denominator': 30.0,
+        }
+    )
     return cfg
 
 
@@ -277,3 +292,34 @@ def test_deploy_extra_files_pair_metadata(monkeypatch, tmp_path):
     assert captured['extra_files']['pair_execution_policy'] == 'full'
     assert captured['extra_files']['topology_cache'] == 'no'
     assert captured['extra_files']['distributed_schedule'] == 'auto'
+
+
+@pytest.mark.skipif(not is_flash_available(), reason='flash not available')
+def test_checkpoint_backend_override_updates_pair_policy(tmp_path):
+    cfg = _flash_checkpoint_cfg()
+    cfg[KEY.PAIR_EXECUTION_CONFIG] = _baseline_cfg()
+    cfg['version'] = '0.0.0'
+    model = build_E3_equivariant_model(cfg)
+    cp_path = tmp_path / 'flash_pair_cp.pth'
+    torch.save({'model_state_dict': model.state_dict(), 'config': cfg}, cp_path)
+
+    cp = load_checkpoint(str(cp_path))
+    model = cp.build_model(enable_flash=True, enable_pair_execution=True)
+    assert model.pair_execution_config['resolved_policy'] == 'geometry_only'
+
+
+@pytest.mark.skipif(not is_flash_available(), reason='flash not available')
+def test_calculator_checkpoint_override_updates_pair_policy(tmp_path):
+    cfg = _flash_checkpoint_cfg()
+    cfg[KEY.PAIR_EXECUTION_CONFIG] = _baseline_cfg()
+    cfg['version'] = '0.0.0'
+    model = build_E3_equivariant_model(cfg)
+    cp_path = tmp_path / 'flash_pair_calc_cp.pth'
+    torch.save({'model_state_dict': model.state_dict(), 'config': cfg}, cp_path)
+
+    calc = SevenNetCalculator(
+        str(cp_path),
+        enable_flash=True,
+        enable_pair_execution=True,
+    )
+    assert calc.pair_execution_config['resolved_policy'] == 'geometry_only'

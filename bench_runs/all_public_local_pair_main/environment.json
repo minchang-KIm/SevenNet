@@ -1,0 +1,21 @@
+{
+  "repo_root": "/home/wise/minchang/DenseMLIP/SevenNet",
+  "torch_version": "2.7.1+cu126",
+  "cuda_available": true,
+  "device_name": "NVIDIA GeForce RTX 4090",
+  "supported_modalities": [
+    "omat24",
+    "mpa",
+    "omol25_low",
+    "omol25_high",
+    "matpes_pbe",
+    "matpes_r2scan",
+    "mp_r2scan",
+    "oc20",
+    "oc22",
+    "spice",
+    "qcml",
+    "odac23",
+    "pet_mad"
+  ]
+}

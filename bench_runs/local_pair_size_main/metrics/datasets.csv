@@ -1,0 +1,8 @@
+dataset,description,modal,num_samples,max_atoms
+mptrj,MPtrj train parquet mirror,mpa,3,444
+md22_double_walled_nanotube,MD22 double-walled nanotube,spice,3,370
+spice_2023,SPICE 2023,spice,3,89
+md22_stachyose,MD22 stachyose,spice,3,87
+ani1x,ANI-1x mirror,spice,3,63
+rmd17,rMD17 mirror,spice,3,24
+iso17,ISO17 mirror,spice,3,19

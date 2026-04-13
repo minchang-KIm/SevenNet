@@ -1,0 +1,6 @@
+dataset,description,modal,source,num_samples,max_atoms
+mptrj_val,MPtrj validation split,mpa,https://huggingface.co/datasets/nimashoghi/mptrj,1,426
+salex_validation,sAlex validation,mpa,https://huggingface.co/datasets/colabfit/sAlex_validation,1,168
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,https://huggingface.co/datasets/colabfit/OMat24_validation_rattled_1000_subsampled,1,112
+omol25_validation,OMol25 neutral validation,omol25_low,https://huggingface.co/datasets/colabfit/OMol25_neutral_validation,1,110
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,https://figshare.com/articles/dataset/Matbench_Discovery_-_Data_Files/22715158,1,8
