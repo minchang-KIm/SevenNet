@@ -165,13 +165,95 @@ def _reverse_key(key):
     return ('vec', src, dst, -vx, -vy, -vz)
 
 
-def build_pair_metadata(
+def _lex_le(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    undecided = torch.ones(a.shape[0], dtype=torch.bool, device=a.device)
+    result = torch.zeros_like(undecided)
+    for col in range(a.shape[1]):
+        lt = a[:, col] < b[:, col]
+        gt = a[:, col] > b[:, col]
+        result = result | (undecided & lt)
+        undecided = undecided & ~(lt | gt)
+    return result | undecided
+
+
+def _build_pair_metadata_vectorized(
+    edge_index: torch.Tensor,
+    edge_vec: torch.Tensor,
+    *,
+    cell_shift: torch.Tensor,
+    nlocal: Optional[int] = None,
+    num_atoms: Optional[int] = None,
+    build_signature: bool = True,
+) -> Dict[str, torch.Tensor]:
+    device = edge_index.device
+    edge_index_i64 = edge_index.to(torch.int64)
+    shift = torch.round(cell_shift).to(torch.int64)
+    dst = edge_index_i64[0]
+    src = edge_index_i64[1]
+
+    forward = torch.stack([dst, src, shift[:, 0], shift[:, 1], shift[:, 2]], dim=1)
+    reverse = torch.stack([src, dst, -shift[:, 0], -shift[:, 1], -shift[:, 2]], dim=1)
+    choose_forward = _lex_le(forward, reverse)
+    canonical = torch.where(choose_forward.unsqueeze(1), forward, reverse)
+    _, inverse = torch.unique(canonical, dim=0, sorted=True, return_inverse=True)
+
+    num_edges = int(edge_index.shape[1])
+    num_pairs = int(inverse.max().item()) + 1 if inverse.numel() > 0 else 0
+    arange_e = torch.arange(num_edges, device=device, dtype=torch.int64)
+    sentinel = torch.full((num_pairs,), num_edges, dtype=torch.int64, device=device)
+
+    pair_forward_index = sentinel.clone()
+    if choose_forward.any():
+        pair_forward_index.scatter_reduce_(
+            0,
+            inverse[choose_forward],
+            arange_e[choose_forward],
+            reduce='amin',
+            include_self=True,
+        )
+
+    reverse_mask = ~choose_forward
+    pair_backward_index = sentinel.clone()
+    if reverse_mask.any():
+        pair_backward_index.scatter_reduce_(
+            0,
+            inverse[reverse_mask],
+            arange_e[reverse_mask],
+            reduce='amin',
+            include_self=True,
+        )
+
+    pair_has_reverse = pair_backward_index != num_edges
+    pair_backward_index = torch.where(
+        pair_has_reverse, pair_backward_index, pair_forward_index
+    )
+
+    meta = {
+        KEY.EDGE_PAIR_MAP: inverse,
+        KEY.EDGE_PAIR_REVERSE: reverse_mask,
+        KEY.PAIR_EDGE_FORWARD_INDEX: pair_forward_index,
+        KEY.PAIR_EDGE_BACKWARD_INDEX: pair_backward_index,
+        KEY.PAIR_EDGE_HAS_REVERSE: pair_has_reverse,
+        KEY.PAIR_EDGE_VEC: edge_vec.index_select(0, pair_forward_index),
+    }
+    if build_signature:
+        meta[KEY.PAIR_TOPOLOGY_SIGNATURE] = build_topology_signature_tensor(
+            edge_index_i64,
+            shift,
+            nlocal=nlocal,
+            num_atoms=num_atoms,
+        ).to(device)
+    return meta
+
+
+def _build_pair_metadata_legacy(
     edge_index: torch.Tensor,
     edge_vec: torch.Tensor,
     *,
     cell_shift: Optional[torch.Tensor] = None,
     nlocal: Optional[int] = None,
     num_atoms: Optional[int] = None,
+    build_signature: bool = True,
 ) -> Dict[str, torch.Tensor]:
     edge_index_cpu = edge_index.detach().cpu().to(torch.int64)
     edge_vec_cpu = edge_vec.detach().cpu().to(torch.float32)
@@ -189,7 +271,9 @@ def build_pair_metadata(
             dst,
             src,
             cell_shift=_shift_tuple(cell_shift_cpu, edge_i),
-            edge_vec=None if cell_shift_cpu is not None else _vec_tuple(edge_vec_cpu, edge_i),
+            edge_vec=None
+            if cell_shift_cpu is not None
+            else _vec_tuple(edge_vec_cpu, edge_i),
         )
         keys.append(key)
         reverse_lookup[key] = edge_i
@@ -237,15 +321,44 @@ def build_pair_metadata(
         KEY.PAIR_EDGE_HAS_REVERSE: torch.tensor(
             pair_has_reverse, dtype=torch.bool, device=device
         ),
-        KEY.PAIR_TOPOLOGY_SIGNATURE: build_topology_signature_tensor(
+    }
+    if build_signature:
+        meta[KEY.PAIR_TOPOLOGY_SIGNATURE] = build_topology_signature_tensor(
             edge_index_cpu,
             cell_shift_cpu,
             nlocal=nlocal,
             num_atoms=num_atoms,
-        ).to(device),
-    }
+        ).to(device)
     meta[KEY.PAIR_EDGE_VEC] = edge_vec.index_select(0, meta[KEY.PAIR_EDGE_FORWARD_INDEX])
     return meta
+
+
+def build_pair_metadata(
+    edge_index: torch.Tensor,
+    edge_vec: torch.Tensor,
+    *,
+    cell_shift: Optional[torch.Tensor] = None,
+    nlocal: Optional[int] = None,
+    num_atoms: Optional[int] = None,
+    build_signature: bool = True,
+) -> Dict[str, torch.Tensor]:
+    if cell_shift is not None:
+        return _build_pair_metadata_vectorized(
+            edge_index,
+            edge_vec,
+            cell_shift=cell_shift,
+            nlocal=nlocal,
+            num_atoms=num_atoms,
+            build_signature=build_signature,
+        )
+    return _build_pair_metadata_legacy(
+        edge_index,
+        edge_vec,
+        cell_shift=cell_shift,
+        nlocal=nlocal,
+        num_atoms=num_atoms,
+        build_signature=build_signature,
+    )
 
 
 def _copy_cached_pair_metadata(
@@ -290,19 +403,20 @@ def prepare_pair_metadata(
         return data, cache_state
 
     cell_shift = data.get(KEY.CELL_SHIFT)
-    signature = build_topology_signature_tensor(
-        data[KEY.EDGE_IDX],
-        cell_shift,
-        nlocal=nlocal,
-        num_atoms=num_atoms,
-    ).cpu()
-    if (
-        cache_state is not None
-        and pair_cfg.get('use_topology_cache', True)
-        and KEY.PAIR_TOPOLOGY_SIGNATURE in cache_state
-        and torch.equal(cache_state[KEY.PAIR_TOPOLOGY_SIGNATURE], signature)
-    ):
-        return _copy_cached_pair_metadata(data, cache_state), cache_state
+    use_cache = cache_state is not None and pair_cfg.get('use_topology_cache', True)
+    signature = None
+    if use_cache:
+        signature = build_topology_signature_tensor(
+            data[KEY.EDGE_IDX],
+            cell_shift,
+            nlocal=nlocal,
+            num_atoms=num_atoms,
+        ).cpu()
+        if (
+            KEY.PAIR_TOPOLOGY_SIGNATURE in cache_state
+            and torch.equal(cache_state[KEY.PAIR_TOPOLOGY_SIGNATURE], signature)
+        ):
+            return _copy_cached_pair_metadata(data, cache_state), cache_state
 
     meta = build_pair_metadata(
         data[KEY.EDGE_IDX],
@@ -310,10 +424,11 @@ def prepare_pair_metadata(
         cell_shift=cell_shift,
         nlocal=nlocal,
         num_atoms=num_atoms,
+        build_signature=use_cache,
     )
     data.update(meta)
 
-    if cache_state is not None and pair_cfg.get('use_topology_cache', True):
+    if use_cache and signature is not None:
         cache_state.clear()
         cache_state.update(
             {

@@ -133,6 +133,62 @@ def test_pair_metadata_builder_and_cache_reuse():
     assert torch.equal(cache_state[KEY.PAIR_TOPOLOGY_SIGNATURE], graph2[KEY.PAIR_TOPOLOGY_SIGNATURE].cpu())
 
 
+def test_pair_metadata_builder_with_cell_shift_vectorized():
+    edge_index = torch.tensor([[0, 1, 0], [1, 0, 2]], dtype=torch.int64)
+    edge_vec = torch.tensor(
+        [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=torch.float32,
+    )
+    cell_shift = torch.zeros((3, 3), dtype=torch.float32)
+
+    meta = pair_runtime.build_pair_metadata(
+        edge_index,
+        edge_vec,
+        cell_shift=cell_shift,
+    )
+
+    assert meta[KEY.EDGE_PAIR_MAP].tolist() == [0, 0, 1]
+    assert meta[KEY.EDGE_PAIR_REVERSE].tolist() == [False, True, False]
+    assert meta[KEY.PAIR_EDGE_FORWARD_INDEX].tolist() == [0, 2]
+    assert meta[KEY.PAIR_EDGE_BACKWARD_INDEX].tolist() == [1, 2]
+    assert meta[KEY.PAIR_EDGE_HAS_REVERSE].tolist() == [True, False]
+    assert torch.allclose(
+        meta[KEY.PAIR_EDGE_VEC],
+        edge_vec.index_select(0, meta[KEY.PAIR_EDGE_FORWARD_INDEX]),
+    )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason='cuda not available')
+def test_pair_metadata_builder_matches_cpu_on_cuda():
+    edge_index = torch.tensor([[0, 1, 0], [1, 0, 2]], dtype=torch.int64)
+    edge_vec = torch.tensor(
+        [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=torch.float32,
+    )
+    cell_shift = torch.zeros((3, 3), dtype=torch.float32)
+
+    cpu_meta = pair_runtime.build_pair_metadata(
+        edge_index,
+        edge_vec,
+        cell_shift=cell_shift,
+    )
+    gpu_meta = pair_runtime.build_pair_metadata(
+        edge_index.cuda(),
+        edge_vec.cuda(),
+        cell_shift=cell_shift.cuda(),
+    )
+
+    for key in (
+        KEY.EDGE_PAIR_MAP,
+        KEY.EDGE_PAIR_REVERSE,
+        KEY.PAIR_EDGE_FORWARD_INDEX,
+        KEY.PAIR_EDGE_BACKWARD_INDEX,
+        KEY.PAIR_EDGE_HAS_REVERSE,
+        KEY.PAIR_EDGE_VEC,
+    ):
+        assert torch.equal(cpu_meta[key].cpu(), gpu_meta[key].cpu())
+
+
 def test_pair_metadata_batches_with_offsets():
     cfg = _pair_cfg()
     g1 = pair_runtime.ensure_pair_metadata_graph(_manual_graph(), cfg)

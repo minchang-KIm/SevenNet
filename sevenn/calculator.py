@@ -289,14 +289,14 @@ class SevenNetCalculator(Calculator):
         if self.modal:
             data[KEY.DATA_MODALITY] = self.modal
 
+        data.to(self.device)  # type: ignore
+
         data, self._pair_topology_cache = pair_runtime.prepare_pair_metadata(
             data,
             self.pair_execution_config,
             cache_state=self._pair_topology_cache,
             num_atoms=len(atoms),
         )
-
-        data.to(self.device)  # type: ignore
 
         if is_ts_type:
             data[KEY.NODE_FEATURE] = torch.tensor(
