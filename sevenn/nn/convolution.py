@@ -139,33 +139,32 @@ class IrrepsConvolution(nn.Module):
             forward_filter = data[KEY.PAIR_EDGE_ATTR]
         else:
             forward_filter = data[self.key_filter].index_select(0, pair_forward_index)
-        msg_forward = self.convolution(
-            x.index_select(0, src_forward),
-            forward_filter,
-            pair_weight,
-        )
-        out = message_gather(x, dst_forward, msg_forward)
+        conv_src = [src_forward]
+        conv_dst = [dst_forward]
+        conv_filter = [forward_filter]
+        conv_weight = [pair_weight]
 
         rev_index = pair_backward_index[pair_has_reverse]
         if rev_index.numel() > 0:
-            if (
-                not self.expand_full_edges
-                and KEY.PAIR_EDGE_REVERSE_ATTR in data
-            ):
+            if not self.expand_full_edges and KEY.PAIR_EDGE_REVERSE_ATTR in data:
                 reverse_filter = data[KEY.PAIR_EDGE_REVERSE_ATTR][pair_has_reverse]
             else:
                 reverse_filter = data[self.key_filter].index_select(0, rev_index)
-            msg_reverse = self.convolution(
-                x.index_select(0, edge_src.index_select(0, rev_index)),
-                reverse_filter,
-                pair_weight[pair_has_reverse],
-            )
-            out = out + message_gather(
-                x,
-                edge_dst.index_select(0, rev_index),
-                msg_reverse,
-            )
-        return out
+            conv_src.append(edge_src.index_select(0, rev_index))
+            conv_dst.append(edge_dst.index_select(0, rev_index))
+            conv_filter.append(reverse_filter)
+            conv_weight.append(pair_weight[pair_has_reverse])
+
+        src_all = torch.cat(conv_src, dim=0)
+        dst_all = torch.cat(conv_dst, dim=0)
+        filter_all = torch.cat(conv_filter, dim=0)
+        weight_all = torch.cat(conv_weight, dim=0)
+        message = self.convolution(
+            x.index_select(0, src_all),
+            filter_all,
+            weight_all,
+        )
+        return message_gather(x, dst_all, message)
 
     def instantiate(self) -> None:
         if self.convolution is not None:
