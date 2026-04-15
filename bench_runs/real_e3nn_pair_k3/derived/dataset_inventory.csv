@@ -1,0 +1,8 @@
+dataset,description,modal,loader,num_configs_total,total_atoms_total,avg_atoms_total,max_atoms_total,file_bytes_total
+mptrj_val,MPtrj validation split,mpa,nimashoghi,10206,320367,31.390064667842445,426,11381572
+salex_validation,sAlex validation,mpa,colabfit,553111,5716263,10.334748359732496,168,375526858
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,colabfit,38271,549832,14.366805152726608,112,40829143
+omol25_validation,OMol25 neutral validation,omol25_low,colabfit,27697,1238644,44.72123334657183,110,72055195
+oc20_val_id,OC20 S2EF in-domain validation,oc20,colabfit,999866,73147343,73.15714605757171,225,3219859939
+oc22_val_id,OC22 S2EF in-domain validation,oc22,colabfit,406249,31934356,78.6078390346807,200,1493569575
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,extxyz,103,692,6.718446601941747,8,76121

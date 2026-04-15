@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+oc22_s2ef_train,s2ef_train_0,oc22,e3nn_baseline,baseline,-1551.4423828125

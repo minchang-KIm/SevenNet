@@ -1,0 +1,11 @@
+{
+  "cuda_available": true,
+  "device_name": "NVIDIA GeForce RTX 4090",
+  "torch_version": "2.7.1+cu126",
+  "warmup": 3,
+  "repeat": 10,
+  "cases": [
+    "e3nn_baseline",
+    "e3nn_pair_full"
+  ]
+}

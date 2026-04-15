@@ -1,0 +1,9 @@
+{
+  "dataset": "md22_stachyose",
+  "sample_id": "md22_stachyose_10546",
+  "modal": "spice",
+  "natoms": 87,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_stachyose"
+}

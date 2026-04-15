@@ -1,0 +1,2 @@
+dataset,flash_baseline_mean_ms,flash_baseline_std_ms,flash_pair_auto_mean_ms,flash_pair_auto_std_ms,flash_speedup_baseline_over_pair
+omat24_1m_official,27.951396093703806,1.0561590461036694,28.234109841287136,0.9140465925673128,0.9899868014549581

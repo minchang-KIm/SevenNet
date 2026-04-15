@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="980" viewBox="0 0 1500 980">
+  <defs>
+    <style>
+      .title { font: 700 28px sans-serif; fill: #1f2937; }
+      .lane { font: 700 22px sans-serif; fill: #111827; }
+      .boxtext { font: 600 17px sans-serif; fill: #111827; }
+      .sub { font: 500 14px sans-serif; fill: #374151; }
+      .note { font: 600 16px sans-serif; fill: #1f2937; }
+      .small { font: 500 15px sans-serif; fill: #374151; }
+      .warn { font: 700 16px sans-serif; fill: #9a3412; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+
+  <rect width="1500" height="980" fill="#ffffff"/>
+  <text x="40" y="50" class="title">Force Backward Pipeline in Current SevenNet Runtime</text>
+  <text x="40" y="82" class="small">Code basis: AtomGraphSequential._preprocess(...) -&gt; ForceStressOutputFromEdge.forward(...)</text>
+
+  <rect x="40" y="120" width="1420" height="300" rx="16" fill="#ecfeff" stroke="#a5f3fc"/>
+  <text x="60" y="160" class="lane">GPU / default stream</text>
+
+  <rect x="90" y="210" width="220" height="95" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="115" y="245" class="boxtext">1. Preprocess</text>
+  <text x="115" y="268" class="sub">EDGE_VEC.requires_grad_(True)</text>
+  <text x="115" y="290" class="sub">autograd graph starts here</text>
+
+  <rect x="370" y="210" width="240" height="95" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="395" y="245" class="boxtext">2. Edge embedding</text>
+  <text x="395" y="268" class="sub">distance / radial / cutoff / SH</text>
+  <text x="395" y="290" class="sub">pair path if enabled</text>
+
+  <rect x="670" y="210" width="260" height="95" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="695" y="245" class="boxtext">3. Interaction blocks</text>
+  <text x="695" y="268" class="sub">weight_nn -&gt; convolution -&gt; gather</text>
+  <text x="695" y="290" class="sub">message passing repeated by layer</text>
+
+  <rect x="990" y="210" width="220" height="95" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="1015" y="245" class="boxtext">4. Readout</text>
+  <text x="1015" y="268" class="sub">node feature -&gt; atomic energy</text>
+  <text x="1015" y="290" class="sub">sum -&gt; total energy</text>
+
+  <line x1="310" y1="258" x2="370" y2="258" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="610" y1="258" x2="670" y2="258" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="930" y1="258" x2="990" y2="258" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="280" y="340" width="920" height="55" rx="12" fill="#dbeafe" stroke="#93c5fd"/>
+  <text x="305" y="374" class="boxtext">Forward region above builds the complete energy computation graph. Backward below re-traverses it.</text>
+
+  <rect x="90" y="490" width="220" height="105" rx="12" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="115" y="525" class="boxtext">5. Force module entry</text>
+  <text x="115" y="548" class="sub">ForceStressOutputFromEdge.forward(...)</text>
+  <text x="115" y="570" class="sub">energy = [sum(total_energy)]</text>
+
+  <rect x="370" y="490" width="300" height="105" rx="12" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="395" y="525" class="boxtext">6. autograd.grad(energy, [rij])</text>
+  <text x="395" y="548" class="sub">rij = EDGE_VEC</text>
+  <text x="395" y="570" class="sub">backward goes through the whole upstream graph</text>
+
+  <rect x="730" y="490" width="260" height="105" rx="12" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="755" y="525" class="boxtext">7. Edge-wise force-like grad</text>
+  <text x="755" y="548" class="sub">fij = dE / d(EDGE_VEC)</text>
+  <text x="755" y="570" class="sub">one value per directed edge</text>
+
+  <rect x="1050" y="490" width="280" height="105" rx="12" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="1075" y="525" class="boxtext">8. Scatter reductions</text>
+  <text x="1075" y="548" class="sub">pf.scatter_reduce_(src, fij)</text>
+  <text x="1075" y="570" class="sub">nf.scatter_reduce_(dst, fij)</text>
+
+  <rect x="540" y="645" width="340" height="105" rx="12" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="565" y="680" class="boxtext">9. Final outputs</text>
+  <text x="565" y="703" class="sub">force = pf - nf</text>
+  <text x="565" y="725" class="sub">stress / virial also reduced here</text>
+
+  <line x1="310" y1="543" x2="370" y2="543" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="670" y1="543" x2="730" y2="543" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="990" y1="543" x2="1050" y2="543" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1190" y1="595" x2="880" y2="645" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <path d="M 520 490 C 520 430, 980 430, 980 305" fill="none" stroke="#ea580c" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrow)"/>
+  <text x="725" y="420" class="warn">Backward revisits edge embedding + interaction + readout, not just the last layer.</text>
+
+  <rect x="40" y="800" width="1420" height="140" rx="14" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="65" y="835" class="note">Concurrency interpretation</text>
+  <text x="65" y="865" class="small">- There is no explicit multi-stream overlap for force backward in current code.</text>
+  <text x="65" y="890" class="small">- Forward kernels and backward kernels are queued in order on the default stream.</text>
+  <text x="65" y="915" class="small">- This is why forward-only and step+force experiments must be interpreted separately: force is a real second phase, not a tiny add-on.</text>
+</svg>

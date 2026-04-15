@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+omat24_1m_official,train:106751,omat24,160,materials,url,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/fairchem/omat24_1m/omat24_1M_251210.tar.gz

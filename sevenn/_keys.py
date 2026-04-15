@@ -44,6 +44,16 @@ MODAL_ATTR: Final[str] = (
 MODAL_TYPE: Final[str] = 'modal_type'  # (1) one-hot index of modal
 EDGE_ATTR: Final[str] = 'edge_attr'  # (from spherical harmonics)
 EDGE_EMBEDDING: Final[str] = 'edge_embedding'  # (from edge embedding)
+EDGE_PAIR_MAP: Final[str] = 'edge_pair_map'
+EDGE_PAIR_REVERSE: Final[str] = 'edge_pair_reverse'
+PAIR_EDGE_VEC: Final[str] = 'pair_edge_vec'
+PAIR_EDGE_EMBEDDING: Final[str] = 'pair_edge_embedding'
+PAIR_EDGE_ATTR: Final[str] = 'pair_edge_attr'
+PAIR_EDGE_REVERSE_ATTR: Final[str] = 'pair_edge_reverse_attr'
+PAIR_EDGE_FORWARD_INDEX: Final[str] = 'pair_edge_forward_index'
+PAIR_EDGE_BACKWARD_INDEX: Final[str] = 'pair_edge_backward_index'
+PAIR_EDGE_HAS_REVERSE: Final[str] = 'pair_edge_has_reverse'
+PAIR_TOPOLOGY_SIGNATURE: Final[str] = 'pair_topology_signature'
 
 # inputs of loss function
 ENERGY: Final[str] = 'total_energy'  # (1)
@@ -224,6 +234,7 @@ TRAIN_AVG_NUM_NEIGH = 'train_avg_num_neigh'  # deprecated
 USE_FLASH_TP = 'use_flash_tp'
 CUEQUIVARIANCE_CONFIG = 'cuequivariance_config'
 USE_OEQ = 'use_oeq'
+PAIR_EXECUTION_CONFIG = 'pair_execution_config'
 
 _NORMALIZE_SPH = '_normalize_sph'
 OPTIMIZE_BY_REDUCE = 'optimize_by_reduce'

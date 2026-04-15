@@ -47,6 +47,8 @@ class IrrepsConvolution(nn.Module):
         data_key_edge_idx: str = KEY.EDGE_IDX,
         lazy_layer_instantiate: bool = True,
         is_parallel: bool = False,
+        pair_execution_policy: str = 'baseline',
+        fuse_reduction: bool = True,
     ) -> None:
         super().__init__()
         self.denominator = nn.Parameter(
@@ -57,6 +59,9 @@ class IrrepsConvolution(nn.Module):
         self.key_weight_input = data_key_weight_input
         self.key_edge_idx = data_key_edge_idx
         self.is_parallel = is_parallel
+        self.pair_execution_policy = pair_execution_policy
+        self.fuse_reduction = fuse_reduction
+        self.expand_full_edges = True
 
         instructions = []
         irreps_mid = []
@@ -104,6 +109,62 @@ class IrrepsConvolution(nn.Module):
             self.instantiate()
 
         self._comm_size = irreps_x.dim  # used in parallel
+        self._out_dim: int = irreps_mid.dim
+
+    def _use_pair_execution(self, data: AtomGraphDataType) -> bool:
+        return (
+            self.pair_execution_policy != 'baseline'
+            and KEY.PAIR_EDGE_EMBEDDING in data
+            and KEY.EDGE_PAIR_MAP in data
+        )
+
+    def _pair_weight(self, data: AtomGraphDataType) -> torch.Tensor:
+        assert self.weight_nn is not None
+        return self.weight_nn(data[KEY.PAIR_EDGE_EMBEDDING])
+
+    def _pair_forward(
+        self, data: AtomGraphDataType, x: torch.Tensor, pair_weight: torch.Tensor
+    ) -> torch.Tensor:
+        assert self.convolution is not None
+        edge_index = data[self.key_edge_idx]
+        pair_forward_index = data[KEY.PAIR_EDGE_FORWARD_INDEX]
+        pair_backward_index = data[KEY.PAIR_EDGE_BACKWARD_INDEX]
+        pair_has_reverse = data[KEY.PAIR_EDGE_HAS_REVERSE]
+        edge_src = edge_index[1]
+        edge_dst = edge_index[0]
+
+        src_forward = edge_src.index_select(0, pair_forward_index)
+        dst_forward = edge_dst.index_select(0, pair_forward_index)
+        if not self.expand_full_edges and KEY.PAIR_EDGE_ATTR in data:
+            forward_filter = data[KEY.PAIR_EDGE_ATTR]
+        else:
+            forward_filter = data[self.key_filter].index_select(0, pair_forward_index)
+        conv_src = [src_forward]
+        conv_dst = [dst_forward]
+        conv_filter = [forward_filter]
+        conv_weight = [pair_weight]
+
+        rev_index = pair_backward_index[pair_has_reverse]
+        if rev_index.numel() > 0:
+            if not self.expand_full_edges and KEY.PAIR_EDGE_REVERSE_ATTR in data:
+                reverse_filter = data[KEY.PAIR_EDGE_REVERSE_ATTR][pair_has_reverse]
+            else:
+                reverse_filter = data[self.key_filter].index_select(0, rev_index)
+            conv_src.append(edge_src.index_select(0, rev_index))
+            conv_dst.append(edge_dst.index_select(0, rev_index))
+            conv_filter.append(reverse_filter)
+            conv_weight.append(pair_weight[pair_has_reverse])
+
+        src_all = torch.cat(conv_src, dim=0)
+        dst_all = torch.cat(conv_dst, dim=0)
+        filter_all = torch.cat(conv_filter, dim=0)
+        weight_all = torch.cat(conv_weight, dim=0)
+        message = self.convolution(
+            x.index_select(0, src_all),
+            filter_all,
+            weight_all,
+        )
+        return message_gather(x, dst_all, message)
 
     def instantiate(self) -> None:
         if self.convolution is not None:
@@ -118,19 +179,32 @@ class IrrepsConvolution(nn.Module):
     def forward(self, data: AtomGraphDataType) -> AtomGraphDataType:
         assert self.convolution is not None, 'Convolution is not instantiated'
         assert self.weight_nn is not None, 'Weight_nn is not instantiated'
-        weight = self.weight_nn(data[self.key_weight_input])
 
         x = data[self.key_x]
 
         if self.is_parallel:
             x = torch.cat([x, data[KEY.NODE_FEATURE_GHOST]])
 
-        edge_src = data[self.key_edge_idx][1]
-        edge_dst = data[self.key_edge_idx][0]
+        if self._use_pair_execution(data):
+            pair_weight = self._pair_weight(data)
+            if self.pair_execution_policy == 'full' and self.fuse_reduction:
+                x = self._pair_forward(data, x, pair_weight)
+            else:
+                weight = pair_weight.index_select(0, data[KEY.EDGE_PAIR_MAP])
+                edge_src = data[self.key_edge_idx][1]
+                edge_dst = data[self.key_edge_idx][0]
+                message = self.convolution(
+                    x[edge_src], data[self.key_filter], weight
+                )
+                x = message_gather(x, edge_dst, message)
+        else:
+            weight = self.weight_nn(data[self.key_weight_input])
+            edge_src = data[self.key_edge_idx][1]
+            edge_dst = data[self.key_edge_idx][0]
 
-        message = self.convolution(x[edge_src], data[self.key_filter], weight)
+            message = self.convolution(x[edge_src], data[self.key_filter], weight)
 
-        x = message_gather(x, edge_dst, message)
+            x = message_gather(x, edge_dst, message)
 
         x = x.div(self.denominator)
 
@@ -162,6 +236,8 @@ class IrrepsScatterGatterFusedConvolution(nn.Module):
         data_key_edge_idx: str = KEY.EDGE_IDX,
         lazy_layer_instantiate: bool = True,
         is_parallel: bool = False,
+        pair_execution_policy: str = 'baseline',
+        fuse_reduction: bool = True,
     ) -> None:
         super().__init__()
         self.denominator = nn.Parameter(
@@ -172,6 +248,9 @@ class IrrepsScatterGatterFusedConvolution(nn.Module):
         self.key_weight_input = data_key_weight_input
         self.key_edge_idx = data_key_edge_idx
         self.is_parallel = is_parallel
+        self.pair_execution_policy = pair_execution_policy
+        self.fuse_reduction = fuse_reduction
+        self.expand_full_edges = True
 
         instructions = []
         irreps_mid = []
@@ -221,6 +300,13 @@ class IrrepsScatterGatterFusedConvolution(nn.Module):
         self._comm_size = irreps_x.dim  # used in parallel
         self._out_dim: int = irreps_mid.dim
 
+    def _use_pair_execution(self, data: AtomGraphDataType) -> bool:
+        return (
+            self.pair_execution_policy != 'baseline'
+            and KEY.PAIR_EDGE_EMBEDDING in data
+            and KEY.EDGE_PAIR_MAP in data
+        )
+
     @classmethod
     def from_irreps_convolution(cls, src: IrrepsConvolution):
         """
@@ -251,9 +337,12 @@ class IrrepsScatterGatterFusedConvolution(nn.Module):
         assert self.weight_nn is not None, 'Weight_nn is not instantiated'
 
         x = data[self.key_x]
-        weight_input = data[self.key_weight_input]
-
-        weight = self.weight_nn(weight_input)
+        if self._use_pair_execution(data):
+            pair_weight = self.weight_nn(data[KEY.PAIR_EDGE_EMBEDDING])
+            weight = pair_weight.index_select(0, data[KEY.EDGE_PAIR_MAP])
+        else:
+            weight_input = data[self.key_weight_input]
+            weight = self.weight_nn(weight_input)
 
         if self.is_parallel:
             x = torch.cat([x, data[KEY.NODE_FEATURE_GHOST]])

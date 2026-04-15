@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+wbm_initial,34.77846987079829,0.2342655236672065,48.96081783808768,0.24978430942758362,0.7103326988084616

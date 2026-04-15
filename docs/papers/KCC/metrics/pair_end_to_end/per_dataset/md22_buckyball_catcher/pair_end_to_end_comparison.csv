@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+md22_buckyball_catcher,104.06654751859605,0.1325198716404491,97.54667624365538,0.3206959747411525,1.066838476983625

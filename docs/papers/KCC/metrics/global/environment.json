@@ -1,0 +1,53 @@
+{
+  "repo_root": "/home/wise/minchang/DenseMLIP",
+  "kcc_root": "/home/wise/minchang/DenseMLIP/SevenNet/docs/papers/KCC",
+  "gpu": {
+    "cuda_available": true,
+    "device_name": "NVIDIA GeForce RTX 4090",
+    "torch_version": "2.7.1+cu126"
+  },
+  "selected_datasets": [
+    "ani1ccx",
+    "ani1x",
+    "iso17",
+    "md22_ac_ala3_nhme",
+    "md22_at_at",
+    "md22_at_at_cg_cg",
+    "md22_buckyball_catcher",
+    "md22_dha",
+    "md22_double_walled_nanotube",
+    "md22_stachyose",
+    "mptrj",
+    "oc20_s2ef_train_20m",
+    "oc20_s2ef_train_2m",
+    "oc20_s2ef_val_id",
+    "oc20_s2ef_val_ood_ads",
+    "oc20_s2ef_val_ood_both",
+    "oc20_s2ef_val_ood_cat",
+    "oc22_s2ef_train",
+    "oc22_s2ef_val_id",
+    "oc22_s2ef_val_ood",
+    "omat24_1m_official",
+    "omol25_train_4m",
+    "omol25_train_neutral",
+    "omol25_validation",
+    "phonondb_pbe",
+    "qm9_hf",
+    "rmd17",
+    "salex_train_official",
+    "salex_val_official",
+    "spice_2023",
+    "wbm_initial"
+  ],
+  "representative_nsys_datasets": [
+    "qm9_hf",
+    "iso17",
+    "spice_2023",
+    "mptrj",
+    "omat24_1m_official",
+    "oc20_s2ef_train_20m"
+  ],
+  "end_to_end_warmup": 3,
+  "end_to_end_repeat": 10,
+  "detailed_repeat": 5
+}

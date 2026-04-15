@@ -1,0 +1,4 @@
+dataset,sample_id,modal,natoms,method,timing_ms_mean,timing_ms_std,timing_ms_median,timing_ms_p95
+wbm_initial,wbm_initial:23057,matpes_pbe,100,cpu_original,15.572723117657006,0.12804195847302624,15.564269502647221,15.78913345001638
+wbm_initial,wbm_initial:23057,matpes_pbe,100,cpu_vectorized,2.784644034691155,0.011222330303452831,2.784799551591277,2.8034053626470268
+wbm_initial,wbm_initial:23057,matpes_pbe,100,gpu_vectorized_kernel_only,0.6727967597544193,0.007705789478464234,0.6726250285282731,0.685292889829725

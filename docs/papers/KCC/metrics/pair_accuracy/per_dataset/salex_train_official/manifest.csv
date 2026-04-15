@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+salex_train_official,alex_go_aao_005:4493,omat24,132,materials,url,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/fairchem/salex/train.tar.gz

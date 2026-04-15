@@ -1,0 +1,10 @@
+dataset,skip_reason
+md17_aspirin,graph-only parquet; atomic positions unavailable
+md17_benzene,graph-only parquet; atomic positions unavailable
+md17_ethanol,no parquet files found
+md17_malonaldehyde,graph-only parquet; atomic positions unavailable
+md17_naphthalene,graph-only parquet; atomic positions unavailable
+md17_salicylic_acid,graph-only parquet; atomic positions unavailable
+md17_toluene,graph-only parquet; atomic positions unavailable
+md17_uracil,graph-only parquet; atomic positions unavailable
+omol25_official_gated,gated dataset

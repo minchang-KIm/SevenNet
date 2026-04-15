@@ -14,6 +14,9 @@ IMPLEMENTED_CUTOFF_FUNCTION = ['poly_cut', 'XPLOR']
 # TODO: support None. This became difficult because of parallel model
 IMPLEMENTED_SELF_CONNECTION_TYPE = ['nequip', 'linear']
 IMPLEMENTED_INTERACTION_TYPE = ['nequip']
+IMPLEMENTED_PAIR_EXECUTION_POLICY = ['auto', 'full', 'geometry_only', 'baseline']
+IMPLEMENTED_PAIR_DISTRIBUTED_SCHEDULE = ['auto', 'pair', 'baseline']
+IMPLEMENTED_PAIR_BACKEND_POLICY = ['auto', 'prefer_flash', 'prefer_common']
 
 IMPLEMENTED_SHIFT = ['per_atom_energy_mean', 'elemwise_reference_energies']
 IMPLEMENTED_SCALE = ['force_rms', 'per_atom_energy_std', 'elemwise_force_rms']
@@ -132,6 +135,14 @@ DEFAULT_E3_EQUIVARIANT_MODEL_CONFIG = {
     KEY.USE_FLASH_TP: False,
     KEY.CUEQUIVARIANCE_CONFIG: {},
     KEY.USE_OEQ: False,
+    KEY.PAIR_EXECUTION_CONFIG: {
+        'use': False,
+        'policy': 'auto',
+        'fuse_reduction': True,
+        'use_topology_cache': True,
+        'distributed_schedule': 'auto',
+        'backend_policy': 'auto',
+    },
 }
 
 
@@ -180,6 +191,14 @@ MODEL_CONFIG_CONDITION = {
     KEY.USE_FLASH_TP: bool,
     KEY.CUEQUIVARIANCE_CONFIG: dict,
     KEY.USE_OEQ: bool,
+    KEY.PAIR_EXECUTION_CONFIG: {
+        'use': bool,
+        'policy': lambda x: x in IMPLEMENTED_PAIR_EXECUTION_POLICY,
+        'fuse_reduction': bool,
+        'use_topology_cache': bool,
+        'distributed_schedule': lambda x: x in IMPLEMENTED_PAIR_DISTRIBUTED_SCHEDULE,
+        'backend_policy': lambda x: x in IMPLEMENTED_PAIR_BACKEND_POLICY,
+    },
 }
 
 

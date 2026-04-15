@@ -1,0 +1,9 @@
+{
+  "dataset": "wbm_initial",
+  "sample_id": "wbm_initial:23057",
+  "modal": "matpes_pbe",
+  "natoms": 100,
+  "category": "materials",
+  "source_kind": "url",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/figshare/wbm_initial.extxyz.zip"
+}

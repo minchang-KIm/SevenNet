@@ -1,0 +1,2 @@
+dataset,flash_baseline_mean_ms,flash_baseline_std_ms,flash_pair_auto_mean_ms,flash_pair_auto_std_ms,flash_speedup_baseline_over_pair
+md22_double_walled_nanotube,28.269196394830942,0.700932694227669,32.345347572118044,0.296685908254798,0.8739802944396005

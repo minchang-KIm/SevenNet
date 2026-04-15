@@ -1,0 +1,23 @@
+{
+  "dataset": "omol25_validation",
+  "sample_id": "OMol25_validation_data0012_18589",
+  "natoms": 350,
+  "modal": "omol25_low",
+  "loader": "colabfit",
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/omol25_validation",
+  "num_edges": 17972,
+  "num_pairs": 8986,
+  "avg_neighbors_directed": 51.348571428571425,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 17972,
+  "pair_edge_embedding_evals": 8986,
+  "baseline_weight_nn_rows_total": 89860,
+  "pair_weight_nn_rows_total": 44930,
+  "baseline_tp_rows_total": 89860,
+  "pair_tp_rows_total": 89860,
+  "baseline_scatter_rows_total": 89860,
+  "pair_scatter_rows_total": 89860
+}

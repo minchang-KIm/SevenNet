@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+md22_double_walled_nanotube,md22_double-walled_nanotube_1987,spice,370,e3nn_baseline,-338922.90625,cuda,baseline

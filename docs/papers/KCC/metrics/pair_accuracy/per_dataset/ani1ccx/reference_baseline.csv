@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+ani1ccx,055:0,spice,55,e3nn_baseline,-22310.2578125,cuda,baseline

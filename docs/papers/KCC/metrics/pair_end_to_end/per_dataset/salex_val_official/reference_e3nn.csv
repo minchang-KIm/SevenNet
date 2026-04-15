@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+salex_val_official,alex_go_aao_006:1039,omat24,e3nn_baseline,baseline,-692.734130859375

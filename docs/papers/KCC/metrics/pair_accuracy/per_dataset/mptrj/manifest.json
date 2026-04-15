@@ -1,0 +1,9 @@
+{
+  "dataset": "mptrj",
+  "sample_id": "mp-1204603",
+  "modal": "mpa",
+  "natoms": 444,
+  "category": "materials",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/mptrj"
+}

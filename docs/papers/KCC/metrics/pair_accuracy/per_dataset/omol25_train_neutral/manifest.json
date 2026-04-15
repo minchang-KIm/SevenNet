@@ -1,0 +1,9 @@
+{
+  "dataset": "omol25_train_neutral",
+  "sample_id": "OMol25_train_neutral_data0063_395425",
+  "modal": "omol25_low",
+  "natoms": 181,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/omol25_train_neutral"
+}

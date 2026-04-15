@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,resolved_policy,n_warmup,n_repeat,device,mean_ms,std_ms,median_ms,p95_ms,warmup_mean_ms,warmup_std_ms,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,e3nn_baseline,baseline,3,10,cuda,29.368734592571855,0.18417747727849418,29.411018011160195,29.600535007193685,111.8072997002552,39.94095352190234,0.0,7.639248167379264e-08
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,e3nn_pair_full,full,3,10,cuda,47.74914663285017,0.2894805130228878,47.677600057795644,48.268320644274354,131.22402100513378,50.38824938103647,0.0,6.213255687725905e-08

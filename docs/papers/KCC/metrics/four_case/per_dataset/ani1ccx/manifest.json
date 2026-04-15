@@ -1,0 +1,23 @@
+{
+  "dataset": "ani1ccx",
+  "sample_id": "055:0",
+  "natoms": 55,
+  "modal": "spice",
+  "loader": "ani1ccx_h5",
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/ani1ccx",
+  "num_edges": 2042,
+  "num_pairs": 1021,
+  "avg_neighbors_directed": 37.127272727272725,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 2042,
+  "pair_edge_embedding_evals": 1021,
+  "baseline_weight_nn_rows_total": 10210,
+  "pair_weight_nn_rows_total": 5105,
+  "baseline_tp_rows_total": 10210,
+  "pair_tp_rows_total": 10210,
+  "baseline_scatter_rows_total": 10210,
+  "pair_scatter_rows_total": 10210
+}

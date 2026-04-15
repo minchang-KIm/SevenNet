@@ -8,6 +8,7 @@ from e3nn.o3 import Irreps
 
 import sevenn._const as _const
 import sevenn._keys as KEY
+import sevenn.pair_runtime as pair_runtime
 import sevenn.util as util
 
 from .nn.convolution import IrrepsConvolution
@@ -96,7 +97,13 @@ def init_edge_embedding(config: Dict[str, Any]) -> EdgeEmbedding:
     _normalize_sph = config[KEY._NORMALIZE_SPH]
     sph = SphericalEncoding(lmax_edge, parity, normalize=_normalize_sph)
 
-    return EdgeEmbedding(basis_module=rbf, cutoff_module=env, spherical_module=sph)
+    pair_cfg = pair_runtime.resolve_pair_execution_config(config)
+    return EdgeEmbedding(
+        basis_module=rbf,
+        cutoff_module=env,
+        spherical_module=sph,
+        pair_execution_policy=pair_cfg['resolved_policy'],
+    )
 
 
 def init_feature_reduce(config: Dict[str, Any], irreps_x: Irreps) -> OrderedDict:
@@ -459,6 +466,8 @@ def build_E3_equivariant_model(
     for data w/o cell volume, pred_stress has garbage values
     """
     layers = OrderedDict()
+    pair_cfg = pair_runtime.resolve_pair_execution_config(config)
+    config[KEY.PAIR_EXECUTION_CONFIG] = pair_cfg
 
     cutoff = config[KEY.CUTOFF]
     num_species = config[KEY.NUM_SPECIES]
@@ -531,6 +540,8 @@ def build_E3_equivariant_model(
         'bias_in_linear': use_bias_in_linear,
         'num_species': num_species,
         'parallel': parallel,
+        'pair_execution_policy': pair_cfg['resolved_policy'],
+        'fuse_reduction': pair_cfg['fuse_reduction'],
     }
 
     interaction_builder = None
@@ -628,9 +639,14 @@ def build_E3_equivariant_model(
 
     if parallel:
         layers_list = _to_parallel_model(layers, config)
-        return [
+        models = [
             AtomGraphSequential(patch_modules(layers, config), **common_args)
             for layers in layers_list
         ]
+        for model in models:
+            model.pair_execution_config = copy.deepcopy(pair_cfg)  # type: ignore
+        return models
     else:
-        return AtomGraphSequential(patch_modules(layers, config), **common_args)
+        model = AtomGraphSequential(patch_modules(layers, config), **common_args)
+        model.pair_execution_config = copy.deepcopy(pair_cfg)  # type: ignore
+        return model

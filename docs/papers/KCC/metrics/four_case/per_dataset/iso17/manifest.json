@@ -1,0 +1,23 @@
+{
+  "dataset": "iso17",
+  "sample_id": "iso17",
+  "natoms": 19,
+  "modal": "spice",
+  "loader": "colabfit",
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/iso17",
+  "num_edges": 340,
+  "num_pairs": 170,
+  "avg_neighbors_directed": 17.894736842105264,
+  "pair_reuse_factor": 2.0,
+  "reverse_pair_fraction": 1.0,
+  "baseline_edge_embedding_evals": 340,
+  "pair_edge_embedding_evals": 170,
+  "baseline_weight_nn_rows_total": 1700,
+  "pair_weight_nn_rows_total": 850,
+  "baseline_tp_rows_total": 1700,
+  "pair_tp_rows_total": 1700,
+  "baseline_scatter_rows_total": 1700,
+  "pair_scatter_rows_total": 1700
+}

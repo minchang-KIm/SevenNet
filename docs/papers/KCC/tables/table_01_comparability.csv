@@ -1,0 +1,5 @@
+family,measurement_style,directly_comparable_to,not_directly_comparable_to,intended_use
+e3nn baseline detailed,intrusive synchronized stage timing,e3nn pair detailed,"Flash end-to-end, Nsight kernel time","stage decomposition, load reduction, share analysis"
+e3nn pair detailed,intrusive synchronized stage timing,e3nn baseline detailed,"Flash end-to-end, Nsight kernel time",pair-specific overhead and reusable-term interpretation
+FlashTP end-to-end,non-intrusive repeated wall-clock timing,FlashTP end-to-end counterpart,"intrusive detailed stage timing, Nsight kernel time",headline latency and accuracy comparison
+Representative Nsight,kernel-level trace summary,same traced case and dataset,wall-clock headline latency,kernel mix validation only

@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+oc20_s2ef_val_ood_both,OC20_S2EF_val_ood_both__file_0113__config_496,oc20,e3nn_baseline,baseline,-1616.622802734375

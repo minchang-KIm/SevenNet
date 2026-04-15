@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,resolved_policy,n_warmup,n_repeat,device,mean_ms,std_ms,median_ms,p95_ms,warmup_mean_ms,warmup_std_ms,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+md22_ac_ala3_nhme,md22_Ac-Ala3-NHMe_4756,spice,42,flash_baseline,baseline,3,10,cuda,13.428485416807234,0.08269086376632401,13.397956383414567,13.583249843213707,61.03579498206576,15.485308827677475,0.0,1.3113021850585938e-06
+md22_ac_ala3_nhme,md22_Ac-Ala3-NHMe_4756,spice,42,flash_pair_auto,geometry_only,3,10,cuda,16.01055827923119,0.29548880279654377,16.05258393101394,16.452810040209442,65.87231198015313,14.132207224364478,0.0,1.8477439880371094e-06

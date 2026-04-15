@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,n_warmup,n_repeat,device,resolved_policy,abs_energy_diff_mean,abs_energy_diff_std,abs_energy_diff_max,max_force_diff_mean,max_force_diff_std,max_force_diff_max,mean_force_diff_mean,mean_force_diff_std,mean_force_diff_max
+salex_val_official,alex_go_aao_006:1039,omat24,128,e3nn_baseline,2,10,cuda,baseline,0.0,0.0,0.0,1.4444813132286072e-06,1.1753054737750402e-07,1.6540288925170898e-06,2.306744420366158e-07,1.5040329544483605e-08,2.5922963686753064e-07
+salex_val_official,alex_go_aao_006:1039,omat24,128,e3nn_pair_full,2,10,cuda,full,0.0,0.0,0.0,4.358962178230285e-06,3.130771290432034e-07,4.742294549942017e-06,5.68899793051969e-07,9.601051840130627e-09,5.855799827259034e-07

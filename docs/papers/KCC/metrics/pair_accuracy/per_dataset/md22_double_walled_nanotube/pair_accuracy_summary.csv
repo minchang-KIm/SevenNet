@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,n_warmup,n_repeat,device,resolved_policy,abs_energy_diff_mean,abs_energy_diff_std,abs_energy_diff_max,max_force_diff_mean,max_force_diff_std,max_force_diff_max,mean_force_diff_mean,mean_force_diff_std,mean_force_diff_max
+md22_double_walled_nanotube,md22_double-walled_nanotube_1987,spice,370,e3nn_baseline,2,10,cuda,baseline,0.0,0.0,0.0,2.2858381271362306e-06,3.1058824537260033e-07,2.8908252716064453e-06,4.1468505003194877e-07,1.1036149071409313e-08,4.2771114294737345e-07
+md22_double_walled_nanotube,md22_double-walled_nanotube_1987,spice,370,e3nn_pair_full,2,10,cuda,full,0.0,0.0,0.0,3.951787948608398e-06,4.1960992590899566e-07,4.649162292480469e-06,6.408180581729539e-07,1.4648965314141473e-08,6.606055649172049e-07

@@ -1,0 +1,2 @@
+dataset,flash_baseline_mean_ms,flash_baseline_std_ms,flash_pair_auto_mean_ms,flash_pair_auto_std_ms,flash_speedup_baseline_over_pair
+oc22_s2ef_train,27.11769985035062,2.0286776128294552,26.969725801609457,1.6069334762650285,1.0054866723462323

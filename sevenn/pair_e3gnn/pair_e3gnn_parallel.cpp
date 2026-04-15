@@ -18,12 +18,17 @@
 #include <ATen/core/Dict.h>
 #include <ATen/core/ivalue_inl.h>
 #include <ATen/ops/from_blob.h>
+#include <chrono>
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <numeric>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <torch/csrc/jit/api/module.h>
 #include <torch/script.h>
@@ -55,6 +60,150 @@ extern void pair_e3gnn_oeq_register_autograd();
 
 #define INTEGER_TYPE torch::TensorOptions().dtype(torch::kInt64)
 #define FLOAT_TYPE torch::TensorOptions().dtype(torch::kFloat)
+
+namespace {
+struct ParallelPairKey {
+  long src;
+  long dst;
+
+  bool operator==(const ParallelPairKey &other) const {
+    return src == other.src && dst == other.dst;
+  }
+};
+
+struct ParallelPairKeyHash {
+  std::size_t operator()(const ParallelPairKey &key) const {
+    std::size_t h = std::hash<long>{}(key.src);
+    h ^= std::hash<long>{}(key.dst) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    return h;
+  }
+};
+
+inline ParallelPairKey reverse_pair_key(const ParallelPairKey &key) {
+  return {key.dst, key.src};
+}
+
+struct ParallelPairBuilder {
+  std::unordered_map<ParallelPairKey, long, ParallelPairKeyHash> waiting_reverse;
+  std::vector<long> edge_pair_map;
+  std::vector<uint8_t> edge_pair_reverse;
+  std::vector<long> pair_forward_index;
+  std::vector<long> pair_backward_index;
+  std::vector<uint8_t> pair_has_reverse;
+
+  explicit ParallelPairBuilder(long edge_cap) {
+    edge_pair_map.resize(edge_cap, -1);
+    edge_pair_reverse.resize(edge_cap, 0);
+    pair_forward_index.reserve(edge_cap / 2 + 1);
+    pair_backward_index.reserve(edge_cap / 2 + 1);
+    pair_has_reverse.reserve(edge_cap / 2 + 1);
+    waiting_reverse.reserve(edge_cap / 2 + 1);
+  }
+
+  void add_edge(long edge_i, const ParallelPairKey &key) {
+    auto it = waiting_reverse.find(key);
+    if (it != waiting_reverse.end()) {
+      const long pair_i = it->second;
+      edge_pair_map[edge_i] = pair_i;
+      edge_pair_reverse[edge_i] = 1;
+      pair_backward_index[pair_i] = edge_i;
+      pair_has_reverse[pair_i] = 1;
+      waiting_reverse.erase(it);
+      return;
+    }
+
+    const long pair_i = static_cast<long>(pair_forward_index.size());
+    edge_pair_map[edge_i] = pair_i;
+    pair_forward_index.push_back(edge_i);
+    pair_backward_index.push_back(edge_i);
+    pair_has_reverse.push_back(0);
+    waiting_reverse.emplace(reverse_pair_key(key), pair_i);
+  }
+
+  std::vector<torch::Tensor> finalize(long nedges) {
+    edge_pair_map.resize(nedges);
+    edge_pair_reverse.resize(nedges);
+    return {
+        torch::tensor(edge_pair_map, INTEGER_TYPE),
+        torch::tensor(edge_pair_reverse, torch::TensorOptions().dtype(torch::kBool)),
+        torch::tensor(pair_forward_index, INTEGER_TYPE),
+        torch::tensor(pair_backward_index, INTEGER_TYPE),
+        torch::tensor(pair_has_reverse,
+                      torch::TensorOptions().dtype(torch::kBool)),
+    };
+  }
+};
+
+std::vector<torch::Tensor> build_pair_metadata_parallel_legacy(
+    const torch::Tensor &edge_index_cpu) {
+  auto edge_src_tensor = edge_index_cpu[0];
+  auto edge_dst_tensor = edge_index_cpu[1];
+  auto edge_src = edge_src_tensor.accessor<long, 1>();
+  auto edge_dst = edge_dst_tensor.accessor<long, 1>();
+  const auto nedges = edge_index_cpu.size(1);
+
+  std::unordered_map<std::string, long> lookup;
+  lookup.reserve(nedges);
+  auto make_key = [](long dst, long src) {
+    return std::to_string(dst) + "|" + std::to_string(src);
+  };
+
+  for (long e = 0; e < nedges; ++e) {
+    lookup.emplace(make_key(edge_src[e], edge_dst[e]), e);
+  }
+
+  std::vector<long> edge_pair_map(nedges, -1);
+  std::vector<uint8_t> edge_pair_reverse(nedges, 0);
+  std::vector<long> pair_forward_index;
+  std::vector<long> pair_backward_index;
+  std::vector<uint8_t> pair_has_reverse;
+
+  for (long e = 0; e < nedges; ++e) {
+    if (edge_pair_map[e] != -1)
+      continue;
+    const long pair_idx = static_cast<long>(pair_forward_index.size());
+    edge_pair_map[e] = pair_idx;
+    pair_forward_index.push_back(e);
+    auto it = lookup.find(make_key(edge_dst[e], edge_src[e]));
+    if (it != lookup.end() && it->second != e &&
+        edge_pair_map[it->second] == -1) {
+      edge_pair_map[it->second] = pair_idx;
+      edge_pair_reverse[it->second] = 1;
+      pair_backward_index.push_back(it->second);
+      pair_has_reverse.push_back(1);
+    } else {
+      pair_backward_index.push_back(e);
+      pair_has_reverse.push_back(0);
+    }
+  }
+
+  return {
+      torch::tensor(edge_pair_map, INTEGER_TYPE),
+      torch::tensor(edge_pair_reverse, torch::TensorOptions().dtype(torch::kBool)),
+      torch::tensor(pair_forward_index, INTEGER_TYPE),
+      torch::tensor(pair_backward_index, INTEGER_TYPE),
+      torch::tensor(pair_has_reverse,
+                    torch::TensorOptions().dtype(torch::kBool)),
+  };
+}
+
+inline bool lammps_profile_enabled() {
+  static const bool enabled = std::getenv("SEVENN_LAMMPS_PROFILE") != nullptr;
+  return enabled;
+}
+
+inline bool use_legacy_pair_build() {
+  static const bool enabled =
+      std::getenv("SEVENN_LAMMPS_LEGACY_PAIR_BUILD") != nullptr;
+  return enabled;
+}
+
+inline double elapsed_ms(
+    const std::chrono::steady_clock::time_point &start,
+    const std::chrono::steady_clock::time_point &end) {
+  return std::chrono::duration<double, std::milli>(end - start).count();
+}
+} // namespace
 
 DeviceBuffManager &DeviceBuffManager::getInstance() {
   static DeviceBuffManager instance;
@@ -195,6 +344,12 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   /*
      Graph build on cpu
   */
+  const auto compute_t0 = std::chrono::steady_clock::now();
+  double pair_metadata_total_ms = 0.0;
+  double pair_metadata_build_ms = 0.0;
+  double model_inference_ms = 0.0;
+  const bool legacy_pair_build = use_legacy_pair_build();
+
   if (eflag || vflag)
     ev_setup(eflag, vflag);
   else
@@ -250,6 +405,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   long edge_idx_dst[nedges_upper_bound];
 
   int nedges = 0;
+  ParallelPairBuilder pair_builder(nedges_upper_bound);
   for (int ii = 0; ii < inum; ii++) {
     // populate tag_to_graph_idx of local atoms
     const int i = ilist[ii];
@@ -295,6 +451,9 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
         edge_vec[nedges][0] = delij[0];
         edge_vec[nedges][1] = delij[1];
         edge_vec[nedges][2] = delij[2];
+        if (pair_execution && !legacy_pair_build) {
+          pair_builder.add_edge(nedges, {i_graph_idx, j_graph_idx});
+        }
         nedges++;
       }
     } // j loop end
@@ -318,6 +477,23 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
       torch::from_blob(edge_idx_dst, {nedges}, INTEGER_TYPE);
   auto inp_edge_index =
       torch::stack({edge_idx_src_tensor, edge_idx_dst_tensor});
+  auto edge_index_cpu = inp_edge_index.cpu();
+  bool topology_same =
+      topology_cache && pair_cache_valid &&
+      torch::equal(cached_edge_index_cpu, edge_index_cpu);
+  if (!topology_same) {
+    comm_preprocess_done = false;
+    for (int i = 0; i < 6; i++) {
+      comm_index_pack_forward[i].clear();
+      comm_index_unpack_forward[i].clear();
+      comm_index_unpack_reverse[i].clear();
+    }
+    extra_graph_idx_map.clear();
+  }
+  if (topology_cache) {
+    cached_edge_index_cpu = edge_index_cpu.clone();
+    pair_cache_valid = true;
+  }
 
   auto inp_edge_vec = torch::from_blob(edge_vec, {nedges, 3}, FLOAT_TYPE);
   if (print_info) {
@@ -339,11 +515,45 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   input_dict.insert("num_atoms", inp_num_atoms.to(device));
   input_dict.insert("nlocal", inp_num_atoms.to(torch::kCPU));
 
+  if (pair_execution) {
+    const auto pair_meta_t0 = std::chrono::steady_clock::now();
+    bool cache_hit = topology_same && cached_edge_pair_map_cpu.defined();
+    if (!cache_hit) {
+      const auto build_t0 = std::chrono::steady_clock::now();
+      auto meta = legacy_pair_build
+                      ? build_pair_metadata_parallel_legacy(edge_index_cpu)
+                      : pair_builder.finalize(nedges);
+      const auto build_t1 = std::chrono::steady_clock::now();
+      pair_metadata_build_ms = elapsed_ms(build_t0, build_t1);
+      cached_edge_pair_map_cpu = meta[0].clone();
+      cached_edge_pair_reverse_cpu = meta[1].clone();
+      cached_pair_forward_index_cpu = meta[2].clone();
+      cached_pair_backward_index_cpu = meta[3].clone();
+      cached_pair_has_reverse_cpu = meta[4].clone();
+      pair_cache_valid = true;
+    }
+    auto pair_forward_index_device = cached_pair_forward_index_cpu.to(device);
+    input_dict.insert("edge_pair_map", cached_edge_pair_map_cpu.to(device));
+    input_dict.insert("edge_pair_reverse",
+                      cached_edge_pair_reverse_cpu.to(device));
+    input_dict.insert("pair_edge_forward_index", pair_forward_index_device);
+    input_dict.insert("pair_edge_backward_index",
+                      cached_pair_backward_index_cpu.to(device));
+    input_dict.insert("pair_edge_has_reverse",
+                      cached_pair_has_reverse_cpu.to(device));
+    input_dict.insert("pair_edge_vec",
+                      inp_edge_vec.to(device).index_select(
+                          0, pair_forward_index_device));
+    const auto pair_meta_t1 = std::chrono::steady_clock::now();
+    pair_metadata_total_ms = elapsed_ms(pair_meta_t0, pair_meta_t1);
+  }
+
   std::list<std::vector<torch::Tensor>> wrt_tensors;
   wrt_tensors.push_back({input_dict.at("edge_vec")});
 
   auto model_part = model_list.front();
 
+  const auto model_t0 = std::chrono::steady_clock::now();
   auto output = model_part.forward({input_dict}).toGenericDict();
 
   comm_preprocess();
@@ -516,15 +726,35 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   }
 
   // clean up comm preprocess variables
-  comm_preprocess_done = false;
-  for (int i = 0; i < 6; i++) {
-    // array of vector<long>
-    comm_index_pack_forward[i].clear();
-    comm_index_unpack_forward[i].clear();
-    comm_index_unpack_reverse[i].clear();
+  if (!topology_cache) {
+    comm_preprocess_done = false;
+    for (int i = 0; i < 6; i++) {
+      // array of vector<long>
+      comm_index_pack_forward[i].clear();
+      comm_index_unpack_forward[i].clear();
+      comm_index_unpack_reverse[i].clear();
+    }
+    extra_graph_idx_map.clear();
   }
 
-  extra_graph_idx_map.clear();
+  const auto model_t1 = std::chrono::steady_clock::now();
+  model_inference_ms = elapsed_ms(model_t0, model_t1);
+
+  if (lammps_profile_enabled() && world_rank == 0) {
+    const auto compute_t1 = std::chrono::steady_clock::now();
+    const long npairs = pair_execution && cached_pair_forward_index_cpu.defined()
+                            ? cached_pair_forward_index_cpu.size(0)
+                            : 0;
+    std::fprintf(stderr,
+                 "[sevenn_lammps_profile] mode=parallel rank=%d builder=%s policy=%s "
+                 "nedges=%d npairs=%ld pair_metadata_total_ms=%.6f "
+                 "pair_metadata_build_ms=%.6f model_inference_ms=%.6f "
+                 "compute_total_ms=%.6f\n",
+                 world_rank, legacy_pair_build ? "legacy" : "upstream",
+                 pair_execution_policy.c_str(), nedges, npairs,
+                 pair_metadata_total_ms, pair_metadata_build_ms,
+                 model_inference_ms, elapsed_ms(compute_t0, compute_t1));
+  }
 }
 
 // allocate arrays (called from coeff)
@@ -564,6 +794,10 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
       {"version", ""},
       {"dtype", ""},
       {"time", ""},
+      {"pair_execution", ""},
+      {"pair_execution_policy", "baseline"},
+      {"topology_cache", "yes"},
+      {"distributed_schedule", "baseline"},
       {"flashTP", "version mismatch"},
       {"oeq", "version mismatch"},
       {"comm_size", ""}};
@@ -603,6 +837,9 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
   torch::jit::setFusionStrategy(strategy);
 
   cutoff = std::stod(meta_dict["cutoff"]);
+  pair_execution = meta_dict["pair_execution"] == "yes";
+  pair_execution_policy = meta_dict["pair_execution_policy"];
+  topology_cache = meta_dict["topology_cache"] != "no";
 
   // maximum possible size of per atom x before last convolution
   int comm_size = std::stod(meta_dict["comm_size"]);
@@ -674,6 +911,10 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
             meta_dict["flashTP"].c_str());
     fprintf(lmp->logfile, "OEQ: %s\n",
             meta_dict["oeq"].c_str());
+    fprintf(lmp->logfile, "Pair execution: %s (%s)\n",
+            pair_execution ? "yes" : "no", pair_execution_policy.c_str());
+    fprintf(lmp->logfile, "Topology cache: %s\n",
+            topology_cache ? "yes" : "no");
   }
 }
 
@@ -696,7 +937,8 @@ void PairE3GNNParallel::notify_proc_ids(const int *sendproc, const int *recvproc
 }
 
 void PairE3GNNParallel::comm_preprocess() {
-  assert(!comm_preprocess_done);
+  if (comm_preprocess_done)
+    return;
   CommBrick *comm_brick = dynamic_cast<CommBrick *>(comm);
 
   // fake lammps communication call to preprocess index

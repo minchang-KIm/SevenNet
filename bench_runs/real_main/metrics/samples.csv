@@ -1,0 +1,22 @@
+dataset,description,modal,sample_id,natoms,case,cold_ms,steady_median_ms,steady_p95_ms,resolved_policy,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+mptrj_val,MPtrj validation split,mpa,mp-1197409,426,e3nn_baseline,706.8961780169047,643.3057899703272,730.5327045498416,baseline,0.0,0.0
+mptrj_val,MPtrj validation split,mpa,mp-1197409,426,flash_baseline,78.19780497811735,50.31322204740718,89.15731199667789,baseline,0.0,1.2367963790893555e-06
+mptrj_val,MPtrj validation split,mpa,mp-1197409,426,flash_pair_auto,279.4098330195993,54.30835398146883,341.5229213074781,geometry_only,0.0,2.682209014892578e-06
+salex_validation,sAlex validation,mpa,sAlex__agm005259073_2_51__id_482978,168,e3nn_baseline,297.79288900317624,232.2453489759937,642.9500071157236,baseline,0.0,0.0
+salex_validation,sAlex validation,mpa,sAlex__agm005259073_2_51__id_482978,168,flash_baseline,65.79855305608362,48.63392800325528,79.03051627799869,baseline,0.0,1.253560185432434e-06
+salex_validation,sAlex validation,mpa,sAlex__agm005259073_2_51__id_482978,168,flash_pair_auto,169.7886959882453,49.52805500943214,82.40431696758606,geometry_only,0.0,1.3187527656555176e-06
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm005231400_AB2C5D6_8_spg14_1_0_rattled-1000-subsampled_i32xdf__file_ix_26036,112,e3nn_baseline,157.06930600572377,76.46614097757265,173.2313536980655,baseline,0.0,0.0
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm005231400_AB2C5D6_8_spg14_1_0_rattled-1000-subsampled_i32xdf__file_ix_26036,112,flash_baseline,60.01113500678912,44.289599056355655,78.00841222633608,baseline,0.0,3.0517578125e-05
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm005231400_AB2C5D6_8_spg14_1_0_rattled-1000-subsampled_i32xdf__file_ix_26036,112,flash_pair_auto,92.39653497934341,48.1418400304392,79.23312662169337,geometry_only,0.0,7.62939453125e-05
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0020_65,110,e3nn_baseline,147.01855299063027,65.10662398068234,163.17724524997175,baseline,0.0,0.0
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0020_65,110,flash_baseline,59.46823500562459,43.129233992658556,77.16051366878673,baseline,0.0,1.9073486328125e-06
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0020_65,110,flash_pair_auto,86.88228798564523,48.2299430295825,78.60289821401238,geometry_only,0.0,2.1457672119140625e-06
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0049__config_3636,225,e3nn_baseline,303.89614595333114,238.60375297954306,320.2725159819238,baseline,0.0,0.0
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0049__config_3636,225,flash_baseline,66.80112396134064,49.031724978704005,87.58150420035236,baseline,0.0,7.748603820800781e-07
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0049__config_3636,225,flash_pair_auto,172.4311810103245,50.282051030080765,81.26479396596551,geometry_only,0.0,2.0563602447509766e-06
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_0,200,e3nn_baseline,258.48595099523664,187.39757494768128,274.6452138875611,baseline,0.0,0.0
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_0,200,flash_baseline,65.49682904733345,51.702452008612454,81.39159078709781,baseline,0.0,1.1444091796875e-05
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_0,200,flash_pair_auto,147.6954209501855,51.4173400006257,83.29385140095837,geometry_only,0.0,2.6702880859375e-05
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:0,8,e3nn_baseline,124.53128199558705,62.24905594717711,148.7440770957619,baseline,0.0,0.0
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:0,8,flash_baseline,60.430155019275844,44.1650579450652,79.20356368413195,baseline,0.0,1.0337680578231812e-07
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:0,8,flash_pair_auto,61.39709200942889,44.33786001754925,78.15445908927359,geometry_only,0.0,1.0291114449501038e-07

@@ -1,0 +1,41 @@
+dataset,category,status,source_kind,modal,loader,skip_reason,local_path,num_samples,max_atoms
+qm9_hf,molecular,benchmarked,hf,qcml,qm9_like,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/qm9_hf,1.0,29.0
+md17_aspirin,molecular,skipped,hf,,,graph-only parquet; atomic positions unavailable,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md17_aspirin,,
+md17_benzene,molecular,skipped,hf,,,graph-only parquet; atomic positions unavailable,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md17_benzene,,
+md17_ethanol,molecular,skipped,hf,,,no parquet files found,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md17_ethanol,,
+md17_malonaldehyde,molecular,skipped,hf,,,graph-only parquet; atomic positions unavailable,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md17_malonaldehyde,,
+md17_naphthalene,molecular,skipped,hf,,,graph-only parquet; atomic positions unavailable,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md17_naphthalene,,
+md17_salicylic_acid,molecular,skipped,hf,,,graph-only parquet; atomic positions unavailable,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md17_salicylic_acid,,
+md17_toluene,molecular,skipped,hf,,,graph-only parquet; atomic positions unavailable,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md17_toluene,,
+md17_uracil,molecular,skipped,hf,,,graph-only parquet; atomic positions unavailable,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md17_uracil,,
+rmd17,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/rmd17,1.0,24.0
+iso17,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/iso17,1.0,19.0
+md22_at_at,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_at_at,1.0,60.0
+md22_at_at_cg_cg,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_at_at_cg_cg,1.0,118.0
+md22_ac_ala3_nhme,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_ac_ala3_nhme,1.0,42.0
+md22_dha,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_dha,1.0,56.0
+md22_double_walled_nanotube,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_double_walled_nanotube,1.0,370.0
+md22_stachyose,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_stachyose,1.0,87.0
+md22_buckyball_catcher,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_buckyball_catcher,1.0,148.0
+ani1x,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/ani1x,1.0,63.0
+ani1ccx,molecular,benchmarked,hf,spice,ani1ccx_h5,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/ani1ccx,1.0,55.0
+spice_2023,molecular,benchmarked,hf,spice,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/spice_2023,1.0,89.0
+mptrj,materials,benchmarked,hf,mpa,nimashoghi,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/mptrj,1.0,444.0
+wbm_initial,materials,benchmarked,url,matpes_pbe,extxyz_file,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/figshare/wbm_initial.extxyz.zip,1.0,100.0
+phonondb_pbe,materials,benchmarked,url,matpes_r2scan,extxyz_file,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/figshare/phonondb_pbe.extxyz.zip,1.0,8.0
+omat24_1m_official,materials,benchmarked,url,omat24,tar_aselmdb,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/fairchem/omat24_1m/omat24_1M_251210.tar.gz,1.0,160.0
+salex_train_official,materials,benchmarked,url,omat24,tar_aselmdb,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/fairchem/salex/train.tar.gz,1.0,132.0
+salex_val_official,materials,benchmarked,url,omat24,tar_aselmdb,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/fairchem/salex/val.tar.gz,1.0,128.0
+omol25_train_4m,molecular,benchmarked,hf,omol25_low,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/omol25_train_4m,1.0,350.0
+omol25_validation,molecular,benchmarked,hf,omol25_low,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/omol25_validation,1.0,350.0
+oc20_s2ef_train_2m,catalysis,benchmarked,hf,oc20,oc20_like,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc20_s2ef_train_2m,1.0,225.0
+oc20_s2ef_val_id,catalysis,benchmarked,hf,oc20,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc20_s2ef_val_id,1.0,225.0
+oc20_s2ef_val_ood_ads,catalysis,benchmarked,hf,oc20,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc20_s2ef_val_ood_ads,1.0,225.0
+oc20_s2ef_val_ood_cat,catalysis,benchmarked,hf,oc20,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc20_s2ef_val_ood_cat,1.0,225.0
+oc20_s2ef_val_ood_both,catalysis,benchmarked,hf,oc20,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc20_s2ef_val_ood_both,1.0,223.0
+oc22_s2ef_train,catalysis,benchmarked,hf,oc22,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc22_s2ef_train,1.0,228.0
+oc22_s2ef_val_id,catalysis,benchmarked,hf,oc22,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc22_s2ef_val_id,1.0,200.0
+oc22_s2ef_val_ood,catalysis,benchmarked,hf,oc22,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc22_s2ef_val_ood,1.0,216.0
+oc20_s2ef_train_20m,catalysis,benchmarked,hf,oc20,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc20_s2ef_train_20m,1.0,225.0
+omol25_train_neutral,molecular,benchmarked,hf,omol25_low,colabfit,,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/omol25_train_neutral,1.0,181.0
+omol25_official_gated,molecular,skipped,hf,,,gated dataset,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/omol25_official_gated,,

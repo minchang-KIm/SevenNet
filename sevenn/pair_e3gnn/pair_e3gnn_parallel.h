@@ -63,6 +63,16 @@ private:
 
   int sendproc[6];
   int recvproc[6];
+  bool pair_execution = false;
+  bool topology_cache = true;
+  std::string pair_execution_policy = "baseline";
+  torch::Tensor cached_edge_index_cpu;
+  torch::Tensor cached_edge_pair_map_cpu;
+  torch::Tensor cached_edge_pair_reverse_cpu;
+  torch::Tensor cached_pair_forward_index_cpu;
+  torch::Tensor cached_pair_backward_index_cpu;
+  torch::Tensor cached_pair_has_reverse_cpu;
+  bool pair_cache_valid = false;
 
 public:
   PairE3GNNParallel(class LAMMPS *);

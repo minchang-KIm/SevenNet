@@ -1,0 +1,5 @@
+lmax,sh_dim,sh_irreps,conv_instruction_count,conv_weight_numel,trainable_params
+1,4,1x0e+1x1o,2,8,16698
+2,9,1x0e+1x1o+1x2e,3,12,20282
+3,16,1x0e+1x1o+1x2e+1x3o,4,16,26378
+4,25,1x0e+1x1o+1x2e+1x3o+1x4e,5,20,35802

@@ -1,0 +1,15 @@
+dataset,description,modal,sample_id,natoms,case,cold_ms,steady_median_ms,steady_p95_ms,resolved_policy,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+mptrj_val,MPtrj validation split,mpa,mp-1197409,426,e3nn_baseline,706.7059029941447,646.2135030305944,732.7476308913901,baseline,0.0,0.0
+mptrj_val,MPtrj validation split,mpa,mp-1197409,426,e3nn_pair_full,769.9405699968338,450.8934349869378,742.6138783979695,full,0.0,3.039836883544922e-06
+salex_validation,sAlex validation,mpa,sAlex__agm005259073_2_51__id_482978,168,e3nn_baseline,298.9741599885747,232.56391001632437,646.462395391427,baseline,0.0,0.0
+salex_validation,sAlex validation,mpa,sAlex__agm005259073_2_51__id_482978,168,e3nn_pair_full,463.376106985379,230.1219169748947,272.866346873343,full,0.0,1.3760291039943695e-06
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm005231400_AB2C5D6_8_spg14_1_0_rattled-1000-subsampled_i32xdf__file_ix_26036,112,e3nn_baseline,157.38854795927182,76.70656201662496,174.1433726856485,baseline,0.0,0.0
+omat24_validation,OMat24 rattled-1000-subsampled validation,omat24,OMat24__agm005231400_AB2C5D6_8_spg14_1_0_rattled-1000-subsampled_i32xdf__file_ix_26036,112,e3nn_pair_full,245.95615902217105,87.55792601732537,125.0438989198301,full,0.0,9.1552734375e-05
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0020_65,110,e3nn_baseline,147.45986502384767,65.29819499701262,163.45628462149762,baseline,0.0,0.0
+omol25_validation,OMol25 neutral validation,omol25_low,OMol25_neutral_validation_data0020_65,110,e3nn_pair_full,235.33572000451386,83.58427201164886,119.07523649861105,full,0.0,1.7881393432617188e-06
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0049__config_3636,225,e3nn_baseline,303.65604296093807,238.19083702983335,320.12763438397087,baseline,0.0,0.0
+oc20_val_id,OC20 S2EF in-domain validation,oc20,OC20_S2EF_val_id__file_0049__config_3636,225,e3nn_pair_full,472.56828600075096,235.64847902162,278.26867470867,full,0.0,1.8030405044555664e-06
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_0,200,e3nn_baseline,259.03229997493327,187.17044399818406,276.58509481698275,baseline,0.0,0.0
+oc22_val_id,OC22 S2EF in-domain validation,oc22,s2ef_val_id_0,200,e3nn_pair_full,402.2694800514728,185.82315900130197,229.9365239974577,full,0.0,7.62939453125e-06
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:0,8,e3nn_baseline,122.31929402332753,59.92185400100425,147.89055218570866,baseline,0.0,0.0
+phonondb_pbe,phononDB PBE benchmark structures,matpes_r2scan,phonondb_pbe:0,8,e3nn_pair_full,198.00697499886155,77.37443299265578,112.76947639416903,full,0.0,8.638016879558563e-08

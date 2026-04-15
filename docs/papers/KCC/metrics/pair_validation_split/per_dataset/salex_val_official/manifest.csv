@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+salex_val_official,alex_go_aao_006:1039,omat24,128,materials,url,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/fairchem/salex/val.tar.gz

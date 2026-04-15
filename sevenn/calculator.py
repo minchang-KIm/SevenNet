@@ -2,20 +2,25 @@ import ctypes
 import os
 import pathlib
 import warnings
+from copy import deepcopy
 from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
+import torch.jit
+import torch.jit._script
 from ase.atoms import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.mixing import SumCalculator
+from ase.data import chemical_symbols
 
 import sevenn._keys as KEY
+import sevenn.pair_runtime as pair_runtime
 import sevenn.util as util
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.nn.sequential import AtomGraphSequential
 from sevenn.train.dataload import unlabeled_atoms_to_graph
-
+torch_script_type = torch.jit._script.RecursiveScriptModule
 
 class SevenNetCalculator(Calculator):
     """Supporting properties:
@@ -35,6 +40,9 @@ class SevenNetCalculator(Calculator):
         enable_cueq: Optional[bool] = False,
         enable_flash: Optional[bool] = False,
         enable_oeq: Optional[bool] = False,
+        enable_pair_execution: Optional[bool] = None,
+        pair_execution_policy: Optional[str] = None,
+        disable_topology_cache: Optional[bool] = None,
         compute_atomic_virial: bool = False,
         sevennet_config: Optional[Dict] = None,  # Not used in logic, just meta info
         **kwargs,
@@ -47,7 +55,7 @@ class SevenNetCalculator(Calculator):
             Name of pretrained models (7net-omni, 7net-mf-ompa, 7net-omat, 7net-l3i5,
             7net-0) or path to the checkpoint, deployed model or the model itself
         file_type: str, default='checkpoint'
-            one of 'checkpoint' | 'model_instance'
+            one of 'checkpoint' | 'torchscript' | 'model_instance'
         device: str | torch.device, default='auto'
             if not given, use CUDA if available
         modal: str | None, default=None
@@ -71,31 +79,27 @@ class SevenNetCalculator(Calculator):
         super().__init__(**kwargs)
         self.sevennet_config = None
         self.compute_atomic_virial = compute_atomic_virial
+        self._pair_topology_cache: Dict[str, Any] = {}
 
         if isinstance(model, pathlib.PurePath):
             model = str(model)
 
-        allowed_file_types = ['checkpoint', 'model_instance']
+        allowed_file_types = ['checkpoint', 'torchscript', 'model_instance']
         file_type = file_type.lower()
         if file_type not in allowed_file_types:
-            if file_type == 'torchscript':
-                raise ValueError(
-                    'torchscript file_type is no longer supported. '
-                    'Use checkpoint or model_instance instead.'
-                )
             raise ValueError(f'file_type not in {allowed_file_types}')
 
         enable_cueq = os.getenv('SEVENNET_ENABLE_CUEQ') == '1' or enable_cueq
         enable_flash = os.getenv('SEVENNET_ENABLE_FLASH') == '1' or enable_flash
         enable_oeq = os.getenv('SEVENNET_ENABLE_OEQ') == '1' or enable_oeq
 
-        if enable_cueq and file_type == 'model_instance':
+        if enable_cueq and file_type in ['model_instance', 'torchscript']:
             warnings.warn(
                 'file_type should be checkpoint to enable cueq. cueq set to False'
             )
             enable_cueq = False
 
-        if enable_oeq and file_type == 'model_instance':
+        if enable_oeq and file_type in ['model_instance', 'torchscript']:
             warnings.warn(
                 'file_type should be checkpoint to enable oeq. oeq set to False'
             )
@@ -115,13 +119,72 @@ class SevenNetCalculator(Calculator):
             cp = util.load_checkpoint(model)
 
             model_loaded = cp.build_model(
-                enable_cueq=enable_cueq, enable_flash=enable_flash, enable_oeq=enable_oeq  # noqa: E501
+                enable_cueq=enable_cueq,
+                enable_flash=enable_flash,
+                enable_oeq=enable_oeq,
+                enable_pair_execution=enable_pair_execution,
+                pair_execution_policy=pair_execution_policy,
+                disable_topology_cache=disable_topology_cache,
             )
             model_loaded.set_is_batch_data(False)
 
             self.type_map = cp.config[KEY.TYPE_MAP]
             self.cutoff = cp.config[KEY.CUTOFF]
             self.sevennet_config = cp.config
+            self.sevennet_config[KEY.CUEQUIVARIANCE_CONFIG] = {
+                'use': bool(enable_cueq)
+            }
+            self.sevennet_config[KEY.USE_FLASH_TP] = bool(enable_flash)
+            self.sevennet_config[KEY.USE_OEQ] = bool(enable_oeq)
+            if hasattr(model_loaded, 'pair_execution_config'):
+                self.sevennet_config[KEY.PAIR_EXECUTION_CONFIG] = deepcopy(
+                    getattr(model_loaded, 'pair_execution_config')
+                )
+
+        elif file_type == 'torchscript' and isinstance(model, str):
+            if modal:
+                raise NotImplementedError()
+            extra_dict = {
+                'chemical_symbols_to_index': b'',
+                'cutoff': b'',
+                'num_species': b'',
+                'model_type': b'',
+                'version': b'',
+                'dtype': b'',
+                'time': b'',
+                'pair_execution': b'',
+                'pair_execution_policy': b'',
+                'topology_cache': b'',
+                'distributed_schedule': b'',
+            }
+            model_loaded = torch.jit.load(
+                model, _extra_files=extra_dict, map_location=self.device
+            )
+            chem_symbols = extra_dict['chemical_symbols_to_index'].decode('utf-8')
+            sym_to_num = {sym: n for n, sym in enumerate(chemical_symbols)}
+            self.type_map = {
+                sym_to_num[sym]: i for i, sym in enumerate(chem_symbols.split())
+            }
+            self.cutoff = float(extra_dict['cutoff'].decode('utf-8'))
+            self.sevennet_config = {
+                KEY.PAIR_EXECUTION_CONFIG: pair_runtime.normalize_pair_execution_config(
+                    {
+                        'use': extra_dict['pair_execution'].decode('utf-8') == 'yes',
+                        'policy': extra_dict[
+                            'pair_execution_policy'
+                        ].decode('utf-8')
+                        or 'baseline',
+                        'use_topology_cache': extra_dict[
+                            'topology_cache'
+                        ].decode('utf-8')
+                        != 'no',
+                        'distributed_schedule': extra_dict[
+                            'distributed_schedule'
+                        ].decode('utf-8')
+                        or 'baseline',
+                    }
+                )
+            }
 
         elif isinstance(model, AtomGraphSequential):
             if model.type_map is None:
@@ -135,6 +198,12 @@ class SevenNetCalculator(Calculator):
             model_loaded = model
             self.type_map = model.type_map
             self.cutoff = model.cutoff
+            if hasattr(model, 'pair_execution_config'):
+                self.sevennet_config = {
+                    KEY.PAIR_EXECUTION_CONFIG: getattr(
+                        model, 'pair_execution_config'
+                    )
+                }
         else:
             raise ValueError('Unexpected input combinations')
 
@@ -142,6 +211,12 @@ class SevenNetCalculator(Calculator):
             self.sevennet_config = sevennet_config
 
         self.model = model_loaded
+        self.pair_execution_config = pair_runtime.resolve_pair_execution_config(
+            self.sevennet_config or {},
+            enable_pair_execution=enable_pair_execution,
+            pair_execution_policy=pair_execution_policy,
+            disable_topology_cache=disable_topology_cache,
+        )
         if self.compute_atomic_virial:
             force_output = self.model._modules.get('force_output')
             if force_output is None or not hasattr(
@@ -214,17 +289,41 @@ class SevenNetCalculator(Calculator):
         return results
 
     def calculate(self, atoms=None, properties=None, system_changes=all_changes):
+        is_ts_type = isinstance(self.model, torch_script_type)
+
         # call parent class to set necessary atom attributes
         Calculator.calculate(self, atoms, properties, system_changes)
         if atoms is None:
             raise ValueError('No atoms to evaluate')
         data = AtomGraphData.from_numpy_dict(
-            unlabeled_atoms_to_graph(atoms, self.cutoff, with_shift=False)
+            unlabeled_atoms_to_graph(
+                atoms,
+                self.cutoff,
+                with_shift=is_ts_type
+                or self.pair_execution_config['resolved_policy'] != 'baseline',
+            )
         )
         if self.modal:
             data[KEY.DATA_MODALITY] = self.modal
 
         data.to(self.device)  # type: ignore
+        data, self._pair_topology_cache = pair_runtime.prepare_pair_metadata(
+            data,
+            self.pair_execution_config,
+            cache_state=self._pair_topology_cache,
+            num_atoms=len(atoms),
+        )
+
+        if is_ts_type:
+            data[KEY.NODE_FEATURE] = torch.tensor(
+                [self.type_map[z.item()] for z in data[KEY.NODE_FEATURE]],
+                dtype=torch.int64,
+                device=self.device,
+            )
+            data[KEY.POS].requires_grad_(True)
+            data[KEY.EDGE_VEC].requires_grad_(True)
+            data = data.to_dict()
+            del data['data_info']
 
         output = self.model(data)
         self.results = self.output_to_results(output)
@@ -240,6 +339,9 @@ class SevenNetD3Calculator(SumCalculator):
         enable_cueq: Optional[bool] = False,
         enable_flash: Optional[bool] = False,
         enable_oeq: Optional[bool] = False,
+        enable_pair_execution: Optional[bool] = None,
+        pair_execution_policy: Optional[str] = None,
+        disable_topology_cache: Optional[bool] = None,
         sevennet_config: Optional[Any] = None,
         damping_type: str = 'damp_bj',
         functional_name: str = 'pbe',
@@ -255,7 +357,7 @@ class SevenNetD3Calculator(SumCalculator):
             Name of pretrained models (7net-omni, 7net-mf-ompa, 7net-omat, 7net-l3i5,
             7net-0) or path to the checkpoint, deployed model or the model itself
         file_type: str, default='checkpoint'
-            one of 'checkpoint' | 'model_instance'
+            one of 'checkpoint' | 'torchscript' | 'model_instance'
         device: str | torch.device, default='auto'
             if not given, use CUDA if available
         modal: str | None, default=None
@@ -304,6 +406,9 @@ class SevenNetD3Calculator(SumCalculator):
             enable_cueq=enable_cueq,
             enable_flash=enable_flash,
             enable_oeq=enable_oeq,
+            enable_pair_execution=enable_pair_execution,
+            pair_execution_policy=pair_execution_policy,
+            disable_topology_cache=disable_topology_cache,
             sevennet_config=sevennet_config,
             **kwargs,
         )

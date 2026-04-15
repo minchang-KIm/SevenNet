@@ -15,6 +15,7 @@ from torch import load as torch_load
 import sevenn
 import sevenn._const as consts
 import sevenn._keys as KEY
+import sevenn.pair_runtime as pair_runtime
 import sevenn.scripts.backward_compatibility as compat
 from sevenn import model_build
 from sevenn.nn.scale import get_resolved_shift_scale
@@ -313,6 +314,9 @@ class SevenNetCheckpoint:
         enable_cueq: Optional[bool] = None,
         enable_flash: Optional[bool] = None,
         enable_oeq: Optional[bool] = None,
+        enable_pair_execution: Optional[bool] = None,
+        pair_execution_policy: Optional[str] = None,
+        disable_topology_cache: Optional[bool] = None,
         _flash_lammps: bool = False,
     ) -> AtomGraphSequential:
         """
@@ -338,7 +342,15 @@ class SevenNetCheckpoint:
         assert not _flash_lammps or enable_flash
         cfg_new = self.config
         cfg_new['_flash_lammps'] = _flash_lammps
+        cfg_new[KEY.CUEQUIVARIANCE_CONFIG] = {'use': enable_cueq}
+        cfg_new[KEY.USE_FLASH_TP] = enable_flash
         cfg_new[KEY.USE_OEQ] = enable_oeq
+        cfg_new[KEY.PAIR_EXECUTION_CONFIG] = pair_runtime.resolve_pair_execution_config(
+            cfg_new,
+            enable_pair_execution=enable_pair_execution,
+            pair_execution_policy=pair_execution_policy,
+            disable_topology_cache=disable_topology_cache,
+        )
 
         if (cp_using_cueq, cp_using_flash, cp_using_oeq) \
                 == (enable_cueq, enable_flash, enable_oeq):
@@ -353,10 +365,6 @@ class SevenNetCheckpoint:
                 warnings.warn(f'Some keys are not used: {not_used}', UserWarning)
         else:
             print('Converting model backend...')
-
-            cfg_new[KEY.CUEQUIVARIANCE_CONFIG] = {'use': enable_cueq}
-            cfg_new[KEY.USE_FLASH_TP] = enable_flash
-            cfg_new[KEY.USE_OEQ] = enable_oeq
             model = build_E3_equivariant_model(cfg_new)
             stct_src = compat.patch_state_dict_if_old(
                 self.model_state_dict, self.config, model

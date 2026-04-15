@@ -47,6 +47,24 @@ class AtomGraphData(torch_geometric.data.Data):
         }
         return dct
 
+    def __inc__(self, key, value, *args, **kwargs):
+        if key == KEY.EDGE_PAIR_MAP:
+            pair_vec = self.get(KEY.PAIR_EDGE_VEC, None)
+            if isinstance(pair_vec, torch.Tensor):
+                return int(pair_vec.shape[0])
+            return 0
+        if key in (KEY.PAIR_EDGE_FORWARD_INDEX, KEY.PAIR_EDGE_BACKWARD_INDEX):
+            edge_index = self.get(KEY.EDGE_IDX, None)
+            if isinstance(edge_index, torch.Tensor):
+                return int(edge_index.shape[1])
+            return 0
+        return super().__inc__(key, value, *args, **kwargs)
+
+    def __cat_dim__(self, key, value, *args, **kwargs):
+        if key in (KEY.PAIR_EDGE_FORWARD_INDEX, KEY.PAIR_EDGE_BACKWARD_INDEX):
+            return 0
+        return super().__cat_dim__(key, value, *args, **kwargs)
+
     def fit_dimension(self) -> 'AtomGraphData':
         per_atom_keys = [
             KEY.ATOMIC_NUMBERS,

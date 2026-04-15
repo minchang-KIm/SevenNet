@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+md22_stachyose,51.79843730293214,0.0718455904984694,53.115194872953,0.39346336155287687,0.9752093996233954

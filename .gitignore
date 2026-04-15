@@ -21,3 +21,23 @@ sevenn/pretrained_potentials/SevenNet_omni_i12
 sevenn/pair_d3*
 *ninja*
 *libpaird3*
+
+# bench outputs
+bench/results/
+bench/__pycache__/
+
+# benchmark outputs
+bench/results/
+
+# local benchmark caches and downloads
+bench_runs/**/downloads
+bench_runs/**/downloads/
+bench_runs/*_smoke/
+bench_runs/*patchcheck*/
+docs/papers/KCC_*.tar.gz
+docs/papers/KCC/lmax_baseline_sweep/runs/
+docs/papers/KCC/lmax_baseline_sweep/smoke_lmax_1/
+
+# local dataset cache
+datasets/raw/
+datasets/logs/

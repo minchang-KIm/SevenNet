@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+wbm_initial,wbm_initial:23057,matpes_pbe,100,materials,url,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/figshare/wbm_initial.extxyz.zip

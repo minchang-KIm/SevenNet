@@ -1,0 +1,9 @@
+{
+  "dataset": "oc20_s2ef_val_ood_both",
+  "sample_id": "OC20_S2EF_val_ood_both__file_0113__config_496",
+  "modal": "oc20",
+  "natoms": 223,
+  "category": "catalysis",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc20_s2ef_val_ood_both"
+}

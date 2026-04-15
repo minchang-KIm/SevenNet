@@ -1,0 +1,4 @@
+dataset,sample_id,modal,natoms,method,timing_ms_mean,timing_ms_std,timing_ms_median,timing_ms_p95
+oc20_s2ef_val_ood_both,OC20_S2EF_val_ood_both__file_0113__config_496,oc20,223,cpu_original,78.20562270469964,0.5657050985172842,78.20821949280798,79.08197632059455
+oc20_s2ef_val_ood_both,OC20_S2EF_val_ood_both__file_0113__config_496,oc20,223,cpu_vectorized,13.962172591127455,0.09810076071168734,13.956503011286259,14.115405338816345
+oc20_s2ef_val_ood_both,OC20_S2EF_val_ood_both__file_0113__config_496,oc20,223,gpu_vectorized_kernel_only,0.7600701600313187,0.013173712567329167,0.7604090496897697,0.7803767221048474

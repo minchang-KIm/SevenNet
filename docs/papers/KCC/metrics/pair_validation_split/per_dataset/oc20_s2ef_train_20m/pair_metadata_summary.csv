@@ -1,0 +1,4 @@
+dataset,sample_id,modal,natoms,method,timing_ms_mean,timing_ms_std,timing_ms_median,timing_ms_p95
+oc20_s2ef_train_20m,OC20_S2EF_train_20M__file_0444__config_1055,oc20,225,cpu_original,55.86646019713953,0.22654946371705093,55.8499206090346,56.24127781484276
+oc20_s2ef_train_20m,OC20_S2EF_train_20M__file_0444__config_1055,oc20,225,cpu_vectorized,10.019094625022262,0.13591767241909372,10.060299537144601,10.16988039482385
+oc20_s2ef_train_20m,OC20_S2EF_train_20M__file_0444__config_1055,oc20,225,gpu_vectorized_kernel_only,0.7300719316117465,0.010306586652438698,0.7287564221769571,0.7477485574781895

@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+md22_double_walled_nanotube,367.5480339676142,0.10648078607632383,363.698288006708,0.21932637883359382,1.0105849988516722

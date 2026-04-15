@@ -1,0 +1,4 @@
+dataset,sample_id,modal,natoms,method,timing_ms_mean,timing_ms_std,timing_ms_median,timing_ms_p95
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,cpu_original,1.4832101482897997,0.008442553235194366,1.4820984797552228,1.4968881732784212
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,cpu_vectorized,0.40535228326916695,0.0053103511293324645,0.4045475507155061,0.4155852016992867
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,gpu_vectorized_kernel_only,0.5212296778336167,0.015257691780826869,0.5181195447221398,0.5537958699278533

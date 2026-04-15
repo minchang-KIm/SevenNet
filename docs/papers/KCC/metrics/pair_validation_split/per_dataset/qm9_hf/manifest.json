@@ -1,0 +1,9 @@
+{
+  "dataset": "qm9_hf",
+  "sample_id": "0_3057",
+  "modal": "qcml",
+  "natoms": 29,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/qm9_hf"
+}

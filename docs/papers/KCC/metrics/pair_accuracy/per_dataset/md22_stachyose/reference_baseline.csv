@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+md22_stachyose,md22_stachyose_10546,spice,87,e3nn_baseline,-68594.703125,cuda,baseline
