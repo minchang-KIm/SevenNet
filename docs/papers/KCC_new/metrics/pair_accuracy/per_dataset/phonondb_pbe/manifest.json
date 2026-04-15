@@ -1,0 +1,9 @@
+{
+  "dataset": "phonondb_pbe",
+  "sample_id": "phonondb_pbe.extxyz:0",
+  "modal": "matpes_r2scan",
+  "natoms": 8,
+  "category": "materials",
+  "source_kind": "url",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/figshare/phonondb_pbe.extxyz.zip"
+}

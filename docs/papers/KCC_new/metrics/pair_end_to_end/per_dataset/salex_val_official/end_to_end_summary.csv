@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,resolved_policy,n_warmup,n_repeat,device,mean_ms,std_ms,median_ms,p95_ms,warmup_mean_ms,warmup_std_ms,abs_energy_diff_vs_baseline,max_abs_force_diff_vs_baseline
+salex_val_official,alex_go_aao_006:1039,omat24,128,sevennet_baseline,baseline,3,30,cuda,200.99349472050866,0.14075088293361718,200.98777138628066,201.20728778420016,264.0965512643258,40.465754768174456,0.0,1.8067657947540283e-06
+salex_val_official,alex_go_aao_006:1039,omat24,128,sevennet_geometry_only,geometry_only,3,30,cuda,203.51513172499835,0.1679086307936028,203.51277338340878,203.84319722652435,266.91819067733985,40.37771224017594,0.0,3.7401914596557617e-06

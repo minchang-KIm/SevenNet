@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+md22_at_at_cg_cg,md22_AT-AT-CG-CG_3798,spice,sevennet_baseline,baseline,-101233.21875

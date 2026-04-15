@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+rmd17,rmd17_azobenzene,spice,24,sevennet_baseline,-15593.1962890625,cuda,baseline

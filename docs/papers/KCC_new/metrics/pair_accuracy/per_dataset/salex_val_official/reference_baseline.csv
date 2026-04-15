@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+salex_val_official,alex_go_aao_006:1039,omat24,128,sevennet_baseline,-692.734130859375,cuda,baseline

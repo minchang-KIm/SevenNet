@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+spice_2023,hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49,spice,sevennet_baseline,baseline,-60925.50390625

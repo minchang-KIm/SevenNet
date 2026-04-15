@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+md22_at_at_cg_cg,md22_AT-AT-CG-CG_3798,spice,118,sevennet_baseline,-101233.21875,cuda,baseline

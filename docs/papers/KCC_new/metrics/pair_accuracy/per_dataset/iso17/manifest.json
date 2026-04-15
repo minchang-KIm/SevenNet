@@ -1,0 +1,9 @@
+{
+  "dataset": "iso17",
+  "sample_id": "iso17",
+  "modal": "spice",
+  "natoms": 19,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/iso17"
+}

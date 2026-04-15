@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+md22_stachyose,md22_stachyose_10546,spice,sevennet_baseline,baseline,-68594.703125

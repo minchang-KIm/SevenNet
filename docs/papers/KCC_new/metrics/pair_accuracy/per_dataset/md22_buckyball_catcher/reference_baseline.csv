@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,sevennet_baseline,-124958.640625,cuda,baseline

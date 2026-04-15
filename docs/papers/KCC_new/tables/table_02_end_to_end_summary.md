@@ -1,0 +1,33 @@
+| dataset | baseline (ms) | geometry_only (ms) | speedup (baseline/geometry_only) | natoms | num_edges | avg_neighbors_directed | density_bucket |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ani1ccx | 31.50 ± 0.29 | 32.03 ± 0.27 | 0.983x | 55 | 2042 | 37.13 | small_sparse |
+| ani1x | 31.19 ± 0.26 | 31.76 ± 0.30 | 0.982x | 63 | 2008 | 31.87 | small_sparse |
+| iso17 | 29.45 ± 0.19 | 30.28 ± 0.51 | 0.973x | 19 | 340 | 17.89 | small_sparse |
+| md22_ac_ala3_nhme | 29.60 ± 0.20 | 30.19 ± 0.52 | 0.981x | 42 | 1142 | 27.19 | small_sparse |
+| md22_at_at | 29.60 ± 0.34 | 29.98 ± 0.20 | 0.987x | 60 | 1312 | 21.87 | small_sparse |
+| md22_at_at_cg_cg | 55.01 ± 0.27 | 55.77 ± 0.17 | 0.986x | 118 | 3740 | 31.69 | large_sparse |
+| md22_buckyball_catcher | 104.21 ± 0.30 | 105.22 ± 0.23 | 0.990x | 148 | 6872 | 46.43 | large_dense |
+| md22_dha | 29.69 ± 0.48 | 29.95 ± 0.16 | 0.991x | 56 | 1406 | 25.11 | small_sparse |
+| md22_double_walled_nanotube | 367.59 ± 0.18 | 372.02 ± 0.26 | 0.988x | 370 | 24024 | 64.93 | large_dense |
+| md22_stachyose | 51.89 ± 0.20 | 52.74 ± 0.27 | 0.984x | 87 | 3532 | 40.60 | large_dense |
+| mptrj | 425.57 ± 0.12 | 430.63 ± 0.16 | 0.988x | 444 | 27612 | 62.19 | large_dense |
+| oc20_s2ef_train_20m | 125.70 ± 0.23 | 127.12 ± 0.19 | 0.989x | 225 | 8260 | 36.71 | large_sparse |
+| oc20_s2ef_train_2m | 163.50 ± 0.14 | 165.54 ± 0.17 | 0.988x | 225 | 10738 | 47.72 | large_dense |
+| oc20_s2ef_val_id | 230.87 ± 0.48 | 233.71 ± 0.29 | 0.988x | 225 | 15230 | 67.69 | large_dense |
+| oc20_s2ef_val_ood_ads | 102.73 ± 0.17 | 103.95 ± 0.16 | 0.988x | 225 | 6686 | 29.72 | large_sparse |
+| oc20_s2ef_val_ood_both | 174.39 ± 0.15 | 176.60 ± 0.26 | 0.987x | 223 | 11486 | 51.51 | large_dense |
+| oc20_s2ef_val_ood_cat | 156.20 ± 0.28 | 158.04 ± 0.22 | 0.988x | 225 | 10270 | 45.64 | large_dense |
+| oc22_s2ef_train | 216.29 ± 0.10 | 218.62 ± 0.20 | 0.989x | 228 | 14238 | 62.45 | large_dense |
+| oc22_s2ef_val_id | 179.23 ± 0.16 | 181.35 ± 0.29 | 0.988x | 200 | 11704 | 58.52 | large_dense |
+| oc22_s2ef_val_ood | 280.29 ± 0.16 | 283.80 ± 0.33 | 0.988x | 216 | 18264 | 84.56 | large_dense |
+| omat24_1m_official | 232.48 ± 0.14 | 235.42 ± 0.24 | 0.988x | 160 | 15224 | 95.15 | large_dense |
+| omol25_train_4m | 293.36 ± 0.16 | 296.82 ± 0.17 | 0.988x | 350 | 19152 | 54.72 | large_dense |
+| omol25_train_neutral | 150.16 ± 0.16 | 152.03 ± 0.22 | 0.988x | 181 | 9926 | 54.84 | large_dense |
+| omol25_validation | 274.24 ± 0.21 | 277.81 ± 0.95 | 0.987x | 350 | 17972 | 51.35 | large_dense |
+| phonondb_pbe | 29.71 ± 0.74 | 29.97 ± 0.18 | 0.991x | 8 | 208 | 26.00 | small_sparse |
+| qm9_hf | 29.55 ± 0.14 | 30.02 ± 0.15 | 0.984x | 29 | 570 | 19.66 | small_sparse |
+| rmd17 | 29.50 ± 0.15 | 30.02 ± 0.18 | 0.983x | 24 | 366 | 15.25 | small_sparse |
+| salex_train_official | 152.02 ± 0.17 | 153.88 ± 0.18 | 0.988x | 132 | 9932 | 75.24 | large_dense |
+| salex_val_official | 200.99 ± 0.14 | 203.52 ± 0.17 | 0.988x | 128 | 13088 | 102.25 | large_dense |
+| spice_2023 | 30.80 ± 0.22 | 31.17 ± 0.20 | 0.988x | 89 | 728 | 8.18 | small_sparse |
+| wbm_initial | 34.58 ± 0.35 | 35.33 ± 0.82 | 0.979x | 100 | 2260 | 22.60 | small_sparse |

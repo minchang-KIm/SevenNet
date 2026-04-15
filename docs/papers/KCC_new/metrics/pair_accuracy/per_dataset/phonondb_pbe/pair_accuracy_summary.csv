@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,n_warmup,n_repeat,device,resolved_policy,abs_energy_diff_mean,abs_energy_diff_std,abs_energy_diff_max,max_force_diff_mean,max_force_diff_std,max_force_diff_max,mean_force_diff_mean,mean_force_diff_std,mean_force_diff_max
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,sevennet_baseline,2,30,cuda,baseline,0.0,0.0,0.0,8.523277041187309e-08,1.7261264431808377e-08,1.1435705005169439e-07,3.147806412565994e-08,5.761481550569017e-09,4.4675029897689456e-08
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,sevennet_geometry_only,2,30,cuda,geometry_only,0.0,0.0,0.0,8.951708387883173e-08,1.9986769915075532e-08,1.5002804332198139e-07,3.123861785544098e-08,5.550221147177716e-09,4.7827455773585825e-08

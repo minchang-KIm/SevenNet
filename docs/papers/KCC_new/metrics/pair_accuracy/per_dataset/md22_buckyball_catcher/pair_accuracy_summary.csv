@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,n_warmup,n_repeat,device,resolved_policy,abs_energy_diff_mean,abs_energy_diff_std,abs_energy_diff_max,max_force_diff_mean,max_force_diff_std,max_force_diff_max,mean_force_diff_mean,mean_force_diff_std,mean_force_diff_max
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,sevennet_baseline,2,30,cuda,baseline,0.0,0.0,0.0,1.7588337262471517e-06,2.2828408192354796e-07,2.384185791015625e-06,3.4475058896532573e-07,1.518986662985446e-08,3.676668427488039e-07
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,sevennet_geometry_only,2,30,cuda,geometry_only,0.0,0.0,0.0,2.294282118479411e-06,2.0110986567263865e-07,2.6226043701171875e-06,5.021701819411344e-07,1.575592860979544e-08,5.348182980924321e-07

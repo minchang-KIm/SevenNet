@@ -1,0 +1,9 @@
+{
+  "dataset": "md22_at_at",
+  "sample_id": "md22_AT-AT_12521",
+  "modal": "spice",
+  "natoms": 60,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_at_at"
+}

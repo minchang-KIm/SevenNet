@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+iso17,iso17,spice,19,sevennet_baseline,-11519.1826171875,cuda,baseline

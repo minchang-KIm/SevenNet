@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980">
+  <defs>
+    <style>
+      .title { font: 700 30px sans-serif; fill: #111827; }
+      .section { font: 700 22px sans-serif; fill: #111827; }
+      .box { font: 600 17px sans-serif; fill: #111827; }
+      .sub { font: 500 14px sans-serif; fill: #374151; }
+      .small { font: 500 15px sans-serif; fill: #374151; }
+      .warn { font: 700 16px sans-serif; fill: #9a3412; }
+      .good { font: 700 16px sans-serif; fill: #166534; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="980" fill="#ffffff"/>
+  <text x="40" y="50" class="title">Current Bottleneck and Root-Fix Direction</text>
+
+  <rect x="40" y="100" width="1520" height="250" rx="16" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="60" y="140" class="section">A. What is actually slow now</text>
+
+  <rect x="90" y="180" width="360" height="120" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="115" y="215" class="box">Step-level biggest bottleneck</text>
+  <text x="115" y="240" class="sub">pair metadata</text>
+  <text x="115" y="265" class="sub">mptrj: 0.01 ms -&gt; 189.58 ms</text>
+  <text x="115" y="288" class="sub">oc20_s2ef_train_20m: 0.01 ms -&gt; 57.89 ms</text>
+
+  <rect x="510" y="180" width="360" height="120" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="535" y="215" class="box">Model-level extra overhead</text>
+  <text x="535" y="240" class="sub">pair -&gt; edge expansion / index_select</text>
+  <text x="535" y="265" class="sub">reverse sign application</text>
+  <text x="535" y="288" class="sub">shared pair tensor gradient fan-in</text>
+
+  <rect x="930" y="180" width="360" height="120" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="955" y="215" class="box">Why full is still worse</text>
+  <text x="955" y="240" class="sub">pair-aware path still not pair-major</text>
+  <text x="955" y="265" class="sub">generic autograd backward remains</text>
+  <text x="955" y="288" class="sub">forward/reduction structure still expensive</text>
+
+  <rect x="1330" y="180" width="180" height="120" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="1355" y="215" class="box">Result</text>
+  <text x="1355" y="240" class="sub">baseline</text>
+  <text x="1355" y="262" class="sub">&gt; geometry_only</text>
+  <text x="1355" y="284" class="sub">&gt; full</text>
+
+  <line x1="450" y1="240" x2="510" y2="240" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="870" y1="240" x2="930" y2="240" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1290" y1="240" x2="1330" y2="240" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="40" y="390" width="1520" height="250" rx="16" fill="#ecfeff" stroke="#a5f3fc"/>
+  <text x="60" y="430" class="section">B. Why autograd still has to go through the whole chain</text>
+
+  <rect x="110" y="475" width="240" height="100" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="135" y="510" class="box">coordinates r</text>
+  <text x="135" y="535" class="sub">atom positions</text>
+
+  <rect x="410" y="475" width="240" height="100" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="435" y="510" class="box">edge features</text>
+  <text x="435" y="535" class="sub">distance / radial / SH</text>
+
+  <rect x="710" y="475" width="240" height="100" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="735" y="510" class="box">message / node state h</text>
+  <text x="735" y="535" class="sub">updated node feature</text>
+
+  <rect x="1010" y="475" width="240" height="100" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="1035" y="510" class="box">energy E(h)</text>
+  <text x="1035" y="535" class="sub">readout + reduce</text>
+
+  <line x1="350" y1="525" x2="410" y2="525" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="650" y1="525" x2="710" y2="525" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="950" y1="525" x2="1010" y2="525" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <path d="M 1120 475 C 1120 420, 820 400, 820 360 C 820 400, 530 420, 530 475" fill="none" stroke="#ea580c" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrow)"/>
+  <text x="1060" y="390" class="warn">dE/dr needs chain rule through h, message, SH, distance.</text>
+
+  <rect x="115" y="595" width="1320" height="30" rx="8" fill="#dbeafe" stroke="#93c5fd"/>
+  <text x="140" y="616" class="small">Autograd is not extra theory. It is the automatic execution of the chain rule that force computation already needs.</text>
+
+  <rect x="40" y="680" width="1520" height="250" rx="16" fill="#f0fdf4" stroke="#86efac"/>
+  <text x="60" y="720" class="section">C. Root fix direction: stop rebuilding pair structure downstream</text>
+
+  <rect x="95" y="760" width="300" height="120" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="120" y="795" class="box">Current ASE path</text>
+  <text x="120" y="820" class="sub">graph -&gt; pair metadata rebuild</text>
+  <text x="120" y="845" class="sub">topology signature + pair map</text>
+  <text x="120" y="868" class="sub">downstream reconstruction cost</text>
+
+  <rect x="455" y="760" width="300" height="120" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="480" y="795" class="box">LAMMPS now</text>
+  <text x="480" y="820" class="sub">already has full neighbor list</text>
+  <text x="480" y="845" class="sub">but still rebuilds reverse pair</text>
+  <text x="480" y="868" class="sub">via string/hash lookup</text>
+
+  <rect x="815" y="760" width="300" height="120" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="840" y="795" class="box">TorchSim now</text>
+  <text x="840" y="820" class="sub">already has neighbor list on device</text>
+  <text x="840" y="845" class="sub">but wrapper does not wire pair execution</text>
+  <text x="840" y="868" class="sub">pair metadata path incomplete</text>
+
+  <rect x="1175" y="760" width="300" height="120" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="1200" y="795" class="box">Best next step</text>
+  <text x="1200" y="820" class="sub">upstream provides reverse index / pair id</text>
+  <text x="1200" y="845" class="sub">pair-major message path</text>
+  <text x="1200" y="868" class="sub">pair-aware backward</text>
+
+  <line x1="395" y1="820" x2="455" y2="820" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="755" y1="820" x2="815" y2="820" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1115" y1="820" x2="1175" y2="820" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <text x="1190" y="910" class="good">Root idea: use upstream neighbor knowledge directly instead of reconstructing pairs later.</text>
+</svg>

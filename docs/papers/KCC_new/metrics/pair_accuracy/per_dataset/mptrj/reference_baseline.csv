@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+mptrj,mp-1204603,mpa,444,sevennet_baseline,-2253.971435546875,cuda,baseline

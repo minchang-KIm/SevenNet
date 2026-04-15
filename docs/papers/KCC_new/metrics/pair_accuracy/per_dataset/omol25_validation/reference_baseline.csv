@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+omol25_validation,OMol25_validation_data0012_18589,omol25_low,350,sevennet_baseline,-210737.5625,cuda,baseline

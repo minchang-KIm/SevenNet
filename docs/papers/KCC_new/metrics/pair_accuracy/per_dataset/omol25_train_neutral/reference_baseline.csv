@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+omol25_train_neutral,OMol25_train_neutral_data0063_395425,omol25_low,181,sevennet_baseline,-115890.6328125,cuda,baseline

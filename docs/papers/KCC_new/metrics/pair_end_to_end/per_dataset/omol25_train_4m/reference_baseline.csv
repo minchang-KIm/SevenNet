@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+omol25_train_4m,OMol25_train_4M_data0016_18415,omol25_low,sevennet_baseline,baseline,-292497.6875

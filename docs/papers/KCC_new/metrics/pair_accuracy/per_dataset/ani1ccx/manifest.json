@@ -1,0 +1,9 @@
+{
+  "dataset": "ani1ccx",
+  "sample_id": "055:0",
+  "modal": "spice",
+  "natoms": 55,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/ani1ccx"
+}

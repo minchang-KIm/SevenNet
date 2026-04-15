@@ -1,0 +1,9 @@
+{
+  "dataset": "md22_buckyball_catcher",
+  "sample_id": "md22_buckyball-catcher_1114",
+  "modal": "spice",
+  "natoms": 148,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/md22_buckyball_catcher"
+}

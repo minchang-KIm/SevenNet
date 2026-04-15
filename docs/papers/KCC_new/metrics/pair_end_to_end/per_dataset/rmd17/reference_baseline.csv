@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+rmd17,rmd17_azobenzene,spice,sevennet_baseline,baseline,-15593.1962890625

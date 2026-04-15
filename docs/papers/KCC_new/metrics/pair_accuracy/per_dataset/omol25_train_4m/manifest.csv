@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+omol25_train_4m,OMol25_train_4M_data0016_18415,omol25_low,350,molecular,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/omol25_train_4m

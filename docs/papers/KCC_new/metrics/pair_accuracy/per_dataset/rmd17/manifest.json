@@ -1,0 +1,9 @@
+{
+  "dataset": "rmd17",
+  "sample_id": "rmd17_azobenzene",
+  "modal": "spice",
+  "natoms": 24,
+  "category": "molecular",
+  "source_kind": "hf",
+  "local_path": "/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/rmd17"
+}

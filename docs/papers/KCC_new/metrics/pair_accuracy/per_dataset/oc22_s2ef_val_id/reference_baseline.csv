@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+oc22_s2ef_val_id,s2ef_val_id_0,oc22,200,sevennet_baseline,-1070.3670654296875,cuda,baseline

@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+spice_2023,hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49,spice,89,molecular,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/spice_2023

@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+omat24_1m_official,train:106751,omat24,160,sevennet_baseline,-532.0814208984375,cuda,baseline

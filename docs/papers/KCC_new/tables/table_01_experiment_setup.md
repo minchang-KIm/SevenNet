@@ -1,0 +1,11 @@
+| item | value |
+| --- | --- |
+| device | NVIDIA GeForce RTX 4090 |
+| torch_version | 2.7.1+cu126 |
+| datasets | 31 |
+| warmup | 3 |
+| repeat | 30 |
+| representative sample per dataset | 1 |
+| headline comparison | SevenNet baseline vs geometry_only |
+| diagnostic profile | geometry_only breakdown, intrusive, repeat 30 |
+| LAMMPS diagnostic | serial pair metadata bench, repeat 30 |

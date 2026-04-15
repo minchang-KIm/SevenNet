@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+wbm_initial,wbm_initial:23057,matpes_pbe,100,sevennet_baseline,-437.61041259765625,cuda,baseline

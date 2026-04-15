@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,category,source_kind,local_path
+oc22_s2ef_train,s2ef_train_0,oc22,228,catalysis,hf,/home/wise/minchang/DenseMLIP/SevenNet/datasets/raw/hf/oc22_s2ef_train

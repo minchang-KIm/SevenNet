@@ -1,0 +1,2 @@
+dataset,sample_id,modal,natoms,reference_case,energy,device,resolved_policy
+oc20_s2ef_val_id,OC20_S2EF_val_id__file_0049__config_3636,oc20,225,sevennet_baseline,-749.0946044921875,cuda,baseline

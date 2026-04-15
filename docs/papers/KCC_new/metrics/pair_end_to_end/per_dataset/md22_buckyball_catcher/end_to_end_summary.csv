@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,resolved_policy,n_warmup,n_repeat,device,mean_ms,std_ms,median_ms,p95_ms,warmup_mean_ms,warmup_std_ms,abs_energy_diff_vs_baseline,max_abs_force_diff_vs_baseline
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,sevennet_baseline,baseline,3,30,cuda,104.21181734806548,0.2953759615888487,104.18991150800139,104.84524745261297,174.07194462915263,45.114729412252075,0.0,1.6987323760986328e-06
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,sevennet_geometry_only,geometry_only,3,30,cuda,105.21889642501871,0.23423571865880877,105.20129650831223,105.62831702409312,176.18272034451365,45.485644385347946,0.0,3.0994415283203125e-06
