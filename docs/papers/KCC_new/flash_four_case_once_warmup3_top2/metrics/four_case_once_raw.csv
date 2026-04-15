@@ -1,0 +1,9 @@
+dataset,sample_id,modal,natoms,num_edges,avg_neighbors_directed,density_bucket,case,label_ko,enable_flash,enable_pair_execution,requested_pair_policy,n_warmup,n_repeat,repeat_idx,timing_ms,resolved_policy,device,status
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,6872,46.432432432432435,large_dense,sevennet_baseline,기본 SevenNet,False,False,none,3,1,0,103.54317096062005,baseline,cuda,ok
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,6872,46.432432432432435,large_dense,sevennet_pair_full,제안기법,False,True,full,3,1,0,97.04570309258997,full,cuda,ok
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,6872,46.432432432432435,large_dense,flashtp_baseline,FlashTP,True,False,none,3,1,0,14.789409004151821,baseline,cuda,ok
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,6872,46.432432432432435,large_dense,flashtp_pair_full,FlashTP + 제안기법,True,True,full,3,1,0,15.511717880144715,full,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,sevennet_baseline,기본 SevenNet,False,False,none,3,1,0,103.11435908079147,baseline,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,sevennet_pair_full,제안기법,False,True,full,3,1,0,96.47604404017329,full,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,flashtp_baseline,FlashTP,True,False,none,3,1,0,16.025222139433026,baseline,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,flashtp_pair_full,FlashTP + 제안기법,True,True,full,3,1,0,16.513607930392027,full,cuda,ok

@@ -1,0 +1,7 @@
+dataset,sample_id,modal,natoms,num_edges,avg_neighbors_directed,density_bucket,case,label_ko,runtime_patch,enable_flash,enable_pair_execution,requested_pair_policy,n_warmup,n_repeat,repeat_idx,timing_ms,resolved_policy,device,status
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,6872,46.432432432432435,large_dense,flashtp_baseline,FlashTP,none,True,False,none,3,1,0,14.701574807986617,baseline,cuda,ok
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,6872,46.432432432432435,large_dense,flashtp_pair_full_current,FlashTP + 현재 pair full,none,True,True,full,3,1,0,15.742555959150195,full,cuda,ok
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,148,6872,46.432432432432435,large_dense,flashtp_pair_weight_only,FlashTP + weight only,weight_only,True,True,full,3,1,0,15.248101903125644,full,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,flashtp_baseline,FlashTP,none,True,False,none,3,1,0,15.967406099662185,baseline,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,flashtp_pair_full_current,FlashTP + 현재 pair full,none,True,True,full,3,1,0,16.82370202615857,full,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,flashtp_pair_weight_only,FlashTP + weight only,weight_only,True,True,full,3,1,0,16.774001996964216,full,cuda,ok

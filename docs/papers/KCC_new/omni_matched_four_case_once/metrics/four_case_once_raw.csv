@@ -1,0 +1,37 @@
+dataset,sample_id,modal,natoms,num_edges,avg_neighbors_directed,density_bucket,case,label_ko,enable_flash,enable_pair_execution,requested_pair_policy,n_warmup,n_repeat,repeat_idx,timing_ms,resolved_policy,device,status
+mptrj,mp-1204603,mpa,444,27612,62.189189189189186,large_dense,sevennet_baseline,기본 SevenNet,False,False,none,1,1,0,501.4549761544913,baseline,cuda,ok
+mptrj,mp-1204603,mpa,444,27612,62.189189189189186,large_dense,sevennet_pair_full,제안기법,False,True,full,1,1,0,756.4774728380144,full,cuda,ok
+mptrj,mp-1204603,mpa,444,27612,62.189189189189186,large_dense,flashtp_baseline,FlashTP,True,False,none,1,1,0,91.46985202096403,baseline,cuda,ok
+mptrj,mp-1204603,mpa,444,27612,62.189189189189186,large_dense,flashtp_pair_full,FlashTP + 제안기법,True,True,full,1,1,0,95.12574202381074,full,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,sevennet_baseline,기본 SevenNet,False,False,none,1,1,0,217.46455505490303,baseline,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,sevennet_pair_full,제안기법,False,True,full,1,1,0,159.1832370031625,full,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,flashtp_baseline,FlashTP,True,False,none,1,1,0,82.23303896375,baseline,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,flashtp_pair_full,FlashTP + 제안기법,True,True,full,1,1,0,83.04756507277489,full,cuda,ok
+oc22_s2ef_val_ood,is2re_val_ood_43,oc22,216,18264,84.55555555555556,large_dense,sevennet_baseline,기본 SevenNet,False,False,none,1,1,0,374.63892600499094,baseline,cuda,ok
+oc22_s2ef_val_ood,is2re_val_ood_43,oc22,216,18264,84.55555555555556,large_dense,sevennet_pair_full,제안기법,False,True,full,1,1,0,330.55079099722207,full,cuda,ok
+oc22_s2ef_val_ood,is2re_val_ood_43,oc22,216,18264,84.55555555555556,large_dense,flashtp_baseline,FlashTP,True,False,none,1,1,0,86.62793505936861,baseline,cuda,ok
+oc22_s2ef_val_ood,is2re_val_ood_43,oc22,216,18264,84.55555555555556,large_dense,flashtp_pair_full,FlashTP + 제안기법,True,True,full,1,1,0,88.990697870031,full,cuda,ok
+omat24_1m_official,train:106751,omat24,160,15224,95.15,large_dense,sevennet_baseline,기본 SevenNet,False,False,none,1,1,0,332.2363819461316,baseline,cuda,ok
+omat24_1m_official,train:106751,omat24,160,15224,95.15,large_dense,sevennet_pair_full,제안기법,False,True,full,1,1,0,286.17831505835056,full,cuda,ok
+omat24_1m_official,train:106751,omat24,160,15224,95.15,large_dense,flashtp_baseline,FlashTP,True,False,none,1,1,0,88.30255689099431,baseline,cuda,ok
+omat24_1m_official,train:106751,omat24,160,15224,95.15,large_dense,flashtp_pair_full,FlashTP + 제안기법,True,True,full,1,1,0,86.49726514704525,full,cuda,ok
+omol25_validation,OMol25_validation_data0012_18589,omol25_low,350,17972,51.348571428571425,large_dense,sevennet_baseline,기본 SevenNet,False,False,none,1,1,0,367.7964711096138,baseline,cuda,ok
+omol25_validation,OMol25_validation_data0012_18589,omol25_low,350,17972,51.348571428571425,large_dense,sevennet_pair_full,제안기법,False,True,full,1,1,0,324.264318915084,full,cuda,ok
+omol25_validation,OMol25_validation_data0012_18589,omol25_low,350,17972,51.348571428571425,large_dense,flashtp_baseline,FlashTP,True,False,none,1,1,0,84.33028892613947,baseline,cuda,ok
+omol25_validation,OMol25_validation_data0012_18589,omol25_low,350,17972,51.348571428571425,large_dense,flashtp_pair_full,FlashTP + 제안기법,True,True,full,1,1,0,86.80545398965478,full,cuda,ok
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,208,26.0,small_sparse,sevennet_baseline,기본 SevenNet,False,False,none,1,1,0,155.75965400785208,baseline,cuda,ok
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,208,26.0,small_sparse,sevennet_pair_full,제안기법,False,True,full,1,1,0,117.80237895436585,full,cuda,ok
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,208,26.0,small_sparse,flashtp_baseline,FlashTP,True,False,none,1,1,0,82.89031498134136,baseline,cuda,ok
+phonondb_pbe,phonondb_pbe.extxyz:0,matpes_r2scan,8,208,26.0,small_sparse,flashtp_pair_full,FlashTP + 제안기법,True,True,full,1,1,0,81.5643121022731,full,cuda,ok
+qm9_hf,0_3057,qcml,29,570,19.655172413793103,small_sparse,sevennet_baseline,기본 SevenNet,False,False,none,1,1,0,157.48235606588423,baseline,cuda,ok
+qm9_hf,0_3057,qcml,29,570,19.655172413793103,small_sparse,sevennet_pair_full,제안기법,False,True,full,1,1,0,118.76970413140953,full,cuda,ok
+qm9_hf,0_3057,qcml,29,570,19.655172413793103,small_sparse,flashtp_baseline,FlashTP,True,False,none,1,1,0,81.77105407230556,baseline,cuda,ok
+qm9_hf,0_3057,qcml,29,570,19.655172413793103,small_sparse,flashtp_pair_full,FlashTP + 제안기법,True,True,full,1,1,0,81.83554210700095,full,cuda,ok
+spice_2023,hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49,spice,89,728,8.179775280898877,small_sparse,sevennet_baseline,기본 SevenNet,False,False,none,1,1,0,157.98291191458702,baseline,cuda,ok
+spice_2023,hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49,spice,89,728,8.179775280898877,small_sparse,sevennet_pair_full,제안기법,False,True,full,1,1,0,119.86474017612636,full,cuda,ok
+spice_2023,hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49,spice,89,728,8.179775280898877,small_sparse,flashtp_baseline,FlashTP,True,False,none,1,1,0,82.48605416156352,baseline,cuda,ok
+spice_2023,hie__SPICE_Solvated_Amino_Acids_Single_Points_Dataset_v1.1__index_49,spice,89,728,8.179775280898877,small_sparse,flashtp_pair_full,FlashTP + 제안기법,True,True,full,1,1,0,83.14173994585872,full,cuda,ok
+wbm_initial,wbm_initial:23057,matpes_pbe,100,2260,22.6,small_sparse,sevennet_baseline,기본 SevenNet,False,False,none,1,1,0,157.55061921663582,baseline,cuda,ok
+wbm_initial,wbm_initial:23057,matpes_pbe,100,2260,22.6,small_sparse,sevennet_pair_full,제안기법,False,True,full,1,1,0,118.52904409170151,full,cuda,ok
+wbm_initial,wbm_initial:23057,matpes_pbe,100,2260,22.6,small_sparse,flashtp_baseline,FlashTP,True,False,none,1,1,0,81.5864079631865,baseline,cuda,ok
+wbm_initial,wbm_initial:23057,matpes_pbe,100,2260,22.6,small_sparse,flashtp_pair_full,FlashTP + 제안기법,True,True,full,1,1,0,82.21813896670938,full,cuda,ok

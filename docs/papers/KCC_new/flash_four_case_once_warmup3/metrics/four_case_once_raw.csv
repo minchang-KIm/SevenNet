@@ -1,0 +1,5 @@
+dataset,sample_id,modal,natoms,num_edges,avg_neighbors_directed,density_bucket,case,label_ko,enable_flash,enable_pair_execution,requested_pair_policy,n_warmup,n_repeat,repeat_idx,timing_ms,resolved_policy,device,status
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,sevennet_baseline,기본 SevenNet,False,False,none,3,1,0,102.74081188254058,baseline,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,sevennet_pair_full,제안기법,False,True,full,3,1,0,97.01891918666661,full,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,flashtp_baseline,FlashTP,True,False,none,3,1,0,16.019318951293826,baseline,cuda,ok
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,225,6686,29.715555555555557,large_sparse,flashtp_pair_full,FlashTP + 제안기법,True,True,full,3,1,0,16.879865201190114,full,cuda,ok

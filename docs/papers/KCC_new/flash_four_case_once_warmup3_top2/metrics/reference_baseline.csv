@@ -1,0 +1,3 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+md22_buckyball_catcher,md22_buckyball-catcher_1114,spice,sevennet_baseline,baseline,-124958.640625
+oc20_s2ef_val_ood_ads,OC20_S2EF_val_ood_ads__file_0071__config_1575,oc20,sevennet_baseline,baseline,-852.8583984375
