@@ -1,0 +1,4 @@
+split,count,avg_atoms,min_atoms,max_atoms,seed
+train,512,24.0,24,24,7
+valid,128,24.0,24,24,7
+test,128,24.0,24,24,7
