@@ -10,24 +10,24 @@
 
 ## bulk_large
 
-- baseline forward total: `3.012 ms`
-- geometry_only forward total: `3.136 ms`
-- pair->edge expansion: `0.030 ms`
+- baseline forward total: `3.164 ms`
+- geometry_only forward total: `3.092 ms`
+- pair->edge expansion: `0.029 ms`
 - pair weight expand: `0.037 ms`
-- pair geometry (norm+basis+sh): `0.191 ms`
+- pair geometry (norm+basis+sh): `0.192 ms`
 
 ## bulk_small
 
-- baseline forward total: `2.946 ms`
-- geometry_only forward total: `3.040 ms`
-- pair->edge expansion: `0.028 ms`
-- pair weight expand: `0.032 ms`
-- pair geometry (norm+basis+sh): `0.187 ms`
+- baseline forward total: `2.980 ms`
+- geometry_only forward total: `3.059 ms`
+- pair->edge expansion: `0.029 ms`
+- pair weight expand: `0.033 ms`
+- pair geometry (norm+basis+sh): `0.192 ms`
 
 ## dimer_small
 
-- baseline forward total: `2.789 ms`
-- geometry_only forward total: `2.921 ms`
-- pair->edge expansion: `0.027 ms`
-- pair weight expand: `0.032 ms`
-- pair geometry (norm+basis+sh): `0.173 ms`
+- baseline forward total: `2.812 ms`
+- geometry_only forward total: `2.962 ms`
+- pair->edge expansion: `0.028 ms`
+- pair weight expand: `0.033 ms`
+- pair geometry (norm+basis+sh): `0.179 ms`

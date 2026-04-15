@@ -219,7 +219,11 @@ class EdgeEmbedding(nn.Module):
         self, data: AtomGraphDataType
     ) -> AtomGraphDataType:
         pair_rvec = data[KEY.PAIR_EDGE_VEC]
-        if KEY.PAIR_EDGE_FORWARD_INDEX in data and KEY.EDGE_VEC in data:
+        if (
+            KEY.PAIR_EDGE_FORWARD_INDEX in data
+            and KEY.EDGE_VEC in data
+            and data[KEY.EDGE_VEC].requires_grad
+        ):
             pair_rvec = data[KEY.EDGE_VEC].index_select(
                 0, data[KEY.PAIR_EDGE_FORWARD_INDEX]
             )
