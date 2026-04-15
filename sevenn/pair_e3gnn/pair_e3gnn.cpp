@@ -18,6 +18,10 @@
 #include <ATen/ops/from_blob.h>
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -46,15 +50,97 @@ extern void pair_e3gnn_oeq_register_autograd();
 #define FLOAT_TYPE torch::TensorOptions().dtype(torch::kFloat)
 
 namespace {
-std::vector<torch::Tensor> build_pair_metadata_serial(
+struct SerialPairKey {
+  long src;
+  long dst;
+  long sx;
+  long sy;
+  long sz;
+
+  bool operator==(const SerialPairKey &other) const {
+    return src == other.src && dst == other.dst && sx == other.sx &&
+           sy == other.sy && sz == other.sz;
+  }
+};
+
+struct SerialPairKeyHash {
+  std::size_t operator()(const SerialPairKey &key) const {
+    std::size_t h = std::hash<long>{}(key.src);
+    h ^= std::hash<long>{}(key.dst) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    h ^= std::hash<long>{}(key.sx) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    h ^= std::hash<long>{}(key.sy) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    h ^= std::hash<long>{}(key.sz) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    return h;
+  }
+};
+
+inline SerialPairKey reverse_pair_key(const SerialPairKey &key) {
+  return {key.dst, key.src, -key.sx, -key.sy, -key.sz};
+}
+
+struct SerialPairBuilder {
+  std::unordered_map<SerialPairKey, long, SerialPairKeyHash> waiting_reverse;
+  std::vector<long> edge_pair_map;
+  std::vector<uint8_t> edge_pair_reverse;
+  std::vector<long> pair_forward_index;
+  std::vector<long> pair_backward_index;
+  std::vector<uint8_t> pair_has_reverse;
+
+  explicit SerialPairBuilder(long edge_cap) {
+    edge_pair_map.resize(edge_cap, -1);
+    edge_pair_reverse.resize(edge_cap, 0);
+    pair_forward_index.reserve(edge_cap / 2 + 1);
+    pair_backward_index.reserve(edge_cap / 2 + 1);
+    pair_has_reverse.reserve(edge_cap / 2 + 1);
+    waiting_reverse.reserve(edge_cap / 2 + 1);
+  }
+
+  void add_edge(long edge_i, const SerialPairKey &key) {
+    auto it = waiting_reverse.find(key);
+    if (it != waiting_reverse.end()) {
+      const long pair_i = it->second;
+      edge_pair_map[edge_i] = pair_i;
+      edge_pair_reverse[edge_i] = 1;
+      pair_backward_index[pair_i] = edge_i;
+      pair_has_reverse[pair_i] = 1;
+      waiting_reverse.erase(it);
+      return;
+    }
+
+    const long pair_i = static_cast<long>(pair_forward_index.size());
+    edge_pair_map[edge_i] = pair_i;
+    pair_forward_index.push_back(edge_i);
+    pair_backward_index.push_back(edge_i);
+    pair_has_reverse.push_back(0);
+    waiting_reverse.emplace(reverse_pair_key(key), pair_i);
+  }
+
+  std::vector<torch::Tensor> finalize(long nedges) {
+    edge_pair_map.resize(nedges);
+    edge_pair_reverse.resize(nedges);
+    return {
+        torch::tensor(edge_pair_map, INTEGER_TYPE),
+        torch::tensor(edge_pair_reverse, torch::TensorOptions().dtype(torch::kBool)),
+        torch::tensor(pair_forward_index, INTEGER_TYPE),
+        torch::tensor(pair_backward_index, INTEGER_TYPE),
+        torch::tensor(pair_has_reverse,
+                      torch::TensorOptions().dtype(torch::kBool)),
+    };
+  }
+};
+
+std::vector<torch::Tensor> build_pair_metadata_serial_legacy(
     const torch::Tensor &edge_index_cpu, const torch::Tensor &cell_shift_cpu) {
-  auto edge_src = edge_index_cpu[0].accessor<long, 1>();
-  auto edge_dst = edge_index_cpu[1].accessor<long, 1>();
+  auto edge_src_tensor = edge_index_cpu[0];
+  auto edge_dst_tensor = edge_index_cpu[1];
+  auto edge_src = edge_src_tensor.accessor<long, 1>();
+  auto edge_dst = edge_dst_tensor.accessor<long, 1>();
   auto shift = cell_shift_cpu.accessor<long, 2>();
   const auto nedges = edge_index_cpu.size(1);
 
   std::unordered_map<std::string, long> lookup;
   std::vector<std::string> keys;
+  lookup.reserve(nedges);
   keys.reserve(nedges);
 
   auto make_key = [](long dst, long src, long sx, long sy, long sz) {
@@ -79,14 +165,15 @@ std::vector<torch::Tensor> build_pair_metadata_serial(
   for (long e = 0; e < nedges; ++e) {
     if (edge_pair_map[e] != -1)
       continue;
-    const long pair_idx = pair_forward_index.size();
+    const long pair_idx = static_cast<long>(pair_forward_index.size());
     edge_pair_map[e] = pair_idx;
     pair_forward_index.push_back(e);
 
-    auto rev_key = make_key(edge_dst[e], edge_src[e], -shift[e][0], -shift[e][1],
-                            -shift[e][2]);
+    auto rev_key = make_key(edge_dst[e], edge_src[e], -shift[e][0],
+                            -shift[e][1], -shift[e][2]);
     auto it = lookup.find(rev_key);
-    if (it != lookup.end() && it->second != e && edge_pair_map[it->second] == -1) {
+    if (it != lookup.end() && it->second != e &&
+        edge_pair_map[it->second] == -1) {
       edge_pair_map[it->second] = pair_idx;
       edge_pair_reverse[it->second] = 1;
       pair_backward_index.push_back(it->second);
@@ -105,6 +192,33 @@ std::vector<torch::Tensor> build_pair_metadata_serial(
       torch::tensor(pair_has_reverse,
                     torch::TensorOptions().dtype(torch::kBool)),
   };
+}
+
+inline void compute_shift_indices(
+    const float inv_t[3][3], const float shift_vec[3], long out_shift[3]) {
+  for (int row = 0; row < 3; ++row) {
+    const double projected = static_cast<double>(inv_t[row][0]) * shift_vec[0] +
+                             static_cast<double>(inv_t[row][1]) * shift_vec[1] +
+                             static_cast<double>(inv_t[row][2]) * shift_vec[2];
+    out_shift[row] = std::lround(projected);
+  }
+}
+
+inline bool lammps_profile_enabled() {
+  static const bool enabled = std::getenv("SEVENN_LAMMPS_PROFILE") != nullptr;
+  return enabled;
+}
+
+inline bool use_legacy_pair_build() {
+  static const bool enabled =
+      std::getenv("SEVENN_LAMMPS_LEGACY_PAIR_BUILD") != nullptr;
+  return enabled;
+}
+
+inline double elapsed_ms(
+    const std::chrono::steady_clock::time_point &start,
+    const std::chrono::steady_clock::time_point &end) {
+  return std::chrono::duration<double, std::milli>(end - start).count();
 }
 } // namespace
 
@@ -143,6 +257,12 @@ void PairE3GNN::compute(int eflag, int vflag) {
      This compute function is ispired/modified from stress branch of pair-nequip
      https://github.com/mir-group/pair_nequip
   */
+
+  const auto compute_t0 = std::chrono::steady_clock::now();
+  double pair_metadata_total_ms = 0.0;
+  double pair_metadata_build_ms = 0.0;
+  double model_inference_ms = 0.0;
+  const bool legacy_pair_build = use_legacy_pair_build();
 
   if (eflag || vflag)
     ev_setup(eflag, vflag);
@@ -214,6 +334,7 @@ void PairE3GNN::compute(int eflag, int vflag) {
       torch::dot(inp_cell[0], torch::cross(inp_cell[1], inp_cell[2], 0));
 
   float pbc_shift_tmp[nedges_upper_bound][3];
+  float cell_inv_t[3][3];
 
   auto node_type = inp_node_type.accessor<long, 1>();
   auto pos = inp_pos.accessor<float, 2>();
@@ -222,6 +343,14 @@ void PairE3GNN::compute(int eflag, int vflag) {
   long edge_idx_dst[nedges_upper_bound];
 
   int nedges = 0;
+  auto cell_inv_cpu = inp_cell.inverse().transpose(0, 1).contiguous();
+  auto cell_inv_acc = cell_inv_cpu.accessor<float, 2>();
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      cell_inv_t[row][col] = cell_inv_acc[row][col];
+    }
+  }
+  SerialPairBuilder pair_builder(nedges_upper_bound);
 
   for (int ii = 0; ii < nlocal; ii++) {
     const int i = ilist[ii];
@@ -257,6 +386,13 @@ void PairE3GNN::compute(int eflag, int vflag) {
         pbc_shift_tmp[nedges][0] = x[j][0] - pos[jtag - 1][0];
         pbc_shift_tmp[nedges][1] = x[j][1] - pos[jtag - 1][1];
         pbc_shift_tmp[nedges][2] = x[j][2] - pos[jtag - 1][2];
+
+        if (pair_execution && !legacy_pair_build) {
+          long shift_idx[3];
+          compute_shift_indices(cell_inv_t, pbc_shift_tmp[nedges], shift_idx);
+          pair_builder.add_edge(
+              nedges, {itag - 1, jtag - 1, shift_idx[0], shift_idx[1], shift_idx[2]});
+        }
 
         nedges++;
       }
@@ -301,6 +437,7 @@ void PairE3GNN::compute(int eflag, int vflag) {
   input_dict.insert("edge_vec", inp_edge_vec);
 
   if (pair_execution) {
+    const auto pair_meta_t0 = std::chrono::steady_clock::now();
     bool cache_hit = false;
     if (topology_cache && pair_cache_valid &&
         torch::equal(cached_edge_index_cpu, inp_edge_index.cpu()) &&
@@ -309,7 +446,13 @@ void PairE3GNN::compute(int eflag, int vflag) {
     }
 
     if (!cache_hit) {
-      auto meta = build_pair_metadata_serial(inp_edge_index.cpu(), inp_cell_shift_cpu);
+      const auto build_t0 = std::chrono::steady_clock::now();
+      auto meta = legacy_pair_build
+                      ? build_pair_metadata_serial_legacy(inp_edge_index.cpu(),
+                                                          inp_cell_shift_cpu)
+                      : pair_builder.finalize(nedges);
+      const auto build_t1 = std::chrono::steady_clock::now();
+      pair_metadata_build_ms = elapsed_ms(build_t0, build_t1);
       cached_edge_index_cpu = inp_edge_index.cpu().clone();
       cached_cell_shift_cpu = inp_cell_shift_cpu.clone();
       cached_edge_pair_map_cpu = meta[0].clone();
@@ -332,10 +475,15 @@ void PairE3GNN::compute(int eflag, int vflag) {
     input_dict.insert("pair_edge_vec",
                       inp_edge_vec.index_select(
                           0, cached_pair_forward_index_cpu.to(device)));
+    const auto pair_meta_t1 = std::chrono::steady_clock::now();
+    pair_metadata_total_ms = elapsed_ms(pair_meta_t0, pair_meta_t1);
   }
 
   std::vector<torch::IValue> input(1, input_dict);
+  const auto model_t0 = std::chrono::steady_clock::now();
   auto output = model.forward(input).toGenericDict();
+  const auto model_t1 = std::chrono::steady_clock::now();
+  model_inference_ms = elapsed_ms(model_t0, model_t1);
 
   torch::Tensor total_energy_tensor =
       output.at("inferred_total_energy").toTensor().cpu();
@@ -380,6 +528,22 @@ void PairE3GNN::compute(int eflag, int vflag) {
   } // else if the nedges is too small, increase the bound
   else if (nedges > this->nedges_bound / 1.2) {
     this->nedges_bound = nedges * 1.2;
+  }
+
+  if (lammps_profile_enabled()) {
+    const auto compute_t1 = std::chrono::steady_clock::now();
+    const long npairs = pair_execution && cached_pair_forward_index_cpu.defined()
+                            ? cached_pair_forward_index_cpu.size(0)
+                            : 0;
+    std::fprintf(stderr,
+                 "[sevenn_lammps_profile] mode=serial builder=%s policy=%s nedges=%d "
+                 "npairs=%ld pair_metadata_total_ms=%.6f "
+                 "pair_metadata_build_ms=%.6f model_inference_ms=%.6f "
+                 "compute_total_ms=%.6f\n",
+                 legacy_pair_build ? "legacy" : "upstream",
+                 pair_execution_policy.c_str(), nedges, npairs,
+                 pair_metadata_total_ms, pair_metadata_build_ms,
+                 model_inference_ms, elapsed_ms(compute_t0, compute_t1));
   }
 }
 

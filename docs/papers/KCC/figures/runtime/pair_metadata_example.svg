@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980">
+  <defs>
+    <style>
+      .title { font: 700 30px sans-serif; fill: #111827; }
+      .section { font: 700 22px sans-serif; fill: #111827; }
+      .box { font: 600 17px sans-serif; fill: #111827; }
+      .sub { font: 500 14px sans-serif; fill: #374151; }
+      .code { font: 600 16px monospace; fill: #1f2937; }
+      .small { font: 500 15px sans-serif; fill: #374151; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="980" fill="#ffffff"/>
+  <text x="40" y="50" class="title">Pair Metadata Example</text>
+  <text x="40" y="82" class="small">Directed edge list -&gt; pair grouping -&gt; metadata arrays</text>
+
+  <rect x="40" y="120" width="430" height="760" rx="16" fill="#eef2ff" stroke="#c7d2fe"/>
+  <text x="65" y="160" class="section">1. Directed edges</text>
+
+  <rect x="80" y="200" width="350" height="90" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="105" y="235" class="box">edge 0</text>
+  <text x="105" y="260" class="code">0 -&gt; 1</text>
+  <text x="220" y="260" class="sub">EDGE_VEC[0] = r_1 - r_0</text>
+
+  <rect x="80" y="310" width="350" height="90" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="105" y="345" class="box">edge 1</text>
+  <text x="105" y="370" class="code">1 -&gt; 0</text>
+  <text x="220" y="370" class="sub">reverse of edge 0</text>
+
+  <rect x="80" y="420" width="350" height="90" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="105" y="455" class="box">edge 2</text>
+  <text x="105" y="480" class="code">0 -&gt; 2</text>
+  <text x="220" y="480" class="sub">EDGE_VEC[2] = r_2 - r_0</text>
+
+  <rect x="80" y="530" width="350" height="90" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="105" y="565" class="box">edge 3</text>
+  <text x="105" y="590" class="code">2 -&gt; 0</text>
+  <text x="220" y="590" class="sub">reverse of edge 2</text>
+
+  <rect x="80" y="640" width="350" height="90" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="105" y="675" class="box">edge 4</text>
+  <text x="105" y="700" class="code">1 -&gt; 3</text>
+  <text x="220" y="700" class="sub">EDGE_VEC[4] = r_3 - r_1</text>
+
+  <rect x="80" y="750" width="350" height="90" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="105" y="785" class="box">edge 5</text>
+  <text x="105" y="810" class="code">3 -&gt; 1</text>
+  <text x="220" y="810" class="sub">reverse of edge 4</text>
+
+  <rect x="520" y="120" width="430" height="760" rx="16" fill="#ecfeff" stroke="#a5f3fc"/>
+  <text x="545" y="160" class="section">2. Pair grouping</text>
+
+  <rect x="560" y="220" width="350" height="150" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="585" y="255" class="box">pair 0</text>
+  <text x="585" y="282" class="sub">forward edge = 0 (0 -&gt; 1)</text>
+  <text x="585" y="307" class="sub">backward edge = 1 (1 -&gt; 0)</text>
+  <text x="585" y="332" class="sub">PAIR_EDGE_VEC[0] = EDGE_VEC[0]</text>
+
+  <rect x="560" y="420" width="350" height="150" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="585" y="455" class="box">pair 1</text>
+  <text x="585" y="482" class="sub">forward edge = 2 (0 -&gt; 2)</text>
+  <text x="585" y="507" class="sub">backward edge = 3 (2 -&gt; 0)</text>
+  <text x="585" y="532" class="sub">PAIR_EDGE_VEC[1] = EDGE_VEC[2]</text>
+
+  <rect x="560" y="620" width="350" height="150" rx="12" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="585" y="655" class="box">pair 2</text>
+  <text x="585" y="682" class="sub">forward edge = 4 (1 -&gt; 3)</text>
+  <text x="585" y="707" class="sub">backward edge = 5 (3 -&gt; 1)</text>
+  <text x="585" y="732" class="sub">PAIR_EDGE_VEC[2] = EDGE_VEC[4]</text>
+
+  <rect x="1000" y="120" width="560" height="760" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="1025" y="160" class="section">3. Metadata arrays</text>
+
+  <text x="1045" y="230" class="box">EDGE_PAIR_MAP</text>
+  <text x="1045" y="260" class="code">[0, 0, 1, 1, 2, 2]</text>
+  <text x="1045" y="285" class="sub">edge e belongs to pair p</text>
+
+  <text x="1045" y="345" class="box">EDGE_PAIR_REVERSE</text>
+  <text x="1045" y="375" class="code">[F, T, F, T, F, T]</text>
+  <text x="1045" y="400" class="sub">is this edge the reverse direction inside the pair?</text>
+
+  <text x="1045" y="460" class="box">PAIR_EDGE_FORWARD_INDEX</text>
+  <text x="1045" y="490" class="code">[0, 2, 4]</text>
+  <text x="1045" y="515" class="sub">representative forward edge of each pair</text>
+
+  <text x="1045" y="575" class="box">PAIR_EDGE_BACKWARD_INDEX</text>
+  <text x="1045" y="605" class="code">[1, 3, 5]</text>
+  <text x="1045" y="630" class="sub">reverse edge of each pair</text>
+
+  <text x="1045" y="690" class="box">PAIR_EDGE_HAS_REVERSE</text>
+  <text x="1045" y="720" class="code">[T, T, T]</text>
+  <text x="1045" y="745" class="sub">does the pair really have the reverse edge?</text>
+
+  <text x="1045" y="805" class="box">PAIR_EDGE_VEC</text>
+  <text x="1045" y="835" class="code">[EDGE_VEC[0], EDGE_VEC[2], EDGE_VEC[4]]</text>
+  <text x="1045" y="860" class="sub">pair-level geometry is computed only on these representative edges</text>
+
+  <line x1="430" y1="255" x2="560" y2="295" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="430" y1="365" x2="560" y2="295" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="430" y1="475" x2="560" y2="495" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="430" y1="585" x2="560" y2="495" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="430" y1="695" x2="560" y2="695" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="430" y1="805" x2="560" y2="695" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <line x1="910" y1="295" x2="1040" y2="255" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="910" y1="495" x2="1040" y2="490" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="910" y1="695" x2="1040" y2="605" stroke="#4b5563" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="120" y="900" width="1360" height="45" rx="10" fill="#dbeafe" stroke="#93c5fd"/>
+  <text x="145" y="928" class="small">핵심: pair metadata는 directed edge 두 개를 하나의 undirected pair로 묶고, pair 기준 계산 후 필요할 때 다시 edge 기준으로 펼치기 위한 인덱스 구조다.</text>
+</svg>
