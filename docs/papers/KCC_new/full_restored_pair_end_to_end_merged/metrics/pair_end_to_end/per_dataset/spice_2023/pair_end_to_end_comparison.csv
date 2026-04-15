@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+spice_2023,30.956597439944744,0.1816644775444809,49.486727896146476,0.4459217833893117,0.6255535323513546

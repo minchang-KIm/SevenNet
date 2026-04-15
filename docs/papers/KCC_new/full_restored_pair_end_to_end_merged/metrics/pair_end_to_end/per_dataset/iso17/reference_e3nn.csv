@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+iso17,iso17,spice,e3nn_baseline,baseline,-11519.1826171875

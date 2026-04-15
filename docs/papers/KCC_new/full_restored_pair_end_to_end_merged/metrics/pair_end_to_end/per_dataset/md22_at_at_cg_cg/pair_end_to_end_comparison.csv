@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+md22_at_at_cg_cg,54.894260906924806,0.21505507837780302,54.90232432105889,0.29964906102802485,0.9998531316436271

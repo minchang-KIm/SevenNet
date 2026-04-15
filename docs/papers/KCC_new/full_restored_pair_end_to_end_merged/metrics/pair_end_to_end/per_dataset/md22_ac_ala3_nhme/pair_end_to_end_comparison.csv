@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+md22_ac_ala3_nhme,29.39163966414829,0.17195687781776287,48.54725728121897,0.22207347465055027,0.6054232784746578

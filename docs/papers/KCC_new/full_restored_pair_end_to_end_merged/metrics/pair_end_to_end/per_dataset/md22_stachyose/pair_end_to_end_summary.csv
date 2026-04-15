@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,resolved_policy,n_warmup,n_repeat,device,mean_ms,std_ms,median_ms,p95_ms,warmup_mean_ms,warmup_std_ms,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+md22_stachyose,md22_stachyose_10546,spice,87,e3nn_baseline,baseline,3,30,cuda,51.85402810263137,0.23673473591797914,51.78694648202509,52.35280345659703,125.71153106788795,46.51883596329374,0.0,1.430511474609375e-06
+md22_stachyose,md22_stachyose_10546,spice,87,e3nn_pair_full,full,3,30,cuda,52.52201345283538,0.3477152109702559,52.49770695809275,53.10371440136805,135.70179999805987,51.634719216387495,0.0,1.8477439880371094e-06

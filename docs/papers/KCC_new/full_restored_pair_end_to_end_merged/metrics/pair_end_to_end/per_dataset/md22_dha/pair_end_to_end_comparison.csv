@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+md22_dha,29.415527863117557,0.32551696856085616,48.49982971791178,0.5412288253716311,0.6065078585678811

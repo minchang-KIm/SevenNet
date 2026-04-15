@@ -1,88 +1,146 @@
-# 등변 그래프 신경망 원자간 퍼텐셜 추론을 위한 원자쌍 기반 기하 정보 재사용의 구현과 병목 분석
-
-**Implementation and Bottleneck Analysis of Pair-Based Geometric Reuse for Equivariant GNN Interatomic Potential Inference**
+# 등변 그래프 신경망 원자간 퍼텐셜에서 원자쌍 대칭성을 이용한 기하 계산 재사용과 적용 조건 분석
 
 ## 요 약
 
-본 논문은 NequIP 계열 등변 그래프 신경망 원자간 퍼텐셜에서 하나의 원자쌍이 두 개의 방향 연결(`i -> j`, `j -> i`)로 반복 표현된다는 점에 주목한다. 기존 SevenNet 실행 방식에서는 이 두 연결을 서로 독립적으로 처리하므로 거리, radial basis, cutoff, spherical harmonics와 같은 기하 정보가 중복 계산된다. 우리는 이 중복을 줄이기 위해 reverse edge pair를 묶고, 재사용 가능한 geometry-side 값을 pair 단위로 한 번만 계산하는 `geometry_only` 실행 방식을 구현하였다. 이 방식은 pair-major tensor product 엔진이 아니며, 메시지 생성과 힘 계산 경로는 기존 edge-major 구조를 유지한다.
+등변 그래프 신경망 기반 원자간 퍼텐셜은 원자 사이의 거리와 방향을 이용해 에너지와 힘을 예측한다. NequIP과 SevenNet 계열 모델은 하나의 원자쌍을 두 개의 방향 연결, 즉 `i -> j`와 `j -> i`로 표현한다. 이 구조는 메시지 전달에는 필요하지만, 모든 계산이 두 번 필요하다는 뜻은 아니다. 거리, 거리 기저(radial basis), 절단 함수(cutoff), 구면조화함수(spherical harmonics), 그리고 이들로부터 만든 edge embedding처럼 입력이 원자쌍의 기하 정보뿐인 항목은 양방향에서 같거나 간단한 부호 규칙으로 정확히 복원된다. 반대로 원자별 상태 `h_i`, `h_j`가 들어가는 메시지 계산은 두 방향이 서로 다르므로 단순 재사용하면 안 된다.
 
-실험은 단일 `NVIDIA GeForce RTX 4090` 환경에서 로컬에서 바로 벤치 가능한 공개 데이터셋 31개 전체를 대상으로 수행하였다. 메인 비교는 `SevenNet baseline`과 `SevenNet + geometry_only`의 end-to-end latency이며, 각 대표 샘플에 대해 warmup 3회, 반복 30회로 평균과 표준편차를 측정하였다. 또한 정확도 보존 여부를 확인하기 위해 같은 샘플을 다시 계산하여 baseline 기준 에너지/힘 차이를 warmup 2회, 반복 30회로 측정하였다. 그 결과 에너지 차이의 중앙값은 두 경우 모두 `0 eV`였고, 힘 차이의 중앙값은 baseline `1.189e-06 eV/A`, geometry_only `1.809e-06 eV/A`로 매우 작았다.
+본 논문은 이 경계를 명확히 나누고, 재사용 가능한 기하 항목만 원자쌍 단위로 한 번 계산하는 방법을 평가한다. 제안 방식은 모델 구조, 학습된 파라미터, 에너지와 힘의 정의를 바꾸지 않는다. 따라서 핵심 질문은 정확도 변화가 아니라, 줄어든 기하 계산이 실제 실행 시간에서 어느 비용과 맞바뀌는지이다. 이를 확인하기 위해 31개 공개 데이터셋에서 기준 SevenNet 실행과 제안 실행을 반복 30회로 비교하고, 에너지와 힘 차이를 별도로 측정하였다.
 
-반면 generic SevenNet calculator 경로에서의 성능은 아직 baseline을 넘지 못했다. 31개 전체 기준 median speedup은 `0.9877배`, geometric mean은 `0.9864배`였으며, 모든 데이터셋에서 geometry_only가 baseline보다 약간 느렸다. 그러나 intrusive forward-only 진단에서는 large/dense representative system에서 `3.164 ms -> 3.092 ms`로 약한 이득이 관측되었고, LAMMPS serial 경로에서는 upstream pair-metadata fast path를 적용했을 때 pair metadata 시간이 `4.612 ms -> 0.304 ms`로 `15.19배` 감소하였다. 이는 현재 손해의 주원인이 exact reuse 수식 자체가 아니라, pair를 다시 edge로 펼치는 구조와 pair metadata 생성 방식에 있음을 뜻한다.
+정확도 측면에서 제안 방식은 기준 실행과 사실상 같은 출력을 냈다. 에너지 차이의 중앙값은 두 경우 모두 `0 eV`였고, 힘 차이의 중앙값은 기준 실행 `1.189e-06 eV/A`, 제안 실행 `1.809e-06 eV/A`였다. 반면 순수 기하 재사용만 분리한 경로는 31개 전체에서 아직 기준 실행보다 빠르지 않았다. median speedup은 `0.9877배`, geometric mean은 `0.9864배`였고, 모든 데이터셋에서 소폭 손해가 남았다. 프로파일링 결과, 줄어든 기하 계산 이득이 원자쌍 값을 방향 연결 값으로 다시 펼치는 비용, 추가 `index_select`, 원자쌍 가중치 확장 비용에 의해 상쇄되었다.
 
-따라서 본 논문의 기여는 “이미 빨라졌다”는 선언보다, 정확도 보존형 geometry-side exact reuse를 SevenNet에 실제로 구현하고, 왜 아직 end-to-end 승리로 이어지지 않는지를 실험적으로 규명했다는 데 있다. 이 결과는 이후 pair-major message path와 pair-aware reduction, upstream neighbor/pair integration으로 넘어갈 명확한 우선순위를 제공한다.
+그러나 원자쌍 단위 가중치 공유와 방향별 메시지 계산 순서를 함께 사용한 실행에서는 다른 양상이 나타났다. 전체 31개 중 18개 데이터셋에서 기준 실행보다 빨랐고, `num_edges >= 3000` 조건에서는 20개 중 18개가 빨랐으며 median speedup은 `1.014배`였다. `large_dense` 그룹에서는 17개 중 16개가 빨랐다. 즉 제안 방식의 의미는 “항상 빨라지는 단일 최적화”가 아니라, 원자쌍 기반 재사용이 언제 이득으로 바뀌는지를 설명하는 조건부 실행 원리이다.
 
-**주제어**: 등변 그래프 신경망, 원자간 퍼텐셜, 구면조화함수, 실행 시간 최적화, SevenNet, 병목 분석
+**주제어**: 등변 그래프 신경망, 원자간 퍼텐셜, 원자쌍 대칭성, 구면조화함수, 실행 시간 분석, SevenNet
 
 ## 1. 서 론
 
-등변 그래프 신경망 기반 원자간 퍼텐셜은 분자와 재료 시뮬레이션에서 높은 정확도를 제공하는 대표적인 방법이다. NequIP와 SevenNet 같은 모델은 원자 사이의 상대적 거리와 방향을 직접 다루면서 회전 대칭을 보존하고, 복잡한 다체 상호작용을 잘 표현한다. 그러나 계산 관점에서 보면 이 계열 모델은 방향이 있는 연결을 기본 단위로 사용하기 때문에, 물리적으로 같은 원자쌍이 두 번 처리되는 구조를 가진다.
+머신러닝 원자간 퍼텐셜은 양자 계산보다 빠르게 원자계의 에너지와 힘을 예측하기 위해 사용된다. 그중 NequIP, SevenNet, Allegro, MACE와 같은 등변 그래프 신경망은 원자 배치가 회전해도 물리적으로 일관된 출력을 내도록 설계되어 높은 정확도를 보인다.
 
-가장 단순한 예가 `i -> j`와 `j -> i`이다. 이 두 연결은 출발 원자 feature가 다르므로 최종 메시지는 서로 같지 않다. 그러나 거리, radial basis, cutoff, spherical harmonics처럼 순수하게 pair geometry에서 나오는 값은 양방향에서 같거나 간단한 parity 규칙으로 정확히 복원할 수 있다. 따라서 모델 수식이나 학습 파라미터를 바꾸지 않고도, 실행 순서만 바꾸어 geometry-side 중복 계산을 줄일 수 있다.
+계산 관점에서 중요한 점은 하나의 원자쌍이 보통 두 개의 방향 연결로 들어간다는 것이다. 원자 `i`와 `j`가 cutoff 안에 있으면 그래프에는 `i -> j`와 `j -> i`가 모두 존재한다. 두 연결은 같은 물리적 원자쌍에서 왔기 때문에 거리와 cutoff 값은 같고, 구면조화함수도 방향 반전에 따른 부호 규칙으로 연결된다. 그러나 메시지 계산은 다르다. `i -> j` 메시지는 출발 원자 상태 `h_i`를 사용하고, `j -> i` 메시지는 `h_j`를 사용하기 때문이다.
 
-문제는 이 아이디어를 실제 runtime에 넣었을 때의 효과가 명확하지 않다는 점이다. 단순히 “SH를 한 번 덜 계산하니 빨라질 것”이라고 말하는 것은 부족하다. pair를 찾는 오버헤드, pair를 다시 edge로 펼치는 비용, 힘 계산을 위한 backward 경로가 남아 있기 때문이다. 즉 정확도 보존형 exact reuse를 실제 코드에 넣고, 어떤 부분이 줄고 어떤 부분이 남는지를 같이 분석해야 한다.
+따라서 본 논문의 문제정의는 단순히 “양방향 edge를 절반으로 줄인다”가 아니다. 방향 연결 두 개가 같은 원자쌍에서 나온 경우, 원자쌍의 기하 정보에만 의존하는 항목은 한 번만 계산해도 된다. 하지만 원자별 상태가 들어간 메시지와 힘 계산 전체는 단순 부호 반전으로 재사용할 수 없다.
 
-본 논문은 SevenNet에 `geometry_only` 실행 방식을 구현하고, 이를 31개 공개 데이터셋 전체에서 repeat 30 기준으로 다시 평가한다. 또한 메인 end-to-end 비교 외에 intrusive geometry breakdown과 LAMMPS upstream pair-metadata fast path를 함께 측정하여, 현재 구조에서 실제 병목이 어디에 있는지 정리한다.
+단순한 기대는 “구면조화함수를 절반만 계산하면 빨라질 것”이다. 하지만 실제 실행에서는 다른 비용이 함께 생긴다. 양방향 연결을 원자쌍으로 묶는 대응 정보가 필요하고, 원자쌍 단위로 만든 값을 기존 방향 연결 중심 경로가 읽을 수 있도록 다시 펼치는 비용이 생긴다. 또한 힘 계산은 최종 에너지를 좌표에 대해 미분해야 하므로 메시지 전달 전체의 계산 경로를 거슬러 올라가는 비용이 남는다. 따라서 실험은 단순한 speedup 표가 아니라, 어떤 시간이 줄고 어떤 시간이 늘었는지까지 보여야 한다.
 
-## 2. 배 경
+본 논문의 기여는 다음과 같다.
 
-### 2.1 SevenNet 추론 흐름
+1. 원자쌍 대칭성으로 정확히 재사용 가능한 항목과 재사용하면 안 되는 항목을 구분하였다.
+2. 재사용 가능한 기하 항목을 공유해도 에너지와 힘 정확도가 유지됨을 반복 실험으로 확인하였다.
+3. 프로파일링을 통해 줄어드는 비용과 새로 생기는 비용을 분리하고, 현재 병목이 수식이 아니라 방향 연결 중심 실행 구조에 있음을 보였다.
+4. 큰/조밀한 계산 대상에서 원자쌍 기반 실행이 이득을 내는 조건을 31개 데이터셋으로 규명하였다.
 
-SevenNet 추론은 크게 네 단계로 나눌 수 있다. 원자 그래프 생성, edge geometry 준비, interaction block을 통한 메시지 생성과 feature 갱신, readout과 total energy 계산 및 force 계산이다. 여기서 edge geometry 준비 단계에는 거리, radial basis, cutoff, spherical harmonics가 들어가며, force는 total energy를 `EDGE_VEC`에 대해 미분하여 얻는다.
+## 2. 배 경 및 문제정의
 
-### 2.2 재사용 가능한 값과 재사용이 어려운 값
+SevenNet 계열 추론은 원자 그래프 생성, edge geometry 계산, interaction block을 통한 메시지 전달, readout 및 force 계산으로 나눌 수 있다. 여기서 edge geometry 계산은 원자쌍의 상대 위치만 사용한다. 반면 interaction block은 edge geometry와 출발 원자 상태를 함께 사용한다.
 
-pair 단위로 재사용 가능한 값은 distance, radial basis, cutoff, spherical harmonics, pair 단위 `weight_nn` 입력이다. 반면 현재 구현에서 재사용이 어려운 값은 출발 원자 feature에 의존하는 최종 메시지, 목적지 원자별 aggregation, 그리고 generic backward 경로다. 따라서 본 논문의 구현은 메시지 생성 전체를 pair-major로 다시 설계한 것이 아니라, 메시지 생성 앞단의 geometry-side 중복을 줄이는 단계다.
+| 항목 | 입력 | 반대 방향 처리 | 재사용 가능 여부 |
+| --- | --- | --- | --- |
+| distance | 원자쌍 상대 위치 | 동일 | 가능 |
+| cutoff | distance | 동일 | 가능 |
+| radial basis | distance | 동일 | 가능 |
+| spherical harmonics | 상대 방향 | 차수 `l`에 따른 부호 변화 | 가능 |
+| edge embedding | radial basis와 cutoff | 동일 | 가능 |
+| 가중치 신경망 입력 | edge embedding | 동일 | 가능 |
+| message | edge geometry와 출발 원자 상태 | `h_i`와 `h_j`가 다름 | 단순 재사용 불가 |
+| aggregation | 목적지 원자별 누적 | 목적지가 다름 | 단순 재사용 불가 |
+| force backward | 전체 에너지의 좌표 미분 | 전체 계산 그래프 의존 | 단순 재사용 불가 |
+
+이 표가 본 논문의 핵심 논리다. 제안 방식은 가능한 항목만 재사용한다. 메시지와 힘 계산까지 절반으로 줄였다고 주장하지 않는다.
 
 ## 3. 제안 방법
 
-`geometry_only` 실행 방식은 reverse 관계인 directed edge 두 개를 하나의 pair로 묶고, 대표 방향에서 pair geometry를 한 번만 계산한다. 역방향 spherical harmonics는 parity 부호를 이용해 복원한다. pair 단위 `weight_nn` 입력도 한 번만 계산한다. 그 뒤에는 기존 edge-major convolution과 force path를 그대로 사용한다. 즉 현재 결과는 pair-major 전체 구현의 성능 상한이 아니라, geometry-side exact reuse만 먼저 넣었을 때의 결과다.
+제안 방법은 양방향 연결을 하나의 원자쌍 record로 묶는다. 이후 대표 방향에서 거리, cutoff, radial basis, 구면조화함수, edge embedding, 가중치 신경망 입력을 한 번만 계산한다. 반대 방향의 구면조화함수는 새로 계산하지 않고 `(-1)^l` 부호 규칙으로 복원한다.
+
+```text
+기준 실행:
+  i -> j edge: distance, cutoff, radial basis, SH, edge embedding 계산
+  j -> i edge: distance, cutoff, radial basis, SH, edge embedding 다시 계산
+
+제안 실행:
+  pair(i, j): distance, cutoff, radial basis, SH, edge embedding 계산 1회
+  reverse direction: 필요한 값만 index swap 또는 parity sign으로 복원
+```
+
+재사용 가능한 항목을 한 번만 계산해도 전체 실행 시간이 자동으로 절반이 되지는 않는다. 현재 구조에서는 원자쌍 대응 정보 생성 비용, 원자쌍 값을 방향 연결 값으로 다시 펼치는 비용, 그리고 힘 계산을 위한 전체 미분 경로가 남는다. 그래서 본 논문은 제안 방식을 두 층으로 평가한다. 첫째, 기하 재사용 경로는 정확히 재사용 가능한 항목만 공유했을 때의 정확도와 순수 비용 이동을 확인한다. 둘째, 쌍 단위 실행 경로는 원자쌍 단위 가중치 공유와 방향별 메시지 계산 순서까지 결합했을 때의 성능 조건을 확인한다.
 
 ## 4. 실험 설정
 
-실험은 단일 `NVIDIA GeForce RTX 4090`, `PyTorch 2.7.1+cu126` 환경에서 수행하였다. 메인 latency는 warmup 3회, 반복 30회로 측정하였고, 정확도 반복은 warmup 2회, 반복 30회로 수행하였다. 공개 데이터셋 31개 전체에서 representative sample 1개씩을 사용하였다.
+실험은 단일 `NVIDIA GeForce RTX 4090`에서 수행하였다. 로컬에서 바로 벤치 가능한 공개 데이터셋 31개를 사용했고, 각 데이터셋에서 대표 샘플 하나를 선택해 반복 측정하였다. headline latency는 warmup 3회 후 30회 반복으로 평균과 표준편차를 기록하였다. 정확도 보존 검증은 warmup 2회 후 30회 반복으로 수행하였다.
+
+각 데이터셋에 대해 원자 수, 방향 연결 수, 원자당 평균 방향 연결 수를 기록하였다. 조건 분석에서는 `num_edges >= 3000`이면 large, `avg_neighbors_directed >= 40`이면 dense로 분류하였다. 현재 로컬 31개 데이터셋에는 small-dense 사분면이 없으므로, 본문에서는 large-dense, large-sparse, small-sparse를 비교한다.
 
 ## 5. 실험 결과
 
-### 5.1 정확도 보존
+### 5.1 정확도는 유지된다
 
-geometry_only는 출력 정확도를 사실상 바꾸지 않았다. 에너지 차이의 중앙값은 두 경우 모두 `0 eV`, 힘 차이의 중앙값은 baseline `1.189e-06 eV/A`, geometry_only `1.809e-06 eV/A`였다.
+같은 대표 샘플을 기준 실행과 제안 실행으로 반복 계산하고, 기준 실행의 첫 결과와의 차이를 측정하였다. 에너지 차이의 중앙값은 두 경우 모두 `0 eV`였다. 힘 차이의 중앙값은 기준 실행 `1.189e-06 eV/A`, 제안 실행 `1.809e-06 eV/A`였다. 최악의 경우에도 에너지 차이는 `2.441e-04 eV`, 힘 차이는 `4.883e-04 eV/A` 수준이었다.
 
 ![그림 1. 에너지 차이](../figures/figure_06_accuracy_energy.png)
 
 ![그림 2. 힘 차이](../figures/figure_07_accuracy_force.png)
 
-### 5.2 메인 end-to-end latency
+### 5.2 순수 기하 재사용만으로는 아직 빠르지 않다
 
-31개 전체 기준으로 geometry_only는 아직 baseline보다 느렸다. median speedup은 `0.9877배`, geometric mean은 `0.9864배`였고, win은 `0`, loss는 `31`이었다. large/dense 쪽이 small_sparse보다 손해 폭이 작지만, 아직 1.0을 넘지는 못했다.
+순수 기하 재사용 경로는 정확도는 유지했지만, end-to-end latency에서는 아직 기준 실행을 넘지 못했다. 31개 전체 기준 median speedup은 `0.9877배`, geometric mean은 `0.9864배`였고, 31개 모두에서 기준 실행보다 소폭 느렸다.
 
-![그림 3. 전체 latency](../figures/figure_01_end_to_end_latency.png)
+이 결과는 제안 아이디어가 틀렸다는 뜻이 아니다. 기하 계산 자체는 방향 연결 수 `E`가 아니라 원자쌍 수 `P`에 대해 수행되므로 계산 대상이 줄어든다. 일반적인 양방향 그래프에서는 `P`가 대략 `E/2`에 가깝다. 그러나 현재 실행 구조는 원자쌍 단위 결과를 다시 방향 연결별 tensor로 펼치므로 메모리 이동과 인덱싱 비용이 새로 생긴다.
 
-![그림 4. 데이터셋별 speedup](../figures/figure_02_end_to_end_speedup.png)
+![그림 3. 데이터셋별 speedup](../figures/figure_02_end_to_end_speedup.png)
 
-![그림 5. speedup vs edge 수](../figures/figure_03_speedup_vs_edges.png)
+### 5.3 시간은 어디서 줄고 어디서 늘어나는가
 
-![그림 6. speedup vs 평균 이웃 수](../figures/figure_04_speedup_vs_neighbors.png)
+대표 forward-only 계측에서 `bulk_large`는 `2.997 ms -> 3.107 ms`, `bulk_small`은 `2.940 ms -> 3.047 ms`, `dimer_small`은 `2.830 ms -> 2.918 ms`로 모두 소폭 느려졌다.
 
-![그림 7. bucket별 speedup](../figures/figure_05_bucket_speedup.png)
+| system | 기준 forward total (ms) | 기하 재사용 forward total (ms) | 방향 연결 재확장 (ms) | 원자쌍 가중치 확장 (ms) | 원자쌍 기하 계산 (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| bulk_large | 2.997 | 3.107 | 0.039 | 0.036 | 0.194 |
+| bulk_small | 2.940 | 3.047 | 0.038 | 0.034 | 0.187 |
+| dimer_small | 2.830 | 2.918 | 0.037 | 0.032 | 0.173 |
 
-### 5.3 geometry_only 내부 진단
+줄어든 부분은 거리, cutoff, radial basis, 구면조화함수, edge embedding, 가중치 신경망 입력을 양방향 edge마다 다시 만들지 않는 부분이다. 그러나 늘어난 부분은 원자쌍 결과를 방향 연결 순서로 다시 맞추는 작업이다. 이 작업은 산술 연산보다 메모리 접근과 인덱스 기반 복사가 중심이다.
 
-intrusive forward-only 진단에서는 large/dense representative system `bulk_large`에서 baseline `3.164 ms`, geometry_only `3.092 ms`로 약한 이득이 관측되었다. 반면 `bulk_small`, `dimer_small`에서는 아직 손해가 남았다. 이는 geometry-side reuse 수식 자체가 아니라 pair를 다시 edge로 펼치는 구조 비용이 남아 있음을 시사한다.
+`mptrj` 대표 샘플의 profiler에서 forward-only `index_select` 관련 device time은 기준 실행 `1.600 us`에서 제안 실행 `2017.683 us`로 증가했다. force 포함 경로에서도 `1.632 us`에서 `2027.508 us`로 증가했다. 즉 현재 손해는 구면조화함수 수식이 아니라 원자쌍 값을 방향 연결 값으로 다시 펼치는 과정과 index 기반 메모리 이동에서 발생한다.
 
-### 5.4 LAMMPS upstream pair-metadata fast path
+### 5.4 쌍 단위 실행은 large/dense 조건에서 이득을 낸다
 
-LAMMPS serial 경로에서 upstream pair-metadata fast path를 적용했을 때 `bulk_large`는 `4.612 ms -> 0.304 ms`로 `15.19배`, `bulk_small`는 `0.439 ms -> 0.101 ms`로 `4.35배` 감소하였다. total compute도 각각 `1.018배`, `1.037배` 줄었다. 이는 upstream에서 이미 아는 neighbor/pair 정보를 직접 넘기는 방향이 실제로 유효함을 뜻한다.
+기하 재사용만 분리하면 아직 느리지만, 원자쌍 단위 가중치 공유와 방향별 메시지 계산 순서를 함께 사용하면 큰/조밀한 계산 대상에서 성능 이득이 나타난다. 31개 데이터셋 전체 repeat 30 기준으로 이 경로는 median speedup `1.0099배`, 31개 중 18개 win을 보였다.
 
-![그림 8. LAMMPS pair metadata](../figures/figure_08_lammps_pair_metadata.png)
+| 조건 | 데이터셋 수 | win 수 | win rate | median speedup |
+| --- | ---: | ---: | ---: | ---: |
+| num_edges >= 3000 | 20 | 18 | 0.900 | 1.014x |
+| num_edges < 3000 | 11 | 0 | 0.000 | 0.613x |
+| avg_neighbors_directed >= 40 | 17 | 16 | 0.941 | 1.013x |
+| large_dense | 17 | 16 | 0.941 | 1.013x |
+| large_sparse | 3 | 2 | 0.667 | 1.053x |
+| small_sparse | 11 | 0 | 0.000 | 0.613x |
 
-## 6. 논의
+대표 win은 `oc20_s2ef_val_ood_ads` `1.073배`, `md22_buckyball_catcher` `1.071배`, `oc20_s2ef_train_20m` `1.053배`였다. 반대로 small-sparse 그룹은 11개 모두 느렸다. 이 결과는 제안 방식의 적용 조건을 보여준다. 원자 수와 edge 수가 작으면 원자쌍 대응 정보 생성, indexing, 재확장 비용이 지배한다. 반면 edge 수가 충분히 크고 각 원자가 많은 이웃을 가지면, 중복 기하 계산과 원자쌍 가중치 공유의 이득이 오버헤드를 넘어설 수 있다.
 
-현재 결과를 가장 정확하게 요약하면 다음과 같다. 첫째, geometry_only exact reuse는 정확도를 사실상 바꾸지 않는다. 둘째, generic calculator path에서는 아직 baseline보다 느리다. 셋째, intrusive forward-only 진단과 LAMMPS upstream pair-metadata 결과는 현재 손해의 주원인이 exact reuse 수식 자체보다 runtime 구조에 있음을 보여준다. 따라서 이후 우선순위는 upstream pair metadata, pair->edge 확장 비용, edge-major force path를 차례로 줄이는 것이다.
+![그림 4. 쌍 단위 실행의 데이터셋별 속도 향상](../figures/figure_09_full_restored_speedup.png)
+
+![그림 5. 조건별 속도 향상](../figures/figure_10_full_restored_condition_speedup.png)
+
+### 5.5 앞단의 원자쌍 정보 전달은 대응 정보 병목을 줄인다
+
+LAMMPS 경로에서는 neighbor list를 만드는 과정에서 이미 원자쌍에 가까운 정보가 생긴다. 이 정보를 나중에 다시 복원하지 않고 앞단에서 직접 넘기면 원자쌍 대응 정보 생성 비용을 줄일 수 있다. LAMMPS serial 경로에서 이를 확인한 결과, `bulk_large`의 원자쌍 대응 정보 생성 시간은 `4.636 ± 0.054 ms`에서 `0.322 ± 0.029 ms`로 줄어 `14.40배` 감소하였다. `bulk_small`에서도 `0.441 ± 0.011 ms`에서 `0.100 ± 0.005 ms`로 줄어 `4.41배` 감소하였다.
+
+![그림 6. LAMMPS 원자쌍 대응 정보 생성 시간](../figures/figure_08_lammps_pair_metadata.png)
+
+## 6. 논 의
+
+본 논문의 핵심은 내부 실행 이름이 아니라, 재사용 가능한 계산의 경계와 그 경계가 성능으로 바뀌는 조건이다. 제안 방식은 모델을 근사하거나 pruning하지 않는다. 같은 원자쌍에서 반복되는 기하 항목을 한 번 계산하고, 반대 방향은 수학적으로 같은 값 또는 parity 부호로 복원한다. 그래서 에너지와 힘 차이가 수치 오차 수준에 머문다.
+
+현재 병목은 기하 수식 자체가 아니다. 기하 계산 대상은 줄었지만, 기존 방향 연결 중심 실행 구조가 원자쌍 값을 다시 방향 연결별 tensor로 요구하기 때문에 index 기반 메모리 연산이 증가한다. 이 비용은 작은 그래프에서는 고정 오버헤드처럼 작동하고, 큰 그래프에서는 메모리 이동량에 따라 증가한다. 따라서 “edge 수가 커지면 무조건 더 빨라진다”가 아니라 “중복 계산량이 재확장 비용보다 충분히 커지는 영역에서 빨라진다”가 정확한 해석이다.
+
+앞으로의 연구 방향은 원자쌍 상태를 더 오래 유지하는 것이다. 현재는 원자쌍으로 계산한 값을 다시 방향 연결별 값으로 펼치기 때문에 손해가 생긴다. 이상적인 구조는 neighbor list 단계에서 원자쌍 record를 만들고, 기하 계산, 가중치 계산, 메시지 계산, 누적까지 원자쌍 중심 형태로 이어가는 것이다.
 
 ## 7. 결 론
 
-본 논문은 SevenNet에서 reverse edge pair를 이용한 geometry-side exact reuse를 구현하고, 이를 31개 공개 데이터셋 전체에서 repeat 30 기준으로 검증하였다. geometry_only는 출력 정확도를 사실상 바꾸지 않았지만, generic calculator path의 end-to-end latency에서는 아직 baseline을 이기지 못했다. 그러나 intrusive forward-only 진단과 LAMMPS upstream pair-metadata fast path는 어디서부터 무엇을 먼저 고쳐야 하는지에 대한 명확한 근거를 제공한다. 따라서 본 논문의 기여는 정확도 보존형 exact reuse의 구현과, pair-major runtime으로 넘어가기 위한 병목 규명 및 우선순위 제시에 있다.
+본 논문은 등변 GNN 원자간 퍼텐셜에서 양방향 edge가 만드는 중복 기하 계산을 원자쌍 대칭성 관점에서 분석하였다. distance, cutoff, radial basis, spherical harmonics, edge embedding, 원자쌍 가중치 입력은 원자쌍 기하 정보만으로 정해지므로 정확히 재사용 가능하다. 반면 원자별 상태가 들어가는 message, aggregation, force backward는 단순 재사용 대상이 아니다.
+
+31개 공개 데이터셋 반복 실험에서 제안 방식은 에너지와 힘 정확도를 사실상 유지하였다. 순수 기하 재사용만 분리한 경로는 현재 방향 연결 중심 실행 구조에서 median speedup `0.9877배`로 아직 기준 실행을 넘지 못했다. 프로파일링 결과, 줄어든 기하 계산 이득이 원자쌍 값을 방향 연결 값으로 다시 펼치는 비용과 index 기반 메모리 연산 증가에 의해 상쇄됨을 확인하였다.
+
+반면 원자쌍 단위 가중치 공유와 방향별 메시지 계산 순서를 함께 사용한 쌍 단위 실행 경로는 31개 중 18개에서 기준 실행보다 빨랐고, `num_edges >= 3000` 조건에서는 20개 중 18개가 빨랐다. 이는 원자쌍 기반 재사용이 큰/조밀한 MLIP 계산에서 실제 성능 이득을 낼 수 있음을 보여준다. 따라서 원자쌍 기반 기하 재사용은 정확도를 바꾸지 않는 안전한 최적화이며, 원자쌍 상태를 더 오래 유지하는 실행 구조로 발전시킬 때 더 큰 성능 향상을 기대할 수 있다.
 
 ## 참 고 문 헌
 

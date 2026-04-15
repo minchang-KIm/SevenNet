@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,resolved_policy,n_warmup,n_repeat,device,mean_ms,std_ms,median_ms,p95_ms,warmup_mean_ms,warmup_std_ms,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+oc20_s2ef_train_20m,OC20_S2EF_train_20M__file_0444__config_1055,oc20,225,e3nn_baseline,baseline,3,30,cuda,125.60166181065142,0.4665462073530978,125.46132155694067,126.28634265856817,192.61569762602448,43.10208280809422,0.0,6.556510925292969e-07
+oc20_s2ef_train_20m,OC20_S2EF_train_20M__file_0444__config_1055,oc20,225,e3nn_pair_full,full,3,30,cuda,119.29129118410249,0.3338407629304628,119.24439005088061,119.88149879034609,194.3683634356906,58.22000159029234,0.0,1.1846423149108887e-06

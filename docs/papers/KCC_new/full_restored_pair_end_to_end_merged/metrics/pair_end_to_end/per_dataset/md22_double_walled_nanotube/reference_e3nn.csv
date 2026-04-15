@@ -1,0 +1,2 @@
+dataset,sample_id,modal,reference_case,resolved_policy,energy
+md22_double_walled_nanotube,md22_double-walled_nanotube_1987,spice,e3nn_baseline,baseline,-338922.90625

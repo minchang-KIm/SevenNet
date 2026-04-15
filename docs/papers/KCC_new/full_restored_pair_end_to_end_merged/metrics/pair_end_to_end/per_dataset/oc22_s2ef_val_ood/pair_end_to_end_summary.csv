@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,resolved_policy,n_warmup,n_repeat,device,mean_ms,std_ms,median_ms,p95_ms,warmup_mean_ms,warmup_std_ms,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+oc22_s2ef_val_ood,is2re_val_ood_43,oc22,216,e3nn_baseline,baseline,3,30,cuda,280.3158024791628,0.17868218348398285,280.3083179751411,280.6575472932309,335.9304897021502,35.68219183960667,0.0,8.791685104370117e-07
+oc22_s2ef_val_ood,is2re_val_ood_43,oc22,216,e3nn_pair_full,full,3,30,cuda,277.5802220605935,0.3493219908201232,277.6055105496198,278.06508768117055,344.2575477529317,54.30192077383626,0.0,1.914799213409424e-06

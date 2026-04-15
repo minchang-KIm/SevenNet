@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+ani1x,31.09031190785269,0.2274192043411734,48.29717247436444,0.31984250851911206,0.6437294424296797

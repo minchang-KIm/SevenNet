@@ -1,0 +1,3 @@
+dataset,sample_id,modal,natoms,case,resolved_policy,n_warmup,n_repeat,device,mean_ms,std_ms,median_ms,p95_ms,warmup_mean_ms,warmup_std_ms,abs_energy_diff_vs_e3nn,max_abs_force_diff_vs_e3nn
+salex_train_official,alex_go_aao_005:4493,omat24,132,e3nn_baseline,baseline,3,30,cuda,151.936005637981,0.20427501805371764,151.92365855909884,152.30901506729424,218.62866504428288,43.16439685947525,6.103515625e-05,1.4007091522216797e-06
+salex_train_official,alex_go_aao_005:4493,omat24,132,e3nn_pair_full,full,3,30,cuda,147.88064831712595,0.27528684838507655,147.94697507750243,148.24536830419675,221.31579229608178,57.85904666459104,6.103515625e-05,2.0563602447509766e-06

@@ -1,0 +1,2 @@
+dataset,baseline_mean_ms,baseline_std_ms,proposal_mean_ms,proposal_std_ms,speedup_baseline_over_proposal
+salex_val_official,201.41295697540045,0.37506055602579574,198.5570884309709,0.7348547320825936,1.0143831105048782
