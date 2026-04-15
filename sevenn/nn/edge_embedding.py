@@ -234,7 +234,8 @@ class EdgeEmbedding(nn.Module):
         data[KEY.PAIR_EDGE_REVERSE_ATTR] = pair_attr * self.reverse_sh_sign.to(
             pair_attr.dtype
         ).unsqueeze(0)
-        data[KEY.EDGE_LENGTH] = pair_r.index_select(0, data[KEY.EDGE_PAIR_MAP])
+        if self.pair_execution_policy != 'geometry_only':
+            data[KEY.EDGE_LENGTH] = pair_r.index_select(0, data[KEY.EDGE_PAIR_MAP])
 
         if self.pair_execution_policy == 'full' and not self.expand_full_edges:
             return data
@@ -246,7 +247,8 @@ class EdgeEmbedding(nn.Module):
         sign = 1.0 + reverse_mask * (
             self.reverse_sh_sign.to(edge_attr.dtype).unsqueeze(0) - 1.0
         )
-        data[KEY.EDGE_EMBEDDING] = edge_embedding
+        if self.pair_execution_policy != 'geometry_only':
+            data[KEY.EDGE_EMBEDDING] = edge_embedding
         data[KEY.EDGE_ATTR] = edge_attr * sign
         return data
 
