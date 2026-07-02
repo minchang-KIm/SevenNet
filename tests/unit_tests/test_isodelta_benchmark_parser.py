@@ -208,6 +208,7 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         """A benchmark with zero pairs cannot support a performance claim."""
         with self.assertRaisesRegex(ValueError, "repeat_count"):
             isodelta_benchmark.validate_benchmark_options(
+                "lmp",
                 0,
                 isodelta_benchmark.DEFAULT_RUN_TIMEOUT_SECONDS,
             )
@@ -215,7 +216,16 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
     def test_validate_benchmark_options_rejects_nonpositive_timeout(self) -> None:
         """Each LAMMPS benchmark run should have a positive timeout."""
         with self.assertRaisesRegex(ValueError, "run_timeout_seconds"):
-            isodelta_benchmark.validate_benchmark_options(1, 0.0)
+            isodelta_benchmark.validate_benchmark_options("lmp", 1, 0.0)
+
+    def test_validate_benchmark_options_rejects_empty_lammps_command(self) -> None:
+        """The benchmark runner should not execute a missing LAMMPS command."""
+        with self.assertRaisesRegex(ValueError, "lammps_command"):
+            isodelta_benchmark.validate_benchmark_options(
+                "   ",
+                1,
+                isodelta_benchmark.DEFAULT_RUN_TIMEOUT_SECONDS,
+            )
 
     def test_run_case_records_timeout_as_failed_result(self) -> None:
         """Timeouts should leave raw logs and fail like other bad runs."""

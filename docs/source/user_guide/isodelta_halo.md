@@ -261,6 +261,7 @@ paths inside the input script keep working. Use `--work-dir` when the benchmark
 must run elsewhere.
 The runner rejects `--repeat` values below 1 because a zero-repeat report has
 no paired timing, cache-hit, or final-thermo evidence to audit.
+It rejects an empty `--lammps-command` before launching any external process.
 It also applies `--run-timeout-seconds` to each individual LAMMPS invocation so
 a hung MPI launch becomes a failed run with raw stdout/stderr logs instead of an
 unbounded experiment.

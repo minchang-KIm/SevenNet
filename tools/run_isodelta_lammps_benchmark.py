@@ -122,11 +122,21 @@ def _coerce_timeout_stream(value: str | bytes | None) -> str:
     return value
 
 
+def _split_lammps_command(lammps_command: str) -> list[str]:
+    """Split a user command and reject empty command lines."""
+    command_tokens = shlex.split(lammps_command)
+    if not command_tokens:
+        raise ValueError("lammps_command must not be empty")
+    return command_tokens
+
+
 def validate_benchmark_options(
+    lammps_command: str,
     repeat_count: int,
     run_timeout_seconds: float,
 ) -> None:
     """Reject benchmark options that cannot produce paired timing evidence."""
+    _split_lammps_command(lammps_command)
     if repeat_count < MIN_REPEAT_COUNT:
         raise ValueError(f"repeat_count must be at least {MIN_REPEAT_COUNT}")
     if not math.isfinite(run_timeout_seconds):
@@ -317,7 +327,7 @@ def _run_case(
 
 def _build_command(lammps_command: str, input_path: Path) -> list[str]:
     """Build a LAMMPS command without relying on shell-specific quoting."""
-    return [*shlex.split(lammps_command), LAMMPS_INPUT_FLAG, str(input_path)]
+    return [*_split_lammps_command(lammps_command), LAMMPS_INPUT_FLAG, str(input_path)]
 
 
 def _summarize(results: list[BenchmarkResult]) -> dict[str, Any]:
@@ -445,7 +455,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        validate_benchmark_options(args.repeat, args.run_timeout_seconds)
+        validate_benchmark_options(
+            args.lammps_command,
+            args.repeat,
+            args.run_timeout_seconds,
+        )
     except ValueError as exc:
         parser.error(str(exc))
 

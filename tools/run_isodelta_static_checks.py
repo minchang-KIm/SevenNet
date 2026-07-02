@@ -415,8 +415,9 @@ def main() -> None:
         "MIN_REPEAT_COUNT" in benchmark
         and "validate_benchmark_options" in benchmark
         and "repeat_count must be at least" in benchmark
+        and "lammps_command must not be empty" in benchmark
         and "parser.error(str(exc))" in benchmark,
-        "benchmark runner must reject empty repeat sets",
+        "benchmark runner must reject empty repeat sets and commands",
     )
     _require(
         "DEFAULT_RUN_TIMEOUT_SECONDS" in benchmark
