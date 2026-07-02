@@ -43,6 +43,7 @@ EXPECTED_STABLE_AVERAGE_SPEEDUP = 40.0 / 34.0
 OUT_OF_RANGE_PERCENT = 101.0
 INVALID_SPEEDUP_THRESHOLD = 0.0
 FRACTIONAL_TRACE_COUNT = 1.5
+INCONSISTENT_TIMING_VALUE = 99.0
 
 
 def _phase(
@@ -178,6 +179,62 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
             isodelta_mlip_trace.validate_trace_evidence(
                 evidence,
                 isodelta_mlip_trace.TraceThresholds(min_estimated_speedup=1.0),
+            )
+
+    def test_validate_trace_rejects_inconsistent_metadata_fraction(self) -> None:
+        """Metadata fraction should match metadata time divided by baseline time."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["timing"]["metadata_fraction_percent"] = INCONSISTENT_TIMING_VALUE
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "metadata / baseline",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_inconsistent_average_speedup(self) -> None:
+        """Average speedup should match baseline divided by enabled time."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["timing"]["estimated_average_speedup"] = INCONSISTENT_TIMING_VALUE
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "estimated_average_speedup",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_missing_speedup_basis(self) -> None:
+        """Precomputed speedup evidence should include enabled-time basis."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["timing"]["estimated_average_enabled_seconds"] = None
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "estimated_average_enabled_seconds",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_inconsistent_worst_case_speedup(self) -> None:
+        """Worst-case speedup should match baseline divided by worst enabled time."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["timing"]["estimated_worst_case_speedup"] = INCONSISTENT_TIMING_VALUE
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "estimated_worst_case_speedup",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
             )
 
     def test_validate_trace_rejects_inconsistent_miss_breakdown(self) -> None:

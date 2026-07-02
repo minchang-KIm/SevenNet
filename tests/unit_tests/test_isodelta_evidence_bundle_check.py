@@ -42,6 +42,13 @@ MIN_TRACE_METADATA_FRACTION_PERCENT = 20.0
 MIN_TRACE_ESTIMATED_SPEEDUP = 1.15
 OUT_OF_RANGE_PERCENT = 101.0
 PERCENT_SCALE = 100.0
+TRACE_BASELINE_SECONDS = 100.0
+TRACE_ESTIMATED_SPEEDUP = 1.18
+TRACE_METADATA_SECONDS = (
+    TRACE_BASELINE_SECONDS * MIN_TRACE_METADATA_FRACTION_PERCENT / PERCENT_SCALE
+)
+TRACE_ENABLED_SECONDS = TRACE_BASELINE_SECONDS / TRACE_ESTIMATED_SPEEDUP
+TRACE_LOOKUP_OVERHEAD_SECONDS = 0.0
 RUN_TIMEOUT_SECONDS = 3600.0
 BASELINE_LOOP_TIME_SECONDS = 12.0
 ISODELTA_LOOP_TIME_SECONDS = 10.0
@@ -214,9 +221,14 @@ def _trace_evidence(model_name: str = "MACE") -> dict[str, object]:
             "miss_comm-list-tag-order-changed": 0.0,
         },
         "timing": {
+            "baseline_step_time_seconds": TRACE_BASELINE_SECONDS,
+            "metadata_build_time_seconds": TRACE_METADATA_SECONDS,
             "metadata_fraction_percent": MIN_TRACE_METADATA_FRACTION_PERCENT,
-            "estimated_average_speedup": 1.18,
-            "estimated_worst_case_speedup": 1.18,
+            "cache_lookup_overhead_seconds": TRACE_LOOKUP_OVERHEAD_SECONDS,
+            "estimated_average_enabled_seconds": TRACE_ENABLED_SECONDS,
+            "estimated_worst_case_enabled_seconds": TRACE_ENABLED_SECONDS,
+            "estimated_average_speedup": TRACE_ESTIMATED_SPEEDUP,
+            "estimated_worst_case_speedup": TRACE_ESTIMATED_SPEEDUP,
         },
         "model_agnostic_requirements": {
             "uses_ordered_graph_node_tags": True,

@@ -323,6 +323,10 @@ def main() -> None:
         and "TRACE_COUNT_RESIDUAL_KEY" in mlip_trace_check
         and "MODEL_AGNOSTIC_REQUIREMENTS_KEY" in mlip_trace_check
         and "REQUIRED_MODEL_AGNOSTIC_REQUIREMENTS" in mlip_trace_check
+        and "_check_trace_timing" in mlip_trace_check
+        and "TIMING_AVERAGE_ENABLED_SECONDS_KEY" in mlip_trace_check
+        and "metadata / baseline" in mlip_trace_check
+        and "baseline / enabled seconds" in mlip_trace_check
         and "must be true" in mlip_trace_check
         and "math.isfinite" in mlip_trace_check
         and "attempts = _as_nonnegative_int" in mlip_trace_check
@@ -380,6 +384,14 @@ def main() -> None:
     _require(
         "whole nonnegative reuse-decision counts" in doc,
         "IsoDelta-Halo guide must document trace count integer validation",
+    )
+    _require(
+        "When timing fields are present" in doc
+        and "`metadata_fraction_percent`" in doc
+        and "baseline" in doc
+        and "enabled seconds" in doc
+        and "timing basis" in doc,
+        "IsoDelta-Halo guide must document trace timing consistency validation",
     )
     _require(
         "model_agnostic_requirements" in doc

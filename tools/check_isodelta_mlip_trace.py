@@ -74,6 +74,15 @@ HIT_RATE_PERCENT_KEY = "hit_rate_percent"
 MISS_BREAKDOWN_KEY = "miss_breakdown"
 TRACE_COUNT_RESIDUAL_KEY = "trace_count_residual"
 MODEL_AGNOSTIC_REQUIREMENTS_KEY = "model_agnostic_requirements"
+TIMING_KEY = "timing"
+TIMING_BASELINE_SECONDS_KEY = "baseline_step_time_seconds"
+TIMING_METADATA_SECONDS_KEY = "metadata_build_time_seconds"
+TIMING_METADATA_FRACTION_KEY = "metadata_fraction_percent"
+TIMING_LOOKUP_OVERHEAD_SECONDS_KEY = "cache_lookup_overhead_seconds"
+TIMING_AVERAGE_ENABLED_SECONDS_KEY = "estimated_average_enabled_seconds"
+TIMING_WORST_CASE_ENABLED_SECONDS_KEY = "estimated_worst_case_enabled_seconds"
+TIMING_AVERAGE_SPEEDUP_KEY = "estimated_average_speedup"
+TIMING_WORST_CASE_SPEEDUP_KEY = "estimated_worst_case_speedup"
 REQUIRED_MODEL_AGNOSTIC_REQUIREMENTS = (
     "uses_ordered_graph_node_tags",
     "uses_edge_count_shape_guard",
@@ -103,6 +112,9 @@ MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = PERCENT_SCALE
 MIN_POSITIVE_SPEEDUP = 0.0
 TRACE_COUNT_TOLERANCE = 1.0e-9
+TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
+TIMING_RELATIVE_TOLERANCE = 1.0e-9
+TIMING_PERCENT_TOLERANCE = 1.0e-9
 
 
 class TraceCheckError(ValueError):
@@ -225,9 +237,9 @@ def trace_schema() -> dict[str, Any]:
             "phase-local send and receive tag order",
         ],
         "timing_estimates": [
-            "metadata_fraction_percent",
-            "estimated_average_speedup",
-            "estimated_worst_case_speedup",
+            TIMING_METADATA_FRACTION_KEY,
+            TIMING_AVERAGE_SPEEDUP_KEY,
+            TIMING_WORST_CASE_SPEEDUP_KEY,
         ],
     }
 
@@ -298,6 +310,42 @@ def _as_nonnegative_int(value: Any, field_name: str) -> int:
         f"{field_name} must be a nonnegative integer",
     )
     return int_value
+
+
+def _as_optional_timing_number(value: Any, field_name: str) -> float | None:
+    """Return an optional timing evidence number."""
+    if value is None:
+        return None
+    return _as_number(value, field_name)
+
+
+def _as_optional_nonnegative_timing_number(
+    value: Any,
+    field_name: str,
+) -> float | None:
+    """Return an optional timing evidence number that cannot be negative."""
+    numeric_value = _as_optional_timing_number(value, field_name)
+    if numeric_value is None:
+        return None
+    _require(
+        numeric_value >= MIN_NONNEGATIVE_VALUE,
+        f"{field_name} must be nonnegative",
+    )
+    return numeric_value
+
+
+def _is_close(
+    observed: float,
+    expected: float,
+    absolute_tolerance: float = TIMING_ABSOLUTE_TOLERANCE_SECONDS,
+    relative_tolerance: float = TIMING_RELATIVE_TOLERANCE,
+) -> bool:
+    """Return whether two timing evidence values agree within named tolerance."""
+    tolerance = max(
+        absolute_tolerance,
+        relative_tolerance * max(abs(observed), abs(expected)),
+    )
+    return abs(observed - expected) <= tolerance
 
 
 def _as_optional_nonnegative_number(
@@ -493,14 +541,14 @@ def _timing_summary(
         )
 
     return {
-        "baseline_step_time_seconds": baseline_seconds,
-        "metadata_build_time_seconds": metadata_seconds,
-        "metadata_fraction_percent": metadata_fraction_percent,
-        "cache_lookup_overhead_seconds": lookup_overhead_seconds,
-        "estimated_average_enabled_seconds": estimated_average_enabled_seconds,
-        "estimated_worst_case_enabled_seconds": estimated_worst_case_enabled_seconds,
-        "estimated_average_speedup": estimated_average_speedup,
-        "estimated_worst_case_speedup": estimated_worst_case_speedup,
+        TIMING_BASELINE_SECONDS_KEY: baseline_seconds,
+        TIMING_METADATA_SECONDS_KEY: metadata_seconds,
+        TIMING_METADATA_FRACTION_KEY: metadata_fraction_percent,
+        TIMING_LOOKUP_OVERHEAD_SECONDS_KEY: lookup_overhead_seconds,
+        TIMING_AVERAGE_ENABLED_SECONDS_KEY: estimated_average_enabled_seconds,
+        TIMING_WORST_CASE_ENABLED_SECONDS_KEY: estimated_worst_case_enabled_seconds,
+        TIMING_AVERAGE_SPEEDUP_KEY: estimated_average_speedup,
+        TIMING_WORST_CASE_SPEEDUP_KEY: estimated_worst_case_speedup,
     }
 
 
@@ -569,6 +617,171 @@ def evaluate_trace(
     }
 
 
+def _timing_field_name(key: str) -> str:
+    """Return the dotted evidence path for one timing field."""
+    return f"{TIMING_KEY}.{key}"
+
+
+def _require_timing_basis(
+    value_key: str,
+    required_value: float | None,
+    required_key: str,
+) -> float:
+    """Require a derived timing field to include its numerical basis."""
+    _require(
+        required_value is not None,
+        f"{_timing_field_name(value_key)} requires {_timing_field_name(required_key)}",
+    )
+    return required_value
+
+
+def _check_trace_timing(
+    timing: dict[str, Any],
+    thresholds: TraceThresholds,
+) -> None:
+    """Validate optional timing evidence and recompute derived speedups."""
+    baseline_seconds = _as_optional_nonnegative_timing_number(
+        timing.get(TIMING_BASELINE_SECONDS_KEY),
+        _timing_field_name(TIMING_BASELINE_SECONDS_KEY),
+    )
+    metadata_seconds = _as_optional_nonnegative_timing_number(
+        timing.get(TIMING_METADATA_SECONDS_KEY),
+        _timing_field_name(TIMING_METADATA_SECONDS_KEY),
+    )
+    metadata_fraction = _as_optional_nonnegative_timing_number(
+        timing.get(TIMING_METADATA_FRACTION_KEY),
+        _timing_field_name(TIMING_METADATA_FRACTION_KEY),
+    )
+    _as_optional_nonnegative_timing_number(
+        timing.get(TIMING_LOOKUP_OVERHEAD_SECONDS_KEY),
+        _timing_field_name(TIMING_LOOKUP_OVERHEAD_SECONDS_KEY),
+    )
+    average_enabled_seconds = _as_optional_nonnegative_timing_number(
+        timing.get(TIMING_AVERAGE_ENABLED_SECONDS_KEY),
+        _timing_field_name(TIMING_AVERAGE_ENABLED_SECONDS_KEY),
+    )
+    worst_case_enabled_seconds = _as_optional_nonnegative_timing_number(
+        timing.get(TIMING_WORST_CASE_ENABLED_SECONDS_KEY),
+        _timing_field_name(TIMING_WORST_CASE_ENABLED_SECONDS_KEY),
+    )
+    average_speedup = _as_optional_timing_number(
+        timing.get(TIMING_AVERAGE_SPEEDUP_KEY),
+        _timing_field_name(TIMING_AVERAGE_SPEEDUP_KEY),
+    )
+    worst_case_speedup = _as_optional_timing_number(
+        timing.get(TIMING_WORST_CASE_SPEEDUP_KEY),
+        _timing_field_name(TIMING_WORST_CASE_SPEEDUP_KEY),
+    )
+
+    if metadata_fraction is not None:
+        _validate_percent(
+            metadata_fraction,
+            _timing_field_name(TIMING_METADATA_FRACTION_KEY),
+        )
+        baseline_for_fraction = _require_timing_basis(
+            TIMING_METADATA_FRACTION_KEY,
+            baseline_seconds,
+            TIMING_BASELINE_SECONDS_KEY,
+        )
+        metadata_for_fraction = _require_timing_basis(
+            TIMING_METADATA_FRACTION_KEY,
+            metadata_seconds,
+            TIMING_METADATA_SECONDS_KEY,
+        )
+        _require(
+            baseline_for_fraction > MIN_NONNEGATIVE_VALUE,
+            (
+                f"{_timing_field_name(TIMING_BASELINE_SECONDS_KEY)} must be "
+                "positive when checking "
+                f"{_timing_field_name(TIMING_METADATA_FRACTION_KEY)}"
+            ),
+        )
+        expected_fraction = (
+            PERCENT_SCALE * metadata_for_fraction / baseline_for_fraction
+        )
+        _require(
+            _is_close(
+                metadata_fraction,
+                expected_fraction,
+                absolute_tolerance=TIMING_PERCENT_TOLERANCE,
+            ),
+            (
+                f"{_timing_field_name(TIMING_METADATA_FRACTION_KEY)} "
+                "must match metadata / baseline"
+            ),
+        )
+
+    for speedup_key, enabled_key, speedup_value in (
+        (
+            TIMING_AVERAGE_SPEEDUP_KEY,
+            TIMING_AVERAGE_ENABLED_SECONDS_KEY,
+            average_speedup,
+        ),
+        (
+            TIMING_WORST_CASE_SPEEDUP_KEY,
+            TIMING_WORST_CASE_ENABLED_SECONDS_KEY,
+            worst_case_speedup,
+        ),
+    ):
+        if speedup_value is None:
+            continue
+        _require(
+            speedup_value > MIN_POSITIVE_SPEEDUP,
+            f"{_timing_field_name(speedup_key)} must be positive",
+        )
+        baseline_for_speedup = _require_timing_basis(
+            speedup_key,
+            baseline_seconds,
+            TIMING_BASELINE_SECONDS_KEY,
+        )
+        enabled_seconds = _require_timing_basis(
+            speedup_key,
+            (
+                average_enabled_seconds
+                if enabled_key == TIMING_AVERAGE_ENABLED_SECONDS_KEY
+                else worst_case_enabled_seconds
+            ),
+            enabled_key,
+        )
+        _require(
+            enabled_seconds > MIN_NONNEGATIVE_VALUE,
+            (
+                f"{_timing_field_name(enabled_key)} must be positive when "
+                f"checking {_timing_field_name(speedup_key)}"
+            ),
+        )
+        expected_speedup = baseline_for_speedup / enabled_seconds
+        _require(
+            _is_close(speedup_value, expected_speedup),
+            f"{_timing_field_name(speedup_key)} must match baseline / enabled seconds",
+        )
+
+    if thresholds.min_metadata_fraction_percent > DEFAULT_MIN_METADATA_FRACTION_PERCENT:
+        _require(
+            metadata_fraction is not None,
+            f"{_timing_field_name(TIMING_METADATA_FRACTION_KEY)} must be numeric",
+        )
+        _require(
+            metadata_fraction >= thresholds.min_metadata_fraction_percent,
+            (
+                f"metadata fraction {metadata_fraction:g}% is below "
+                f"{thresholds.min_metadata_fraction_percent:g}%"
+            ),
+        )
+    if thresholds.min_estimated_speedup is not None:
+        _require(
+            average_speedup is not None,
+            f"{_timing_field_name(TIMING_AVERAGE_SPEEDUP_KEY)} must be numeric",
+        )
+        _require(
+            average_speedup >= thresholds.min_estimated_speedup,
+            (
+                f"estimated speedup {average_speedup:g} is below "
+                f"{thresholds.min_estimated_speedup:g}"
+            ),
+        )
+
+
 def validate_trace_evidence(
     evidence: dict[str, Any],
     thresholds: TraceThresholds,
@@ -626,29 +839,8 @@ def validate_trace_evidence(
             requirement_value,
             f"{MODEL_AGNOSTIC_REQUIREMENTS_KEY}.{requirement} must be true",
         )
-    timing = _as_mapping(evidence.get("timing"), "timing")
-    metadata_fraction = timing.get("metadata_fraction_percent")
-    if thresholds.min_metadata_fraction_percent > DEFAULT_MIN_METADATA_FRACTION_PERCENT:
-        metadata_fraction_value = _as_number(
-            metadata_fraction,
-            "timing.metadata_fraction_percent",
-        )
-        _require(
-            metadata_fraction_value >= thresholds.min_metadata_fraction_percent,
-            (
-                f"metadata fraction {metadata_fraction_value:g}% is below "
-                f"{thresholds.min_metadata_fraction_percent:g}%"
-            ),
-        )
-    if thresholds.min_estimated_speedup is not None:
-        speedup = _as_number(
-            timing.get("estimated_average_speedup"),
-            "timing.estimated_average_speedup",
-        )
-        _require(
-            speedup >= thresholds.min_estimated_speedup,
-            f"estimated speedup {speedup:g} is below {thresholds.min_estimated_speedup:g}",
-        )
+    timing = _as_mapping(evidence.get(TIMING_KEY), TIMING_KEY)
+    _check_trace_timing(timing, thresholds)
     evidence["status"] = "passed"
     evidence["thresholds"] = asdict(thresholds)
     evidence[TRACE_COUNT_RESIDUAL_KEY] = trace_count_residual
