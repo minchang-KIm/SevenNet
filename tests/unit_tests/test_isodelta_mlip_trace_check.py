@@ -35,6 +35,7 @@ METADATA_BUILD_SECONDS = 2.0
 STABLE_TRACE_STEP_COUNT = 4
 EXPECTED_TRACE_SCHEMA_VERSION = "1.0"
 EXPECTED_STABLE_HIT_RATE_PERCENT = 75.0
+EXPECTED_ZERO_TRACE_COUNT_RESIDUAL = 0.0
 MIN_STABLE_TRACE_SPEEDUP = 1.15
 MIN_STABLE_TRACE_METADATA_FRACTION_PERCENT = 20.0
 EXPECTED_STABLE_AVERAGE_SPEEDUP = 40.0 / 34.0
@@ -109,10 +110,56 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         self.assertEqual(evidence["model"], "MACE")
         self.assertEqual(evidence["hits"], 3.0)
         self.assertEqual(evidence["hit_rate_percent"], EXPECTED_STABLE_HIT_RATE_PERCENT)
+        self.assertEqual(
+            evidence["trace_count_residual"],
+            EXPECTED_ZERO_TRACE_COUNT_RESIDUAL,
+        )
         self.assertAlmostEqual(
             evidence["timing"]["estimated_average_speedup"],
             EXPECTED_STABLE_AVERAGE_SPEEDUP,
         )
+
+    def test_validate_trace_rejects_inconsistent_hit_rate(self) -> None:
+        """Trace hit rate should match hits divided by attempts."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["hit_rate_percent"] = 99.0
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "hits / attempts",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_inconsistent_miss_breakdown(self) -> None:
+        """Trace miss counters should sum to attempts minus hits."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["miss_breakdown"]["miss_shape-changed"] = 1.0
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "attempts - hits",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_negative_miss_counter(self) -> None:
+        """Trace miss counters should be nonnegative counts."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["miss_breakdown"]["miss_shape-changed"] = -1.0
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "must be nonnegative",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
 
     def test_trace_rejects_unstable_tag_order_for_effect_gate(self) -> None:
         """Atom tag reordering should be a miss and fail a reuse-rate gate."""

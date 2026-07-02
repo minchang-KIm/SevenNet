@@ -85,6 +85,9 @@ count, neighbor-list rebuild state, communication topology, and phase-local
 send/receive tag order show that reuse would be safe. This lets a paper compare
 SevenNet implementation results with NequIP/MACE/Allegro trace evidence without
 claiming that another model's kernels were modified.
+For precomputed trace evidence, the checker also verifies that `hit_rate_percent`
+matches `hits / attempts` and that the miss breakdown counters sum to
+`attempts - hits`.
 
 ### Portable Demo Traces
 

@@ -311,6 +311,10 @@ def main() -> None:
         and "TraceThresholds" in mlip_trace_check
         and "validate_thresholds" in mlip_trace_check
         and "MAX_PERCENT_VALUE" in mlip_trace_check
+        and "TRACE_COUNT_TOLERANCE" in mlip_trace_check
+        and "TRACE_COUNT_RESIDUAL_KEY" in mlip_trace_check
+        and "must match hits / attempts" in mlip_trace_check
+        and "must match attempts - hits" in mlip_trace_check
         and "trace_schema" in mlip_trace_check
         and "--print-schema" in mlip_trace_check
         and "estimated_average_speedup" in mlip_trace_check
@@ -350,6 +354,12 @@ def main() -> None:
         and "NequIP" in doc
         and "Allegro" in doc,
         "IsoDelta-Halo guide must document the model-agnostic trace checker",
+    )
+    _require(
+        "hit_rate_percent" in doc
+        and "hits / attempts" in doc
+        and "attempts - hits" in doc,
+        "IsoDelta-Halo guide must document trace evidence counter consistency",
     )
     _require(
         "check_isodelta_evidence_bundle.py" in doc

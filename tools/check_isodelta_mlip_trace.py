@@ -67,6 +67,11 @@ MISS_COMM_TOPOLOGY_CHANGED = "comm-topology-changed"
 MISS_COMM_LIST_TAG_ORDER_CHANGED = "comm-list-tag-order-changed"
 HIT_DECISION = "hit"
 MISS_REASON_PREFIX = "miss_"
+ATTEMPTS_KEY = "attempts"
+HITS_KEY = "hits"
+HIT_RATE_PERCENT_KEY = "hit_rate_percent"
+MISS_BREAKDOWN_KEY = "miss_breakdown"
+TRACE_COUNT_RESIDUAL_KEY = "trace_count_residual"
 MISS_REASONS = (
     MISS_DISABLED,
     MISS_NO_CACHE,
@@ -84,9 +89,11 @@ DEFAULT_CACHE_LOOKUP_OVERHEAD_SECONDS = 0.0
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_METADATA_FRACTION_PERCENT = 0.0
 MIN_NONNEGATIVE_VALUE = 0.0
+MIN_REQUIRED_TRACE_ATTEMPTS = 1.0
 MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = PERCENT_SCALE
 MIN_POSITIVE_SPEEDUP = 0.0
+TRACE_COUNT_TOLERANCE = 1.0e-9
 
 
 class TraceCheckError(ValueError):
@@ -534,10 +541,10 @@ def evaluate_trace(
     return {
         "status": "evaluated",
         "model": model_name,
-        "attempts": attempts,
-        "hits": hits,
-        "hit_rate_percent": hit_rate_percent,
-        "miss_breakdown": miss_counts,
+        ATTEMPTS_KEY: attempts,
+        HITS_KEY: hits,
+        HIT_RATE_PERCENT_KEY: hit_rate_percent,
+        MISS_BREAKDOWN_KEY: miss_counts,
         "decisions": decisions,
         "timing": _timing_summary(
             records,
@@ -560,9 +567,23 @@ def validate_trace_evidence(
 ) -> dict[str, Any]:
     """Gate evaluated trace evidence before using it as a generality claim."""
     validate_thresholds(thresholds)
+    attempts = _as_number(evidence.get(ATTEMPTS_KEY), ATTEMPTS_KEY)
+    hits = _as_number(evidence.get(HITS_KEY), HITS_KEY)
     hit_rate_percent = _as_number(
-        evidence.get("hit_rate_percent"),
-        "hit_rate_percent",
+        evidence.get(HIT_RATE_PERCENT_KEY),
+        HIT_RATE_PERCENT_KEY,
+    )
+    _require(
+        attempts >= MIN_REQUIRED_TRACE_ATTEMPTS,
+        f"{ATTEMPTS_KEY} must be at least one",
+    )
+    _require(hits >= MIN_NONNEGATIVE_VALUE, f"{HITS_KEY} must be nonnegative")
+    _require(hits <= attempts, f"{HITS_KEY} cannot exceed {ATTEMPTS_KEY}")
+    _validate_percent(hit_rate_percent, HIT_RATE_PERCENT_KEY)
+    expected_hit_rate = PERCENT_SCALE * hits / attempts
+    _require(
+        abs(hit_rate_percent - expected_hit_rate) <= TRACE_COUNT_TOLERANCE,
+        f"{HIT_RATE_PERCENT_KEY} must match hits / attempts",
     )
     _require(
         hit_rate_percent >= thresholds.min_hit_rate_percent,
@@ -570,6 +591,24 @@ def validate_trace_evidence(
             f"hit rate {hit_rate_percent:g}% is below "
             f"{thresholds.min_hit_rate_percent:g}%"
         ),
+    )
+    miss_breakdown = _as_mapping(evidence.get(MISS_BREAKDOWN_KEY), MISS_BREAKDOWN_KEY)
+    miss_count_sum = 0.0
+    for miss_reason in MISS_REASONS:
+        miss_key = f"{MISS_REASON_PREFIX}{miss_reason}"
+        miss_count = _as_number(
+            miss_breakdown.get(miss_key),
+            f"{MISS_BREAKDOWN_KEY}.{miss_key}",
+        )
+        _require(
+            miss_count >= MIN_NONNEGATIVE_VALUE,
+            f"{MISS_BREAKDOWN_KEY}.{miss_key} must be nonnegative",
+        )
+        miss_count_sum += miss_count
+    trace_count_residual = abs(miss_count_sum - (attempts - hits))
+    _require(
+        trace_count_residual <= TRACE_COUNT_TOLERANCE,
+        f"{MISS_BREAKDOWN_KEY} counters must match attempts - hits",
     )
     timing = _as_mapping(evidence.get("timing"), "timing")
     metadata_fraction = timing.get("metadata_fraction_percent")
@@ -596,6 +635,7 @@ def validate_trace_evidence(
         )
     evidence["status"] = "passed"
     evidence["thresholds"] = asdict(thresholds)
+    evidence[TRACE_COUNT_RESIDUAL_KEY] = trace_count_residual
     return evidence
 
 
