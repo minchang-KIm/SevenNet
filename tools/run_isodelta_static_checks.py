@@ -356,6 +356,13 @@ def main() -> None:
         "benchmark runner must report final thermo consistency deltas",
     )
     _require(
+        "SUMMARY_RANK_COUNT_KEY" in benchmark
+        and "summary_rank_count" in benchmark
+        and "summary.get(key, 0.0) + float" in benchmark
+        and "PERCENT_SCALE * hits / attempts" in benchmark,
+        "benchmark runner must aggregate cache summaries across MPI ranks",
+    )
+    _require(
         "sample_variance_loop_time_seconds" in benchmark
         and "sample_stddev_loop_time_seconds" in benchmark
         and "MIN_SAMPLE_VARIANCE_COUNT" in benchmark,
@@ -391,6 +398,12 @@ def main() -> None:
         "benchmark report checker must gate cache activity evidence",
     )
     _require(
+        "CACHE_HIT_RATE_TOLERANCE_PERCENT" in report_check
+        and "hits <= attempts" in report_check
+        and "must match hits / attempts" in report_check,
+        "benchmark report checker must validate cache hit-rate consistency",
+    )
+    _require(
         "REQUIRED_CACHE_MISS_KEYS" in report_check
         and "miss_comm-list-tag-order-changed" in report_check
         and "verified_cache_miss_key_count" in report_check,
@@ -400,6 +413,12 @@ def main() -> None:
         "final_thermo_delta_vs_disabled_cache" in doc
         and "final_thermo_observables" in doc,
         "IsoDelta-Halo guide must document final thermo consistency fields",
+    )
+    _require(
+        "summary_rank_count" in doc
+        and "recomputes" in doc
+        and "aggregated hits and attempts" in doc,
+        "IsoDelta-Halo guide must document MPI cache-summary aggregation",
     )
     _require(
         "sample_variance_loop_time_seconds" in doc

@@ -24,6 +24,14 @@ sys.modules[SPEC.name] = isodelta_benchmark
 SPEC.loader.exec_module(isodelta_benchmark)
 
 
+MPI_RANK_COUNT = 2.0
+AGGREGATED_ATTEMPTS = 30.0
+AGGREGATED_HITS = 18.0
+AGGREGATED_HIT_RATE_PERCENT = 60.0
+AGGREGATED_NO_CACHE_MISSES = 3.0
+AGGREGATED_SHAPE_CHANGED_MISSES = 3.0
+
+
 class IsoDeltaBenchmarkParserTest(unittest.TestCase):
     """Check that profiling logs become stable numeric report fields."""
 
@@ -47,8 +55,30 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         self.assertEqual(parsed["attempts"], 10.0)
         self.assertEqual(parsed["hits"], 8.0)
         self.assertEqual(parsed["hit_rate_percent"], 80.0)
+        self.assertEqual(parsed["summary_rank_count"], 1.0)
         self.assertEqual(parsed["miss_no-cache"], 1.0)
         self.assertEqual(parsed["miss_shape-changed"], 1.0)
+
+    def test_parse_cache_summary_aggregates_mpi_rank_counters(self) -> None:
+        """Multiple rank summaries should aggregate counters and recompute rate."""
+        log_text = "\n".join(
+            (
+                "0 IsoDelta-Halo summary: attempts=10 hits=8 "
+                "hit_rate_percent=80 miss_no-cache=1 miss_shape-changed=1",
+                "1 IsoDelta-Halo summary: attempts=20 hits=10 "
+                "hit_rate_percent=50 miss_no-cache=2 miss_shape-changed=2",
+            )
+        )
+        parsed = isodelta_benchmark.parse_cache_summary(log_text)
+        self.assertEqual(parsed["summary_rank_count"], MPI_RANK_COUNT)
+        self.assertEqual(parsed["attempts"], AGGREGATED_ATTEMPTS)
+        self.assertEqual(parsed["hits"], AGGREGATED_HITS)
+        self.assertEqual(parsed["hit_rate_percent"], AGGREGATED_HIT_RATE_PERCENT)
+        self.assertEqual(parsed["miss_no-cache"], AGGREGATED_NO_CACHE_MISSES)
+        self.assertEqual(
+            parsed["miss_shape-changed"],
+            AGGREGATED_SHAPE_CHANGED_MISSES,
+        )
 
     def test_parse_run_output_uses_both_streams(self) -> None:
         """MPI wrappers may split loop time and profiling summary across streams."""

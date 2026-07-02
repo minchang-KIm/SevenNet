@@ -23,6 +23,7 @@ from typing import Any
 # Environment names mirror the C++ constants so the benchmark toggles the same
 # runtime controls that PairE3GNNParallel reads.
 DEFAULT_REPEAT_COUNT = 3
+PERCENT_SCALE = 100.0
 LAMMPS_INPUT_FLAG = "-in"
 BASELINE_CASE = "baseline-disabled"
 ISODELTA_CASE = "isodelta-enabled"
@@ -32,6 +33,10 @@ PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
 ENV_FLAG_ENABLED = "1"
 THERMO_STEP_COLUMN = "Step"
 MIN_THERMO_HEADER_COLUMNS = 2
+ATTEMPTS_KEY = "attempts"
+HITS_KEY = "hits"
+HIT_RATE_PERCENT_KEY = "hit_rate_percent"
+SUMMARY_RANK_COUNT_KEY = "summary_rank_count"
 FINAL_THERMO_DELTA_KEY = "final_thermo_delta_vs_disabled_cache"
 MAX_ABS_DELTA_KEY = "max_abs_delta"
 PAIRED_COUNT_KEY = "paired_count"
@@ -106,12 +111,24 @@ def parse_loop_time(log_text: str) -> float | None:
 
 
 def parse_cache_summary(log_text: str) -> dict[str, float]:
-    """Extract IsoDelta-Halo summary counters from profiling output."""
+    """Aggregate IsoDelta-Halo summary counters from all MPI rank logs."""
     summary: dict[str, float] = {}
+    summary_rank_count = 0.0
     for summary_match in SUMMARY_RE.finditer(log_text):
+        summary_rank_count += 1.0
         body = summary_match.group("body")
         for value_match in SUMMARY_VALUE_RE.finditer(body):
-            summary[value_match.group("key")] = float(value_match.group("value"))
+            key = value_match.group("key")
+            if key == HIT_RATE_PERCENT_KEY:
+                continue
+            summary[key] = summary.get(key, 0.0) + float(value_match.group("value"))
+    if summary_rank_count:
+        summary[SUMMARY_RANK_COUNT_KEY] = summary_rank_count
+        attempts = summary.get(ATTEMPTS_KEY, 0.0)
+        hits = summary.get(HITS_KEY, 0.0)
+        summary[HIT_RATE_PERCENT_KEY] = (
+            0.0 if attempts == 0.0 else PERCENT_SCALE * hits / attempts
+        )
     return summary
 
 

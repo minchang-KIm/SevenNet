@@ -254,6 +254,7 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `results.*.cache_summary.attempts`
 - `results.*.cache_summary.hits`
 - `results.*.cache_summary.hit_rate_percent`
+- `results.*.cache_summary.summary_rank_count`
 - `results.*.final_thermo_observables`
 - `results.*.cache_summary.miss_disabled`
 - `results.*.cache_summary.miss_no-cache`
@@ -288,6 +289,10 @@ benchmark report so the acceptance rule is reproducible.
 The checker also requires every enabled run to include all IsoDelta-Halo miss
 reason counters, which keeps failed reuse diagnosable instead of reducing the
 experiment to a single speedup number.
+When multiple MPI ranks print profiling summaries, the benchmark parser sums
+rank-local attempts, hits, and miss counters, then recomputes
+`hit_rate_percent` from the aggregated hits and attempts. The report checker
+rejects cache summaries whose hit rate is inconsistent with those totals.
 
 For a publishable performance claim, report the mean and variance across
 multiple repeats, include cache hit rate, and show that final thermodynamic

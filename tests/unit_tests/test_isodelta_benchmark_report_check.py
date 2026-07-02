@@ -27,6 +27,11 @@ sys.modules[SPEC.name] = isodelta_report_check
 SPEC.loader.exec_module(isodelta_report_check)
 
 
+PERCENT_SCALE = 100.0
+SECOND_ENABLED_ATTEMPTS = 11.0
+SECOND_ENABLED_HITS = 9.0
+
+
 def _cache_summary(
     attempts: float,
     hits: float,
@@ -81,9 +86,11 @@ def _valid_report() -> dict[str, object]:
                 "case": "isodelta-enabled",
                 "returncode": 0,
                 "cache_summary": _cache_summary(
-                    attempts=11.0,
-                    hits=9.0,
-                    hit_rate_percent=82.0,
+                    attempts=SECOND_ENABLED_ATTEMPTS,
+                    hits=SECOND_ENABLED_HITS,
+                    hit_rate_percent=(
+                        PERCENT_SCALE * SECOND_ENABLED_HITS / SECOND_ENABLED_ATTEMPTS
+                    ),
                 ),
             },
         ],
@@ -175,6 +182,7 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         cache_summary = enabled_result["cache_summary"]
         assert isinstance(cache_summary, dict)
         cache_summary["hits"] = 0.0
+        cache_summary["hit_rate_percent"] = 0.0
 
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
@@ -186,6 +194,46 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                     min_enabled_cache_attempts=1,
                     min_enabled_cache_hits=1,
                 ),
+            )
+
+    def test_validate_report_rejects_inconsistent_cache_hit_rate(self) -> None:
+        """Reported hit rate should match the enabled hits and attempts."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["hit_rate_percent"] = 99.0
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "hits / attempts",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_hits_above_attempts(self) -> None:
+        """Cache hits cannot exceed cache lookup attempts in a valid report."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["hits"] = 11.0
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "cannot exceed attempts",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
             )
 
     def test_validate_report_rejects_missing_miss_breakdown(self) -> None:

@@ -50,6 +50,7 @@ MIN_NONNEGATIVE_VALUE = 0.0
 MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = 100.0
 MIN_POSITIVE_SPEEDUP = 0.0
+CACHE_HIT_RATE_TOLERANCE_PERCENT = 1.0e-9
 
 
 class ReportCheckError(ValueError):
@@ -248,24 +249,50 @@ def _check_cache_evidence(
             result_map.get(CACHE_SUMMARY_KEY),
             f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}",
         )
-        attempt_counts.append(
-            _as_number(
-                cache_summary.get(ATTEMPTS_KEY),
-                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{ATTEMPTS_KEY}",
-            )
+        attempts = _as_number(
+            cache_summary.get(ATTEMPTS_KEY),
+            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{ATTEMPTS_KEY}",
         )
-        hit_counts.append(
-            _as_number(
-                cache_summary.get(HITS_KEY),
-                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HITS_KEY}",
-            )
+        hits = _as_number(
+            cache_summary.get(HITS_KEY),
+            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HITS_KEY}",
         )
-        hit_rates.append(
-            _as_number(
-                cache_summary.get(HIT_RATE_KEY),
-                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HIT_RATE_KEY}",
-            )
+        hit_rate_percent = _as_number(
+            cache_summary.get(HIT_RATE_KEY),
+            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HIT_RATE_KEY}",
         )
+        _require(
+            attempts >= MIN_NONNEGATIVE_VALUE,
+            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{ATTEMPTS_KEY} must be nonnegative",
+        )
+        _require(
+            hits >= MIN_NONNEGATIVE_VALUE,
+            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HITS_KEY} must be nonnegative",
+        )
+        _require(
+            hits <= attempts,
+            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HITS_KEY} cannot exceed attempts",
+        )
+        _validate_percent(
+            hit_rate_percent,
+            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HIT_RATE_KEY}",
+        )
+        expected_hit_rate = (
+            MIN_PERCENT_VALUE
+            if attempts == MIN_NONNEGATIVE_VALUE
+            else MAX_PERCENT_VALUE * hits / attempts
+        )
+        _require(
+            abs(hit_rate_percent - expected_hit_rate)
+            <= CACHE_HIT_RATE_TOLERANCE_PERCENT,
+            (
+                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HIT_RATE_KEY} "
+                "must match hits / attempts"
+            ),
+        )
+        attempt_counts.append(attempts)
+        hit_counts.append(hits)
+        hit_rates.append(hit_rate_percent)
         for miss_key in REQUIRED_CACHE_MISS_KEYS:
             _as_number(
                 cache_summary.get(miss_key),
