@@ -806,7 +806,7 @@ def validate_trace_evidence(
         status in (EVALUATED_STATUS, PASSED_STATUS),
         f"{STATUS_KEY} must be {EVALUATED_STATUS!r} or {PASSED_STATUS!r}",
     )
-    _as_nonempty_string(evidence.get(MODEL_KEY), MODEL_KEY)
+    model_name = _as_nonempty_string(evidence.get(MODEL_KEY), MODEL_KEY)
     attempts = _as_nonnegative_int(evidence.get(ATTEMPTS_KEY), ATTEMPTS_KEY)
     hits = _as_nonnegative_int(evidence.get(HITS_KEY), HITS_KEY)
     hit_rate_percent = _as_number(
@@ -861,6 +861,7 @@ def validate_trace_evidence(
     timing = _as_mapping(evidence.get(TIMING_KEY), TIMING_KEY)
     _check_trace_timing(timing, thresholds)
     evidence[STATUS_KEY] = PASSED_STATUS
+    evidence[MODEL_KEY] = model_name
     evidence["thresholds"] = asdict(thresholds)
     evidence[TRACE_COUNT_RESIDUAL_KEY] = trace_count_residual
     return evidence

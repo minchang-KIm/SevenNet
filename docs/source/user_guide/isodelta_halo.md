@@ -93,6 +93,9 @@ whole nonnegative reuse-decision counts. The evidence must also include
 `model_agnostic_requirements` flags proving that ordered graph node tags, edge
 count, neighbor-list rebuilds, communication topology, and communication list
 tag order were all used as reuse guards.
+Model labels are stripped of surrounding whitespace before required-model
+matching, so the label archived in evidence is the normalized value used by the
+bundle gate.
 When timing fields are present, the checker recomputes
 `metadata_fraction_percent` from metadata and baseline seconds, and recomputes
 `estimated_average_speedup` and `estimated_worst_case_speedup` from baseline

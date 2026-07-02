@@ -45,6 +45,7 @@ INVALID_SPEEDUP_THRESHOLD = 0.0
 FRACTIONAL_TRACE_COUNT = 1.5
 INCONSISTENT_TIMING_VALUE = 99.0
 FAILED_STATUS = "failed"
+WHITESPACE_PADDED_MODEL = " MACE "
 
 
 def _phase(
@@ -167,6 +168,18 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
                 evidence,
                 isodelta_mlip_trace.TraceThresholds(),
             )
+
+    def test_validate_trace_normalizes_model_label(self) -> None:
+        """Trace evidence model labels should be trimmed before bundle matching."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["model"] = WHITESPACE_PADDED_MODEL
+
+        validated = isodelta_mlip_trace.validate_trace_evidence(
+            evidence,
+            isodelta_mlip_trace.TraceThresholds(),
+        )
+
+        self.assertEqual(validated["model"], "MACE")
 
     def test_validate_trace_rejects_fractional_attempts(self) -> None:
         """Trace attempts should be whole reuse-decision counts."""

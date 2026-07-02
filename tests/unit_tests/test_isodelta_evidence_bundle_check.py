@@ -297,6 +297,23 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
                     thresholds=_thresholds(),
                 )
 
+    def test_validate_bundle_matches_trimmed_trace_model(self) -> None:
+        """Whitespace around a trace model label should not break required matching."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            benchmark_path = Path(tmpdir) / "benchmark.json"
+            trace_path = Path(tmpdir) / "mace_trace_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            trace_path.write_text(json.dumps(_trace_evidence(" MACE ")), encoding="utf-8")
+
+            evidence = isodelta_evidence_bundle.validate_bundle(
+                benchmark_report=benchmark_path,
+                trace_evidence_paths=[trace_path],
+                required_models=["MACE"],
+                thresholds=_thresholds(),
+            )
+
+        self.assertEqual(evidence["trace_models"], ["MACE"])
+
     def test_validate_bundle_rejects_duplicate_trace_paths(self) -> None:
         """One trace evidence file should not satisfy count gates twice."""
         with tempfile.TemporaryDirectory() as tmpdir:
