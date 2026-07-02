@@ -92,6 +92,12 @@ def main() -> None:
         "make_owned_index_tensor" in cpp
         and ".clone()\n      .to(target_device)" in cpp
         and "kEmptyIndexTensorLength" in cpp
+        and "kIndexTensorRank" in cpp
+        and "kIndexTensorLengthDimension" in cpp
+        and "index_tensor_matches_vector" in cpp
+        and "cached_comm_tensors_match_vectors" in combined
+        and "if (!cached_comm_tensors_match_vectors())" in cpp
+        and "record_comm_cache_miss(CommCacheMissReason::kShapeChanged);" in cpp
         and "if (index_map.empty())" in cpp
         and "torch::empty({kEmptyIndexTensorLength}, INTEGER_TYPE)" in cpp
         and "torch::from_blob(idx_map_forward.data()" not in cpp
@@ -691,6 +697,12 @@ def main() -> None:
         "attempts - hits" in doc
         and "miss breakdown table" in doc,
         "IsoDelta-Halo guide must document miss-counter consistency",
+    )
+    _require(
+        "CUDA-aware MPI runs" in doc
+        and "cached index tensors" in doc
+        and "`miss_shape-changed`" in doc,
+        "IsoDelta-Halo guide must document CUDA index tensor reuse guard",
     )
     _require(
         "whole nonnegative profiling counts" in doc

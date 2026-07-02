@@ -118,6 +118,7 @@ private:
   void invalidate_comm_preprocess_cache();
   bool current_comm_topology_is_cacheable() const;
   bool comm_topology_matches_cache() const;
+  bool cached_comm_tensors_match_vectors() const;
   void store_comm_topology_signature();
   bool comm_list_tags_match_cache() const;
   void store_comm_list_tag_signature();

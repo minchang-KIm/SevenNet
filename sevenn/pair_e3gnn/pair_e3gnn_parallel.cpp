@@ -73,6 +73,8 @@ constexpr double kIsoDeltaHaloPercentScale = 100.0;
 constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
 constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
 constexpr long long kEmptyIndexTensorLength = 0;
+constexpr int kIndexTensorRank = 1;
+constexpr int kIndexTensorLengthDimension = 0;
 
 torch::Tensor make_owned_index_tensor(std::vector<long> &index_map,
                                       const torch::Device &target_device) {
@@ -88,6 +90,13 @@ torch::Tensor make_owned_index_tensor(std::vector<long> &index_map,
              INTEGER_TYPE)
       .clone()
       .to(target_device);
+}
+
+bool index_tensor_matches_vector(const torch::Tensor &index_tensor,
+                                 const std::vector<long> &index_map) {
+  return index_tensor.defined() && index_tensor.dim() == kIndexTensorRank &&
+         index_tensor.size(kIndexTensorLengthDimension) ==
+             static_cast<long long>(index_map.size());
 }
 } // namespace
 
@@ -838,6 +847,11 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
     invalidate_comm_preprocess_cache();
     return false;
   }
+  if (!cached_comm_tensors_match_vectors()) {
+    record_comm_cache_miss(CommCacheMissReason::kShapeChanged);
+    invalidate_comm_preprocess_cache();
+    return false;
+  }
 
   tagint *tag = atom->tag;
   for (int graph_idx = 0; graph_idx < graph_size; graph_idx++) {
@@ -871,6 +885,27 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
     std::cout << world_rank
               << " IsoDelta-Halo: reused communication metadata cache"
               << std::endl;
+  }
+  return true;
+}
+
+bool PairE3GNNParallel::cached_comm_tensors_match_vectors() const {
+  if (!use_cuda_mpi) {
+    return true;
+  }
+
+  for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
+    if (!index_tensor_matches_vector(
+            comm_cache_index_pack_forward_tensor[comm_phase],
+            comm_cache_index_pack_forward[comm_phase]) ||
+        !index_tensor_matches_vector(
+            comm_cache_index_unpack_forward_tensor[comm_phase],
+            comm_cache_index_unpack_forward[comm_phase]) ||
+        !index_tensor_matches_vector(
+            comm_cache_index_unpack_reverse_tensor[comm_phase],
+            comm_cache_index_unpack_reverse[comm_phase])) {
+      return false;
+    }
   }
   return true;
 }

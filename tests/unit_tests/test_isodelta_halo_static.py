@@ -157,6 +157,25 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertNotIn("torch::from_blob(upmap.data()", self.cpp)
         self.assertNotIn("torch::from_blob(idx_map_reverse.data()", self.cpp)
 
+    def test_cached_index_tensors_match_cached_vectors(self) -> None:
+        """CUDA index tensor reuse should be gated by cached vector lengths."""
+        self.assertIn("cached_comm_tensors_match_vectors", self.combined)
+        self.assertIn("index_tensor_matches_vector", self.cpp)
+        self.assertIn("kIndexTensorRank", self.cpp)
+        self.assertIn("kIndexTensorLengthDimension", self.cpp)
+        self.assertIn("index_tensor.defined()", self.cpp)
+        self.assertIn("comm_cache_index_pack_forward_tensor", self.cpp)
+        self.assertIn("comm_cache_index_unpack_forward_tensor", self.cpp)
+        self.assertIn("comm_cache_index_unpack_reverse_tensor", self.cpp)
+        self.assertIn(
+            "if (!cached_comm_tensors_match_vectors())",
+            self.cpp,
+        )
+        self.assertIn(
+            "record_comm_cache_miss(CommCacheMissReason::kShapeChanged);",
+            self.cpp,
+        )
+
     def test_comm_preprocess_requires_comm_brick(self) -> None:
         """The parallel pair style should fail clearly without CommBrick."""
         self.assertIn("kIsoDeltaHaloCommBrickRequiredError", self.cpp)

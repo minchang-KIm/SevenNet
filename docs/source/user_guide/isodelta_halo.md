@@ -378,6 +378,9 @@ It also rejects reports where the required miss reason counters do not sum to
 the measured cache activity. The checker treats `attempts`, `hits`, and every
 miss reason counter as whole nonnegative profiling counts, and each cache
 summary must record at least one attempt.
+On CUDA-aware MPI runs, the runtime also checks that cached index tensors still
+match their cached CPU index-vector lengths before reuse; a mismatch is treated
+as `miss_shape-changed` and the metadata cache is rebuilt.
 
 For a publishable performance claim, report the mean and variance across
 multiple repeats, include cache hit rate, and show that final thermodynamic
