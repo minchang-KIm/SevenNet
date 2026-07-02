@@ -51,8 +51,8 @@ def main() -> None:
 
     _require("kCommPhaseCount = 6" in header, "named comm phase count missing")
     _require(
-        "kCommCacheMissReasonCount = 7" in header,
-        "cache miss reason count must include topology changes",
+        "kCommCacheMissReasonCount = 8" in header,
+        "cache miss reason count must include comm list tag changes",
     )
     _require("[6]" not in cpp, "raw six-phase array/magic count remains in cpp")
     _require("[6]" not in header, "raw six-phase array/magic count remains in header")
@@ -84,6 +84,7 @@ def main() -> None:
         "e3gnn_sendproc",
         "e3gnn_recvproc",
         "e3gnn_firstrecv",
+        "e3gnn_sendlist_atom",
     ):
         _require(
             accessor_name in comm_brick_header and f"CommBrick::{accessor_name}" in comm_brick_cpp,
@@ -94,6 +95,12 @@ def main() -> None:
         and "store_comm_topology_signature" in combined
         and "comm-topology-changed" in cpp,
         "cache reuse must compare and report communication topology signatures",
+    )
+    _require(
+        "comm_list_tags_match_cache" in combined
+        and "store_comm_list_tag_signature" in combined
+        and "comm-list-tag-order-changed" in cpp,
+        "cache reuse must compare and report send/recv list tag signatures",
     )
 
     _require(
@@ -224,8 +231,9 @@ def main() -> None:
     )
     _require(
         "miss_comm-topology-changed" in doc
-        and "CommBrick communication topology" in doc,
-        "IsoDelta-Halo guide must document topology-guarded cache reuse",
+        and "miss_comm-list-tag-order-changed" in doc
+        and "sendlist tag order" in doc,
+        "IsoDelta-Halo guide must document topology and tag-order guards",
     )
     _require(
         "isodelta_halo" in doc_index,

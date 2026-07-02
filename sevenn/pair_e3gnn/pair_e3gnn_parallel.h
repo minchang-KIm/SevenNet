@@ -42,10 +42,11 @@ private:
     kTagCountChanged,
     kTagOrderChanged,
     kCommTopologyChanged,
+    kCommListTagOrderChanged,
   };
-  static constexpr int kCommCacheMissReasonCount = 7;
+  static constexpr int kCommCacheMissReasonCount = 8;
   static_assert(
-      static_cast<int>(CommCacheMissReason::kCommTopologyChanged) + 1 ==
+      static_cast<int>(CommCacheMissReason::kCommListTagOrderChanged) + 1 ==
           kCommCacheMissReasonCount,
       "CommCacheMissReason count must match the enum entries.");
   static constexpr int kInactiveCommPhaseValue = -1;
@@ -101,6 +102,8 @@ private:
   std::array<int, kCommPhaseCount> comm_cache_sendproc = {};
   std::array<int, kCommPhaseCount> comm_cache_recvproc = {};
   std::array<int, kCommPhaseCount> comm_cache_firstrecv = {};
+  std::vector<tagint> comm_cache_sendlist_tags[kCommPhaseCount];
+  std::vector<tagint> comm_cache_recvlist_tags[kCommPhaseCount];
   std::unordered_map<int, long> comm_cache_extra_graph_idx_map;
   std::vector<long> comm_cache_index_pack_forward[kCommPhaseCount];
   std::vector<long> comm_cache_index_unpack_forward[kCommPhaseCount];
@@ -114,6 +117,8 @@ private:
   void clear_comm_preprocess_work();
   bool comm_topology_matches_cache() const;
   void store_comm_topology_signature();
+  bool comm_list_tags_match_cache() const;
+  void store_comm_list_tag_signature();
   void record_comm_cache_miss(CommCacheMissReason);
   static const char *comm_cache_miss_reason_name(CommCacheMissReason);
   void print_comm_cache_summary() const;

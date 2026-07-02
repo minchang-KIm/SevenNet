@@ -105,6 +105,11 @@ int CommBrick::e3gnn_recvproc(int iswap) const { return recvproc[iswap]; }
 
 int CommBrick::e3gnn_firstrecv(int iswap) const { return firstrecv[iswap]; }
 
+int CommBrick::e3gnn_sendlist_atom(int iswap, int index) const
+{
+  return sendlist[iswap][index];
+}
+
 /* ---------------------------------------------------------------------- */
 //IMPORTANT: we *MUST* pass "*oldcomm" to the Comm initializer here, as
 //           the code below *requires* that the (implicit) copy constructor

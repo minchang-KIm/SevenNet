@@ -21,7 +21,9 @@ path.
 Before a cache hit is accepted, the runtime checks graph size, edge count, graph
 tag order, neighbor-list age, and the current CommBrick communication topology
 signature. The topology signature includes phase count, send/receive counts,
-send/receive ranks, and first-receive offsets.
+send/receive ranks, and first-receive offsets. The cache also compares the
+phase-local sendlist tag order and the contiguous receive-segment tag order so
+pass-through halo entries cannot be reused after atom-list reordering.
 
 ## Why This Is Model-Agnostic
 
@@ -138,6 +140,7 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `results.*.cache_summary.miss_neighbor-list-rebuilt`
 - `results.*.cache_summary.miss_shape-changed`
 - `results.*.cache_summary.miss_comm-topology-changed`
+- `results.*.cache_summary.miss_comm-list-tag-order-changed`
 - `results.*.cache_summary.miss_tag-order-changed`
 
 ## Report Correctness Gate

@@ -57,6 +57,7 @@ public:
   int e3gnn_sendproc(int) const;
   int e3gnn_recvproc(int) const;
   int e3gnn_firstrecv(int) const;
+  int e3gnn_sendlist_atom(int, int) const;
   // patched from SevenNet //
 
 protected:

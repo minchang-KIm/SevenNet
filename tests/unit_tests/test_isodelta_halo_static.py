@@ -71,12 +71,16 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
     def test_cache_is_conservatively_gated(self) -> None:
         """Reuse should only happen after neighbor-list rebuild checks pass."""
         self.assertIn("try_reuse_comm_preprocess_cache", self.combined)
+        self.assertIn("kCommCacheMissReasonCount = 8", self.header)
         self.assertIn("neighbor->ago <= kNeighborListJustBuiltAgo", self.cpp)
         self.assertIn("comm_cache_graph_tags", self.combined)
         self.assertIn("tag[atom_idx] != comm_cache_graph_tags[graph_idx]", self.cpp)
         self.assertIn("comm_topology_matches_cache", self.combined)
         self.assertIn("store_comm_topology_signature", self.combined)
         self.assertIn("comm-topology-changed", self.cpp)
+        self.assertIn("comm_list_tags_match_cache", self.combined)
+        self.assertIn("store_comm_list_tag_signature", self.combined)
+        self.assertIn("comm-list-tag-order-changed", self.cpp)
 
     def test_cache_miss_rebuilds_and_stores_metadata(self) -> None:
         """A miss must rebuild first and store only when the cache is enabled."""
@@ -117,6 +121,7 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
             "e3gnn_sendproc",
             "e3gnn_recvproc",
             "e3gnn_firstrecv",
+            "e3gnn_sendlist_atom",
         ):
             self.assertIn(accessor_name, self.comm_brick_header)
             self.assertIn(f"CommBrick::{accessor_name}", self.comm_brick_cpp)

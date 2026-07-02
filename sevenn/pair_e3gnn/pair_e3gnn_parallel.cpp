@@ -741,6 +741,8 @@ const char *PairE3GNNParallel::comm_cache_miss_reason_name(
     return "tag-order-changed";
   case CommCacheMissReason::kCommTopologyChanged:
     return "comm-topology-changed";
+  case CommCacheMissReason::kCommListTagOrderChanged:
+    return "comm-list-tag-order-changed";
   }
   return "unknown";
 }
@@ -797,6 +799,10 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
     record_comm_cache_miss(CommCacheMissReason::kCommTopologyChanged);
     return false;
   }
+  if (!comm_list_tags_match_cache()) {
+    record_comm_cache_miss(CommCacheMissReason::kCommListTagOrderChanged);
+    return false;
+  }
 
   tagint *tag = atom->tag;
   for (int graph_idx = 0; graph_idx < graph_size; graph_idx++) {
@@ -849,6 +855,7 @@ void PairE3GNNParallel::store_comm_preprocess_cache(
   }
 
   store_comm_topology_signature();
+  store_comm_list_tag_signature();
   comm_cache_extra_graph_idx_map = extra_graph_idx_map;
   for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
     comm_cache_index_pack_forward[comm_phase] =
@@ -919,6 +926,50 @@ bool PairE3GNNParallel::comm_topology_matches_cache() const {
   return true;
 }
 
+bool PairE3GNNParallel::comm_list_tags_match_cache() const {
+  CommBrick *comm_brick = dynamic_cast<CommBrick *>(comm);
+  if (comm_brick == nullptr) {
+    return false;
+  }
+
+  const int current_nswap = comm_brick->e3gnn_nswap();
+  if (current_nswap > kCommPhaseCount) {
+    return false;
+  }
+
+  tagint *tag = atom->tag;
+  for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
+    const bool active_phase = comm_phase < current_nswap;
+    const int current_sendnum =
+        active_phase ? comm_brick->e3gnn_sendnum(comm_phase) : 0;
+    const int current_recvnum =
+        active_phase ? comm_brick->e3gnn_recvnum(comm_phase) : 0;
+    if (comm_cache_sendlist_tags[comm_phase].size() !=
+            static_cast<size_t>(current_sendnum) ||
+        comm_cache_recvlist_tags[comm_phase].size() !=
+            static_cast<size_t>(current_recvnum)) {
+      return false;
+    }
+
+    for (int index = 0; index < current_sendnum; index++) {
+      const int atom_idx = comm_brick->e3gnn_sendlist_atom(comm_phase, index);
+      if (tag[atom_idx] != comm_cache_sendlist_tags[comm_phase][index]) {
+        return false;
+      }
+    }
+
+    const int firstrecv =
+        active_phase ? comm_brick->e3gnn_firstrecv(comm_phase) : 0;
+    for (int index = 0; index < current_recvnum; index++) {
+      if (tag[firstrecv + index] !=
+          comm_cache_recvlist_tags[comm_phase][index]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 void PairE3GNNParallel::store_comm_topology_signature() {
   CommBrick *comm_brick = dynamic_cast<CommBrick *>(comm);
   comm_cache_nswap =
@@ -939,6 +990,40 @@ void PairE3GNNParallel::store_comm_topology_signature() {
     comm_cache_sendproc[comm_phase] = comm_brick->e3gnn_sendproc(comm_phase);
     comm_cache_recvproc[comm_phase] = comm_brick->e3gnn_recvproc(comm_phase);
     comm_cache_firstrecv[comm_phase] = comm_brick->e3gnn_firstrecv(comm_phase);
+  }
+}
+
+void PairE3GNNParallel::store_comm_list_tag_signature() {
+  for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
+    comm_cache_sendlist_tags[comm_phase].clear();
+    comm_cache_recvlist_tags[comm_phase].clear();
+  }
+
+  CommBrick *comm_brick = dynamic_cast<CommBrick *>(comm);
+  if (comm_brick == nullptr) {
+    return;
+  }
+
+  const int current_nswap = comm_brick->e3gnn_nswap();
+  if (current_nswap > kCommPhaseCount) {
+    return;
+  }
+
+  tagint *tag = atom->tag;
+  for (int comm_phase = 0; comm_phase < current_nswap; comm_phase++) {
+    const int current_sendnum = comm_brick->e3gnn_sendnum(comm_phase);
+    comm_cache_sendlist_tags[comm_phase].reserve(current_sendnum);
+    for (int index = 0; index < current_sendnum; index++) {
+      const int atom_idx = comm_brick->e3gnn_sendlist_atom(comm_phase, index);
+      comm_cache_sendlist_tags[comm_phase].push_back(tag[atom_idx]);
+    }
+
+    const int current_recvnum = comm_brick->e3gnn_recvnum(comm_phase);
+    const int firstrecv = comm_brick->e3gnn_firstrecv(comm_phase);
+    comm_cache_recvlist_tags[comm_phase].reserve(current_recvnum);
+    for (int index = 0; index < current_recvnum; index++) {
+      comm_cache_recvlist_tags[comm_phase].push_back(tag[firstrecv + index]);
+    }
   }
 }
 
