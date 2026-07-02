@@ -20,6 +20,9 @@ from typing import Any
 # JSON field names are centralized so the schema stays stable across trace
 # exporters written for SevenNet, NequIP, MACE, Allegro, or another MLIP.
 MODEL_KEY = "model"
+STATUS_KEY = "status"
+EVALUATED_STATUS = "evaluated"
+PASSED_STATUS = "passed"
 SCHEMA_VERSION_KEY = "schema_version"
 STEPS_KEY = "steps"
 STEP_ID_KEY = "step"
@@ -206,7 +209,10 @@ def trace_schema() -> dict[str, Any]:
     return {
         SCHEMA_VERSION_KEY: TRACE_SCHEMA_VERSION,
         "root": {
-            MODEL_KEY: "optional string label such as SevenNet, NequIP, MACE, or Allegro",
+            MODEL_KEY: (
+                "optional non-empty string label such as SevenNet, NequIP, "
+                "MACE, or Allegro"
+            ),
             STEPS_KEY: "non-empty array of per-MD-step metadata records",
         },
         "required_step_fields": list(SCHEMA_REQUIRED_STEP_FIELDS),
@@ -299,6 +305,13 @@ def _as_number(value: Any, field_name: str) -> float:
     numeric_value = float(value)
     _require(math.isfinite(numeric_value), f"{field_name} must be finite")
     return numeric_value
+
+
+def _as_nonempty_string(value: Any, field_name: str) -> str:
+    """Return a non-empty string field for labels and statuses."""
+    _require(isinstance(value, str), f"{field_name} must be a string")
+    _require(bool(value.strip()), f"{field_name} must not be empty")
+    return value.strip()
 
 
 def _as_nonnegative_int(value: Any, field_name: str) -> int:
@@ -564,7 +577,7 @@ def evaluate_trace(
         "cache lookup overhead must be nonnegative",
     )
     model_name = trace.get(MODEL_KEY, "unknown-mlip")
-    _require(isinstance(model_name, str), f"{MODEL_KEY} must be a string when present")
+    model_name = _as_nonempty_string(model_name, MODEL_KEY)
     step_values = _as_sequence(trace.get(STEPS_KEY), STEPS_KEY)
     _require(step_values, f"{STEPS_KEY} must not be empty")
 
@@ -598,8 +611,8 @@ def evaluate_trace(
     hits = float(sum(hit_flags))
     hit_rate_percent = PERCENT_SCALE * hits / attempts
     return {
-        "status": "evaluated",
-        "model": model_name,
+        STATUS_KEY: EVALUATED_STATUS,
+        MODEL_KEY: model_name,
         ATTEMPTS_KEY: attempts,
         HITS_KEY: hits,
         HIT_RATE_PERCENT_KEY: hit_rate_percent,
@@ -788,6 +801,12 @@ def validate_trace_evidence(
 ) -> dict[str, Any]:
     """Gate evaluated trace evidence before using it as a generality claim."""
     validate_thresholds(thresholds)
+    status = _as_nonempty_string(evidence.get(STATUS_KEY), STATUS_KEY)
+    _require(
+        status in (EVALUATED_STATUS, PASSED_STATUS),
+        f"{STATUS_KEY} must be {EVALUATED_STATUS!r} or {PASSED_STATUS!r}",
+    )
+    _as_nonempty_string(evidence.get(MODEL_KEY), MODEL_KEY)
     attempts = _as_nonnegative_int(evidence.get(ATTEMPTS_KEY), ATTEMPTS_KEY)
     hits = _as_nonnegative_int(evidence.get(HITS_KEY), HITS_KEY)
     hit_rate_percent = _as_number(
@@ -841,7 +860,7 @@ def validate_trace_evidence(
         )
     timing = _as_mapping(evidence.get(TIMING_KEY), TIMING_KEY)
     _check_trace_timing(timing, thresholds)
-    evidence["status"] = "passed"
+    evidence[STATUS_KEY] = PASSED_STATUS
     evidence["thresholds"] = asdict(thresholds)
     evidence[TRACE_COUNT_RESIDUAL_KEY] = trace_count_residual
     return evidence

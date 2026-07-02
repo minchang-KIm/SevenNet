@@ -89,6 +89,7 @@ For precomputed trace evidence, the checker also verifies that `hit_rate_percent
 matches `hits / attempts` and that the miss breakdown counters sum to
 `attempts - hits`. It treats `attempts`, `hits`, and each miss counter as
 whole nonnegative reuse-decision counts. The evidence must also include
+`status` as `evaluated` or `passed`, a non-empty `model` label, and
 `model_agnostic_requirements` flags proving that ordered graph node tags, edge
 count, neighbor-list rebuilds, communication topology, and communication list
 tag order were all used as reuse guards.

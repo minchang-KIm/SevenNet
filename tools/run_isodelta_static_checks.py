@@ -314,6 +314,10 @@ def main() -> None:
     )
     _require(
         "MODEL_KEY = \"model\"" in mlip_trace_check
+        and "STATUS_KEY = \"status\"" in mlip_trace_check
+        and "EVALUATED_STATUS" in mlip_trace_check
+        and "_as_nonempty_string(evidence.get(STATUS_KEY)" in mlip_trace_check
+        and "_as_nonempty_string(evidence.get(MODEL_KEY)" in mlip_trace_check
         and "MISS_COMM_TOPOLOGY_CHANGED" in mlip_trace_check
         and "MISS_COMM_LIST_TAG_ORDER_CHANGED" in mlip_trace_check
         and "TraceThresholds" in mlip_trace_check
@@ -388,6 +392,11 @@ def main() -> None:
     _require(
         "whole nonnegative reuse-decision counts" in doc,
         "IsoDelta-Halo guide must document trace count integer validation",
+    )
+    _require(
+        "`status` as `evaluated` or `passed`" in doc
+        and "non-empty `model` label" in doc,
+        "IsoDelta-Halo guide must document trace model/status validation",
     )
     _require(
         "When timing fields are present" in doc

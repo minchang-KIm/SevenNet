@@ -44,6 +44,7 @@ OUT_OF_RANGE_PERCENT = 101.0
 INVALID_SPEEDUP_THRESHOLD = 0.0
 FRACTIONAL_TRACE_COUNT = 1.5
 INCONSISTENT_TIMING_VALUE = 99.0
+FAILED_STATUS = "failed"
 
 
 def _phase(
@@ -133,6 +134,34 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_mlip_trace.TraceCheckError,
             "hits / attempts",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_invalid_status(self) -> None:
+        """Precomputed trace evidence should carry an evaluated or passed status."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["status"] = FAILED_STATUS
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "status",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_empty_model_label(self) -> None:
+        """Trace evidence should identify the MLIP model label."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["model"] = " "
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "model",
         ):
             isodelta_mlip_trace.validate_trace_evidence(
                 evidence,
@@ -361,6 +390,16 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
             evidence["miss_breakdown"]["miss_disabled"],
             float(STABLE_TRACE_STEP_COUNT),
         )
+
+    def test_evaluate_trace_rejects_empty_model_label(self) -> None:
+        """Trace exporters should not emit an empty model label."""
+        trace = _stable_trace(" ")
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "model",
+        ):
+            isodelta_mlip_trace.evaluate_trace(trace)
 
     def test_trace_schema_documents_portable_export_fields(self) -> None:
         """The checker should expose a schema for non-SevenNet trace exporters."""
