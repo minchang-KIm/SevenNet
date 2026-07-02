@@ -28,4 +28,5 @@ SevenNet offers various pretrained models, MD engines (ASE, LAMMPS), and user in
    cli
    reewc
    d3
+   isodelta_halo
    note_book

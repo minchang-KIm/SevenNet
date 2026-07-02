@@ -14,6 +14,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.cpp"
 HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
+DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
+DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
 
 
 def _read(path: Path) -> str:
@@ -31,6 +33,8 @@ def main() -> None:
     """Validate that the cache remains metadata-only and conservatively gated."""
     cpp = _read(CPP_PATH)
     header = _read(HEADER_PATH)
+    doc = _read(DOC_PATH)
+    doc_index = _read(DOC_INDEX_PATH)
     combined = cpp + "\n" + header
 
     _require("kCommPhaseCount = 6" in header, "named comm phase count missing")
@@ -108,6 +112,23 @@ def main() -> None:
         "extra_graph_idx_map[list_i] = graph_size + extra_graph_idx_map.size();"
         in cpp,
         "pack-forward extra graph map must be keyed by list_i",
+    )
+    _require(
+        doc.lstrip().startswith("<!--"),
+        "IsoDelta-Halo guide must start with a generated-file comment",
+    )
+    _require(
+        "run_isodelta_lammps_benchmark.py" in doc,
+        "IsoDelta-Halo guide must document the benchmark runner",
+    )
+    _require(
+        "SEVENN_ISODELTA_HALO_DISABLE" in doc
+        and "SEVENN_ISODELTA_HALO_PROFILE" in doc,
+        "IsoDelta-Halo guide must document runtime controls",
+    )
+    _require(
+        "isodelta_halo" in doc_index,
+        "IsoDelta-Halo guide must be linked from the user guide index",
     )
 
     print("IsoDelta-Halo static checks passed.")
