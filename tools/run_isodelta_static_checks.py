@@ -42,6 +42,15 @@ def main() -> None:
     _require("kCommPhaseCount = 6" in header, "named comm phase count missing")
     _require("[6]" not in cpp, "raw six-phase array/magic count remains in cpp")
     _require("[6]" not in header, "raw six-phase array/magic count remains in header")
+    for include_name in ("<cstring>", "<iostream>", "<list>", "<map>", "<set>"):
+        _require(
+            f"#include {include_name}" in cpp,
+            f"pair_e3gnn_parallel.cpp must explicitly include {include_name}",
+        )
+    _require(
+        "std::vector<long> &upmap = comm_index_unpack_forward[comm_phase];" in cpp,
+        "CUDA unpack tensor creation must not copy the unpack vector first",
+    )
 
     _require(
         "try_reuse_comm_preprocess_cache" in combined,

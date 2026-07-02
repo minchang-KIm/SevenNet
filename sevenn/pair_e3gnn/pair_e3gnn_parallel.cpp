@@ -21,8 +21,13 @@
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
+#include <iostream>
+#include <list>
+#include <map>
 #include <numeric>
+#include <set>
 #include <string>
 
 #include <torch/csrc/jit/api/module.h>
@@ -907,7 +912,7 @@ void PairE3GNNParallel::comm_preprocess() {
     if (use_cuda_mpi) {
       comm_index_pack_forward_tensor[comm_phase] = torch::from_blob(idx_map_forward.data(), idx_map_forward.size(), INTEGER_TYPE).to(device);
 
-      auto upmap = comm_index_unpack_forward[comm_phase];
+      std::vector<long> &upmap = comm_index_unpack_forward[comm_phase];
       comm_index_unpack_forward_tensor[comm_phase] = torch::from_blob(upmap.data(), upmap.size(), INTEGER_TYPE).to(device);
       comm_index_unpack_reverse_tensor[comm_phase] = torch::from_blob(idx_map_reverse.data(), idx_map_reverse.size(), INTEGER_TYPE).to(device);
     }
