@@ -219,6 +219,10 @@ Both the experiment report and benchmark report include a `provenance` object
 with schema version, Git commit, Git branch, dirty-worktree state, Python
 runtime, platform string, and benchmark environment overrides. Treat a dirty
 worktree as a signal to archive the exact diff beside the raw logs.
+The report checker requires `provenance.report_schema_version`,
+`provenance.git_commit`, `provenance.git_branch`, `provenance.git_dirty`,
+runtime fields, and case environment overrides before accepting benchmark
+evidence.
 
 To append the publication evidence bundle gate to the same driver run, add one
 or more trace evidence files:

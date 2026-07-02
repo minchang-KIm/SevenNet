@@ -42,6 +42,9 @@ ISODELTA_MEAN_LOOP_TIME_SECONDS = 10.0
 ISODELTA_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.0
 ISODELTA_SAMPLE_STDDEV_LOOP_TIME_SECONDS = 0.0
 EXPECTED_RESULT_COUNT = 4
+EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+EXPECTED_GIT_COMMIT = "0123456789abcdef"
+EXPECTED_GIT_BRANCH = "isodelta-halo-runtime"
 
 
 def _cache_summary(
@@ -68,6 +71,19 @@ def _cache_summary(
 def _valid_report() -> dict[str, object]:
     """Create a small benchmark report with passing correctness evidence."""
     return {
+        "provenance": {
+            "report_schema_version": EXPECTED_REPORT_SCHEMA_VERSION,
+            "git_commit": EXPECTED_GIT_COMMIT,
+            "git_branch": EXPECTED_GIT_BRANCH,
+            "git_dirty": False,
+            "python_executable": "python",
+            "python_version": "3.13.0",
+            "platform": "test-platform",
+            "case_environment_overrides": {
+                "baseline-disabled": {"SEVENN_ISODELTA_HALO_DISABLE": "1"},
+                "isodelta-enabled": {"SEVENN_ISODELTA_HALO_PROFILE": "1"},
+            },
+        },
         "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
         "summary": {
             "runs": EXPECTED_RESULT_COUNT,
@@ -170,6 +186,13 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         evidence = isodelta_report_check.validate_report(_valid_report(), thresholds)
         self.assertEqual(evidence["status"], "passed")
         self.assertEqual(
+            evidence["report_schema_version"],
+            EXPECTED_REPORT_SCHEMA_VERSION,
+        )
+        self.assertEqual(evidence["git_commit"], EXPECTED_GIT_COMMIT)
+        self.assertEqual(evidence["git_branch"], EXPECTED_GIT_BRANCH)
+        self.assertFalse(evidence["git_dirty"])
+        self.assertEqual(
             evidence["checked_observables"],
             ["PotEng", "TotEng"],
         )
@@ -213,6 +236,36 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
             "run_timeout_seconds",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_missing_provenance(self) -> None:
+        """Benchmark evidence should include reproducibility metadata."""
+        report = _valid_report()
+        del report["provenance"]
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "provenance",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_wrong_schema_version(self) -> None:
+        """Benchmark evidence should pin the expected report schema version."""
+        report = _valid_report()
+        provenance = report["provenance"]
+        assert isinstance(provenance, dict)
+        provenance["report_schema_version"] = "old-schema"
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "report_schema_version",
         ):
             isodelta_report_check.validate_report(
                 report,

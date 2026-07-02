@@ -48,6 +48,7 @@ ISODELTA_LOOP_TIME_SECONDS = 10.0
 ZERO_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.0
 ZERO_SAMPLE_STDDEV_LOOP_TIME_SECONDS = 0.0
 EXPECTED_RESULT_COUNT = 4
+EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
 
 
 def _cache_summary(
@@ -79,6 +80,19 @@ def _cache_summary(
 def _benchmark_report() -> dict[str, object]:
     """Create a benchmark report that proves correctness and speedup."""
     return {
+        "provenance": {
+            "report_schema_version": EXPECTED_REPORT_SCHEMA_VERSION,
+            "git_commit": "0123456789abcdef",
+            "git_branch": "isodelta-halo-runtime",
+            "git_dirty": False,
+            "python_executable": "python",
+            "python_version": "3.13.0",
+            "platform": "test-platform",
+            "case_environment_overrides": {
+                "baseline-disabled": {"SEVENN_ISODELTA_HALO_DISABLE": "1"},
+                "isodelta-enabled": {"SEVENN_ISODELTA_HALO_PROFILE": "1"},
+            },
+        },
         "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
         "summary": {
             "runs": EXPECTED_RESULT_COUNT,

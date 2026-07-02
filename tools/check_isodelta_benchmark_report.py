@@ -17,6 +17,16 @@ from typing import Any
 
 # These keys mirror the benchmark report schema rather than scattering JSON
 # field names through the validation logic.
+PROVENANCE_KEY = "provenance"
+REPORT_SCHEMA_VERSION_KEY = "report_schema_version"
+EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+GIT_COMMIT_KEY = "git_commit"
+GIT_BRANCH_KEY = "git_branch"
+GIT_DIRTY_KEY = "git_dirty"
+PYTHON_EXECUTABLE_KEY = "python_executable"
+PYTHON_VERSION_KEY = "python_version"
+PLATFORM_KEY = "platform"
+CASE_ENVIRONMENT_OVERRIDES_KEY = "case_environment_overrides"
 SUMMARY_KEY = "summary"
 SUMMARY_CASES_KEY = "cases"
 SUMMARY_RUNS_KEY = "runs"
@@ -156,6 +166,19 @@ def _as_sequence(value: Any, field_name: str) -> list[Any]:
     return value
 
 
+def _as_nonempty_string(value: Any, field_name: str) -> str:
+    """Return a non-empty string field with a schema-oriented message."""
+    _require(isinstance(value, str), f"{field_name} must be a string")
+    _require(bool(value.strip()), f"{field_name} must not be empty")
+    return value
+
+
+def _as_boolean(value: Any, field_name: str) -> bool:
+    """Return a boolean field without accepting integer aliases."""
+    _require(isinstance(value, bool), f"{field_name} must be boolean")
+    return value
+
+
 def _as_number(value: Any, field_name: str) -> float:
     """Return a numeric field without accepting booleans as numbers."""
     _require(
@@ -194,6 +217,61 @@ def _summary(report: dict[str, Any]) -> dict[str, Any]:
 def _results(report: dict[str, Any]) -> list[Any]:
     """Return the report result list."""
     return _as_sequence(report.get(RESULTS_KEY), RESULTS_KEY)
+
+
+def _check_provenance(report: dict[str, Any]) -> dict[str, Any]:
+    """Require reproducibility metadata for a publishable benchmark report."""
+    provenance = _as_mapping(report.get(PROVENANCE_KEY), PROVENANCE_KEY)
+    schema_version = _as_nonempty_string(
+        provenance.get(REPORT_SCHEMA_VERSION_KEY),
+        f"{PROVENANCE_KEY}.{REPORT_SCHEMA_VERSION_KEY}",
+    )
+    _require(
+        schema_version == EXPECTED_REPORT_SCHEMA_VERSION,
+        (
+            f"{PROVENANCE_KEY}.{REPORT_SCHEMA_VERSION_KEY} must be "
+            f"{EXPECTED_REPORT_SCHEMA_VERSION}"
+        ),
+    )
+    git_commit = _as_nonempty_string(
+        provenance.get(GIT_COMMIT_KEY),
+        f"{PROVENANCE_KEY}.{GIT_COMMIT_KEY}",
+    )
+    git_branch = _as_nonempty_string(
+        provenance.get(GIT_BRANCH_KEY),
+        f"{PROVENANCE_KEY}.{GIT_BRANCH_KEY}",
+    )
+    git_dirty = _as_boolean(
+        provenance.get(GIT_DIRTY_KEY),
+        f"{PROVENANCE_KEY}.{GIT_DIRTY_KEY}",
+    )
+    _as_nonempty_string(
+        provenance.get(PYTHON_EXECUTABLE_KEY),
+        f"{PROVENANCE_KEY}.{PYTHON_EXECUTABLE_KEY}",
+    )
+    _as_nonempty_string(
+        provenance.get(PYTHON_VERSION_KEY),
+        f"{PROVENANCE_KEY}.{PYTHON_VERSION_KEY}",
+    )
+    _as_nonempty_string(
+        provenance.get(PLATFORM_KEY),
+        f"{PROVENANCE_KEY}.{PLATFORM_KEY}",
+    )
+    case_environment_overrides = _as_mapping(
+        provenance.get(CASE_ENVIRONMENT_OVERRIDES_KEY),
+        f"{PROVENANCE_KEY}.{CASE_ENVIRONMENT_OVERRIDES_KEY}",
+    )
+    for case_name in EXPECTED_CASES:
+        _as_mapping(
+            case_environment_overrides.get(case_name),
+            f"{PROVENANCE_KEY}.{CASE_ENVIRONMENT_OVERRIDES_KEY}.{case_name}",
+        )
+    return {
+        "report_schema_version": schema_version,
+        "git_commit": git_commit,
+        "git_branch": git_branch,
+        "git_dirty": git_dirty,
+    }
 
 
 def _check_run_timeout(report: dict[str, Any]) -> float:
@@ -631,6 +709,7 @@ def validate_report(
 ) -> dict[str, Any]:
     """Validate one report and return a compact evidence summary."""
     validate_thresholds(thresholds)
+    provenance_evidence = _check_provenance(report)
     summary = _summary(report)
     run_timeout_seconds = _check_run_timeout(report)
     result_count = _check_result_count(report, summary)
@@ -654,6 +733,7 @@ def validate_report(
     return {
         "status": "passed",
         "thresholds": asdict(thresholds),
+        **provenance_evidence,
         "successful_run_count": successful_run_count,
         "result_count": result_count,
         "run_timeout_seconds": run_timeout_seconds,
