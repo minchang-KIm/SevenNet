@@ -69,6 +69,21 @@ The validation script checks:
 This does not replace a full LAMMPS/LibTorch build. It is a fast local guard so
 the implementation does not drift while runtime environments are being prepared.
 
+## Build Prerequisite Check
+
+Before patching and compiling LAMMPS, check that the local checkout has the
+expected SevenNet pair-style sources and that the LAMMPS source tree matches the
+version used by the patch script:
+
+```bash
+python tools/check_isodelta_build_prereqs.py \
+  --lammps-root /path/to/lammps \
+  --require-torch
+```
+
+The checker prints JSON so failed checks can be archived with build logs. It
+does not modify the LAMMPS tree.
+
 ## Paired Benchmark
 
 Use the benchmark runner after building a LAMMPS binary that contains

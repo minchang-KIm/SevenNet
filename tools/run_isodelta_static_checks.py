@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.cpp"
 HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
 BENCHMARK_PATH = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
+PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
 DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
 
@@ -35,6 +36,7 @@ def main() -> None:
     cpp = _read(CPP_PATH)
     header = _read(HEADER_PATH)
     benchmark = _read(BENCHMARK_PATH)
+    prereq = _read(PREREQ_PATH)
     doc = _read(DOC_PATH)
     doc_index = _read(DOC_INDEX_PATH)
     combined = cpp + "\n" + header
@@ -131,6 +133,16 @@ def main() -> None:
     _require(
         "run_isodelta_lammps_benchmark.py" in doc,
         "IsoDelta-Halo guide must document the benchmark runner",
+    )
+    _require(
+        "EXPECTED_LAMMPS_VERSION" in prereq
+        and "check_lammps_root" in prereq
+        and "check_torch_import" in prereq,
+        "build prerequisite checker must cover LAMMPS and torch checks",
+    )
+    _require(
+        "check_isodelta_build_prereqs.py" in doc,
+        "IsoDelta-Halo guide must document the build prerequisite checker",
     )
     _require(
         "parse_final_thermo_observables" in benchmark
