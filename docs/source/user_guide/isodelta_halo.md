@@ -282,6 +282,7 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `summary.cases.*.max_loop_time_seconds`
 - `summary.speedup_vs_disabled_cache`
 - `summary.final_thermo_delta_vs_disabled_cache`
+- `results.*.repeat_index`
 - `results.*.cache_summary.attempts`
 - `results.*.cache_summary.hits`
 - `results.*.cache_summary.hit_rate_percent`
@@ -322,6 +323,9 @@ reason counters, which keeps failed reuse diagnosable instead of reducing the
 experiment to a single speedup number.
 The report checker validates `run_timeout_seconds` as a positive finite value,
 so accepted benchmark evidence proves that each LAMMPS invocation was bounded.
+It also validates that every `repeat_index` has exactly one `baseline-disabled`
+run and one `isodelta-enabled` run, then reports `paired_repeat_count` in the
+evidence summary.
 When multiple MPI ranks print profiling summaries, the benchmark parser sums
 rank-local attempts, hits, and miss counters, then recomputes
 `hit_rate_percent` from the aggregated hits and attempts. The report checker

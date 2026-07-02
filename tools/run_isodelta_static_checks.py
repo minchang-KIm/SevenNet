@@ -464,6 +464,9 @@ def main() -> None:
         and "validate_thresholds" in report_check
         and "RUN_TIMEOUT_SECONDS_KEY" in report_check
         and "_check_run_timeout" in report_check
+        and "REPEAT_INDEX_KEY" in report_check
+        and "_check_paired_runs" in report_check
+        and "paired_repeat_count" in report_check
         and "MIN_REQUIRED_PAIRED_THERMO_COUNT" in report_check
         and "MAX_PERCENT_VALUE" in report_check
         and "math.isfinite" in report_check
@@ -510,6 +513,12 @@ def main() -> None:
         "run_timeout_seconds" in doc
         and "report checker validates" in doc,
         "IsoDelta-Halo guide must document report timeout evidence",
+    )
+    _require(
+        "results.*.repeat_index" in doc
+        and "paired_repeat_count" in doc
+        and "exactly one `baseline-disabled`" in doc,
+        "IsoDelta-Halo guide must document paired repeat evidence",
     )
     _require(
         "summary_rank_count" in doc

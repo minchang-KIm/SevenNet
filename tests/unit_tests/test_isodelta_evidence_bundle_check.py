@@ -87,11 +87,25 @@ def _benchmark_report() -> dict[str, object]:
         "results": [
             {
                 "case": "baseline-disabled",
+                "repeat_index": 0,
                 "returncode": 0,
                 "cache_summary": _cache_summary(hits=0.0, hit_rate_percent=0.0),
             },
             {
                 "case": "isodelta-enabled",
+                "repeat_index": 0,
+                "returncode": 0,
+                "cache_summary": _cache_summary(),
+            },
+            {
+                "case": "baseline-disabled",
+                "repeat_index": 1,
+                "returncode": 0,
+                "cache_summary": _cache_summary(hits=0.0, hit_rate_percent=0.0),
+            },
+            {
+                "case": "isodelta-enabled",
+                "repeat_index": 1,
                 "returncode": 0,
                 "cache_summary": _cache_summary(),
             },

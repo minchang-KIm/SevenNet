@@ -70,6 +70,7 @@ def _valid_report() -> dict[str, object]:
         "results": [
             {
                 "case": "baseline-disabled",
+                "repeat_index": 0,
                 "returncode": 0,
                 "cache_summary": _cache_summary(
                     attempts=10.0,
@@ -79,6 +80,7 @@ def _valid_report() -> dict[str, object]:
             },
             {
                 "case": "isodelta-enabled",
+                "repeat_index": 0,
                 "returncode": 0,
                 "cache_summary": _cache_summary(
                     attempts=10.0,
@@ -87,7 +89,18 @@ def _valid_report() -> dict[str, object]:
                 ),
             },
             {
+                "case": "baseline-disabled",
+                "repeat_index": 1,
+                "returncode": 0,
+                "cache_summary": _cache_summary(
+                    attempts=10.0,
+                    hits=0.0,
+                    hit_rate_percent=0.0,
+                ),
+            },
+            {
                 "case": "isodelta-enabled",
+                "repeat_index": 1,
                 "returncode": 0,
                 "cache_summary": _cache_summary(
                     attempts=SECOND_ENABLED_ATTEMPTS,
@@ -126,6 +139,7 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         self.assertEqual(evidence["max_cache_count_residual"], EXPECTED_ZERO_RESIDUAL)
         self.assertEqual(evidence["verified_cache_miss_key_count"], 8.0)
         self.assertEqual(evidence["run_timeout_seconds"], RUN_TIMEOUT_SECONDS)
+        self.assertEqual(evidence["paired_repeat_count"], 2)
 
     def test_validate_report_rejects_missing_run_timeout(self) -> None:
         """Paper evidence should record the timeout used for each run."""
@@ -149,6 +163,39 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
             "run_timeout_seconds",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_unpaired_repeat(self) -> None:
+        """Every repeat should include both disabled and enabled cases."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        del results[2]
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "missing paired cases",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_duplicate_case_for_repeat(self) -> None:
+        """A repeat should not contain two enabled or two disabled entries."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        duplicate = dict(results[1])
+        results.append(duplicate)
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "duplicate",
         ):
             isodelta_report_check.validate_report(
                 report,

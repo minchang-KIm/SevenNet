@@ -21,6 +21,7 @@ SUMMARY_KEY = "summary"
 RESULTS_KEY = "results"
 RUN_TIMEOUT_SECONDS_KEY = "run_timeout_seconds"
 CASE_KEY = "case"
+REPEAT_INDEX_KEY = "repeat_index"
 RETURNCODE_KEY = "returncode"
 CACHE_SUMMARY_KEY = "cache_summary"
 ATTEMPTS_KEY = "attempts"
@@ -40,7 +41,10 @@ SPEEDUP_KEY = "speedup_vs_disabled_cache"
 FINAL_THERMO_DELTA_KEY = "final_thermo_delta_vs_disabled_cache"
 MAX_ABS_DELTA_KEY = "max_abs_delta"
 PAIRED_COUNT_KEY = "paired_count"
+BASELINE_CASE = "baseline-disabled"
 ISODELTA_CASE = "isodelta-enabled"
+EXPECTED_CASES = frozenset((BASELINE_CASE, ISODELTA_CASE))
+EXPECTED_CASE_COUNT_PER_REPEAT = len(EXPECTED_CASES)
 DEFAULT_MAX_ABS_THERMO_DELTA = 1.0e-8
 DEFAULT_MIN_PAIRED_THERMO_COUNT = 1
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
@@ -172,6 +176,53 @@ def _check_run_timeout(report: dict[str, Any]) -> float:
     return run_timeout_seconds
 
 
+def _check_paired_runs(report: dict[str, Any]) -> int:
+    """Require each repeat to include exactly one baseline and enabled run."""
+    cases_by_repeat: dict[int, set[str]] = {}
+    for index, result in enumerate(_results(report)):
+        result_map = _as_mapping(result, f"{RESULTS_KEY}[{index}]")
+        case_name = result_map.get(CASE_KEY)
+        _require(
+            isinstance(case_name, str),
+            f"{RESULTS_KEY}[{index}].{CASE_KEY} must be a string",
+        )
+        _require(
+            case_name in EXPECTED_CASES,
+            f"{RESULTS_KEY}[{index}].{CASE_KEY} must be one of {sorted(EXPECTED_CASES)}",
+        )
+        repeat_index_value = _as_number(
+            result_map.get(REPEAT_INDEX_KEY),
+            f"{RESULTS_KEY}[{index}].{REPEAT_INDEX_KEY}",
+        )
+        _require(
+            repeat_index_value >= MIN_COUNT_VALUE and repeat_index_value.is_integer(),
+            f"{RESULTS_KEY}[{index}].{REPEAT_INDEX_KEY} must be a nonnegative integer",
+        )
+        repeat_index = int(repeat_index_value)
+        seen_cases = cases_by_repeat.setdefault(repeat_index, set())
+        _require(
+            case_name not in seen_cases,
+            f"repeat_index {repeat_index} has duplicate {case_name}",
+        )
+        seen_cases.add(case_name)
+
+    _require(cases_by_repeat, "benchmark report must contain paired repeat results")
+    for repeat_index, seen_cases in sorted(cases_by_repeat.items()):
+        missing_cases = EXPECTED_CASES - seen_cases
+        _require(
+            not missing_cases,
+            (
+                f"repeat_index {repeat_index} missing paired cases: "
+                f"{', '.join(sorted(missing_cases))}"
+            ),
+        )
+        _require(
+            len(seen_cases) == EXPECTED_CASE_COUNT_PER_REPEAT,
+            f"repeat_index {repeat_index} must contain exactly two paired cases",
+        )
+    return len(cases_by_repeat)
+
+
 def _check_successful_runs(report: dict[str, Any]) -> int:
     """Require every recorded benchmark process to exit successfully."""
     successful_count = 0
@@ -189,7 +240,9 @@ def _check_successful_runs(report: dict[str, Any]) -> int:
 
 
 def _check_thermo_deltas(
-    summary: dict[str, Any], thresholds: ReportThresholds
+    summary: dict[str, Any],
+    thresholds: ReportThresholds,
+    paired_repeat_count: int,
 ) -> tuple[list[str], float]:
     """Require final thermo deltas to stay within the configured tolerance."""
     delta_report = _as_mapping(
@@ -221,6 +274,13 @@ def _check_thermo_deltas(
             (
                 f"{observable} paired_count {paired_count:g} is below "
                 f"{thresholds.min_paired_thermo_count}"
+            ),
+        )
+        _require(
+            paired_count <= paired_repeat_count,
+            (
+                f"{observable} paired_count {paired_count:g} exceeds "
+                f"paired_repeat_count {paired_repeat_count:g}"
             ),
         )
         _require(
@@ -371,10 +431,15 @@ def validate_report(
     validate_thresholds(thresholds)
     summary = _summary(report)
     run_timeout_seconds = _check_run_timeout(report)
+    paired_repeat_count = _check_paired_runs(report)
     successful_run_count = (
         _check_successful_runs(report) if thresholds.require_successful_runs else None
     )
-    checked_observables, max_seen_delta = _check_thermo_deltas(summary, thresholds)
+    checked_observables, max_seen_delta = _check_thermo_deltas(
+        summary,
+        thresholds,
+        paired_repeat_count,
+    )
     speedup = _check_speedup(summary, thresholds.min_speedup)
     cache_evidence = _check_cache_evidence(
         report,
@@ -387,6 +452,7 @@ def validate_report(
         "thresholds": asdict(thresholds),
         "successful_run_count": successful_run_count,
         "run_timeout_seconds": run_timeout_seconds,
+        "paired_repeat_count": paired_repeat_count,
         "checked_observables": checked_observables,
         "max_seen_abs_thermo_delta": max_seen_delta,
         "speedup_vs_disabled_cache": speedup,
