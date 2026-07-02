@@ -43,6 +43,8 @@ MIN_TRACE_ESTIMATED_SPEEDUP = 1.15
 OUT_OF_RANGE_PERCENT = 101.0
 PERCENT_SCALE = 100.0
 RUN_TIMEOUT_SECONDS = 3600.0
+BASELINE_LOOP_TIME_SECONDS = 12.0
+ISODELTA_LOOP_TIME_SECONDS = 10.0
 
 
 def _cache_summary(
@@ -77,6 +79,16 @@ def _benchmark_report() -> dict[str, object]:
         "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
         "summary": {
             "speedup_vs_disabled_cache": 1.2,
+            "cases": {
+                "baseline-disabled": {
+                    "mean_loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
+                    "valid_loop_time_count": 2,
+                },
+                "isodelta-enabled": {
+                    "mean_loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                    "valid_loop_time_count": 2,
+                },
+            },
             "final_thermo_delta_vs_disabled_cache": {
                 "PotEng": {
                     "max_abs_delta": 1.0e-9,
@@ -89,24 +101,28 @@ def _benchmark_report() -> dict[str, object]:
                 "case": "baseline-disabled",
                 "repeat_index": 0,
                 "returncode": 0,
+                "loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
                 "cache_summary": _cache_summary(hits=0.0, hit_rate_percent=0.0),
             },
             {
                 "case": "isodelta-enabled",
                 "repeat_index": 0,
                 "returncode": 0,
+                "loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
                 "cache_summary": _cache_summary(),
             },
             {
                 "case": "baseline-disabled",
                 "repeat_index": 1,
                 "returncode": 0,
+                "loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
                 "cache_summary": _cache_summary(hits=0.0, hit_rate_percent=0.0),
             },
             {
                 "case": "isodelta-enabled",
                 "repeat_index": 1,
                 "returncode": 0,
+                "loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
                 "cache_summary": _cache_summary(),
             },
         ],

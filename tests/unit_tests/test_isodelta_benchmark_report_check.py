@@ -33,6 +33,8 @@ SECOND_ENABLED_ATTEMPTS = 11.0
 SECOND_ENABLED_HITS = 9.0
 EXPECTED_ZERO_RESIDUAL = 0.0
 RUN_TIMEOUT_SECONDS = 3600.0
+BASELINE_MEAN_LOOP_TIME_SECONDS = 11.5
+ISODELTA_MEAN_LOOP_TIME_SECONDS = 10.0
 
 
 def _cache_summary(
@@ -62,6 +64,16 @@ def _valid_report() -> dict[str, object]:
         "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
         "summary": {
             "speedup_vs_disabled_cache": 1.15,
+            "cases": {
+                "baseline-disabled": {
+                    "mean_loop_time_seconds": BASELINE_MEAN_LOOP_TIME_SECONDS,
+                    "valid_loop_time_count": 2,
+                },
+                "isodelta-enabled": {
+                    "mean_loop_time_seconds": ISODELTA_MEAN_LOOP_TIME_SECONDS,
+                    "valid_loop_time_count": 2,
+                },
+            },
             "final_thermo_delta_vs_disabled_cache": {
                 "PotEng": {"max_abs_delta": 1.0e-9, "paired_count": 2.0},
                 "TotEng": {"max_abs_delta": 2.0e-9, "paired_count": 2.0},
@@ -72,6 +84,7 @@ def _valid_report() -> dict[str, object]:
                 "case": "baseline-disabled",
                 "repeat_index": 0,
                 "returncode": 0,
+                "loop_time_seconds": 12.0,
                 "cache_summary": _cache_summary(
                     attempts=10.0,
                     hits=0.0,
@@ -82,6 +95,7 @@ def _valid_report() -> dict[str, object]:
                 "case": "isodelta-enabled",
                 "repeat_index": 0,
                 "returncode": 0,
+                "loop_time_seconds": 10.0,
                 "cache_summary": _cache_summary(
                     attempts=10.0,
                     hits=8.0,
@@ -92,6 +106,7 @@ def _valid_report() -> dict[str, object]:
                 "case": "baseline-disabled",
                 "repeat_index": 1,
                 "returncode": 0,
+                "loop_time_seconds": 11.0,
                 "cache_summary": _cache_summary(
                     attempts=10.0,
                     hits=0.0,
@@ -102,6 +117,7 @@ def _valid_report() -> dict[str, object]:
                 "case": "isodelta-enabled",
                 "repeat_index": 1,
                 "returncode": 0,
+                "loop_time_seconds": 10.0,
                 "cache_summary": _cache_summary(
                     attempts=SECOND_ENABLED_ATTEMPTS,
                     hits=SECOND_ENABLED_HITS,
@@ -140,6 +156,15 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         self.assertEqual(evidence["verified_cache_miss_key_count"], 8.0)
         self.assertEqual(evidence["run_timeout_seconds"], RUN_TIMEOUT_SECONDS)
         self.assertEqual(evidence["paired_repeat_count"], 2)
+        self.assertEqual(
+            evidence["baseline_mean_loop_time_seconds"],
+            BASELINE_MEAN_LOOP_TIME_SECONDS,
+        )
+        self.assertEqual(
+            evidence["isodelta_mean_loop_time_seconds"],
+            ISODELTA_MEAN_LOOP_TIME_SECONDS,
+        )
+        self.assertEqual(evidence["timing_speedup_residual"], 0.0)
 
     def test_validate_report_rejects_missing_run_timeout(self) -> None:
         """Paper evidence should record the timeout used for each run."""
@@ -196,6 +221,42 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
             "duplicate",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_inconsistent_case_mean_time(self) -> None:
+        """Summary means should be recomputed from raw loop times."""
+        report = _valid_report()
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        cases = summary["cases"]
+        assert isinstance(cases, dict)
+        baseline = cases["baseline-disabled"]
+        assert isinstance(baseline, dict)
+        baseline["mean_loop_time_seconds"] = 99.0
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "mean_loop_time_seconds",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_inconsistent_speedup(self) -> None:
+        """Reported speedup should match the case mean loop times."""
+        report = _valid_report()
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        summary["speedup_vs_disabled_cache"] = 1.5
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "speedup_vs_disabled_cache",
         ):
             isodelta_report_check.validate_report(
                 report,

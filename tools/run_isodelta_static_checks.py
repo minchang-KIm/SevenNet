@@ -467,6 +467,10 @@ def main() -> None:
         and "REPEAT_INDEX_KEY" in report_check
         and "_check_paired_runs" in report_check
         and "paired_repeat_count" in report_check
+        and "LOOP_TIME_SECONDS_KEY" in report_check
+        and "_check_timing_summary" in report_check
+        and "timing_speedup_residual" in report_check
+        and "must match mean loop times" in report_check
         and "MAX_ABS_DELTA_KEY} must be nonnegative" in report_check
         and "PAIRED_COUNT_KEY} must be a positive integer" in report_check
         and "MIN_REQUIRED_PAIRED_THERMO_COUNT" in report_check
@@ -521,6 +525,12 @@ def main() -> None:
         and "paired_repeat_count" in doc
         and "exactly one `baseline-disabled`" in doc,
         "IsoDelta-Halo guide must document paired repeat evidence",
+    )
+    _require(
+        "results.*.loop_time_seconds" in doc
+        and "recomputes case mean loop times" in doc
+        and "summary.speedup_vs_disabled_cache" in doc,
+        "IsoDelta-Halo guide must document timing consistency evidence",
     )
     _require(
         "summary_rank_count" in doc

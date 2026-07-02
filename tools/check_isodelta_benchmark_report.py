@@ -18,11 +18,13 @@ from typing import Any
 # These keys mirror the benchmark report schema rather than scattering JSON
 # field names through the validation logic.
 SUMMARY_KEY = "summary"
+SUMMARY_CASES_KEY = "cases"
 RESULTS_KEY = "results"
 RUN_TIMEOUT_SECONDS_KEY = "run_timeout_seconds"
 CASE_KEY = "case"
 REPEAT_INDEX_KEY = "repeat_index"
 RETURNCODE_KEY = "returncode"
+LOOP_TIME_SECONDS_KEY = "loop_time_seconds"
 CACHE_SUMMARY_KEY = "cache_summary"
 ATTEMPTS_KEY = "attempts"
 HITS_KEY = "hits"
@@ -38,6 +40,8 @@ REQUIRED_CACHE_MISS_KEYS = (
     "miss_comm-list-tag-order-changed",
 )
 SPEEDUP_KEY = "speedup_vs_disabled_cache"
+MEAN_LOOP_TIME_KEY = "mean_loop_time_seconds"
+VALID_LOOP_TIME_COUNT_KEY = "valid_loop_time_count"
 FINAL_THERMO_DELTA_KEY = "final_thermo_delta_vs_disabled_cache"
 MAX_ABS_DELTA_KEY = "max_abs_delta"
 PAIRED_COUNT_KEY = "paired_count"
@@ -57,8 +61,11 @@ MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = 100.0
 MIN_POSITIVE_SPEEDUP = 0.0
 MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
+MIN_POSITIVE_LOOP_TIME_SECONDS = 0.0
 CACHE_HIT_RATE_TOLERANCE_PERCENT = 1.0e-9
 CACHE_COUNT_TOLERANCE = 1.0e-9
+TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
+TIMING_RELATIVE_TOLERANCE = 1.0e-9
 
 
 class ReportCheckError(ValueError):
@@ -153,6 +160,20 @@ def _as_number(value: Any, field_name: str) -> float:
     return numeric_value
 
 
+def _is_close(
+    observed: float,
+    expected: float,
+    absolute_tolerance: float = TIMING_ABSOLUTE_TOLERANCE_SECONDS,
+    relative_tolerance: float = TIMING_RELATIVE_TOLERANCE,
+) -> bool:
+    """Return whether two report numbers agree within a named tolerance."""
+    tolerance = max(
+        absolute_tolerance,
+        relative_tolerance * max(abs(observed), abs(expected)),
+    )
+    return abs(observed - expected) <= tolerance
+
+
 def _summary(report: dict[str, Any]) -> dict[str, Any]:
     """Return the report summary object."""
     return _as_mapping(report.get(SUMMARY_KEY), SUMMARY_KEY)
@@ -237,6 +258,77 @@ def _check_successful_runs(report: dict[str, Any]) -> int:
             raise ReportCheckError(f"{case_name} failed with returncode {returncode:g}")
         successful_count += 1
     return successful_count
+
+
+def _check_timing_summary(report: dict[str, Any], summary: dict[str, Any]) -> dict[str, float]:
+    """Require summary timing and speedup to match raw run loop times."""
+    summary_cases = _as_mapping(
+        summary.get(SUMMARY_CASES_KEY),
+        f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}",
+    )
+    loop_times_by_case: dict[str, list[float]] = {
+        case_name: [] for case_name in EXPECTED_CASES
+    }
+    for index, result in enumerate(_results(report)):
+        result_map = _as_mapping(result, f"{RESULTS_KEY}[{index}]")
+        case_name = result_map.get(CASE_KEY)
+        if case_name not in EXPECTED_CASES:
+            continue
+        loop_time = _as_number(
+            result_map.get(LOOP_TIME_SECONDS_KEY),
+            f"{RESULTS_KEY}[{index}].{LOOP_TIME_SECONDS_KEY}",
+        )
+        _require(
+            loop_time > MIN_POSITIVE_LOOP_TIME_SECONDS,
+            f"{RESULTS_KEY}[{index}].{LOOP_TIME_SECONDS_KEY} must be positive",
+        )
+        loop_times_by_case[str(case_name)].append(loop_time)
+
+    mean_loop_times: dict[str, float] = {}
+    for case_name in sorted(EXPECTED_CASES):
+        loop_times = loop_times_by_case[case_name]
+        _require(loop_times, f"no loop times recorded for {case_name}")
+        expected_mean = sum(loop_times) / len(loop_times)
+        case_summary = _as_mapping(
+            summary_cases.get(case_name),
+            f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}",
+        )
+        reported_mean = _as_number(
+            case_summary.get(MEAN_LOOP_TIME_KEY),
+            f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}.{MEAN_LOOP_TIME_KEY}",
+        )
+        reported_count = _as_number(
+            case_summary.get(VALID_LOOP_TIME_COUNT_KEY),
+            f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}.{VALID_LOOP_TIME_COUNT_KEY}",
+        )
+        _require(
+            reported_mean > MIN_POSITIVE_LOOP_TIME_SECONDS,
+            f"{case_name} {MEAN_LOOP_TIME_KEY} must be positive",
+        )
+        _require(
+            reported_count == len(loop_times),
+            f"{case_name} {VALID_LOOP_TIME_COUNT_KEY} must match raw loop times",
+        )
+        _require(
+            _is_close(reported_mean, expected_mean),
+            f"{case_name} {MEAN_LOOP_TIME_KEY} must match raw loop times",
+        )
+        mean_loop_times[case_name] = reported_mean
+
+    expected_speedup = mean_loop_times[BASELINE_CASE] / mean_loop_times[ISODELTA_CASE]
+    reported_speedup = _as_number(
+        summary.get(SPEEDUP_KEY),
+        f"{SUMMARY_KEY}.{SPEEDUP_KEY}",
+    )
+    _require(
+        _is_close(reported_speedup, expected_speedup),
+        f"{SPEEDUP_KEY} must match mean loop times",
+    )
+    return {
+        "baseline_mean_loop_time_seconds": mean_loop_times[BASELINE_CASE],
+        "isodelta_mean_loop_time_seconds": mean_loop_times[ISODELTA_CASE],
+        "timing_speedup_residual": abs(reported_speedup - expected_speedup),
+    }
 
 
 def _check_thermo_deltas(
@@ -444,6 +536,7 @@ def validate_report(
     successful_run_count = (
         _check_successful_runs(report) if thresholds.require_successful_runs else None
     )
+    timing_evidence = _check_timing_summary(report, summary)
     checked_observables, max_seen_delta = _check_thermo_deltas(
         summary,
         thresholds,
@@ -462,6 +555,7 @@ def validate_report(
         "successful_run_count": successful_run_count,
         "run_timeout_seconds": run_timeout_seconds,
         "paired_repeat_count": paired_repeat_count,
+        **timing_evidence,
         "checked_observables": checked_observables,
         "max_seen_abs_thermo_delta": max_seen_delta,
         "speedup_vs_disabled_cache": speedup,

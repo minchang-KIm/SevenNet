@@ -283,6 +283,7 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `summary.speedup_vs_disabled_cache`
 - `summary.final_thermo_delta_vs_disabled_cache`
 - `results.*.repeat_index`
+- `results.*.loop_time_seconds`
 - `results.*.cache_summary.attempts`
 - `results.*.cache_summary.hits`
 - `results.*.cache_summary.hit_rate_percent`
@@ -328,6 +329,9 @@ run and one `isodelta-enabled` run, then reports `paired_repeat_count` in the
 evidence summary.
 For thermo deltas, `max_abs_delta` must be nonnegative and `paired_count` must
 be a whole positive count that does not exceed `paired_repeat_count`.
+For timing evidence, the checker recomputes case mean loop times from
+`results.*.loop_time_seconds` and rejects reports whose
+`summary.speedup_vs_disabled_cache` does not match those means.
 When multiple MPI ranks print profiling summaries, the benchmark parser sums
 rank-local attempts, hits, and miss counters, then recomputes
 `hit_rate_percent` from the aggregated hits and attempts. The report checker
