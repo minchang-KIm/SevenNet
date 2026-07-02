@@ -353,7 +353,8 @@ It also requires `summary.runs` to match the number of `results` rows.
 When multiple MPI ranks print profiling summaries, the benchmark parser sums
 rank-local attempts, hits, and miss counters, then recomputes
 `hit_rate_percent` from the aggregated hits and attempts. The report checker
-rejects cache summaries whose hit rate is inconsistent with those totals.
+requires `summary_rank_count` to be a positive integer and rejects cache
+summaries whose hit rate is inconsistent with the aggregated totals.
 The parser accepts ordinary decimal values and scientific notation in loop-time
 and IsoDelta-Halo summary lines, so very short smoke runs and large counters do
 not lose timing or cache evidence.

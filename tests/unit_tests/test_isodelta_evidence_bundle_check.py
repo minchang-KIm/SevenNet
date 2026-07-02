@@ -51,6 +51,7 @@ EXPECTED_RESULT_COUNT = 4
 EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
 ZERO_CACHE_COUNT = 0.0
 ZERO_HIT_RATE_PERCENT = 0.0
+DEFAULT_SUMMARY_RANK_COUNT = 1.0
 PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
@@ -63,6 +64,7 @@ def _cache_summary(
     hit_rate_percent: float | None = None,
     miss_disabled: float = ZERO_CACHE_COUNT,
     miss_no_cache: float | None = None,
+    summary_rank_count: float = DEFAULT_SUMMARY_RANK_COUNT,
 ) -> dict[str, float]:
     """Create a complete IsoDelta-Halo cache summary for one run."""
     resolved_hit_rate_percent = (
@@ -77,6 +79,7 @@ def _cache_summary(
         "attempts": attempts,
         "hits": hits,
         "hit_rate_percent": resolved_hit_rate_percent,
+        "summary_rank_count": summary_rank_count,
         "miss_disabled": miss_disabled,
         "miss_no-cache": resolved_no_cache_misses,
         "miss_neighbor-list-rebuilt": 0.0,

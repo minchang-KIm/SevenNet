@@ -516,6 +516,9 @@ def main() -> None:
         "CACHE_COUNT_TOLERANCE" in report_check
         and "miss_count_sum" in report_check
         and "max_cache_count_residual" in report_check
+        and "SUMMARY_RANK_COUNT_KEY" in report_check
+        and "min_cache_summary_rank_count" in report_check
+        and "must be a positive integer" in report_check
         and "must match attempts - hits" in report_check,
         "benchmark report checker must validate miss-counter consistency",
     )
@@ -583,6 +586,10 @@ def main() -> None:
         and "recomputes" in doc
         and "aggregated hits and attempts" in doc,
         "IsoDelta-Halo guide must document MPI cache-summary aggregation",
+    )
+    _require(
+        "`summary_rank_count` to be a positive integer" in doc,
+        "IsoDelta-Halo guide must document summary rank-count validation",
     )
     _require(
         "scientific notation" in doc

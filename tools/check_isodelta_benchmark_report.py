@@ -40,6 +40,7 @@ CACHE_SUMMARY_KEY = "cache_summary"
 ATTEMPTS_KEY = "attempts"
 HITS_KEY = "hits"
 HIT_RATE_KEY = "hit_rate_percent"
+SUMMARY_RANK_COUNT_KEY = "summary_rank_count"
 REQUIRED_CACHE_MISS_KEYS = (
     "miss_disabled",
     "miss_no-cache",
@@ -94,6 +95,7 @@ MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
 MIN_POSITIVE_LOOP_TIME_SECONDS = 0.0
 MIN_SAMPLE_VARIANCE_COUNT = 2
 SAMPLE_VARIANCE_DEGREES_OF_FREEDOM = 1
+MIN_REQUIRED_SUMMARY_RANK_COUNT = 1
 CACHE_HIT_RATE_TOLERANCE_PERCENT = 1.0e-9
 CACHE_COUNT_TOLERANCE = 1.0e-9
 TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
@@ -634,6 +636,7 @@ def _check_cache_evidence(
     attempt_counts: list[float] = []
     hit_counts: list[float] = []
     cache_count_residuals: list[float] = []
+    summary_rank_counts: list[float] = []
     verified_miss_keys: set[str] = set()
     for index, result in enumerate(_results(report)):
         result_map = _as_mapping(result, f"{RESULTS_KEY}[{index}]")
@@ -656,6 +659,19 @@ def _check_cache_evidence(
             cache_summary.get(HIT_RATE_KEY),
             f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HIT_RATE_KEY}",
         )
+        summary_rank_count = _as_number(
+            cache_summary.get(SUMMARY_RANK_COUNT_KEY),
+            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{SUMMARY_RANK_COUNT_KEY}",
+        )
+        _require(
+            summary_rank_count >= MIN_REQUIRED_SUMMARY_RANK_COUNT
+            and summary_rank_count.is_integer(),
+            (
+                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}."
+                f"{SUMMARY_RANK_COUNT_KEY} must be a positive integer"
+            ),
+        )
+        summary_rank_counts.append(summary_rank_count)
         _require(
             attempts >= MIN_NONNEGATIVE_VALUE,
             f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{ATTEMPTS_KEY} must be nonnegative",
@@ -756,6 +772,7 @@ def _check_cache_evidence(
         "min_enabled_cache_hits": min_seen_hits,
         "min_enabled_hit_rate_percent": min_seen_hit_rate,
         "max_cache_count_residual": max(cache_count_residuals),
+        "min_cache_summary_rank_count": min(summary_rank_counts),
         "verified_cache_miss_key_count": float(len(verified_miss_keys)),
     }
 

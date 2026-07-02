@@ -37,6 +37,8 @@ ZERO_CACHE_COUNT = 0.0
 ZERO_HIT_RATE_PERCENT = 0.0
 DEFAULT_ENABLED_NO_CACHE_MISSES = 1.0
 DEFAULT_ENABLED_NEIGHBOR_REBUILT_MISSES = 1.0
+DEFAULT_SUMMARY_RANK_COUNT = 1.0
+FRACTIONAL_SUMMARY_RANK_COUNT = 1.5
 ONE_CACHE_COUNT = 1.0
 WRONG_BASELINE_HIT_RATE_PERCENT = 10.0
 WRONG_BASELINE_DISABLED_MISSES = 9.0
@@ -67,12 +69,14 @@ def _cache_summary(
     miss_disabled: float = ZERO_CACHE_COUNT,
     miss_no_cache: float = DEFAULT_ENABLED_NO_CACHE_MISSES,
     miss_neighbor_list_rebuilt: float = DEFAULT_ENABLED_NEIGHBOR_REBUILT_MISSES,
+    summary_rank_count: float = DEFAULT_SUMMARY_RANK_COUNT,
 ) -> dict[str, float]:
     """Create a cache summary with every IsoDelta-Halo miss counter."""
     return {
         "attempts": attempts,
         "hits": hits,
         "hit_rate_percent": hit_rate_percent,
+        "summary_rank_count": summary_rank_count,
         "miss_disabled": miss_disabled,
         "miss_no-cache": miss_no_cache,
         "miss_neighbor-list-rebuilt": miss_neighbor_list_rebuilt,
@@ -227,6 +231,10 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         self.assertEqual(evidence["min_enabled_cache_hits"], 8.0)
         self.assertEqual(evidence["min_enabled_hit_rate_percent"], 80.0)
         self.assertEqual(evidence["max_cache_count_residual"], EXPECTED_ZERO_RESIDUAL)
+        self.assertEqual(
+            evidence["min_cache_summary_rank_count"],
+            DEFAULT_SUMMARY_RANK_COUNT,
+        )
         self.assertEqual(evidence["verified_cache_miss_key_count"], 8.0)
         self.assertEqual(evidence["result_count"], EXPECTED_RESULT_COUNT)
         self.assertEqual(evidence["run_timeout_seconds"], RUN_TIMEOUT_SECONDS)
@@ -627,6 +635,46 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                     min_enabled_cache_attempts=1,
                     min_enabled_cache_hits=1,
                 ),
+            )
+
+    def test_validate_report_rejects_missing_summary_rank_count(self) -> None:
+        """Cache summaries should prove how many MPI rank summaries were parsed."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        del cache_summary["summary_rank_count"]
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "summary_rank_count",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_fractional_summary_rank_count(self) -> None:
+        """MPI summary rank counts should be whole positive counts."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["summary_rank_count"] = FRACTIONAL_SUMMARY_RANK_COUNT
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "positive integer",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
             )
 
     def test_validate_report_rejects_inconsistent_cache_hit_rate(self) -> None:
