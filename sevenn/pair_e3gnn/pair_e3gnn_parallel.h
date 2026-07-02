@@ -21,6 +21,7 @@ PairStyle(e3gnn/parallel, PairE3GNNParallel)
 
 #include "pair.h"
 
+#include <array>
 #include <torch/torch.h>
 #include <unordered_map>
 #include <vector>
@@ -32,6 +33,25 @@ private:
   // and reverse sweeps. Keeping this named avoids hidden phase-count coupling.
   static constexpr int kCommPhaseCount = 6;
   static constexpr int kNeighborListJustBuiltAgo = 0;
+  static constexpr const char *kIsoDeltaHaloDisableEnv =
+      "SEVENN_ISODELTA_HALO_DISABLE";
+  static constexpr const char *kIsoDeltaHaloProfileEnv =
+      "SEVENN_ISODELTA_HALO_PROFILE";
+  static constexpr double kPercentScale = 100.0;
+
+  enum class CommCacheMissReason {
+    kDisabled = 0,
+    kNoCache,
+    kNeighborListRebuilt,
+    kShapeChanged,
+    kTagCountChanged,
+    kTagOrderChanged,
+  };
+  static constexpr int kCommCacheMissReasonCount = 6;
+  static_assert(
+      static_cast<int>(CommCacheMissReason::kTagOrderChanged) + 1 ==
+          kCommCacheMissReasonCount,
+      "CommCacheMissReason count must match the enum entries.");
 
   double cutoff;
   double cutoff_square;
@@ -68,6 +88,11 @@ private:
   // reused. Edge vectors, embeddings, messages, energies, and forces are still
   // recomputed every timestep by the original SevenNet path.
   bool comm_cache_valid = false;
+  bool iso_delta_halo_enabled = true;
+  bool iso_delta_halo_profile = false;
+  long long comm_cache_attempts = 0;
+  long long comm_cache_hits = 0;
+  std::array<long long, kCommCacheMissReasonCount> comm_cache_misses = {};
   int comm_cache_nlocal = 0;
   int comm_cache_ghost_node_num = 0;
   int comm_cache_graph_size = 0;
@@ -84,6 +109,9 @@ private:
   bool try_reuse_comm_preprocess_cache(int, int, int, const int *);
   void store_comm_preprocess_cache(int, int, int, const int *);
   void clear_comm_preprocess_work();
+  void record_comm_cache_miss(CommCacheMissReason);
+  static const char *comm_cache_miss_reason_name(CommCacheMissReason);
+  void print_comm_cache_summary() const;
 
   // to use tag_to_graph_idx inside comm methods
   int *tag_to_graph_idx_ptr = nullptr;

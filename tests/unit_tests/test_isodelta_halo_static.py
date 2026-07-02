@@ -61,9 +61,13 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("tag[atom_idx] != comm_cache_graph_tags[graph_idx]", self.cpp)
 
     def test_cache_miss_rebuilds_and_stores_metadata(self) -> None:
-        """A miss must preserve the original preprocess path before storing cache."""
+        """A miss must rebuild first and store only when the cache is enabled."""
         self.assertIn(
-            "comm_preprocess();\n    store_comm_preprocess_cache",
+            "comm_preprocess();\n    if (iso_delta_halo_enabled)",
+            self.cpp,
+        )
+        self.assertIn(
+            "if (iso_delta_halo_enabled) {\n      store_comm_preprocess_cache",
             self.cpp,
         )
         self.assertIn("clear_comm_preprocess_work();", self.cpp)
@@ -74,6 +78,15 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
             "extra_graph_idx_map[list_i] = graph_size + extra_graph_idx_map.size();",
             self.cpp,
         )
+
+    def test_cache_can_be_profiled_and_disabled(self) -> None:
+        """Runtime toggles should expose fair baseline and profiling experiments."""
+        self.assertIn("SEVENN_ISODELTA_HALO_DISABLE", self.header)
+        self.assertIn("SEVENN_ISODELTA_HALO_PROFILE", self.header)
+        self.assertIn("comm_cache_attempts++", self.cpp)
+        self.assertIn("comm_cache_hits++", self.cpp)
+        self.assertIn("record_comm_cache_miss", self.combined)
+        self.assertIn("hit_rate_percent", self.cpp)
 
 
 if __name__ == "__main__":

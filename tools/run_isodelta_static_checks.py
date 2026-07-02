@@ -54,8 +54,28 @@ def main() -> None:
         "cache is not gated by LAMMPS neighbor-list age",
     )
     _require(
-        "comm_preprocess();\n    store_comm_preprocess_cache" in cpp,
-        "cache miss path does not rebuild then store metadata",
+        "comm_preprocess();\n    if (iso_delta_halo_enabled)" in cpp,
+        "cache miss path must rebuild before any optional cache store",
+    )
+    _require(
+        "if (iso_delta_halo_enabled) {\n      store_comm_preprocess_cache" in cpp,
+        "cache store must be skipped when IsoDelta-Halo is disabled",
+    )
+    _require(
+        'kIsoDeltaHaloDisableEnv =\n      "SEVENN_ISODELTA_HALO_DISABLE"' in header,
+        "cache disable environment variable is not named in the header",
+    )
+    _require(
+        'kIsoDeltaHaloProfileEnv =\n      "SEVENN_ISODELTA_HALO_PROFILE"' in header,
+        "cache profiling environment variable is not named in the header",
+    )
+    _require(
+        "comm_cache_attempts++" in cpp and "comm_cache_hits++" in cpp,
+        "cache hit/attempt counters are missing",
+    )
+    _require(
+        "print_comm_cache_summary" in combined and "hit_rate_percent" in cpp,
+        "cache profiling summary is missing",
     )
 
     forbidden_cache_terms = (

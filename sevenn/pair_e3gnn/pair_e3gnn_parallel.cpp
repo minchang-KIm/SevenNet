@@ -89,6 +89,8 @@ PairE3GNNParallel::PairE3GNNParallel(LAMMPS *lmp) : Pair(lmp) {
 
   const char *print_flag = std::getenv("SEVENN_PRINT_INFO");
   const char *print_both_flag = std::getenv("SEVENN_PRINT_BOTH_INFO");
+  iso_delta_halo_enabled = std::getenv(kIsoDeltaHaloDisableEnv) == nullptr;
+  iso_delta_halo_profile = std::getenv(kIsoDeltaHaloProfileEnv) != nullptr;
   if (print_flag) {
     world_rank = comm->me;
     std::cout << "process rank: " << world_rank << " initialized" << std::endl;
@@ -155,6 +157,16 @@ PairE3GNNParallel::PairE3GNNParallel(LAMMPS *lmp) : Pair(lmp) {
     fprintf(lmp->logfile, "PairE3GNNParallel cuda-aware mpi: %s\n",
             use_cuda_mpi ? "True" : "False");
   }
+
+  if (print_info) {
+    std::cout << world_rank << " IsoDelta-Halo metadata cache: "
+              << (iso_delta_halo_enabled ? "enabled" : "disabled")
+              << std::endl;
+    if (iso_delta_halo_profile) {
+      std::cout << world_rank << " IsoDelta-Halo profiling enabled by "
+                << kIsoDeltaHaloProfileEnv << std::endl;
+    }
+  }
 }
 
 torch::Device PairE3GNNParallel::get_cuda_device() {
@@ -176,6 +188,7 @@ torch::Device PairE3GNNParallel::get_cuda_device() {
 }
 
 PairE3GNNParallel::~PairE3GNNParallel() {
+  print_comm_cache_summary();
   if (allocated) {
     memory->destroy(setflag);
     memory->destroy(cutsq);
@@ -349,8 +362,10 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   if (!try_reuse_comm_preprocess_cache(nlocal, ghost_node_num, nedges,
                                        graph_index_to_i)) {
     comm_preprocess();
-    store_comm_preprocess_cache(nlocal, ghost_node_num, nedges,
-                                graph_index_to_i);
+    if (iso_delta_halo_enabled) {
+      store_comm_preprocess_cache(nlocal, ghost_node_num, nedges,
+                                  graph_index_to_i);
+    }
   }
 
   // extra_graph_idx_map is set from comm_preprocess();
@@ -687,24 +702,80 @@ double PairE3GNNParallel::init_one(int i, int j) { return cutoff; }
 void PairE3GNNParallel::notify_proc_ids(const int *sendproc, const int *recvproc) {
   for (int iswap = 0; iswap < kCommPhaseCount; iswap++) {
     this->sendproc[iswap] = sendproc[iswap];
-    this->recvproc[iswap]= recvproc[iswap];
+    this->recvproc[iswap] = recvproc[iswap];
   }
+}
+
+void PairE3GNNParallel::record_comm_cache_miss(CommCacheMissReason reason) {
+  const size_t reason_index = static_cast<size_t>(reason);
+  comm_cache_misses[reason_index]++;
+}
+
+const char *PairE3GNNParallel::comm_cache_miss_reason_name(
+    CommCacheMissReason reason) {
+  switch (reason) {
+  case CommCacheMissReason::kDisabled:
+    return "disabled";
+  case CommCacheMissReason::kNoCache:
+    return "no-cache";
+  case CommCacheMissReason::kNeighborListRebuilt:
+    return "neighbor-list-rebuilt";
+  case CommCacheMissReason::kShapeChanged:
+    return "shape-changed";
+  case CommCacheMissReason::kTagCountChanged:
+    return "tag-count-changed";
+  case CommCacheMissReason::kTagOrderChanged:
+    return "tag-order-changed";
+  }
+  return "unknown";
+}
+
+void PairE3GNNParallel::print_comm_cache_summary() const {
+  if (!iso_delta_halo_profile || !print_info) {
+    return;
+  }
+
+  const double hit_percent =
+      comm_cache_attempts == 0
+          ? 0.0
+          : kPercentScale * static_cast<double>(comm_cache_hits) /
+                static_cast<double>(comm_cache_attempts);
+  std::cout << world_rank << " IsoDelta-Halo summary: attempts="
+            << comm_cache_attempts << " hits=" << comm_cache_hits
+            << " hit_rate_percent=" << hit_percent;
+
+  for (int reason_index = 0; reason_index < kCommCacheMissReasonCount;
+       reason_index++) {
+    const auto reason = static_cast<CommCacheMissReason>(reason_index);
+    std::cout << " miss_" << comm_cache_miss_reason_name(reason) << "="
+              << comm_cache_misses[reason_index];
+  }
+  std::cout << std::endl;
 }
 
 bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
     int nlocal, int ghost_node_num, int nedges, const int *graph_index_to_i) {
+  comm_cache_attempts++;
+  if (!iso_delta_halo_enabled) {
+    record_comm_cache_miss(CommCacheMissReason::kDisabled);
+    return false;
+  }
   if (!comm_cache_valid) {
+    record_comm_cache_miss(CommCacheMissReason::kNoCache);
     return false;
   }
   if (neighbor->ago <= kNeighborListJustBuiltAgo) {
+    record_comm_cache_miss(CommCacheMissReason::kNeighborListRebuilt);
     return false;
   }
   if (nlocal != comm_cache_nlocal ||
       ghost_node_num != comm_cache_ghost_node_num ||
       graph_size != comm_cache_graph_size || nedges != comm_cache_nedges) {
+    record_comm_cache_miss(CommCacheMissReason::kShapeChanged);
     return false;
   }
   if (comm_cache_graph_tags.size() != static_cast<size_t>(graph_size)) {
+    record_comm_cache_miss(CommCacheMissReason::kTagCountChanged);
     return false;
   }
 
@@ -712,6 +783,7 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
   for (int graph_idx = 0; graph_idx < graph_size; graph_idx++) {
     const int atom_idx = graph_index_to_i[graph_idx];
     if (tag[atom_idx] != comm_cache_graph_tags[graph_idx]) {
+      record_comm_cache_miss(CommCacheMissReason::kTagOrderChanged);
       return false;
     }
   }
@@ -733,6 +805,7 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
   }
 
   comm_preprocess_done = true;
+  comm_cache_hits++;
   if (print_info) {
     std::cout << world_rank
               << " IsoDelta-Halo: reused communication metadata cache"
