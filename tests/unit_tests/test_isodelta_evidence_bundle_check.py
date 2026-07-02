@@ -45,6 +45,7 @@ PERCENT_SCALE = 100.0
 RUN_TIMEOUT_SECONDS = 3600.0
 BASELINE_LOOP_TIME_SECONDS = 12.0
 ISODELTA_LOOP_TIME_SECONDS = 10.0
+EXPECTED_RESULT_COUNT = 4
 
 
 def _cache_summary(
@@ -78,6 +79,7 @@ def _benchmark_report() -> dict[str, object]:
     return {
         "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
         "summary": {
+            "runs": EXPECTED_RESULT_COUNT,
             "speedup_vs_disabled_cache": 1.2,
             "cases": {
                 "baseline-disabled": {

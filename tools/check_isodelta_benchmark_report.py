@@ -19,6 +19,7 @@ from typing import Any
 # field names through the validation logic.
 SUMMARY_KEY = "summary"
 SUMMARY_CASES_KEY = "cases"
+SUMMARY_RUNS_KEY = "runs"
 RESULTS_KEY = "results"
 RUN_TIMEOUT_SECONDS_KEY = "run_timeout_seconds"
 CASE_KEY = "case"
@@ -195,6 +196,24 @@ def _check_run_timeout(report: dict[str, Any]) -> float:
         f"{RUN_TIMEOUT_SECONDS_KEY} must be positive",
     )
     return run_timeout_seconds
+
+
+def _check_result_count(report: dict[str, Any], summary: dict[str, Any]) -> int:
+    """Require summary run count to match the result rows."""
+    results = _results(report)
+    reported_runs = _as_number(
+        summary.get(SUMMARY_RUNS_KEY),
+        f"{SUMMARY_KEY}.{SUMMARY_RUNS_KEY}",
+    )
+    _require(
+        reported_runs >= MIN_REQUIRED_PAIRED_THERMO_COUNT and reported_runs.is_integer(),
+        f"{SUMMARY_KEY}.{SUMMARY_RUNS_KEY} must be a positive integer",
+    )
+    _require(
+        int(reported_runs) == len(results),
+        f"{SUMMARY_KEY}.{SUMMARY_RUNS_KEY} must match results length",
+    )
+    return len(results)
 
 
 def _check_paired_runs(report: dict[str, Any]) -> int:
@@ -532,6 +551,7 @@ def validate_report(
     validate_thresholds(thresholds)
     summary = _summary(report)
     run_timeout_seconds = _check_run_timeout(report)
+    result_count = _check_result_count(report, summary)
     paired_repeat_count = _check_paired_runs(report)
     successful_run_count = (
         _check_successful_runs(report) if thresholds.require_successful_runs else None
@@ -553,6 +573,7 @@ def validate_report(
         "status": "passed",
         "thresholds": asdict(thresholds),
         "successful_run_count": successful_run_count,
+        "result_count": result_count,
         "run_timeout_seconds": run_timeout_seconds,
         "paired_repeat_count": paired_repeat_count,
         **timing_evidence,

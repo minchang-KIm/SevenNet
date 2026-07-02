@@ -464,6 +464,9 @@ def main() -> None:
         and "validate_thresholds" in report_check
         and "RUN_TIMEOUT_SECONDS_KEY" in report_check
         and "_check_run_timeout" in report_check
+        and "SUMMARY_RUNS_KEY" in report_check
+        and "_check_result_count" in report_check
+        and "result_count" in report_check
         and "REPEAT_INDEX_KEY" in report_check
         and "_check_paired_runs" in report_check
         and "paired_repeat_count" in report_check
@@ -531,6 +534,11 @@ def main() -> None:
         and "recomputes case mean loop times" in doc
         and "summary.speedup_vs_disabled_cache" in doc,
         "IsoDelta-Halo guide must document timing consistency evidence",
+    )
+    _require(
+        "summary.runs" in doc
+        and "number of `results` rows" in doc,
+        "IsoDelta-Halo guide must document result count consistency",
     )
     _require(
         "summary_rank_count" in doc

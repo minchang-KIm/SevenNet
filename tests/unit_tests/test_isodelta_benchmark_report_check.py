@@ -35,6 +35,7 @@ EXPECTED_ZERO_RESIDUAL = 0.0
 RUN_TIMEOUT_SECONDS = 3600.0
 BASELINE_MEAN_LOOP_TIME_SECONDS = 11.5
 ISODELTA_MEAN_LOOP_TIME_SECONDS = 10.0
+EXPECTED_RESULT_COUNT = 4
 
 
 def _cache_summary(
@@ -63,6 +64,7 @@ def _valid_report() -> dict[str, object]:
     return {
         "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
         "summary": {
+            "runs": EXPECTED_RESULT_COUNT,
             "speedup_vs_disabled_cache": 1.15,
             "cases": {
                 "baseline-disabled": {
@@ -154,6 +156,7 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         self.assertEqual(evidence["min_enabled_hit_rate_percent"], 80.0)
         self.assertEqual(evidence["max_cache_count_residual"], EXPECTED_ZERO_RESIDUAL)
         self.assertEqual(evidence["verified_cache_miss_key_count"], 8.0)
+        self.assertEqual(evidence["result_count"], EXPECTED_RESULT_COUNT)
         self.assertEqual(evidence["run_timeout_seconds"], RUN_TIMEOUT_SECONDS)
         self.assertEqual(evidence["paired_repeat_count"], 2)
         self.assertEqual(
@@ -194,12 +197,31 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                 isodelta_report_check.ReportThresholds(),
             )
 
+    def test_validate_report_rejects_wrong_summary_run_count(self) -> None:
+        """The summary run count should match result rows."""
+        report = _valid_report()
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        summary["runs"] = 3
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "summary.runs",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
     def test_validate_report_rejects_unpaired_repeat(self) -> None:
         """Every repeat should include both disabled and enabled cases."""
         report = _valid_report()
         results = report["results"]
         assert isinstance(results, list)
         del results[2]
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        summary["runs"] = len(results)
 
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
@@ -217,6 +239,9 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         assert isinstance(results, list)
         duplicate = dict(results[1])
         results.append(duplicate)
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        summary["runs"] = len(results)
 
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,

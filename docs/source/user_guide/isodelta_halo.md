@@ -275,6 +275,7 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `provenance.git_dirty`
 - `provenance.case_environment_overrides`
 - `run_timeout_seconds`
+- `summary.runs`
 - `summary.cases.*.mean_loop_time_seconds`
 - `summary.cases.*.sample_variance_loop_time_seconds`
 - `summary.cases.*.sample_stddev_loop_time_seconds`
@@ -332,6 +333,7 @@ be a whole positive count that does not exceed `paired_repeat_count`.
 For timing evidence, the checker recomputes case mean loop times from
 `results.*.loop_time_seconds` and rejects reports whose
 `summary.speedup_vs_disabled_cache` does not match those means.
+It also requires `summary.runs` to match the number of `results` rows.
 When multiple MPI ranks print profiling summaries, the benchmark parser sums
 rank-local attempts, hits, and miss counters, then recomputes
 `hit_rate_percent` from the aggregated hits and attempts. The report checker
