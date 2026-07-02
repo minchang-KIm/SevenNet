@@ -57,6 +57,10 @@ def main() -> None:
     doc_index = _read(DOC_INDEX_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
 
+    _require(
+        "TODO" not in combined and "temporary" not in combined.lower(),
+        "IsoDelta-Halo pair/comm sources must not carry temporary implementation markers",
+    )
     _require("kCommPhaseCount = 6" in header, "named comm phase count missing")
     _require(
         "kCommCacheMissReasonCount = 8" in header,

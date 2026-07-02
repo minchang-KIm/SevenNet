@@ -60,9 +60,8 @@ private:
   torch::Device get_cuda_device();
   bool use_cuda_mpi;
 
-  // for communication
-  // Most of these variables for communication is temporary and valid for only
-  // one MD step.
+  // Communication state is rebuilt for each MD step unless IsoDelta-Halo
+  // safely restores the metadata that only depends on stable halo topology.
   int x_dim; // to determine per atom data size
   int graph_size;
   torch::Tensor x_comm; // x_local + x_ghost + x_comm_extra
@@ -70,7 +69,7 @@ private:
   void comm_preprocess();
   bool comm_preprocess_done = false;
 
-  // temporary variables holds for each compute step
+  // Per-step communication index maps populated by comm_preprocess().
   std::unordered_map<int, long> extra_graph_idx_map;
   // To use scatter, store long instead of int
   // array of vector
@@ -134,7 +133,8 @@ public:
   PairE3GNNParallel(class LAMMPS *);
   ~PairE3GNNParallel();
 
-  // TODO: keep encapsulation..
+  // LAMMPS invokes this Pair interface; CommBrick calls the GNN-specific
+  // communication helpers below during the halo exchange phases.
   void compute(int, int) override;
   void settings(int, char **) override;
   // read Atom type string from input script & related coeff

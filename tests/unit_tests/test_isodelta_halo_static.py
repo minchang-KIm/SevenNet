@@ -48,6 +48,11 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertNotIn("[6]", self.header)
         self.assertNotIn("nswap > 6", self.comm_brick_cpp)
 
+    def test_sources_do_not_contain_temporary_markers(self) -> None:
+        """The implementation should not carry TODO or temporary-work markers."""
+        self.assertNotIn("TODO", self.combined)
+        self.assertNotIn("temporary", self.combined.lower())
+
     def test_cache_reuses_only_communication_metadata(self) -> None:
         """Force, message, embedding, and edge-geometry values must not be cached."""
         for term in (

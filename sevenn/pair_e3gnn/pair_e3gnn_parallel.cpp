@@ -435,8 +435,8 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   std::vector<torch::Tensor> grads;
   std::vector<torch::Tensor> of_tensor;
 
-  // TODO: most values of self_conn_grads were zero because we use only scalars
-  // for energy
+  // self_conn_grads is usually sparse because the energy head uses scalar
+  // channels, but it is still passed through autograd to preserve semantics.
   for (auto rit = wrt_tensors.rbegin(); rit != wrt_tensors.rend(); ++rit) {
     // edge_vec, x, x_ghost order
     auto wrt_tensor = *rit;
