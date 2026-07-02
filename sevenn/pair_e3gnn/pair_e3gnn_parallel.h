@@ -154,7 +154,7 @@ public:
   int get_x_dim();
   bool use_cuda_mpi_();
   bool is_comm_preprocess_done();
-  void notify_proc_ids(const int *sendproc, const int *recvproc);
+  void notify_proc_ids(const int *sendproc, const int *recvproc, int);
 
   bool print_info = false;
   int world_rank;

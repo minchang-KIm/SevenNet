@@ -1096,11 +1096,11 @@ void CommBrick::forward_comm(PairE3GNNParallel *pair)
     buf_send_ = reinterpret_cast<float*>(buf_send);
     buf_recv_ = reinterpret_cast<float*>(buf_recv);
   }
-  if(!comm_preprocess_done) {
-    pair->notify_proc_ids(sendproc, recvproc);
-  }
   if (nswap > kE3GnnCommPhaseLimit)
     error->all(FLERR, kE3GnnCommPhaseLimitError);
+  if(!comm_preprocess_done) {
+    pair->notify_proc_ids(sendproc, recvproc, nswap);
+  }
 
   for (iswap = 0; iswap < nswap; iswap++) {
     if(sendproc[iswap] == me) continue;

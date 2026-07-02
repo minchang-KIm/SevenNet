@@ -68,6 +68,13 @@ def main() -> None:
         "CUDA unpack tensor creation must not copy the unpack vector first",
     )
     _require(
+        "notify_proc_ids(" in cpp
+        and "int active_phase_count" in cpp
+        and "active_phase ? sendproc[iswap] : kInactiveCommPhaseValue" in cpp
+        and "active_phase ? recvproc[iswap] : kInactiveCommPhaseValue" in cpp,
+        "proc id notification must initialize inactive comm phases",
+    )
+    _require(
         "kE3GnnCommPhaseLimit = 6" in comm_brick_cpp,
         "CommBrick e3gnn phase limit must be named",
     )
@@ -78,6 +85,10 @@ def main() -> None:
     _require(
         "kE3GnnCommPhaseLimitError" in comm_brick_cpp,
         "CommBrick e3gnn phase-limit error must be named",
+    )
+    _require(
+        "pair->notify_proc_ids(sendproc, recvproc, nswap)" in comm_brick_cpp,
+        "CommBrick must pass the active phase count to PairE3GNNParallel",
     )
     for accessor_name in (
         "e3gnn_nswap",

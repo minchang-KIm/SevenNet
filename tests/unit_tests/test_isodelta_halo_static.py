@@ -126,6 +126,23 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
             self.assertIn(accessor_name, self.comm_brick_header)
             self.assertIn(f"CommBrick::{accessor_name}", self.comm_brick_cpp)
 
+    def test_inactive_comm_phases_are_initialized(self) -> None:
+        """Inactive phases should not read uninitialized CommBrick proc ids."""
+        self.assertIn("notify_proc_ids(", self.cpp)
+        self.assertIn("int active_phase_count", self.cpp)
+        self.assertIn(
+            "active_phase ? sendproc[iswap] : kInactiveCommPhaseValue",
+            self.cpp,
+        )
+        self.assertIn(
+            "active_phase ? recvproc[iswap] : kInactiveCommPhaseValue",
+            self.cpp,
+        )
+        self.assertIn(
+            "pair->notify_proc_ids(sendproc, recvproc, nswap)",
+            self.comm_brick_cpp,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

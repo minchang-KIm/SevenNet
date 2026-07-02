@@ -712,10 +712,14 @@ void PairE3GNNParallel::init_style() {
 
 double PairE3GNNParallel::init_one(int i, int j) { return cutoff; }
 
-void PairE3GNNParallel::notify_proc_ids(const int *sendproc, const int *recvproc) {
+void PairE3GNNParallel::notify_proc_ids(
+    const int *sendproc, const int *recvproc, int active_phase_count) {
   for (int iswap = 0; iswap < kCommPhaseCount; iswap++) {
-    this->sendproc[iswap] = sendproc[iswap];
-    this->recvproc[iswap] = recvproc[iswap];
+    const bool active_phase = iswap < active_phase_count;
+    this->sendproc[iswap] =
+        active_phase ? sendproc[iswap] : kInactiveCommPhaseValue;
+    this->recvproc[iswap] =
+        active_phase ? recvproc[iswap] : kInactiveCommPhaseValue;
   }
 }
 
