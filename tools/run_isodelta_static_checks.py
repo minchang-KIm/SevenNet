@@ -17,6 +17,7 @@ HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
 COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
 COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
 BENCHMARK_PATH = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
+REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
@@ -41,6 +42,7 @@ def main() -> None:
     comm_brick_cpp = _read(COMM_BRICK_CPP_PATH)
     comm_brick_header = _read(COMM_BRICK_HEADER_PATH)
     benchmark = _read(BENCHMARK_PATH)
+    report_check = _read(REPORT_CHECK_PATH)
     prereq = _read(PREREQ_PATH)
     binary_check = _read(BINARY_CHECK_PATH)
     doc = _read(DOC_PATH)
@@ -199,9 +201,21 @@ def main() -> None:
         "benchmark runner must report final thermo consistency deltas",
     )
     _require(
+        "DEFAULT_MAX_ABS_THERMO_DELTA" in report_check
+        and "validate_report" in report_check
+        and "min_speedup" in report_check,
+        "benchmark report checker must gate thermo consistency and effect",
+    )
+    _require(
         "final_thermo_delta_vs_disabled_cache" in doc
         and "final_thermo_observables" in doc,
         "IsoDelta-Halo guide must document final thermo consistency fields",
+    )
+    _require(
+        "check_isodelta_benchmark_report.py" in doc
+        and "--max-abs-thermo-delta" in doc
+        and "--min-speedup" in doc,
+        "IsoDelta-Halo guide must document the benchmark report checker",
     )
     _require(
         "SEVENN_ISODELTA_HALO_DISABLE" in doc

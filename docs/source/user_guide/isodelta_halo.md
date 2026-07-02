@@ -140,6 +140,25 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `results.*.cache_summary.miss_comm-topology-changed`
 - `results.*.cache_summary.miss_tag-order-changed`
 
+## Report Correctness Gate
+
+After a paired benchmark finishes, validate the JSON report before using the
+numbers in a paper table:
+
+```bash
+python tools/check_isodelta_benchmark_report.py \
+  --report isodelta_benchmark_runs/isodelta_benchmark_report.json \
+  --max-abs-thermo-delta 1.0e-8 \
+  --min-paired-thermo-count 5 \
+  --min-speedup 1.05 \
+  --min-hit-rate-percent 50.0
+```
+
+`--max-abs-thermo-delta` should match the precision and observable scale of the
+target simulation. `--min-speedup` and `--min-hit-rate-percent` are effect
+gates: use them when making a performance claim, and archive the command with
+the benchmark report so the acceptance rule is reproducible.
+
 For a publishable performance claim, report the mean and variance across
 multiple repeats, include cache hit rate, and show that final thermodynamic
 scalars match the disabled-cache baseline within the tolerance required by the
