@@ -42,8 +42,11 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
     def test_named_comm_phase_count_replaces_raw_six(self) -> None:
         """The LAMMPS six-phase detail should be a named constant."""
         self.assertIn("kCommPhaseCount = 6", self.header)
+        self.assertIn("kE3GnnCommPhaseLimit = 6", self.comm_brick_cpp)
+        self.assertIn("kE3GnnCommPhaseLimitError", self.comm_brick_cpp)
         self.assertNotIn("[6]", self.cpp)
         self.assertNotIn("[6]", self.header)
+        self.assertNotIn("nswap > 6", self.comm_brick_cpp)
 
     def test_cache_reuses_only_communication_metadata(self) -> None:
         """Force, message, embedding, and edge-geometry values must not be cached."""

@@ -41,6 +41,15 @@ using namespace LAMMPS_NS;
 #define BUFMIN 1024
 #define BIG 1.0e20
 
+namespace {
+
+constexpr int kE3GnnCommPhaseLimit = 6;
+constexpr const char *kE3GnnCommPhaseLimitError =
+    "PairE3GNNParallel: Cell size is too small. "
+    "Please use a single GPU or make a supercell";
+
+} // namespace
+
 /* ---------------------------------------------------------------------- */
 
 CommBrick::CommBrick(LAMMPS *lmp) :
@@ -1085,7 +1094,8 @@ void CommBrick::forward_comm(PairE3GNNParallel *pair)
   if(!comm_preprocess_done) {
     pair->notify_proc_ids(sendproc, recvproc);
   }
-  if (nswap > 6) error->all(FLERR,"PairE3GNNParallel: Cell size is too small. Please use a single GPU or make a supercell");
+  if (nswap > kE3GnnCommPhaseLimit)
+    error->all(FLERR, kE3GnnCommPhaseLimitError);
 
   for (iswap = 0; iswap < nswap; iswap++) {
     if(sendproc[iswap] == me) continue;

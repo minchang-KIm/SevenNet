@@ -63,6 +63,18 @@ def main() -> None:
         "std::vector<long> &upmap = comm_index_unpack_forward[comm_phase];" in cpp,
         "CUDA unpack tensor creation must not copy the unpack vector first",
     )
+    _require(
+        "kE3GnnCommPhaseLimit = 6" in comm_brick_cpp,
+        "CommBrick e3gnn phase limit must be named",
+    )
+    _require(
+        "nswap > 6" not in comm_brick_cpp,
+        "CommBrick e3gnn path must not compare against a raw phase limit",
+    )
+    _require(
+        "kE3GnnCommPhaseLimitError" in comm_brick_cpp,
+        "CommBrick e3gnn phase-limit error must be named",
+    )
     for accessor_name in (
         "e3gnn_nswap",
         "e3gnn_sendnum",
