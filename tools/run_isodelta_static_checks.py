@@ -363,6 +363,12 @@ def main() -> None:
         and "validate_thresholds" in evidence_bundle_check
         and "_validate_unique_trace_evidence_paths" in evidence_bundle_check
         and "_validate_distinct_model_count" in evidence_bundle_check
+        and "_artifact_record" in evidence_bundle_check
+        and "hashlib.sha256" in evidence_bundle_check
+        and "HASH_READ_CHUNK_BYTES" in evidence_bundle_check
+        and "ARTIFACTS_KEY" in evidence_bundle_check
+        and "ARTIFACT_SHA256_KEY" in evidence_bundle_check
+        and "ARTIFACT_SIZE_BYTES_KEY" in evidence_bundle_check
         and "_validate_required_model_names" in evidence_bundle_check
         and "duplicate trace evidence paths" in evidence_bundle_check
         and "duplicate required trace models" in evidence_bundle_check
@@ -440,6 +446,12 @@ def main() -> None:
         and "multi-model portability evidence" in doc
         and "same MLIP label" in doc,
         "IsoDelta-Halo guide must document distinct trace model gating",
+    )
+    _require(
+        "SHA-256 digest" in doc
+        and "byte" in doc
+        and "benchmark report and every trace evidence file" in doc,
+        "IsoDelta-Halo guide must document evidence artifact fingerprints",
     )
     _require(
         "parse_final_thermo_observables" in benchmark

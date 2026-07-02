@@ -8,6 +8,7 @@ a LAMMPS binary or an external model runtime.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -64,6 +65,11 @@ PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
 ENV_FLAG_ENABLED = "1"
+
+
+def _sha256_file(path: Path) -> str:
+    """Return the SHA-256 digest for a test evidence artifact."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _cache_summary(
@@ -278,11 +284,26 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
                 required_models=["MACE"],
                 thresholds=_thresholds(),
             )
+            expected_benchmark_sha256 = _sha256_file(benchmark_path)
+            expected_benchmark_size_bytes = benchmark_path.stat().st_size
+            expected_trace_sha256 = _sha256_file(trace_path)
 
         self.assertEqual(evidence["status"], "passed")
         self.assertEqual(evidence["trace_models"], ["MACE"])
         self.assertEqual(evidence["trace_model_count"], 1)
         self.assertIn("benchmark_evidence", evidence)
+        self.assertEqual(
+            evidence["artifacts"]["benchmark_report"]["sha256"],
+            expected_benchmark_sha256,
+        )
+        self.assertEqual(
+            evidence["artifacts"]["benchmark_report"]["size_bytes"],
+            expected_benchmark_size_bytes,
+        )
+        self.assertEqual(
+            evidence["artifacts"]["trace_evidence"][0]["sha256"],
+            expected_trace_sha256,
+        )
 
     def test_validate_bundle_rejects_missing_required_model(self) -> None:
         """Required model labels should prevent vague portability claims."""
@@ -609,6 +630,22 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
             written = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertEqual(written["status"], "passed")
             self.assertEqual(written["required_trace_models"], ["MACE"])
+            self.assertEqual(
+                written["artifacts"]["benchmark_report"]["path"],
+                str(benchmark_path),
+            )
+            self.assertEqual(
+                written["artifacts"]["benchmark_report"]["sha256"],
+                _sha256_file(benchmark_path),
+            )
+            self.assertEqual(
+                written["artifacts"]["trace_evidence"][0]["path"],
+                str(trace_path),
+            )
+            self.assertEqual(
+                written["artifacts"]["trace_evidence"][0]["size_bytes"],
+                trace_path.stat().st_size,
+            )
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
+import hashlib
 import importlib.util
 import json
 import os
@@ -35,9 +36,18 @@ MIN_POSITIVE_SPEEDUP = 0.0
 MODEL_KEY = "model"
 STATUS_KEY = "status"
 PASSED_STATUS = "passed"
+ARTIFACTS_KEY = "artifacts"
+ARTIFACT_PATH_KEY = "path"
+ARTIFACT_SHA256_KEY = "sha256"
+ARTIFACT_SIZE_BYTES_KEY = "size_bytes"
+ARTIFACT_ROLE_BENCHMARK_REPORT = "benchmark_report"
+ARTIFACT_ROLE_TRACE_EVIDENCE = "trace_evidence"
 TRACE_EVIDENCE_KEY = "trace_evidence"
 BENCHMARK_EVIDENCE_KEY = "benchmark_evidence"
 PATH_SEPARATOR = ", "
+BYTES_PER_KIBIBYTE = 1024
+BYTES_PER_MEBIBYTE = BYTES_PER_KIBIBYTE * BYTES_PER_KIBIBYTE
+HASH_READ_CHUNK_BYTES = BYTES_PER_MEBIBYTE
 
 
 class EvidenceBundleError(ValueError):
@@ -118,6 +128,26 @@ def _validate_unique_trace_evidence_paths(trace_evidence_paths: list[Path]) -> N
         not duplicate_paths,
         "duplicate trace evidence paths: " + PATH_SEPARATOR.join(duplicate_paths),
     )
+
+
+def _artifact_record(path: Path) -> dict[str, str | int]:
+    """Return a content fingerprint for one archived evidence artifact."""
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            while True:
+                chunk = handle.read(HASH_READ_CHUNK_BYTES)
+                if not chunk:
+                    break
+                digest.update(chunk)
+        size_bytes = path.stat().st_size
+    except OSError as exc:
+        raise EvidenceBundleError(f"cannot fingerprint evidence artifact: {path}") from exc
+    return {
+        ARTIFACT_PATH_KEY: str(path),
+        ARTIFACT_SHA256_KEY: digest.hexdigest(),
+        ARTIFACT_SIZE_BYTES_KEY: size_bytes,
+    }
 
 
 def _validate_required_model_names(required_models: list[str]) -> list[str]:
@@ -291,6 +321,12 @@ def validate_bundle(
     return {
         STATUS_KEY: PASSED_STATUS,
         "thresholds": asdict(thresholds),
+        ARTIFACTS_KEY: {
+            ARTIFACT_ROLE_BENCHMARK_REPORT: _artifact_record(benchmark_report),
+            ARTIFACT_ROLE_TRACE_EVIDENCE: [
+                _artifact_record(path) for path in trace_evidence_paths
+            ],
+        },
         BENCHMARK_EVIDENCE_KEY: benchmark_evidence,
         TRACE_EVIDENCE_KEY: trace_evidence,
         "trace_model_count": len(validated_models),
