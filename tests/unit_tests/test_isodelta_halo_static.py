@@ -99,6 +99,21 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         )
         self.assertIn("clear_comm_preprocess_work();", self.cpp)
 
+    def test_cache_misses_invalidate_stale_metadata(self) -> None:
+        """A failed reuse attempt should not leave stale metadata marked valid."""
+        self.assertIn("invalidate_comm_preprocess_cache", self.combined)
+        self.assertIn("comm_cache_valid = false;", self.cpp)
+        self.assertIn("comm_cache_graph_tags.clear();", self.cpp)
+        self.assertIn("comm_cache_nswap = kInactiveCommPhaseValue;", self.cpp)
+        self.assertIn(
+            "comm_cache_index_pack_forward_tensor[comm_phase] = torch::Tensor();",
+            self.cpp,
+        )
+        self.assertGreaterEqual(
+            self.cpp.count("invalidate_comm_preprocess_cache();"),
+            7,
+        )
+
     def test_pack_forward_extra_map_uses_atom_index_key(self) -> None:
         """The extra graph map should use the communicated atom index, not loop i."""
         self.assertIn(

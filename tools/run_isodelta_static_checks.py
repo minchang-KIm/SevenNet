@@ -165,6 +165,15 @@ def main() -> None:
         "cache store function is missing",
     )
     _require(
+        "invalidate_comm_preprocess_cache" in combined
+        and "comm_cache_valid = false;" in cpp
+        and "comm_cache_nswap = kInactiveCommPhaseValue;" in cpp
+        and "comm_cache_graph_tags.clear();" in cpp
+        and "comm_cache_index_pack_forward_tensor[comm_phase] = torch::Tensor();" in cpp
+        and cpp.count("invalidate_comm_preprocess_cache();") >= 7,
+        "cache miss paths must invalidate stale IsoDelta-Halo metadata",
+    )
+    _require(
         "clear_comm_preprocess_work" in combined,
         "per-step cache work cleanup helper is missing",
     )

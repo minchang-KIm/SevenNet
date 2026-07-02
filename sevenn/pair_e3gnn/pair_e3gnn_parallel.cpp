@@ -804,6 +804,7 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
   comm_cache_attempts++;
   if (!iso_delta_halo_enabled) {
     record_comm_cache_miss(CommCacheMissReason::kDisabled);
+    invalidate_comm_preprocess_cache();
     return false;
   }
   if (!comm_cache_valid) {
@@ -812,24 +813,29 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
   }
   if (neighbor->ago <= kNeighborListJustBuiltAgo) {
     record_comm_cache_miss(CommCacheMissReason::kNeighborListRebuilt);
+    invalidate_comm_preprocess_cache();
     return false;
   }
   if (nlocal != comm_cache_nlocal ||
       ghost_node_num != comm_cache_ghost_node_num ||
       graph_size != comm_cache_graph_size || nedges != comm_cache_nedges) {
     record_comm_cache_miss(CommCacheMissReason::kShapeChanged);
+    invalidate_comm_preprocess_cache();
     return false;
   }
   if (comm_cache_graph_tags.size() != static_cast<size_t>(graph_size)) {
     record_comm_cache_miss(CommCacheMissReason::kTagCountChanged);
+    invalidate_comm_preprocess_cache();
     return false;
   }
   if (!comm_topology_matches_cache()) {
     record_comm_cache_miss(CommCacheMissReason::kCommTopologyChanged);
+    invalidate_comm_preprocess_cache();
     return false;
   }
   if (!comm_list_tags_match_cache()) {
     record_comm_cache_miss(CommCacheMissReason::kCommListTagOrderChanged);
+    invalidate_comm_preprocess_cache();
     return false;
   }
 
@@ -838,6 +844,7 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
     const int atom_idx = graph_index_to_i[graph_idx];
     if (tag[atom_idx] != comm_cache_graph_tags[graph_idx]) {
       record_comm_cache_miss(CommCacheMissReason::kTagOrderChanged);
+      invalidate_comm_preprocess_cache();
       return false;
     }
   }
@@ -913,6 +920,28 @@ void PairE3GNNParallel::clear_comm_preprocess_work() {
   }
 
   extra_graph_idx_map.clear();
+}
+
+void PairE3GNNParallel::invalidate_comm_preprocess_cache() {
+  comm_cache_valid = false;
+  comm_cache_nswap = kInactiveCommPhaseValue;
+  comm_cache_sendnum.fill(kInactiveCommPhaseValue);
+  comm_cache_recvnum.fill(kInactiveCommPhaseValue);
+  comm_cache_sendproc.fill(kInactiveCommPhaseValue);
+  comm_cache_recvproc.fill(kInactiveCommPhaseValue);
+  comm_cache_firstrecv.fill(kInactiveCommPhaseValue);
+  comm_cache_graph_tags.clear();
+  comm_cache_extra_graph_idx_map.clear();
+  for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
+    comm_cache_sendlist_tags[comm_phase].clear();
+    comm_cache_recvlist_tags[comm_phase].clear();
+    comm_cache_index_pack_forward[comm_phase].clear();
+    comm_cache_index_unpack_forward[comm_phase].clear();
+    comm_cache_index_unpack_reverse[comm_phase].clear();
+    comm_cache_index_pack_forward_tensor[comm_phase] = torch::Tensor();
+    comm_cache_index_unpack_forward_tensor[comm_phase] = torch::Tensor();
+    comm_cache_index_unpack_reverse_tensor[comm_phase] = torch::Tensor();
+  }
 }
 
 bool PairE3GNNParallel::comm_topology_matches_cache() const {
