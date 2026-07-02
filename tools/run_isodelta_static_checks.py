@@ -338,8 +338,12 @@ def main() -> None:
         and "check_isodelta_lammps_binary.py" in experiment
         and "run_isodelta_lammps_benchmark.py" in experiment
         and "check_isodelta_benchmark_report.py" in experiment
+        and "check_isodelta_evidence_bundle.py" in experiment
         and "--min-enabled-cache-attempts" in experiment
         and "--min-enabled-cache-hits" in experiment
+        and "--trace-evidence" in experiment
+        and "--require-trace-model" in experiment
+        and "bundle_evidence.json" in experiment
         and "isodelta_experiment_report.json" in experiment,
         "experiment driver must connect all runtime validation stages",
     )

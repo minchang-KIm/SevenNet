@@ -184,6 +184,23 @@ and report correctness gate in that order. It writes stage logs and
 `isodelta_experiment_report.json`; archive that report with the benchmark JSON
 when using the numbers in a manuscript.
 
+To append the publication evidence bundle gate to the same driver run, add one
+or more trace evidence files:
+
+```bash
+python tools/run_isodelta_experiment.py \
+  --lammps-command "mpiexec -n 4 lmp" \
+  --input /path/to/in.sevenn \
+  --trace-evidence mace_isodelta_trace_evidence.json \
+  --require-trace-model MACE \
+  --min-trace-hit-rate-percent 50.0 \
+  --min-trace-estimated-speedup 1.05 \
+  --min-trace-metadata-fraction-percent 5.0
+```
+
+When trace evidence is provided, the driver adds an `evidence-bundle` stage and
+writes `bundle_evidence.json` under the experiment output directory.
+
 ## Paired Benchmark
 
 Use the benchmark runner after building a LAMMPS binary that contains

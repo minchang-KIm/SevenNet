@@ -7,7 +7,9 @@ without launching LAMMPS.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -62,6 +64,31 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIn("2", commands[3].argv)
         self.assertIn(str(config.benchmark_report_path()), commands[3].argv)
 
+    def test_build_experiment_commands_can_append_bundle_gate(self) -> None:
+        """Trace evidence options should add a final evidence-bundle gate."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            output_dir=Path("out"),
+            min_speedup=1.05,
+            trace_evidence_paths=(Path("mace_trace_evidence.json"),),
+            required_trace_models=("MACE",),
+            min_trace_hit_rate_percent=50.0,
+            min_trace_estimated_speedup=1.05,
+            min_trace_metadata_fraction_percent=5.0,
+        )
+        commands = isodelta_experiment.build_experiment_commands(config)
+
+        self.assertEqual(commands[-1].name, "evidence-bundle")
+        self.assertEqual(len(commands), 5)
+        self.assertIn("check_isodelta_evidence_bundle.py", commands[-1].argv[1])
+        self.assertIn("--trace-evidence", commands[-1].argv)
+        self.assertIn("mace_trace_evidence.json", commands[-1].argv)
+        self.assertIn("--require-trace-model", commands[-1].argv)
+        self.assertIn("MACE", commands[-1].argv)
+        self.assertIn("--min-trace-estimated-speedup", commands[-1].argv)
+        self.assertIn(str(config.bundle_evidence_report_path()), commands[-1].argv)
+
     def test_run_experiment_stops_on_first_failed_stage(self) -> None:
         """A failing gate should write a partial report and skip later stages."""
         executed: list[str] = []
@@ -82,7 +109,11 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
                 input_path=Path("in.sevenn"),
                 output_dir=Path(tmpdir),
             )
-            exit_code = isodelta_experiment.run_experiment(config, runner=fake_runner)
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = isodelta_experiment.run_experiment(
+                    config,
+                    runner=fake_runner,
+                )
             report = json.loads(config.experiment_report_path().read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 2)
@@ -111,7 +142,11 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
                 output_dir=Path(tmpdir),
                 min_speedup=1.1,
             )
-            exit_code = isodelta_experiment.run_experiment(config, runner=fake_runner)
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = isodelta_experiment.run_experiment(
+                    config,
+                    runner=fake_runner,
+                )
             report = json.loads(config.experiment_report_path().read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 0)
@@ -120,6 +155,45 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIsNone(report["failed_stage"])
         self.assertEqual(len(report["commands"]), 4)
         self.assertEqual(report["benchmark_report"], str(config.benchmark_report_path()))
+
+    def test_run_experiment_writes_bundle_report_path_when_requested(self) -> None:
+        """The success report should expose the optional bundle evidence output."""
+        executed: list[list[str]] = []
+
+        def fake_runner(argv: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+            executed.append(argv)
+            return subprocess.CompletedProcess(
+                args=argv,
+                returncode=0,
+                stdout="ok",
+                stderr="",
+            )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = isodelta_experiment.ExperimentConfig(
+                lammps_command="lmp",
+                input_path=Path("in.sevenn"),
+                output_dir=Path(tmpdir),
+                trace_evidence_paths=(Path("mace_trace_evidence.json"),),
+                required_trace_models=("MACE",),
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = isodelta_experiment.run_experiment(
+                    config,
+                    runner=fake_runner,
+                )
+            report = json.loads(config.experiment_report_path().read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(executed), 5)
+        self.assertEqual(
+            report["bundle_evidence_report"],
+            str(config.bundle_evidence_report_path()),
+        )
+        self.assertEqual(
+            report["config"]["trace_evidence_paths"],
+            ["mace_trace_evidence.json"],
+        )
 
 
 if __name__ == "__main__":

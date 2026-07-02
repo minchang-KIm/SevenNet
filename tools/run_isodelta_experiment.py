@@ -23,6 +23,7 @@ PREREQ_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 BENCHMARK_SCRIPT = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
 REPORT_CHECK_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
+EVIDENCE_BUNDLE_CHECK_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_evidence_bundle.py"
 DEFAULT_OUTPUT_DIR = Path("isodelta_experiment_runs")
 DEFAULT_REPEAT_COUNT = 3
 DEFAULT_MAX_ABS_THERMO_DELTA = 1.0e-8
@@ -30,11 +31,15 @@ DEFAULT_MIN_PAIRED_THERMO_COUNT = 1
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS = 1
 DEFAULT_MIN_ENABLED_CACHE_HITS = 0
+DEFAULT_MIN_TRACE_COUNT = 1
+DEFAULT_MIN_TRACE_HIT_RATE_PERCENT = 0.0
+DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT = 0.0
 DEFAULT_BINARY_TIMEOUT_SECONDS = 60.0
 LOG_DIR_NAME = "logs"
 BENCHMARK_DIR_NAME = "benchmark"
 EXPERIMENT_REPORT_NAME = "isodelta_experiment_report.json"
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
+BUNDLE_EVIDENCE_REPORT_NAME = "bundle_evidence.json"
 SUCCESS_RETURN_CODE = 0
 
 
@@ -57,6 +62,14 @@ class ExperimentConfig:
     min_hit_rate_percent: float = DEFAULT_MIN_HIT_RATE_PERCENT
     min_enabled_cache_attempts: int = DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS
     min_enabled_cache_hits: int = DEFAULT_MIN_ENABLED_CACHE_HITS
+    trace_evidence_paths: tuple[Path, ...] = ()
+    required_trace_models: tuple[str, ...] = ()
+    min_trace_count: int = DEFAULT_MIN_TRACE_COUNT
+    min_trace_hit_rate_percent: float = DEFAULT_MIN_TRACE_HIT_RATE_PERCENT
+    min_trace_estimated_speedup: float | None = None
+    min_trace_metadata_fraction_percent: float = (
+        DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT
+    )
     binary_timeout_seconds: float = DEFAULT_BINARY_TIMEOUT_SECONDS
 
     def benchmark_output_dir(self) -> Path:
@@ -70,6 +83,14 @@ class ExperimentConfig:
     def experiment_report_path(self) -> Path:
         """Return the JSON report produced by this driver."""
         return self.output_dir / EXPERIMENT_REPORT_NAME
+
+    def bundle_evidence_report_path(self) -> Path:
+        """Return the optional combined evidence bundle report path."""
+        return self.output_dir / BUNDLE_EVIDENCE_REPORT_NAME
+
+    def should_run_bundle_gate(self) -> bool:
+        """Return whether trace evidence options request the bundle gate."""
+        return bool(self.trace_evidence_paths or self.required_trace_models)
 
 
 @dataclass(frozen=True)
@@ -155,7 +176,7 @@ def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentComman
     if config.allow_failed_report_runs:
         report_argv.append("--allow-failed-runs")
 
-    return [
+    commands = [
         ExperimentCommand(
             name="prerequisites",
             argv=prereq_argv,
@@ -181,6 +202,56 @@ def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentComman
             stderr_path=log_dir / "report_gate.stderr.log",
         ),
     ]
+
+    if config.should_run_bundle_gate():
+        bundle_argv = [
+            *_python_script_command(EVIDENCE_BUNDLE_CHECK_SCRIPT),
+            "--benchmark-report",
+            str(config.benchmark_report_path()),
+            "--min-trace-count",
+            str(config.min_trace_count),
+            "--max-abs-thermo-delta",
+            str(config.max_abs_thermo_delta),
+            "--min-paired-thermo-count",
+            str(config.min_paired_thermo_count),
+            "--min-hit-rate-percent",
+            str(config.min_hit_rate_percent),
+            "--min-enabled-cache-attempts",
+            str(config.min_enabled_cache_attempts),
+            "--min-enabled-cache-hits",
+            str(config.min_enabled_cache_hits),
+            "--min-trace-hit-rate-percent",
+            str(config.min_trace_hit_rate_percent),
+            "--min-trace-metadata-fraction-percent",
+            str(config.min_trace_metadata_fraction_percent),
+            "--output",
+            str(config.bundle_evidence_report_path()),
+        ]
+        if config.min_speedup is not None:
+            bundle_argv.extend(["--min-speedup", str(config.min_speedup)])
+        if config.min_trace_estimated_speedup is not None:
+            bundle_argv.extend(
+                [
+                    "--min-trace-estimated-speedup",
+                    str(config.min_trace_estimated_speedup),
+                ]
+            )
+        if config.allow_failed_report_runs:
+            bundle_argv.append("--allow-failed-runs")
+        for trace_evidence_path in config.trace_evidence_paths:
+            bundle_argv.extend(["--trace-evidence", str(trace_evidence_path)])
+        for model_name in config.required_trace_models:
+            bundle_argv.extend(["--require-trace-model", model_name])
+        commands.append(
+            ExperimentCommand(
+                name="evidence-bundle",
+                argv=bundle_argv,
+                stdout_path=log_dir / "evidence_bundle.stdout.log",
+                stderr_path=log_dir / "evidence_bundle.stderr.log",
+            )
+        )
+
+    return commands
 
 
 def _run_command(
@@ -214,17 +285,26 @@ def _write_report(
     failed_stage: str | None,
 ) -> None:
     """Write the top-level experiment report after each completed stage."""
+    config_payload = {
+        **asdict(config),
+        "input_path": str(config.input_path),
+        "output_dir": str(config.output_dir),
+        "work_dir": str(config.work_dir) if config.work_dir else None,
+        "lammps_root": str(config.lammps_root) if config.lammps_root else None,
+        "trace_evidence_paths": [
+            str(path) for path in config.trace_evidence_paths
+        ],
+    }
     payload = {
         "ok": ok,
         "failed_stage": failed_stage,
-        "config": {
-            **asdict(config),
-            "input_path": str(config.input_path),
-            "output_dir": str(config.output_dir),
-            "work_dir": str(config.work_dir) if config.work_dir else None,
-            "lammps_root": str(config.lammps_root) if config.lammps_root else None,
-        },
+        "config": config_payload,
         "benchmark_report": str(config.benchmark_report_path()),
+        "bundle_evidence_report": (
+            str(config.bundle_evidence_report_path())
+            if config.should_run_bundle_gate()
+            else None
+        ),
         "commands": [asdict(result) for result in command_results],
     }
     config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -334,6 +414,42 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         help="Minimum cache hits required for every enabled run",
     )
     parser.add_argument(
+        "--trace-evidence",
+        action="append",
+        default=[],
+        type=Path,
+        help="Optional MLIP trace evidence JSON for the bundle gate",
+    )
+    parser.add_argument(
+        "--require-trace-model",
+        action="append",
+        default=[],
+        help="Model label that must appear in optional trace evidence",
+    )
+    parser.add_argument(
+        "--min-trace-count",
+        type=int,
+        default=DEFAULT_MIN_TRACE_COUNT,
+        help="Minimum number of trace evidence files for the bundle gate",
+    )
+    parser.add_argument(
+        "--min-trace-hit-rate-percent",
+        type=float,
+        default=DEFAULT_MIN_TRACE_HIT_RATE_PERCENT,
+        help="Minimum reusable-step hit rate in each trace evidence file",
+    )
+    parser.add_argument(
+        "--min-trace-estimated-speedup",
+        type=float,
+        help="Optional minimum trace-estimated speedup for the bundle gate",
+    )
+    parser.add_argument(
+        "--min-trace-metadata-fraction-percent",
+        type=float,
+        default=DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT,
+        help="Minimum metadata-build fraction in each trace evidence file",
+    )
+    parser.add_argument(
         "--binary-timeout-seconds",
         type=float,
         default=DEFAULT_BINARY_TIMEOUT_SECONDS,
@@ -356,6 +472,12 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         min_hit_rate_percent=args.min_hit_rate_percent,
         min_enabled_cache_attempts=args.min_enabled_cache_attempts,
         min_enabled_cache_hits=args.min_enabled_cache_hits,
+        trace_evidence_paths=tuple(args.trace_evidence),
+        required_trace_models=tuple(args.require_trace_model),
+        min_trace_count=args.min_trace_count,
+        min_trace_hit_rate_percent=args.min_trace_hit_rate_percent,
+        min_trace_estimated_speedup=args.min_trace_estimated_speedup,
+        min_trace_metadata_fraction_percent=args.min_trace_metadata_fraction_percent,
         binary_timeout_seconds=args.binary_timeout_seconds,
     )
 
