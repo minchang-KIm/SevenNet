@@ -29,6 +29,11 @@ PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
 ENV_FLAG_ENABLED = "1"
+THERMO_STEP_COLUMN = "Step"
+MIN_THERMO_HEADER_COLUMNS = 2
+FINAL_THERMO_DELTA_KEY = "final_thermo_delta_vs_disabled_cache"
+MAX_ABS_DELTA_KEY = "max_abs_delta"
+PAIRED_COUNT_KEY = "paired_count"
 LOOP_TIME_RE = re.compile(
     r"Loop time of\s+(?P<seconds>[-+]?\d+(?:\.\d+)?)\s+on\b",
     re.IGNORECASE,
@@ -36,6 +41,9 @@ LOOP_TIME_RE = re.compile(
 SUMMARY_RE = re.compile(r"IsoDelta-Halo summary:\s+(?P<body>.*)")
 SUMMARY_VALUE_RE = re.compile(
     r"(?P<key>[A-Za-z0-9_-]+)=(?P<value>[-+]?\d+(?:\.\d+)?)"
+)
+FLOAT_TOKEN_RE = re.compile(
+    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 )
 
 
@@ -56,6 +64,7 @@ class BenchmarkResult:
     returncode: int
     loop_time_seconds: float | None
     cache_summary: dict[str, float]
+    final_thermo_observables: dict[str, float]
     stdout_path: str
     stderr_path: str
 
@@ -97,10 +106,51 @@ def parse_cache_summary(log_text: str) -> dict[str, float]:
     return summary
 
 
-def parse_run_output(stdout_text: str, stderr_text: str) -> tuple[float | None, dict[str, float]]:
+def _parse_float_token(token: str) -> float | None:
+    """Return a float for plain numeric LAMMPS table tokens."""
+    if FLOAT_TOKEN_RE.fullmatch(token) is None:
+        return None
+    return float(token)
+
+
+def parse_final_thermo_observables(log_text: str) -> dict[str, float]:
+    """Extract the final numeric row from the latest LAMMPS thermo table."""
+    active_headers: list[str] | None = None
+    final_observables: dict[str, float] = {}
+
+    for line in log_text.splitlines():
+        tokens = line.strip().split()
+        if not tokens:
+            continue
+        if tokens[0] == THERMO_STEP_COLUMN and len(tokens) >= MIN_THERMO_HEADER_COLUMNS:
+            active_headers = tokens
+            continue
+        if active_headers is None or len(tokens) < len(active_headers):
+            continue
+
+        row_values: list[float] = []
+        for token in tokens[: len(active_headers)]:
+            value = _parse_float_token(token)
+            if value is None:
+                row_values = []
+                break
+            row_values.append(value)
+        if row_values:
+            final_observables = dict(zip(active_headers, row_values))
+
+    return final_observables
+
+
+def parse_run_output(
+    stdout_text: str, stderr_text: str
+) -> tuple[float | None, dict[str, float], dict[str, float]]:
     """Parse both streams because MPI launchers may route logs differently."""
     combined_log = stdout_text + "\n" + stderr_text
-    return parse_loop_time(combined_log), parse_cache_summary(combined_log)
+    return (
+        parse_loop_time(combined_log),
+        parse_cache_summary(combined_log),
+        parse_final_thermo_observables(combined_log),
+    )
 
 
 def _case_environment(case: BenchmarkCase) -> dict[str, str]:
@@ -133,7 +183,9 @@ def _run_case(
     )
     stdout_path.write_text(completed.stdout, encoding="utf-8")
     stderr_path.write_text(completed.stderr, encoding="utf-8")
-    loop_time, cache_summary = parse_run_output(completed.stdout, completed.stderr)
+    loop_time, cache_summary, final_thermo_observables = parse_run_output(
+        completed.stdout, completed.stderr
+    )
 
     result = BenchmarkResult(
         case=case.name,
@@ -141,6 +193,7 @@ def _run_case(
         returncode=completed.returncode,
         loop_time_seconds=loop_time,
         cache_summary=cache_summary,
+        final_thermo_observables=final_thermo_observables,
         stdout_path=str(stdout_path),
         stderr_path=str(stderr_path),
     )
@@ -182,7 +235,42 @@ def _summarize(results: list[BenchmarkResult]) -> dict[str, Any]:
         summary["speedup_vs_disabled_cache"] = baseline_mean / isodelta_mean
     else:
         summary["speedup_vs_disabled_cache"] = None
+    summary[FINAL_THERMO_DELTA_KEY] = _summarize_final_thermo_deltas(results)
     return summary
+
+
+def _summarize_final_thermo_deltas(results: list[BenchmarkResult]) -> dict[str, dict[str, float]]:
+    """Compare final thermo scalars between paired baseline and enabled runs."""
+    paired_by_repeat: dict[int, dict[str, BenchmarkResult]] = {}
+    for result in results:
+        paired_by_repeat.setdefault(result.repeat_index, {})[result.case] = result
+
+    deltas_by_observable: dict[str, list[float]] = {}
+    for paired_results in paired_by_repeat.values():
+        baseline = paired_results.get(BASELINE_CASE)
+        enabled = paired_results.get(ISODELTA_CASE)
+        if baseline is None or enabled is None:
+            continue
+        common_observables = (
+            set(baseline.final_thermo_observables)
+            & set(enabled.final_thermo_observables)
+            - {THERMO_STEP_COLUMN}
+        )
+        for observable in common_observables:
+            delta = abs(
+                enabled.final_thermo_observables[observable]
+                - baseline.final_thermo_observables[observable]
+            )
+            deltas_by_observable.setdefault(observable, []).append(delta)
+
+    return {
+        observable: {
+            MAX_ABS_DELTA_KEY: max(deltas),
+            PAIRED_COUNT_KEY: float(len(deltas)),
+        }
+        for observable, deltas in sorted(deltas_by_observable.items())
+        if deltas
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

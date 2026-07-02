@@ -14,6 +14,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.cpp"
 HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
+BENCHMARK_PATH = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
 DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
 
@@ -33,6 +34,7 @@ def main() -> None:
     """Validate that the cache remains metadata-only and conservatively gated."""
     cpp = _read(CPP_PATH)
     header = _read(HEADER_PATH)
+    benchmark = _read(BENCHMARK_PATH)
     doc = _read(DOC_PATH)
     doc_index = _read(DOC_INDEX_PATH)
     combined = cpp + "\n" + header
@@ -120,6 +122,16 @@ def main() -> None:
     _require(
         "run_isodelta_lammps_benchmark.py" in doc,
         "IsoDelta-Halo guide must document the benchmark runner",
+    )
+    _require(
+        "parse_final_thermo_observables" in benchmark
+        and "final_thermo_delta_vs_disabled_cache" in benchmark,
+        "benchmark runner must report final thermo consistency deltas",
+    )
+    _require(
+        "final_thermo_delta_vs_disabled_cache" in doc
+        and "final_thermo_observables" in doc,
+        "IsoDelta-Halo guide must document final thermo consistency fields",
     )
     _require(
         "SEVENN_ISODELTA_HALO_DISABLE" in doc

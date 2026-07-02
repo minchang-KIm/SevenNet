@@ -97,17 +97,20 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 
 - `summary.cases.*.mean_loop_time_seconds`
 - `summary.speedup_vs_disabled_cache`
+- `summary.final_thermo_delta_vs_disabled_cache`
 - `results.*.cache_summary.attempts`
 - `results.*.cache_summary.hits`
 - `results.*.cache_summary.hit_rate_percent`
+- `results.*.final_thermo_observables`
 - `results.*.cache_summary.miss_neighbor-list-rebuilt`
 - `results.*.cache_summary.miss_shape-changed`
 - `results.*.cache_summary.miss_tag-order-changed`
 
 For a publishable performance claim, report the mean and variance across
-multiple repeats, and include cache hit rate. A low hit rate usually means the
-neighbor list is rebuilt too often, the graph shape changes often, or atom tag
-order is not stable enough for reuse.
+multiple repeats, include cache hit rate, and show that final thermodynamic
+scalars match the disabled-cache baseline within the tolerance required by the
+simulation. A low hit rate usually means the neighbor list is rebuilt too often,
+the graph shape changes often, or atom tag order is not stable enough for reuse.
 
 ## Expected Evidence For A Paper
 

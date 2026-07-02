@@ -52,12 +52,56 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
 
     def test_parse_run_output_uses_both_streams(self) -> None:
         """MPI wrappers may split loop time and profiling summary across streams."""
-        stdout_text = "Loop time of 9.5 on 2 procs for 40 steps with 512 atoms"
+        stdout_text = "\n".join(
+            (
+                "Step Temp PotEng TotEng",
+                "0 300 -10.0 -9.0",
+                "40 310 -10.5 -9.2",
+                "Loop time of 9.5 on 2 procs for 40 steps with 512 atoms",
+            )
+        )
         stderr_text = "0 IsoDelta-Halo summary: attempts=5 hits=4 hit_rate_percent=80"
-        loop_time, summary = isodelta_benchmark.parse_run_output(stdout_text, stderr_text)
+        loop_time, summary, thermo = isodelta_benchmark.parse_run_output(
+            stdout_text,
+            stderr_text,
+        )
         self.assertEqual(loop_time, 9.5)
         self.assertEqual(summary["attempts"], 5.0)
         self.assertEqual(summary["hits"], 4.0)
+        self.assertEqual(thermo["Step"], 40.0)
+        self.assertEqual(thermo["PotEng"], -10.5)
+        self.assertEqual(thermo["TotEng"], -9.2)
+
+    def test_summarize_final_thermo_deltas(self) -> None:
+        """Paired runs should expose output-difference evidence in the report."""
+        baseline = isodelta_benchmark.BenchmarkResult(
+            case=isodelta_benchmark.BASELINE_CASE,
+            repeat_index=0,
+            returncode=0,
+            loop_time_seconds=12.0,
+            cache_summary={},
+            final_thermo_observables={"Step": 100.0, "PotEng": -20.0},
+            stdout_path="baseline.out",
+            stderr_path="baseline.err",
+        )
+        enabled = isodelta_benchmark.BenchmarkResult(
+            case=isodelta_benchmark.ISODELTA_CASE,
+            repeat_index=0,
+            returncode=0,
+            loop_time_seconds=10.0,
+            cache_summary={"hit_rate_percent": 90.0},
+            final_thermo_observables={"Step": 100.0, "PotEng": -19.999},
+            stdout_path="enabled.out",
+            stderr_path="enabled.err",
+        )
+        summary = isodelta_benchmark._summarize([baseline, enabled])
+        self.assertEqual(summary["speedup_vs_disabled_cache"], 1.2)
+        self.assertAlmostEqual(
+            summary["final_thermo_delta_vs_disabled_cache"]["PotEng"][
+                "max_abs_delta"
+            ],
+            0.001,
+        )
 
     def test_build_command_appends_input_flag(self) -> None:
         """The runner should build commands without shell-specific quoting."""
