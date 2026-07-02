@@ -10,6 +10,7 @@ import importlib.util
 import contextlib
 import io
 import json
+import math
 from pathlib import Path
 import sys
 import tempfile
@@ -134,6 +135,20 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
             isodelta_mlip_trace.validate_trace_evidence(
                 evidence,
                 isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_nonfinite_numeric_values(self) -> None:
+        """Trace evidence should not accept NaN or infinity values."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["timing"]["estimated_average_speedup"] = math.inf
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "must be finite",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(min_estimated_speedup=1.0),
             )
 
     def test_validate_trace_rejects_inconsistent_miss_breakdown(self) -> None:

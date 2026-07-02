@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 from pathlib import Path
 import sys
 import tempfile
@@ -213,6 +214,26 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
             "hits / attempts",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_nonfinite_numeric_values(self) -> None:
+        """Benchmark evidence should not accept NaN or infinity values."""
+        report = _valid_report()
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        deltas = summary["final_thermo_delta_vs_disabled_cache"]
+        assert isinstance(deltas, dict)
+        poteng = deltas["PotEng"]
+        assert isinstance(poteng, dict)
+        poteng["max_abs_delta"] = math.nan
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "must be finite",
         ):
             isodelta_report_check.validate_report(
                 report,

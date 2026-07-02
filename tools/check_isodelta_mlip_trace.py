@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -283,7 +284,9 @@ def _as_number(value: Any, field_name: str) -> float:
         isinstance(value, (int, float)) and not isinstance(value, bool),
         f"{field_name} must be numeric",
     )
-    return float(value)
+    numeric_value = float(value)
+    _require(math.isfinite(numeric_value), f"{field_name} must be finite")
+    return numeric_value
 
 
 def _as_nonnegative_int(value: Any, field_name: str) -> int:

@@ -316,6 +316,7 @@ def main() -> None:
         and "MODEL_AGNOSTIC_REQUIREMENTS_KEY" in mlip_trace_check
         and "REQUIRED_MODEL_AGNOSTIC_REQUIREMENTS" in mlip_trace_check
         and "must be true" in mlip_trace_check
+        and "math.isfinite" in mlip_trace_check
         and "must match hits / attempts" in mlip_trace_check
         and "must match attempts - hits" in mlip_trace_check
         and "trace_schema" in mlip_trace_check
@@ -429,6 +430,7 @@ def main() -> None:
         and "validate_thresholds" in report_check
         and "MIN_REQUIRED_PAIRED_THERMO_COUNT" in report_check
         and "MAX_PERCENT_VALUE" in report_check
+        and "math.isfinite" in report_check
         and "min_speedup" in report_check,
         "benchmark report checker must gate thermo consistency and effect",
     )
