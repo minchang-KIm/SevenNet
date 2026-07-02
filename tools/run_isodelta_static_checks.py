@@ -364,6 +364,12 @@ def main() -> None:
         and "_validate_unique_trace_evidence_paths" in evidence_bundle_check
         and "_validate_distinct_model_count" in evidence_bundle_check
         and "_artifact_record" in evidence_bundle_check
+        and "collect_run_provenance" in evidence_bundle_check
+        and "BUNDLE_SCHEMA_VERSION" in evidence_bundle_check
+        and "BUNDLE_SCHEMA_VERSION_KEY" in evidence_bundle_check
+        and "PROVENANCE_KEY" in evidence_bundle_check
+        and "git_dirty" in evidence_bundle_check
+        and "platform.platform" in evidence_bundle_check
         and "hashlib.sha256" in evidence_bundle_check
         and "HASH_READ_CHUNK_BYTES" in evidence_bundle_check
         and "ARTIFACTS_KEY" in evidence_bundle_check
@@ -452,6 +458,12 @@ def main() -> None:
         and "byte" in doc
         and "benchmark report and every trace evidence file" in doc,
         "IsoDelta-Halo guide must document evidence artifact fingerprints",
+    )
+    _require(
+        "`bundle_schema_version`" in doc
+        and "`provenance` object" in doc
+        and "Git, Python, and platform" in doc,
+        "IsoDelta-Halo guide must document bundle evidence provenance",
     )
     _require(
         "parse_final_thermo_observables" in benchmark

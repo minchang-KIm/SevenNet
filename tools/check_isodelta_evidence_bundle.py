@@ -14,7 +14,9 @@ import hashlib
 import importlib.util
 import json
 import os
+import platform
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any
 
@@ -24,6 +26,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
+BUNDLE_SCHEMA_VERSION = "isodelta-evidence-bundle-v1"
 DEFAULT_MIN_TRACE_COUNT = 1
 DEFAULT_MIN_DISTINCT_TRACE_MODELS = 1
 MIN_COUNT_VALUE = 0
@@ -36,6 +39,8 @@ MIN_POSITIVE_SPEEDUP = 0.0
 MODEL_KEY = "model"
 STATUS_KEY = "status"
 PASSED_STATUS = "passed"
+BUNDLE_SCHEMA_VERSION_KEY = "bundle_schema_version"
+PROVENANCE_KEY = "provenance"
 ARTIFACTS_KEY = "artifacts"
 ARTIFACT_PATH_KEY = "path"
 ARTIFACT_SHA256_KEY = "sha256"
@@ -48,6 +53,8 @@ PATH_SEPARATOR = ", "
 BYTES_PER_KIBIBYTE = 1024
 BYTES_PER_MEBIBYTE = BYTES_PER_KIBIBYTE * BYTES_PER_KIBIBYTE
 HASH_READ_CHUNK_BYTES = BYTES_PER_MEBIBYTE
+GIT_METADATA_TIMEOUT_SECONDS = 10.0
+SUCCESS_RETURN_CODE = 0
 
 
 class EvidenceBundleError(ValueError):
@@ -147,6 +154,37 @@ def _artifact_record(path: Path) -> dict[str, str | int]:
         ARTIFACT_PATH_KEY: str(path),
         ARTIFACT_SHA256_KEY: digest.hexdigest(),
         ARTIFACT_SIZE_BYTES_KEY: size_bytes,
+    }
+
+
+def _run_metadata_command(argv: list[str]) -> str | None:
+    """Run a short metadata command and return stripped stdout when it works."""
+    try:
+        completed = subprocess.run(
+            argv,
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=GIT_METADATA_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != SUCCESS_RETURN_CODE:
+        return None
+    return completed.stdout.strip()
+
+
+def collect_run_provenance() -> dict[str, str | bool | None]:
+    """Collect bundle-check provenance so archived evidence is auditable."""
+    git_status_short = _run_metadata_command(["git", "status", "--short"])
+    return {
+        "git_commit": _run_metadata_command(["git", "rev-parse", "HEAD"]),
+        "git_branch": _run_metadata_command(["git", "branch", "--show-current"]),
+        "git_dirty": bool(git_status_short),
+        "python_executable": sys.executable,
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
     }
 
 
@@ -320,6 +358,8 @@ def validate_bundle(
     )
     return {
         STATUS_KEY: PASSED_STATUS,
+        BUNDLE_SCHEMA_VERSION_KEY: BUNDLE_SCHEMA_VERSION,
+        PROVENANCE_KEY: collect_run_provenance(),
         "thresholds": asdict(thresholds),
         ARTIFACTS_KEY: {
             ARTIFACT_ROLE_BENCHMARK_REPORT: _artifact_record(benchmark_report),

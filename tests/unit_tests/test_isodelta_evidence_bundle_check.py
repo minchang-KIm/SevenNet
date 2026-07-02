@@ -57,6 +57,7 @@ ZERO_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.0
 ZERO_SAMPLE_STDDEV_LOOP_TIME_SECONDS = 0.0
 EXPECTED_RESULT_COUNT = 4
 EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+EXPECTED_BUNDLE_SCHEMA_VERSION = "isodelta-evidence-bundle-v1"
 MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY = 2
 ZERO_CACHE_COUNT = 0.0
 ZERO_HIT_RATE_PERCENT = 0.0
@@ -289,6 +290,13 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
             expected_trace_sha256 = _sha256_file(trace_path)
 
         self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(
+            evidence["bundle_schema_version"],
+            EXPECTED_BUNDLE_SCHEMA_VERSION,
+        )
+        self.assertIn("git_commit", evidence["provenance"])
+        self.assertIn("python_executable", evidence["provenance"])
+        self.assertIsInstance(evidence["provenance"]["git_dirty"], bool)
         self.assertEqual(evidence["trace_models"], ["MACE"])
         self.assertEqual(evidence["trace_model_count"], 1)
         self.assertIn("benchmark_evidence", evidence)
@@ -629,6 +637,11 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             written = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertEqual(written["status"], "passed")
+            self.assertEqual(
+                written["bundle_schema_version"],
+                EXPECTED_BUNDLE_SCHEMA_VERSION,
+            )
+            self.assertIn("platform", written["provenance"])
             self.assertEqual(written["required_trace_models"], ["MACE"])
             self.assertEqual(
                 written["artifacts"]["benchmark_report"]["path"],
