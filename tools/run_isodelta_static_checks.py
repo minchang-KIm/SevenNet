@@ -419,6 +419,14 @@ def main() -> None:
         "benchmark runner must reject empty repeat sets",
     )
     _require(
+        "DEFAULT_RUN_TIMEOUT_SECONDS" in benchmark
+        and "TIMEOUT_RETURN_CODE" in benchmark
+        and "TIMEOUT_DETAIL_PREFIX" in benchmark
+        and "timeout=run_timeout_seconds" in benchmark
+        and "--run-timeout-seconds" in benchmark,
+        "benchmark runner must bound each LAMMPS benchmark run",
+    )
+    _require(
         "check_isodelta_build_prereqs.py" in experiment
         and "check_isodelta_lammps_binary.py" in experiment
         and "run_isodelta_lammps_benchmark.py" in experiment
@@ -436,6 +444,8 @@ def main() -> None:
         "validate_config" in experiment
         and "MIN_POSITIVE_TIMEOUT_SECONDS" in experiment
         and "binary_timeout_seconds must be positive" in experiment
+        and "benchmark_timeout_seconds must be positive" in experiment
+        and "--run-timeout-seconds" in experiment
         and "min_enabled_cache_hits cannot exceed min_enabled_cache_attempts" in experiment
         and "required_trace_models must not include empty names" in experiment,
         "experiment driver must reject meaningless experiment options",
@@ -513,6 +523,11 @@ def main() -> None:
         "`--repeat` must be at least 1" in doc
         and "`--binary-timeout-seconds` must be positive" in doc,
         "IsoDelta-Halo guide must document experiment option sanity checks",
+    )
+    _require(
+        "`--run-timeout-seconds`" in doc
+        and "`--benchmark-timeout-seconds` must be positive" in doc,
+        "IsoDelta-Halo guide must document benchmark run timeouts",
     )
     _require(
         "check_isodelta_benchmark_report.py" in doc

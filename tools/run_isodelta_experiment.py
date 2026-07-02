@@ -40,6 +40,7 @@ DEFAULT_MIN_TRACE_COUNT = 1
 DEFAULT_MIN_TRACE_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT = 0.0
 DEFAULT_BINARY_TIMEOUT_SECONDS = 60.0
+DEFAULT_BENCHMARK_TIMEOUT_SECONDS = 3600.0
 MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
 MIN_POSITIVE_SPEEDUP = 0.0
 MIN_NONNEGATIVE_VALUE = 0.0
@@ -83,6 +84,7 @@ class ExperimentConfig:
         DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT
     )
     binary_timeout_seconds: float = DEFAULT_BINARY_TIMEOUT_SECONDS
+    benchmark_timeout_seconds: float = DEFAULT_BENCHMARK_TIMEOUT_SECONDS
 
     def benchmark_output_dir(self) -> Path:
         """Return the directory where the paired benchmark writes logs."""
@@ -163,6 +165,11 @@ def validate_config(config: ExperimentConfig) -> None:
     _require_valid_config(
         config.binary_timeout_seconds > MIN_POSITIVE_TIMEOUT_SECONDS,
         "binary_timeout_seconds must be positive",
+    )
+    _validate_finite(config.benchmark_timeout_seconds, "benchmark_timeout_seconds")
+    _require_valid_config(
+        config.benchmark_timeout_seconds > MIN_POSITIVE_TIMEOUT_SECONDS,
+        "benchmark_timeout_seconds must be positive",
     )
     _validate_finite(config.max_abs_thermo_delta, "max_abs_thermo_delta")
     _require_valid_config(
@@ -285,6 +292,8 @@ def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentComman
         str(config.input_path),
         "--repeat",
         str(config.repeat_count),
+        "--run-timeout-seconds",
+        str(config.benchmark_timeout_seconds),
         "--output-dir",
         str(config.benchmark_output_dir()),
     ]
@@ -594,6 +603,12 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         default=DEFAULT_BINARY_TIMEOUT_SECONDS,
         help="Timeout for the LAMMPS help smoke check",
     )
+    parser.add_argument(
+        "--benchmark-timeout-seconds",
+        type=float,
+        default=DEFAULT_BENCHMARK_TIMEOUT_SECONDS,
+        help="Timeout for each paired LAMMPS benchmark run",
+    )
     args = parser.parse_args(argv)
     config = ExperimentConfig(
         lammps_command=args.lammps_command,
@@ -618,6 +633,7 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         min_trace_estimated_speedup=args.min_trace_estimated_speedup,
         min_trace_metadata_fraction_percent=args.min_trace_metadata_fraction_percent,
         binary_timeout_seconds=args.binary_timeout_seconds,
+        benchmark_timeout_seconds=args.benchmark_timeout_seconds,
     )
     try:
         validate_config(config)

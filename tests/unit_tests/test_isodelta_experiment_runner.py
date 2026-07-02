@@ -50,6 +50,7 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
             min_hit_rate_percent=50.0,
             min_enabled_cache_attempts=4,
             min_enabled_cache_hits=2,
+            benchmark_timeout_seconds=120.0,
         )
         commands = isodelta_experiment.build_experiment_commands(config)
         self.assertEqual(
@@ -60,6 +61,8 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIn("mpiexec -n 2 lmp", commands[1].argv)
         self.assertIn("--repeat", commands[2].argv)
         self.assertIn("5", commands[2].argv)
+        self.assertIn("--run-timeout-seconds", commands[2].argv)
+        self.assertIn("120.0", commands[2].argv)
         self.assertIn("--min-speedup", commands[3].argv)
         self.assertIn("--min-enabled-cache-attempts", commands[3].argv)
         self.assertIn("4", commands[3].argv)
@@ -110,6 +113,16 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
             binary_timeout_seconds=0.0,
         )
         with self.assertRaisesRegex(ValueError, "binary_timeout_seconds"):
+            isodelta_experiment.validate_config(config)
+
+    def test_validate_config_rejects_nonpositive_benchmark_timeout(self) -> None:
+        """Each paired benchmark run should have a positive timeout."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            benchmark_timeout_seconds=0.0,
+        )
+        with self.assertRaisesRegex(ValueError, "benchmark_timeout_seconds"):
             isodelta_experiment.validate_config(config)
 
     def test_validate_config_rejects_impossible_cache_gate(self) -> None:

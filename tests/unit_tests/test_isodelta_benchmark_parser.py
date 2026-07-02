@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -205,7 +207,48 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
     def test_validate_benchmark_options_rejects_empty_repeat_set(self) -> None:
         """A benchmark with zero pairs cannot support a performance claim."""
         with self.assertRaisesRegex(ValueError, "repeat_count"):
-            isodelta_benchmark.validate_benchmark_options(0)
+            isodelta_benchmark.validate_benchmark_options(
+                0,
+                isodelta_benchmark.DEFAULT_RUN_TIMEOUT_SECONDS,
+            )
+
+    def test_validate_benchmark_options_rejects_nonpositive_timeout(self) -> None:
+        """Each LAMMPS benchmark run should have a positive timeout."""
+        with self.assertRaisesRegex(ValueError, "run_timeout_seconds"):
+            isodelta_benchmark.validate_benchmark_options(1, 0.0)
+
+    def test_run_case_records_timeout_as_failed_result(self) -> None:
+        """Timeouts should leave raw logs and fail like other bad runs."""
+        original_run = isodelta_benchmark.subprocess.run
+
+        def fake_run(*_: object, **__: object) -> subprocess.CompletedProcess[str]:
+            raise subprocess.TimeoutExpired(
+                cmd=["lmp"],
+                timeout=1.0,
+                output="partial stdout",
+                stderr="partial stderr",
+            )
+
+        try:
+            isodelta_benchmark.subprocess.run = fake_run
+            with tempfile.TemporaryDirectory() as tmpdir:
+                result = isodelta_benchmark._run_case(
+                    command=["lmp", "-in", "in.test"],
+                    case=isodelta_benchmark.BENCHMARK_CASES[1],
+                    repeat_index=0,
+                    work_dir=Path(tmpdir),
+                    output_dir=Path(tmpdir),
+                    keep_going=True,
+                    run_timeout_seconds=1.0,
+                )
+                stderr_text = Path(result.stderr_path).read_text(encoding="utf-8")
+                stdout_text = Path(result.stdout_path).read_text(encoding="utf-8")
+        finally:
+            isodelta_benchmark.subprocess.run = original_run
+
+        self.assertEqual(result.returncode, isodelta_benchmark.TIMEOUT_RETURN_CODE)
+        self.assertIn("partial stdout", stdout_text)
+        self.assertIn(isodelta_benchmark.TIMEOUT_DETAIL_PREFIX, stderr_text)
 
     def test_collect_run_provenance_records_git_and_runtime_context(self) -> None:
         """Benchmark reports should carry enough context for audit trails."""

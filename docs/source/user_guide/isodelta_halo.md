@@ -196,6 +196,7 @@ python tools/run_isodelta_experiment.py \
   --lammps-root /path/to/lammps \
   --require-torch \
   --repeat 5 \
+  --benchmark-timeout-seconds 3600 \
   --output-dir isodelta_experiment_runs \
   --max-abs-thermo-delta 1.0e-8 \
   --min-paired-thermo-count 5 \
@@ -211,8 +212,9 @@ and report correctness gate in that order. It writes stage logs and
 when using the numbers in a manuscript.
 The driver rejects empty or impossible evidence settings before launching
 external commands. `--repeat` must be at least 1.
-`--binary-timeout-seconds` must be positive. Percentage gates must stay between
-0 and 100, and minimum cache hits cannot exceed minimum cache attempts.
+`--binary-timeout-seconds` must be positive.
+`--benchmark-timeout-seconds` must be positive. Percentage gates must stay
+between 0 and 100, and minimum cache hits cannot exceed minimum cache attempts.
 Both the experiment report and benchmark report include a `provenance` object
 with schema version, Git commit, Git branch, dirty-worktree state, Python
 runtime, platform string, and benchmark environment overrides. Treat a dirty
@@ -245,6 +247,7 @@ python tools/run_isodelta_lammps_benchmark.py \
   --lammps-command "mpiexec -n 4 lmp" \
   --input /path/to/in.sevenn \
   --repeat 5 \
+  --run-timeout-seconds 3600 \
   --output-dir isodelta_benchmark_runs
 ```
 
@@ -258,6 +261,9 @@ paths inside the input script keep working. Use `--work-dir` when the benchmark
 must run elsewhere.
 The runner rejects `--repeat` values below 1 because a zero-repeat report has
 no paired timing, cache-hit, or final-thermo evidence to audit.
+It also applies `--run-timeout-seconds` to each individual LAMMPS invocation so
+a hung MPI launch becomes a failed run with raw stdout/stderr logs instead of an
+unbounded experiment.
 
 ## Report Fields
 

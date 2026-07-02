@@ -28,9 +28,12 @@ REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
 DEFAULT_OUTPUT_DIR = Path("isodelta_benchmark_runs")
 DEFAULT_REPEAT_COUNT = 3
+DEFAULT_RUN_TIMEOUT_SECONDS = 3600.0
 MIN_REPEAT_COUNT = 1
+MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
 PERCENT_SCALE = 100.0
 GIT_METADATA_TIMEOUT_SECONDS = 10.0
+TIMEOUT_RETURN_CODE = 124
 LAMMPS_INPUT_FLAG = "-in"
 BASELINE_CASE = "baseline-disabled"
 ISODELTA_CASE = "isodelta-enabled"
@@ -55,6 +58,7 @@ MAX_LOOP_TIME_KEY = "max_loop_time_seconds"
 VALID_LOOP_TIME_COUNT_KEY = "valid_loop_time_count"
 MIN_SAMPLE_VARIANCE_COUNT = 2
 SAMPLE_VARIANCE_DEGREES_OF_FREEDOM = 1
+TIMEOUT_DETAIL_PREFIX = "LAMMPS benchmark timed out after"
 LOOP_TIME_RE = re.compile(
     r"Loop time of\s+(?P<seconds>[-+]?\d+(?:\.\d+)?)\s+on\b",
     re.IGNORECASE,
@@ -109,10 +113,26 @@ BENCHMARK_CASES = (
 )
 
 
-def validate_benchmark_options(repeat_count: int) -> None:
+def _coerce_timeout_stream(value: str | bytes | None) -> str:
+    """Return timeout-captured output as text for raw log persistence."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value
+
+
+def validate_benchmark_options(
+    repeat_count: int,
+    run_timeout_seconds: float,
+) -> None:
     """Reject benchmark options that cannot produce paired timing evidence."""
     if repeat_count < MIN_REPEAT_COUNT:
         raise ValueError(f"repeat_count must be at least {MIN_REPEAT_COUNT}")
+    if not math.isfinite(run_timeout_seconds):
+        raise ValueError("run_timeout_seconds must be finite")
+    if run_timeout_seconds <= MIN_POSITIVE_TIMEOUT_SECONDS:
+        raise ValueError("run_timeout_seconds must be positive")
 
 
 def parse_loop_time(log_text: str) -> float | None:
@@ -244,38 +264,53 @@ def _run_case(
     work_dir: Path,
     output_dir: Path,
     keep_going: bool,
+    run_timeout_seconds: float,
 ) -> BenchmarkResult:
     """Run one case, persist logs, parse metrics, and optionally fail fast."""
     stdout_path = output_dir / f"{case.name}_repeat{repeat_index}.stdout.log"
     stderr_path = output_dir / f"{case.name}_repeat{repeat_index}.stderr.log"
-    completed = subprocess.run(
-        command,
-        cwd=work_dir,
-        env=_case_environment(case),
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    stdout_path.write_text(completed.stdout, encoding="utf-8")
-    stderr_path.write_text(completed.stderr, encoding="utf-8")
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=work_dir,
+            env=_case_environment(case),
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=run_timeout_seconds,
+        )
+        stdout_text = completed.stdout
+        stderr_text = completed.stderr
+        returncode = completed.returncode
+    except subprocess.TimeoutExpired as exc:
+        stdout_text = _coerce_timeout_stream(exc.output)
+        timeout_stderr = _coerce_timeout_stream(exc.stderr)
+        timeout_detail = f"{TIMEOUT_DETAIL_PREFIX} {run_timeout_seconds:g} seconds"
+        stderr_text = (
+            f"{timeout_stderr}\n{timeout_detail}" if timeout_stderr else timeout_detail
+        )
+        returncode = TIMEOUT_RETURN_CODE
+
+    stdout_path.write_text(stdout_text, encoding="utf-8")
+    stderr_path.write_text(stderr_text, encoding="utf-8")
     loop_time, cache_summary, final_thermo_observables = parse_run_output(
-        completed.stdout, completed.stderr
+        stdout_text, stderr_text
     )
 
     result = BenchmarkResult(
         case=case.name,
         repeat_index=repeat_index,
-        returncode=completed.returncode,
+        returncode=returncode,
         loop_time_seconds=loop_time,
         cache_summary=cache_summary,
         final_thermo_observables=final_thermo_observables,
         stdout_path=str(stdout_path),
         stderr_path=str(stderr_path),
     )
-    if completed.returncode != 0 and not keep_going:
+    if returncode != 0 and not keep_going:
         raise RuntimeError(
             f"{case.name} repeat {repeat_index} failed with exit code "
-            f"{completed.returncode}. See {stderr_path}"
+            f"{returncode}. See {stderr_path}"
         )
     return result
 
@@ -393,6 +428,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Directory for logs and JSON report",
     )
     parser.add_argument(
+        "--run-timeout-seconds",
+        type=float,
+        default=DEFAULT_RUN_TIMEOUT_SECONDS,
+        help="Maximum seconds to wait for each LAMMPS benchmark run",
+    )
+    parser.add_argument(
         "--work-dir",
         type=Path,
         help="Directory where LAMMPS should run; defaults to the input directory",
@@ -404,7 +445,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        validate_benchmark_options(args.repeat)
+        validate_benchmark_options(args.repeat, args.run_timeout_seconds)
     except ValueError as exc:
         parser.error(str(exc))
 
@@ -425,6 +466,7 @@ def main(argv: list[str] | None = None) -> int:
                     work_dir=work_dir,
                     output_dir=output_dir,
                     keep_going=args.keep_going,
+                    run_timeout_seconds=args.run_timeout_seconds,
                 )
             )
 
@@ -433,6 +475,7 @@ def main(argv: list[str] | None = None) -> int:
         "command": command,
         "input": str(input_path),
         "work_dir": str(work_dir),
+        "run_timeout_seconds": args.run_timeout_seconds,
         "summary": _summarize(results),
         "results": [asdict(result) for result in results],
     }
