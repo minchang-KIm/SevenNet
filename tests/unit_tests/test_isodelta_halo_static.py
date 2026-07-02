@@ -99,6 +99,13 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         )
         self.assertIn("clear_comm_preprocess_work();", self.cpp)
 
+    def test_cache_store_requires_cacheable_topology(self) -> None:
+        """A rebuilt cache should be marked valid only for captured topology."""
+        self.assertIn("current_comm_topology_is_cacheable", self.combined)
+        self.assertIn("if (!current_comm_topology_is_cacheable())", self.cpp)
+        self.assertIn("current_nswap >= kNoActiveCommPhases", self.cpp)
+        self.assertIn("current_nswap <= kCommPhaseCount", self.cpp)
+
     def test_cache_misses_invalidate_stale_metadata(self) -> None:
         """A failed reuse attempt should not leave stale metadata marked valid."""
         self.assertIn("invalidate_comm_preprocess_cache", self.combined)

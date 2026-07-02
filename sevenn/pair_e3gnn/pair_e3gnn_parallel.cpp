@@ -877,6 +877,11 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
 
 void PairE3GNNParallel::store_comm_preprocess_cache(
     int nlocal, int ghost_node_num, int nedges, const int *graph_index_to_i) {
+  if (!current_comm_topology_is_cacheable()) {
+    invalidate_comm_preprocess_cache();
+    return;
+  }
+
   comm_cache_nlocal = nlocal;
   comm_cache_ghost_node_num = ghost_node_num;
   comm_cache_graph_size = graph_size;
@@ -942,6 +947,17 @@ void PairE3GNNParallel::invalidate_comm_preprocess_cache() {
     comm_cache_index_unpack_forward_tensor[comm_phase] = torch::Tensor();
     comm_cache_index_unpack_reverse_tensor[comm_phase] = torch::Tensor();
   }
+}
+
+bool PairE3GNNParallel::current_comm_topology_is_cacheable() const {
+  CommBrick *comm_brick = dynamic_cast<CommBrick *>(comm);
+  if (comm_brick == nullptr) {
+    return false;
+  }
+
+  const int current_nswap = comm_brick->e3gnn_nswap();
+  return current_nswap >= kNoActiveCommPhases &&
+         current_nswap <= kCommPhaseCount;
 }
 
 bool PairE3GNNParallel::comm_topology_matches_cache() const {

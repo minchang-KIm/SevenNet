@@ -116,6 +116,7 @@ private:
   void store_comm_preprocess_cache(int, int, int, const int *);
   void clear_comm_preprocess_work();
   void invalidate_comm_preprocess_cache();
+  bool current_comm_topology_is_cacheable() const;
   bool comm_topology_matches_cache() const;
   void store_comm_topology_signature();
   bool comm_list_tags_match_cache() const;

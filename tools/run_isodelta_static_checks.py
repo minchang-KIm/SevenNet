@@ -167,6 +167,13 @@ def main() -> None:
         "cache store function is missing",
     )
     _require(
+        "current_comm_topology_is_cacheable" in combined
+        and "if (!current_comm_topology_is_cacheable())" in cpp
+        and "current_nswap >= kNoActiveCommPhases" in cpp
+        and "current_nswap <= kCommPhaseCount" in cpp,
+        "cache store must reject uncapturable communication topologies",
+    )
+    _require(
         "invalidate_comm_preprocess_cache" in combined
         and "comm_cache_valid = false;" in cpp
         and "comm_cache_nswap = kInactiveCommPhaseValue;" in cpp
