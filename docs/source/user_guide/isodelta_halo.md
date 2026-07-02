@@ -261,6 +261,34 @@ scalars match the disabled-cache baseline within the tolerance required by the
 simulation. A low hit rate usually means the neighbor list is rebuilt too often,
 the graph shape changes often, or atom tag order is not stable enough for reuse.
 
+## Evidence Bundle Gate
+
+For a manuscript claim that combines the implemented SevenNet/LAMMPS speedup
+with model-agnostic MLIP portability evidence, validate the benchmark report and
+trace evidence files together:
+
+```bash
+python tools/check_isodelta_evidence_bundle.py \
+  --benchmark-report isodelta_benchmark_runs/isodelta_benchmark_report.json \
+  --trace-evidence mace_isodelta_trace_evidence.json \
+  --require-trace-model MACE \
+  --max-abs-thermo-delta 1.0e-8 \
+  --min-paired-thermo-count 5 \
+  --min-speedup 1.05 \
+  --min-hit-rate-percent 50.0 \
+  --min-enabled-cache-attempts 5 \
+  --min-enabled-cache-hits 1 \
+  --min-trace-hit-rate-percent 50.0 \
+  --min-trace-estimated-speedup 1.05 \
+  --min-trace-metadata-fraction-percent 5.0 \
+  --output bundle_evidence.json
+```
+
+Use one `--trace-evidence` argument per model trace and one
+`--require-trace-model` argument for every model label that must appear in the
+claim. The resulting `bundle_evidence.json` is the file to archive beside raw
+LAMMPS logs, trace JSON, and plotting scripts.
+
 ## Expected Evidence For A Paper
 
 A complete experiment should include:

@@ -19,6 +19,7 @@ COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
 BENCHMARK_PATH = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
 EXPERIMENT_PATH = REPO_ROOT / "tools" / "run_isodelta_experiment.py"
 REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
+EVIDENCE_BUNDLE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_evidence_bundle.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 MLIP_TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
@@ -48,6 +49,7 @@ def main() -> None:
     benchmark = _read(BENCHMARK_PATH)
     experiment = _read(EXPERIMENT_PATH)
     report_check = _read(REPORT_CHECK_PATH)
+    evidence_bundle_check = _read(EVIDENCE_BUNDLE_CHECK_PATH)
     prereq = _read(PREREQ_PATH)
     binary_check = _read(BINARY_CHECK_PATH)
     mlip_trace_check = _read(MLIP_TRACE_CHECK_PATH)
@@ -296,6 +298,14 @@ def main() -> None:
         "MLIP trace checker must expose model-agnostic reuse and speedup evidence",
     )
     _require(
+        "check_isodelta_benchmark_report.py" in evidence_bundle_check
+        and "check_isodelta_mlip_trace.py" in evidence_bundle_check
+        and "validate_bundle" in evidence_bundle_check
+        and "--require-trace-model" in evidence_bundle_check
+        and "min_trace_estimated_speedup" in evidence_bundle_check,
+        "evidence bundle checker must gate benchmark and trace evidence together",
+    )
+    _require(
         "check_isodelta_mlip_trace.py" in doc
         and "graph_node_tags" in doc
         and "comm_phases" in doc
@@ -305,6 +315,12 @@ def main() -> None:
         and "NequIP" in doc
         and "Allegro" in doc,
         "IsoDelta-Halo guide must document the model-agnostic trace checker",
+    )
+    _require(
+        "check_isodelta_evidence_bundle.py" in doc
+        and "bundle_evidence.json" in doc
+        and "--require-trace-model" in doc,
+        "IsoDelta-Halo guide must document the evidence bundle checker",
     )
     _require(
         "parse_final_thermo_observables" in benchmark
