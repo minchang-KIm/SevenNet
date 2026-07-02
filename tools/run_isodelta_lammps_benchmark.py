@@ -28,6 +28,7 @@ ISODELTA_CASE = "isodelta-enabled"
 PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
+ENV_FLAG_ENABLED = "1"
 LOOP_TIME_RE = re.compile(
     r"Loop time of\s+(?P<seconds>[-+]?\d+(?:\.\d+)?)\s+on\b",
     re.IGNORECASE,
@@ -63,16 +64,16 @@ BENCHMARK_CASES = (
     BenchmarkCase(
         name=BASELINE_CASE,
         env_updates={
-            PRINT_INFO_ENV: "1",
-            DISABLE_CACHE_ENV: "1",
-            PROFILE_CACHE_ENV: "1",
+            PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+            DISABLE_CACHE_ENV: ENV_FLAG_ENABLED,
+            PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
         },
     ),
     BenchmarkCase(
         name=ISODELTA_CASE,
         env_updates={
-            PRINT_INFO_ENV: "1",
-            PROFILE_CACHE_ENV: "1",
+            PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+            PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
         },
     ),
 )
