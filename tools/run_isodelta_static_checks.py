@@ -18,6 +18,7 @@ COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
 COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
 BENCHMARK_PATH = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
+BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
 DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
 
@@ -41,6 +42,7 @@ def main() -> None:
     comm_brick_header = _read(COMM_BRICK_HEADER_PATH)
     benchmark = _read(BENCHMARK_PATH)
     prereq = _read(PREREQ_PATH)
+    binary_check = _read(BINARY_CHECK_PATH)
     doc = _read(DOC_PATH)
     doc_index = _read(DOC_INDEX_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
@@ -169,6 +171,15 @@ def main() -> None:
     _require(
         "check_isodelta_build_prereqs.py" in doc,
         "IsoDelta-Halo guide must document the build prerequisite checker",
+    )
+    _require(
+        "PAIR_STYLE_NAME = \"e3gnn/parallel\"" in binary_check
+        and "parse_pair_style_available" in binary_check,
+        "LAMMPS binary smoke checker must verify e3gnn/parallel registration",
+    )
+    _require(
+        "check_isodelta_lammps_binary.py" in doc,
+        "IsoDelta-Halo guide must document the LAMMPS binary smoke checker",
     )
     _require(
         "parse_final_thermo_observables" in benchmark

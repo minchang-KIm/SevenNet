@@ -89,6 +89,19 @@ python tools/check_isodelta_build_prereqs.py \
 The checker prints JSON so failed checks can be archived with build logs. It
 does not modify the LAMMPS tree.
 
+## Binary Smoke Check
+
+After building LAMMPS, verify that the patched pair style is registered before
+running long simulations:
+
+```bash
+python tools/check_isodelta_lammps_binary.py \
+  --lammps-command "mpiexec -n 1 lmp"
+```
+
+This command runs LAMMPS help output and checks for `e3gnn/parallel`. It is a
+fast registration check, not a numerical correctness test.
+
 ## Paired Benchmark
 
 Use the benchmark runner after building a LAMMPS binary that contains
