@@ -102,6 +102,69 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
             ],
             0.001,
         )
+        self.assertIsNone(
+            summary["cases"][isodelta_benchmark.BASELINE_CASE][
+                "sample_variance_loop_time_seconds"
+            ]
+        )
+
+    def test_summarize_loop_time_repeat_statistics(self) -> None:
+        """Repeated timings should include variance fields for paper tables."""
+        results = [
+            isodelta_benchmark.BenchmarkResult(
+                case=isodelta_benchmark.BASELINE_CASE,
+                repeat_index=0,
+                returncode=0,
+                loop_time_seconds=10.0,
+                cache_summary={},
+                final_thermo_observables={},
+                stdout_path="baseline0.out",
+                stderr_path="baseline0.err",
+            ),
+            isodelta_benchmark.BenchmarkResult(
+                case=isodelta_benchmark.BASELINE_CASE,
+                repeat_index=1,
+                returncode=0,
+                loop_time_seconds=14.0,
+                cache_summary={},
+                final_thermo_observables={},
+                stdout_path="baseline1.out",
+                stderr_path="baseline1.err",
+            ),
+            isodelta_benchmark.BenchmarkResult(
+                case=isodelta_benchmark.ISODELTA_CASE,
+                repeat_index=0,
+                returncode=0,
+                loop_time_seconds=5.0,
+                cache_summary={},
+                final_thermo_observables={},
+                stdout_path="enabled0.out",
+                stderr_path="enabled0.err",
+            ),
+            isodelta_benchmark.BenchmarkResult(
+                case=isodelta_benchmark.ISODELTA_CASE,
+                repeat_index=1,
+                returncode=0,
+                loop_time_seconds=7.0,
+                cache_summary={},
+                final_thermo_observables={},
+                stdout_path="enabled1.out",
+                stderr_path="enabled1.err",
+            ),
+        ]
+        summary = isodelta_benchmark._summarize(results)
+        baseline_summary = summary["cases"][isodelta_benchmark.BASELINE_CASE]
+        enabled_summary = summary["cases"][isodelta_benchmark.ISODELTA_CASE]
+        self.assertEqual(baseline_summary["mean_loop_time_seconds"], 12.0)
+        self.assertEqual(baseline_summary["sample_variance_loop_time_seconds"], 8.0)
+        self.assertAlmostEqual(
+            baseline_summary["sample_stddev_loop_time_seconds"],
+            8.0 ** 0.5,
+        )
+        self.assertEqual(baseline_summary["min_loop_time_seconds"], 10.0)
+        self.assertEqual(baseline_summary["max_loop_time_seconds"], 14.0)
+        self.assertEqual(enabled_summary["mean_loop_time_seconds"], 6.0)
+        self.assertEqual(summary["speedup_vs_disabled_cache"], 2.0)
 
     def test_build_command_appends_input_flag(self) -> None:
         """The runner should build commands without shell-specific quoting."""

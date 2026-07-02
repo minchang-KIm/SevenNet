@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -34,6 +35,14 @@ MIN_THERMO_HEADER_COLUMNS = 2
 FINAL_THERMO_DELTA_KEY = "final_thermo_delta_vs_disabled_cache"
 MAX_ABS_DELTA_KEY = "max_abs_delta"
 PAIRED_COUNT_KEY = "paired_count"
+MEAN_LOOP_TIME_KEY = "mean_loop_time_seconds"
+SAMPLE_VARIANCE_LOOP_TIME_KEY = "sample_variance_loop_time_seconds"
+SAMPLE_STDDEV_LOOP_TIME_KEY = "sample_stddev_loop_time_seconds"
+MIN_LOOP_TIME_KEY = "min_loop_time_seconds"
+MAX_LOOP_TIME_KEY = "max_loop_time_seconds"
+VALID_LOOP_TIME_COUNT_KEY = "valid_loop_time_count"
+MIN_SAMPLE_VARIANCE_COUNT = 2
+SAMPLE_VARIANCE_DEGREES_OF_FREEDOM = 1
 LOOP_TIME_RE = re.compile(
     r"Loop time of\s+(?P<seconds>[-+]?\d+(?:\.\d+)?)\s+on\b",
     re.IGNORECASE,
@@ -219,24 +228,51 @@ def _summarize(results: list[BenchmarkResult]) -> dict[str, Any]:
             for result in results
             if result.case == case_name and result.loop_time_seconds is not None
         ]
-        if case_times:
-            summary["cases"][case_name] = {
-                "mean_loop_time_seconds": sum(case_times) / len(case_times),
-                "valid_loop_time_count": len(case_times),
-            }
-        else:
-            summary["cases"][case_name] = {
-                "mean_loop_time_seconds": None,
-                "valid_loop_time_count": 0,
-            }
-    baseline_mean = summary["cases"][BASELINE_CASE]["mean_loop_time_seconds"]
-    isodelta_mean = summary["cases"][ISODELTA_CASE]["mean_loop_time_seconds"]
+        summary["cases"][case_name] = _summarize_loop_times(case_times)
+    baseline_mean = summary["cases"][BASELINE_CASE][MEAN_LOOP_TIME_KEY]
+    isodelta_mean = summary["cases"][ISODELTA_CASE][MEAN_LOOP_TIME_KEY]
     if baseline_mean and isodelta_mean:
         summary["speedup_vs_disabled_cache"] = baseline_mean / isodelta_mean
     else:
         summary["speedup_vs_disabled_cache"] = None
     summary[FINAL_THERMO_DELTA_KEY] = _summarize_final_thermo_deltas(results)
     return summary
+
+
+def _summarize_loop_times(loop_times: list[float]) -> dict[str, float | int | None]:
+    """Compute repeat statistics for one benchmark case."""
+    if not loop_times:
+        return {
+            MEAN_LOOP_TIME_KEY: None,
+            SAMPLE_VARIANCE_LOOP_TIME_KEY: None,
+            SAMPLE_STDDEV_LOOP_TIME_KEY: None,
+            MIN_LOOP_TIME_KEY: None,
+            MAX_LOOP_TIME_KEY: None,
+            VALID_LOOP_TIME_COUNT_KEY: 0,
+        }
+
+    loop_time_count = len(loop_times)
+    mean_loop_time = sum(loop_times) / loop_time_count
+    if loop_time_count >= MIN_SAMPLE_VARIANCE_COUNT:
+        squared_delta_sum = sum(
+            (loop_time - mean_loop_time) ** 2 for loop_time in loop_times
+        )
+        sample_variance = squared_delta_sum / (
+            loop_time_count - SAMPLE_VARIANCE_DEGREES_OF_FREEDOM
+        )
+        sample_stddev = math.sqrt(sample_variance)
+    else:
+        sample_variance = None
+        sample_stddev = None
+
+    return {
+        MEAN_LOOP_TIME_KEY: mean_loop_time,
+        SAMPLE_VARIANCE_LOOP_TIME_KEY: sample_variance,
+        SAMPLE_STDDEV_LOOP_TIME_KEY: sample_stddev,
+        MIN_LOOP_TIME_KEY: min(loop_times),
+        MAX_LOOP_TIME_KEY: max(loop_times),
+        VALID_LOOP_TIME_COUNT_KEY: loop_time_count,
+    }
 
 
 def _summarize_final_thermo_deltas(results: list[BenchmarkResult]) -> dict[str, dict[str, float]]:

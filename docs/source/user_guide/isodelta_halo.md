@@ -154,6 +154,10 @@ must run elsewhere.
 The runner writes `isodelta_benchmark_report.json`. Important fields are:
 
 - `summary.cases.*.mean_loop_time_seconds`
+- `summary.cases.*.sample_variance_loop_time_seconds`
+- `summary.cases.*.sample_stddev_loop_time_seconds`
+- `summary.cases.*.min_loop_time_seconds`
+- `summary.cases.*.max_loop_time_seconds`
 - `summary.speedup_vs_disabled_cache`
 - `summary.final_thermo_delta_vs_disabled_cache`
 - `results.*.cache_summary.attempts`

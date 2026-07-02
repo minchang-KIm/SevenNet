@@ -210,6 +210,12 @@ def main() -> None:
         "benchmark runner must report final thermo consistency deltas",
     )
     _require(
+        "sample_variance_loop_time_seconds" in benchmark
+        and "sample_stddev_loop_time_seconds" in benchmark
+        and "MIN_SAMPLE_VARIANCE_COUNT" in benchmark,
+        "benchmark runner must report repeat variance statistics",
+    )
+    _require(
         "check_isodelta_build_prereqs.py" in experiment
         and "check_isodelta_lammps_binary.py" in experiment
         and "run_isodelta_lammps_benchmark.py" in experiment
@@ -227,6 +233,11 @@ def main() -> None:
         "final_thermo_delta_vs_disabled_cache" in doc
         and "final_thermo_observables" in doc,
         "IsoDelta-Halo guide must document final thermo consistency fields",
+    )
+    _require(
+        "sample_variance_loop_time_seconds" in doc
+        and "sample_stddev_loop_time_seconds" in doc,
+        "IsoDelta-Halo guide must document repeat variance fields",
     )
     _require(
         "check_isodelta_benchmark_report.py" in doc
