@@ -398,6 +398,12 @@ def main() -> None:
         "benchmark runner must aggregate cache summaries across MPI ranks",
     )
     _require(
+        "FLOAT_PATTERN" in benchmark
+        and "SUMMARY_VALUE_RE" in benchmark
+        and "FLOAT_TOKEN_RE = re.compile(FLOAT_PATTERN)" in benchmark,
+        "benchmark runner must parse decimal and scientific numeric logs consistently",
+    )
+    _require(
         "REPORT_SCHEMA_VERSION" in benchmark
         and "collect_run_provenance" in benchmark
         and "git_commit" in benchmark
@@ -570,6 +576,12 @@ def main() -> None:
         and "recomputes" in doc
         and "aggregated hits and attempts" in doc,
         "IsoDelta-Halo guide must document MPI cache-summary aggregation",
+    )
+    _require(
+        "scientific notation" in doc
+        and "loop-time" in doc
+        and "cache evidence" in doc,
+        "IsoDelta-Halo guide must document numeric parser coverage",
     )
     _require(
         "attempts - hits" in doc

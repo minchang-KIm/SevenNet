@@ -33,6 +33,11 @@ AGGREGATED_HIT_RATE_PERCENT = 60.0
 AGGREGATED_NO_CACHE_MISSES = 3.0
 AGGREGATED_SHAPE_CHANGED_MISSES = 3.0
 EXPECTED_BENCHMARK_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+SCIENTIFIC_LOOP_TIME_SECONDS = 1.25e-3
+SCIENTIFIC_ATTEMPTS = 10.0
+SCIENTIFIC_HITS = 8.0
+SCIENTIFIC_HIT_RATE_PERCENT = 80.0
+SCIENTIFIC_NO_CACHE_MISSES = 2.0
 
 
 class IsoDeltaBenchmarkParserTest(unittest.TestCase):
@@ -48,6 +53,14 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         log_text = "Loop time of 12.3456 on 4 procs for 100 steps with 4096 atoms"
         self.assertEqual(isodelta_benchmark.parse_loop_time(log_text), 12.3456)
 
+    def test_parse_loop_time_from_scientific_notation(self) -> None:
+        """Very short smoke runs may print loop time in scientific notation."""
+        log_text = "Loop time of 1.25e-3 on 1 procs for 1 steps with 8 atoms"
+        self.assertEqual(
+            isodelta_benchmark.parse_loop_time(log_text),
+            SCIENTIFIC_LOOP_TIME_SECONDS,
+        )
+
     def test_parse_cache_summary_counters(self) -> None:
         """IsoDelta-Halo summary lines should parse all numeric key-value pairs."""
         log_text = (
@@ -61,6 +74,18 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         self.assertEqual(parsed["summary_rank_count"], 1.0)
         self.assertEqual(parsed["miss_no-cache"], 1.0)
         self.assertEqual(parsed["miss_shape-changed"], 1.0)
+
+    def test_parse_cache_summary_counters_from_scientific_notation(self) -> None:
+        """Summary counters should accept the same float syntax as thermo rows."""
+        log_text = (
+            "0 IsoDelta-Halo summary: attempts=1e1 hits=8e0 "
+            "hit_rate_percent=8.0e1 miss_no-cache=2e0"
+        )
+        parsed = isodelta_benchmark.parse_cache_summary(log_text)
+        self.assertEqual(parsed["attempts"], SCIENTIFIC_ATTEMPTS)
+        self.assertEqual(parsed["hits"], SCIENTIFIC_HITS)
+        self.assertEqual(parsed["hit_rate_percent"], SCIENTIFIC_HIT_RATE_PERCENT)
+        self.assertEqual(parsed["miss_no-cache"], SCIENTIFIC_NO_CACHE_MISSES)
 
     def test_parse_cache_summary_aggregates_mpi_rank_counters(self) -> None:
         """Multiple rank summaries should aggregate counters and recompute rate."""

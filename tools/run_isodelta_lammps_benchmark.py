@@ -59,17 +59,16 @@ VALID_LOOP_TIME_COUNT_KEY = "valid_loop_time_count"
 MIN_SAMPLE_VARIANCE_COUNT = 2
 SAMPLE_VARIANCE_DEGREES_OF_FREEDOM = 1
 TIMEOUT_DETAIL_PREFIX = "LAMMPS benchmark timed out after"
+FLOAT_PATTERN = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 LOOP_TIME_RE = re.compile(
-    r"Loop time of\s+(?P<seconds>[-+]?\d+(?:\.\d+)?)\s+on\b",
+    rf"Loop time of\s+(?P<seconds>{FLOAT_PATTERN})\s+on\b",
     re.IGNORECASE,
 )
 SUMMARY_RE = re.compile(r"IsoDelta-Halo summary:\s+(?P<body>.*)")
 SUMMARY_VALUE_RE = re.compile(
-    r"(?P<key>[A-Za-z0-9_-]+)=(?P<value>[-+]?\d+(?:\.\d+)?)"
+    rf"(?P<key>[A-Za-z0-9_-]+)=(?P<value>{FLOAT_PATTERN})"
 )
-FLOAT_TOKEN_RE = re.compile(
-    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
-)
+FLOAT_TOKEN_RE = re.compile(FLOAT_PATTERN)
 
 
 @dataclass(frozen=True)
