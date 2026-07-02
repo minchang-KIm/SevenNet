@@ -56,6 +56,7 @@ ZERO_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.0
 ZERO_SAMPLE_STDDEV_LOOP_TIME_SECONDS = 0.0
 EXPECTED_RESULT_COUNT = 4
 EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY = 2
 ZERO_CACHE_COUNT = 0.0
 ZERO_HIT_RATE_PERCENT = 0.0
 DEFAULT_SUMMARY_RANK_COUNT = 1.0
@@ -240,7 +241,11 @@ def _trace_evidence(model_name: str = "MACE") -> dict[str, object]:
     }
 
 
-def _thresholds() -> object:
+def _thresholds(
+    min_distinct_trace_models: int = (
+        isodelta_evidence_bundle.DEFAULT_MIN_DISTINCT_TRACE_MODELS
+    ),
+) -> object:
     """Return the shared bundle thresholds used by direct tests."""
     return isodelta_evidence_bundle.BundleThresholds(
         max_abs_thermo_delta=MAX_ABS_THERMO_DELTA,
@@ -252,6 +257,7 @@ def _thresholds() -> object:
         min_trace_hit_rate_percent=MIN_HIT_RATE_PERCENT,
         min_trace_estimated_speedup=MIN_TRACE_ESTIMATED_SPEEDUP,
         min_trace_metadata_fraction_percent=MIN_TRACE_METADATA_FRACTION_PERCENT,
+        min_distinct_trace_models=min_distinct_trace_models,
     )
 
 
@@ -313,6 +319,82 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
             )
 
         self.assertEqual(evidence["trace_models"], ["MACE"])
+
+    def test_validate_bundle_accepts_distinct_trace_models(self) -> None:
+        """Portability evidence should pass when distinct MLIP labels are present."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            benchmark_path = Path(tmpdir) / "benchmark.json"
+            mace_trace_path = Path(tmpdir) / "mace_trace_evidence.json"
+            nequip_trace_path = Path(tmpdir) / "nequip_trace_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            mace_trace_path.write_text(
+                json.dumps(_trace_evidence("MACE")),
+                encoding="utf-8",
+            )
+            nequip_trace_path.write_text(
+                json.dumps(_trace_evidence("NequIP")),
+                encoding="utf-8",
+            )
+
+            evidence = isodelta_evidence_bundle.validate_bundle(
+                benchmark_report=benchmark_path,
+                trace_evidence_paths=[mace_trace_path, nequip_trace_path],
+                required_models=["MACE", "NequIP"],
+                thresholds=_thresholds(
+                    min_distinct_trace_models=(
+                        MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY
+                    ),
+                ),
+            )
+
+        self.assertEqual(evidence["trace_models"], ["MACE", "NequIP"])
+        self.assertEqual(
+            evidence["trace_model_count"],
+            MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY,
+        )
+
+    def test_validate_bundle_rejects_repeated_model_for_distinct_gate(self) -> None:
+        """Two files from one MLIP should not prove a multi-model portability claim."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            benchmark_path = Path(tmpdir) / "benchmark.json"
+            first_trace_path = Path(tmpdir) / "first_mace_trace_evidence.json"
+            second_trace_path = Path(tmpdir) / "second_mace_trace_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            first_trace_path.write_text(
+                json.dumps(_trace_evidence("MACE")),
+                encoding="utf-8",
+            )
+            second_trace_path.write_text(
+                json.dumps(_trace_evidence("MACE")),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_evidence_bundle.EvidenceBundleError,
+                "distinct trace model count",
+            ):
+                isodelta_evidence_bundle.validate_bundle(
+                    benchmark_report=benchmark_path,
+                    trace_evidence_paths=[first_trace_path, second_trace_path],
+                    required_models=["MACE"],
+                    thresholds=isodelta_evidence_bundle.BundleThresholds(
+                        max_abs_thermo_delta=MAX_ABS_THERMO_DELTA,
+                        min_paired_thermo_count=MIN_PAIRED_THERMO_COUNT,
+                        min_speedup=MIN_SPEEDUP,
+                        min_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                        min_enabled_cache_attempts=MIN_ENABLED_ATTEMPTS,
+                        min_enabled_cache_hits=MIN_ENABLED_HITS,
+                        min_trace_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                        min_trace_estimated_speedup=MIN_TRACE_ESTIMATED_SPEEDUP,
+                        min_trace_metadata_fraction_percent=(
+                            MIN_TRACE_METADATA_FRACTION_PERCENT
+                        ),
+                        min_trace_count=MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY,
+                        min_distinct_trace_models=(
+                            MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY
+                        ),
+                    ),
+                )
 
     def test_validate_bundle_rejects_duplicate_trace_paths(self) -> None:
         """One trace evidence file should not satisfy count gates twice."""
@@ -438,6 +520,29 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
                 )
             )
 
+    def test_validate_thresholds_rejects_zero_distinct_model_gate(self) -> None:
+        """Distinct model gates should require at least one model label."""
+        with self.assertRaisesRegex(
+            isodelta_evidence_bundle.EvidenceBundleError,
+            "min_distinct_trace_models",
+        ):
+            isodelta_evidence_bundle.validate_thresholds(
+                isodelta_evidence_bundle.BundleThresholds(
+                    max_abs_thermo_delta=MAX_ABS_THERMO_DELTA,
+                    min_paired_thermo_count=MIN_PAIRED_THERMO_COUNT,
+                    min_speedup=MIN_SPEEDUP,
+                    min_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                    min_enabled_cache_attempts=MIN_ENABLED_ATTEMPTS,
+                    min_enabled_cache_hits=MIN_ENABLED_HITS,
+                    min_trace_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                    min_trace_estimated_speedup=MIN_TRACE_ESTIMATED_SPEEDUP,
+                    min_trace_metadata_fraction_percent=(
+                        MIN_TRACE_METADATA_FRACTION_PERCENT
+                    ),
+                    min_distinct_trace_models=0,
+                )
+            )
+
     def test_validate_thresholds_rejects_out_of_range_percent(self) -> None:
         """Percent thresholds should stay inside the zero-to-hundred range."""
         with self.assertRaisesRegex(
@@ -493,6 +598,8 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
                         str(MIN_TRACE_ESTIMATED_SPEEDUP),
                         "--min-trace-metadata-fraction-percent",
                         str(MIN_TRACE_METADATA_FRACTION_PERCENT),
+                        "--min-distinct-trace-models",
+                        str(isodelta_evidence_bundle.DEFAULT_MIN_DISTINCT_TRACE_MODELS),
                         "--output",
                         str(output_path),
                     ]

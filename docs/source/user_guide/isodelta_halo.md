@@ -390,7 +390,10 @@ trace evidence files together:
 python tools/check_isodelta_evidence_bundle.py \
   --benchmark-report isodelta_benchmark_runs/isodelta_benchmark_report.json \
   --trace-evidence mace_isodelta_trace_evidence.json \
+  --trace-evidence nequip_isodelta_trace_evidence.json \
   --require-trace-model MACE \
+  --require-trace-model NequIP \
+  --min-distinct-trace-models 2 \
   --max-abs-thermo-delta 1.0e-8 \
   --min-paired-thermo-count 5 \
   --min-speedup 1.05 \
@@ -407,8 +410,11 @@ Use one `--trace-evidence` argument per model trace and one
 `--require-trace-model` argument for every model label that must appear in the
 claim. The bundle checker rejects duplicate trace evidence paths and duplicate
 or empty required model labels, so `min_trace_count` cannot be satisfied by
-reusing the same artifact. The resulting `bundle_evidence.json` is the file to
-archive beside raw LAMMPS logs, trace JSON, and plotting scripts.
+reusing the same artifact. Set `--min-distinct-trace-models` above one when the
+claim needs multi-model portability evidence; this separate gate rejects two
+trace files from the same MLIP label as insufficient for a cross-model claim.
+The resulting `bundle_evidence.json` is the file to archive beside raw LAMMPS
+logs, trace JSON, and plotting scripts.
 
 ## Expected Evidence For A Paper
 

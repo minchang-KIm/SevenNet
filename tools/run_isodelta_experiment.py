@@ -37,6 +37,7 @@ DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS = 1
 DEFAULT_MIN_ENABLED_CACHE_HITS = 0
 DEFAULT_MIN_TRACE_COUNT = 1
+DEFAULT_MIN_DISTINCT_TRACE_MODELS = 1
 DEFAULT_MIN_TRACE_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT = 0.0
 DEFAULT_BINARY_TIMEOUT_SECONDS = 60.0
@@ -78,6 +79,7 @@ class ExperimentConfig:
     trace_evidence_paths: tuple[Path, ...] = ()
     required_trace_models: tuple[str, ...] = ()
     min_trace_count: int = DEFAULT_MIN_TRACE_COUNT
+    min_distinct_trace_models: int = DEFAULT_MIN_DISTINCT_TRACE_MODELS
     min_trace_hit_rate_percent: float = DEFAULT_MIN_TRACE_HIT_RATE_PERCENT
     min_trace_estimated_speedup: float | None = None
     min_trace_metadata_fraction_percent: float = (
@@ -195,6 +197,10 @@ def validate_config(config: ExperimentConfig) -> None:
     _require_valid_config(
         config.min_trace_count >= MIN_REPEAT_COUNT,
         "min_trace_count must be at least one",
+    )
+    _require_valid_config(
+        config.min_distinct_trace_models >= MIN_REPEAT_COUNT,
+        "min_distinct_trace_models must be at least one",
     )
     if config.min_speedup is not None:
         _validate_finite(config.min_speedup, "min_speedup")
@@ -356,6 +362,8 @@ def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentComman
             str(config.benchmark_report_path()),
             "--min-trace-count",
             str(config.min_trace_count),
+            "--min-distinct-trace-models",
+            str(config.min_distinct_trace_models),
             "--max-abs-thermo-delta",
             str(config.max_abs_thermo_delta),
             "--min-paired-thermo-count",
@@ -581,6 +589,12 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         help="Minimum number of trace evidence files for the bundle gate",
     )
     parser.add_argument(
+        "--min-distinct-trace-models",
+        type=int,
+        default=DEFAULT_MIN_DISTINCT_TRACE_MODELS,
+        help="Minimum number of distinct trace model labels for the bundle gate",
+    )
+    parser.add_argument(
         "--min-trace-hit-rate-percent",
         type=float,
         default=DEFAULT_MIN_TRACE_HIT_RATE_PERCENT,
@@ -629,6 +643,7 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         trace_evidence_paths=tuple(args.trace_evidence),
         required_trace_models=tuple(args.require_trace_model),
         min_trace_count=args.min_trace_count,
+        min_distinct_trace_models=args.min_distinct_trace_models,
         min_trace_hit_rate_percent=args.min_trace_hit_rate_percent,
         min_trace_estimated_speedup=args.min_trace_estimated_speedup,
         min_trace_metadata_fraction_percent=args.min_trace_metadata_fraction_percent,

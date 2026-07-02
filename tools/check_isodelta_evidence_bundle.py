@@ -24,8 +24,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
 DEFAULT_MIN_TRACE_COUNT = 1
+DEFAULT_MIN_DISTINCT_TRACE_MODELS = 1
 MIN_COUNT_VALUE = 0
 MIN_REQUIRED_TRACE_COUNT = 1
+MIN_REQUIRED_DISTINCT_TRACE_MODELS = 1
 MIN_NONNEGATIVE_VALUE = 0.0
 MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = 100.0
@@ -56,6 +58,7 @@ class BundleThresholds:
     min_trace_estimated_speedup: float | None
     min_trace_metadata_fraction_percent: float
     min_trace_count: int = DEFAULT_MIN_TRACE_COUNT
+    min_distinct_trace_models: int = DEFAULT_MIN_DISTINCT_TRACE_MODELS
     require_successful_runs: bool = True
 
 
@@ -164,6 +167,10 @@ def validate_thresholds(thresholds: BundleThresholds) -> None:
         thresholds.min_trace_count >= MIN_REQUIRED_TRACE_COUNT,
         "min_trace_count must be at least one",
     )
+    _require(
+        thresholds.min_distinct_trace_models >= MIN_REQUIRED_DISTINCT_TRACE_MODELS,
+        "min_distinct_trace_models must be at least one",
+    )
     if thresholds.min_speedup is not None:
         _require(
             thresholds.min_speedup > MIN_POSITIVE_SPEEDUP,
@@ -222,6 +229,19 @@ def _validate_required_models(
     return sorted(model for model in seen_models if isinstance(model, str))
 
 
+def _validate_distinct_model_count(
+    validated_models: list[str],
+    min_distinct_trace_models: int,
+) -> None:
+    """Require enough distinct MLIP labels to support a portability claim."""
+    distinct_model_count = len(validated_models)
+    if distinct_model_count < min_distinct_trace_models:
+        raise EvidenceBundleError(
+            f"distinct trace model count {distinct_model_count} is below "
+            f"{min_distinct_trace_models}"
+        )
+
+
 def validate_bundle(
     *,
     benchmark_report: Path,
@@ -264,6 +284,10 @@ def validate_bundle(
         trace_evidence,
         normalized_required_models,
     )
+    _validate_distinct_model_count(
+        validated_models,
+        thresholds.min_distinct_trace_models,
+    )
     return {
         STATUS_KEY: PASSED_STATUS,
         "thresholds": asdict(thresholds),
@@ -297,6 +321,12 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=DEFAULT_MIN_TRACE_COUNT,
         help="Minimum number of trace evidence files required",
+    )
+    parser.add_argument(
+        "--min-distinct-trace-models",
+        type=int,
+        default=DEFAULT_MIN_DISTINCT_TRACE_MODELS,
+        help="Minimum number of distinct model labels required in trace evidence",
     )
     parser.add_argument(
         "--max-abs-thermo-delta",
@@ -354,6 +384,7 @@ def main(argv: list[str] | None = None) -> int:
         min_trace_estimated_speedup=args.min_trace_estimated_speedup,
         min_trace_metadata_fraction_percent=args.min_trace_metadata_fraction_percent,
         min_trace_count=args.min_trace_count,
+        min_distinct_trace_models=args.min_distinct_trace_models,
         require_successful_runs=not args.allow_failed_runs,
     )
     try:

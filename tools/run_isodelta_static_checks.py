@@ -362,9 +362,12 @@ def main() -> None:
         and "validate_bundle" in evidence_bundle_check
         and "validate_thresholds" in evidence_bundle_check
         and "_validate_unique_trace_evidence_paths" in evidence_bundle_check
+        and "_validate_distinct_model_count" in evidence_bundle_check
         and "_validate_required_model_names" in evidence_bundle_check
         and "duplicate trace evidence paths" in evidence_bundle_check
         and "duplicate required trace models" in evidence_bundle_check
+        and "min_distinct_trace_models" in evidence_bundle_check
+        and "--min-distinct-trace-models" in evidence_bundle_check
         and "MIN_REQUIRED_TRACE_COUNT" in evidence_bundle_check
         and "MAX_PERCENT_VALUE" in evidence_bundle_check
         and "--require-trace-model" in evidence_bundle_check
@@ -433,6 +436,12 @@ def main() -> None:
         "IsoDelta-Halo guide must document bundle input validation",
     )
     _require(
+        "--min-distinct-trace-models" in doc
+        and "multi-model portability evidence" in doc
+        and "same MLIP label" in doc,
+        "IsoDelta-Halo guide must document distinct trace model gating",
+    )
+    _require(
         "parse_final_thermo_observables" in benchmark
         and "final_thermo_delta_vs_disabled_cache" in benchmark,
         "benchmark runner must report final thermo consistency deltas",
@@ -490,6 +499,8 @@ def main() -> None:
         and "--min-enabled-cache-hits" in experiment
         and "--trace-evidence" in experiment
         and "--require-trace-model" in experiment
+        and "--min-distinct-trace-models" in experiment
+        and "min_distinct_trace_models must be at least one" in experiment
         and "bundle_evidence.json" in experiment
         and "isodelta_experiment_report.json" in experiment,
         "experiment driver must connect all runtime validation stages",

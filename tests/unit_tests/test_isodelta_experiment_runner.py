@@ -32,6 +32,7 @@ SPEC.loader.exec_module(isodelta_experiment)
 
 
 EXPECTED_EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
+MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY = 2
 
 
 class IsoDeltaExperimentRunnerTest(unittest.TestCase):
@@ -79,6 +80,7 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
             min_speedup=1.05,
             trace_evidence_paths=(Path("mace_trace_evidence.json"),),
             required_trace_models=("MACE",),
+            min_distinct_trace_models=MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY,
             min_trace_hit_rate_percent=50.0,
             min_trace_estimated_speedup=1.05,
             min_trace_metadata_fraction_percent=5.0,
@@ -92,6 +94,8 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIn("mace_trace_evidence.json", commands[-1].argv)
         self.assertIn("--require-trace-model", commands[-1].argv)
         self.assertIn("MACE", commands[-1].argv)
+        self.assertIn("--min-distinct-trace-models", commands[-1].argv)
+        self.assertIn(str(MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY), commands[-1].argv)
         self.assertIn("--min-trace-estimated-speedup", commands[-1].argv)
         self.assertIn(str(config.bundle_evidence_report_path()), commands[-1].argv)
 
@@ -134,6 +138,16 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
             min_enabled_cache_hits=2,
         )
         with self.assertRaisesRegex(ValueError, "min_enabled_cache_hits"):
+            isodelta_experiment.validate_config(config)
+
+    def test_validate_config_rejects_zero_distinct_model_gate(self) -> None:
+        """The experiment bundle gate should require a positive model count."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            min_distinct_trace_models=0,
+        )
+        with self.assertRaisesRegex(ValueError, "min_distinct_trace_models"):
             isodelta_experiment.validate_config(config)
 
     def test_run_experiment_stops_on_first_failed_stage(self) -> None:
