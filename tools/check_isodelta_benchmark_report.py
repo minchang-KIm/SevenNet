@@ -95,6 +95,7 @@ MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
 MIN_POSITIVE_LOOP_TIME_SECONDS = 0.0
 MIN_SAMPLE_VARIANCE_COUNT = 2
 SAMPLE_VARIANCE_DEGREES_OF_FREEDOM = 1
+MIN_REQUIRED_CACHE_ATTEMPTS = 1
 MIN_REQUIRED_SUMMARY_RANK_COUNT = 1
 CACHE_HIT_RATE_TOLERANCE_PERCENT = 1.0e-9
 CACHE_COUNT_TOLERANCE = 1.0e-9
@@ -207,6 +208,16 @@ def _as_number(value: Any, field_name: str) -> float:
     numeric_value = float(value)
     _require(math.isfinite(numeric_value), f"{field_name} must be finite")
     return numeric_value
+
+
+def _as_nonnegative_count(value: Any, field_name: str) -> float:
+    """Return a numeric profiling count and reject fractional counters."""
+    count = _as_number(value, field_name)
+    _require(
+        count >= MIN_COUNT_VALUE and count.is_integer(),
+        f"{field_name} must be a nonnegative integer",
+    )
+    return count
 
 
 def _require_optional_none(value: Any, field_name: str) -> None:
@@ -647,11 +658,11 @@ def _check_cache_evidence(
             result_map.get(CACHE_SUMMARY_KEY),
             f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}",
         )
-        attempts = _as_number(
+        attempts = _as_nonnegative_count(
             cache_summary.get(ATTEMPTS_KEY),
             f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{ATTEMPTS_KEY}",
         )
-        hits = _as_number(
+        hits = _as_nonnegative_count(
             cache_summary.get(HITS_KEY),
             f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HITS_KEY}",
         )
@@ -673,12 +684,11 @@ def _check_cache_evidence(
         )
         summary_rank_counts.append(summary_rank_count)
         _require(
-            attempts >= MIN_NONNEGATIVE_VALUE,
-            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{ATTEMPTS_KEY} must be nonnegative",
-        )
-        _require(
-            hits >= MIN_NONNEGATIVE_VALUE,
-            f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HITS_KEY} must be nonnegative",
+            attempts >= MIN_REQUIRED_CACHE_ATTEMPTS,
+            (
+                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{ATTEMPTS_KEY} "
+                f"must be at least {MIN_REQUIRED_CACHE_ATTEMPTS}"
+            ),
         )
         _require(
             hits <= attempts,
@@ -704,13 +714,9 @@ def _check_cache_evidence(
         miss_count_sum = 0.0
         miss_counts: dict[str, float] = {}
         for miss_key in REQUIRED_CACHE_MISS_KEYS:
-            miss_count = _as_number(
+            miss_count = _as_nonnegative_count(
                 cache_summary.get(miss_key),
                 f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{miss_key}",
-            )
-            _require(
-                miss_count >= MIN_NONNEGATIVE_VALUE,
-                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{miss_key} must be nonnegative",
             )
             miss_count_sum += miss_count
             miss_counts[miss_key] = miss_count

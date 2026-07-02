@@ -516,9 +516,12 @@ def main() -> None:
         "CACHE_COUNT_TOLERANCE" in report_check
         and "miss_count_sum" in report_check
         and "max_cache_count_residual" in report_check
+        and "_as_nonnegative_count" in report_check
+        and "MIN_REQUIRED_CACHE_ATTEMPTS" in report_check
         and "SUMMARY_RANK_COUNT_KEY" in report_check
         and "min_cache_summary_rank_count" in report_check
         and "must be a positive integer" in report_check
+        and "must be a nonnegative integer" in report_check
         and "must match attempts - hits" in report_check,
         "benchmark report checker must validate miss-counter consistency",
     )
@@ -601,6 +604,11 @@ def main() -> None:
         "attempts - hits" in doc
         and "miss breakdown table" in doc,
         "IsoDelta-Halo guide must document miss-counter consistency",
+    )
+    _require(
+        "whole nonnegative profiling counts" in doc
+        and "at least one attempt" in doc,
+        "IsoDelta-Halo guide must document cache counter count validation",
     )
     _require(
         "miss_disabled` equal to `attempts`" in doc

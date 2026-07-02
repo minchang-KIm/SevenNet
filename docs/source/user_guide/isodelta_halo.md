@@ -360,7 +360,9 @@ and IsoDelta-Halo summary lines, so very short smoke runs and large counters do
 not lose timing or cache evidence.
 It also rejects reports where the required miss reason counters do not sum to
 `attempts - hits`, so a miss breakdown table cannot silently drift away from
-the measured cache activity.
+the measured cache activity. The checker treats `attempts`, `hits`, and every
+miss reason counter as whole nonnegative profiling counts, and each cache
+summary must record at least one attempt.
 
 For a publishable performance claim, report the mean and variance across
 multiple repeats, include cache hit rate, and show that final thermodynamic

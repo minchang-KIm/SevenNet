@@ -39,6 +39,7 @@ DEFAULT_ENABLED_NO_CACHE_MISSES = 1.0
 DEFAULT_ENABLED_NEIGHBOR_REBUILT_MISSES = 1.0
 DEFAULT_SUMMARY_RANK_COUNT = 1.0
 FRACTIONAL_SUMMARY_RANK_COUNT = 1.5
+FRACTIONAL_CACHE_COUNT = 1.5
 ONE_CACHE_COUNT = 1.0
 WRONG_BASELINE_HIT_RATE_PERCENT = 10.0
 WRONG_BASELINE_DISABLED_MISSES = 9.0
@@ -637,6 +638,50 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                 ),
             )
 
+    def test_validate_report_rejects_fractional_cache_attempts(self) -> None:
+        """Cache attempts should be whole profiling counts."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["attempts"] = FRACTIONAL_CACHE_COUNT
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "nonnegative integer",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_zero_cache_attempts(self) -> None:
+        """Cache summaries with no lookup attempts cannot prove runtime behavior."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["attempts"] = ZERO_CACHE_COUNT
+        cache_summary["hits"] = ZERO_CACHE_COUNT
+        cache_summary["hit_rate_percent"] = ZERO_HIT_RATE_PERCENT
+        for miss_key in isodelta_report_check.REQUIRED_CACHE_MISS_KEYS:
+            cache_summary[miss_key] = ZERO_CACHE_COUNT
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "at least 1",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
     def test_validate_report_rejects_missing_summary_rank_count(self) -> None:
         """Cache summaries should prove how many MPI rank summaries were parsed."""
         report = _valid_report()
@@ -671,6 +716,26 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
             "positive integer",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_fractional_miss_counter(self) -> None:
+        """Miss reason counters should also be whole profiling counts."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["miss_shape-changed"] = FRACTIONAL_CACHE_COUNT
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "nonnegative integer",
         ):
             isodelta_report_check.validate_report(
                 report,
@@ -770,7 +835,7 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
 
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
-            "must be nonnegative",
+            "nonnegative integer",
         ):
             isodelta_report_check.validate_report(
                 report,
