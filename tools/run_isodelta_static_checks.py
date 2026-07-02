@@ -85,6 +85,14 @@ def main() -> None:
         "CUDA unpack tensor creation must not copy the unpack vector first",
     )
     _require(
+        "make_owned_index_tensor" in cpp
+        and ".clone()\n      .to(target_device)" in cpp
+        and "torch::from_blob(idx_map_forward.data()" not in cpp
+        and "torch::from_blob(upmap.data()" not in cpp
+        and "torch::from_blob(idx_map_reverse.data()" not in cpp,
+        "cached index tensors must own memory instead of borrowing step vectors",
+    )
+    _require(
         "notify_proc_ids(" in cpp
         and "int active_phase_count" in cpp
         and "kNoActiveCommPhases = 0" in header

@@ -70,6 +70,18 @@ constexpr const char *kIsoDeltaHaloProfileEnv = "SEVENN_ISODELTA_HALO_PROFILE";
 constexpr double kIsoDeltaHaloPercentScale = 100.0;
 constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
 constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
+
+torch::Tensor make_owned_index_tensor(std::vector<long> &index_map,
+                                      const torch::Device &target_device) {
+  // from_blob borrows vector memory on CPU, so clone before moving to the
+  // target device. The cache must outlive per-step vector cleanup.
+  return torch::from_blob(
+             index_map.data(),
+             {static_cast<long long>(index_map.size())},
+             INTEGER_TYPE)
+      .clone()
+      .to(target_device);
+}
 } // namespace
 
 DeviceBuffManager &DeviceBuffManager::getInstance() {
@@ -1075,11 +1087,14 @@ void PairE3GNNParallel::comm_preprocess() {
     }
 
     if (use_cuda_mpi) {
-      comm_index_pack_forward_tensor[comm_phase] = torch::from_blob(idx_map_forward.data(), idx_map_forward.size(), INTEGER_TYPE).to(device);
+      comm_index_pack_forward_tensor[comm_phase] =
+          make_owned_index_tensor(idx_map_forward, device);
 
       std::vector<long> &upmap = comm_index_unpack_forward[comm_phase];
-      comm_index_unpack_forward_tensor[comm_phase] = torch::from_blob(upmap.data(), upmap.size(), INTEGER_TYPE).to(device);
-      comm_index_unpack_reverse_tensor[comm_phase] = torch::from_blob(idx_map_reverse.data(), idx_map_reverse.size(), INTEGER_TYPE).to(device);
+      comm_index_unpack_forward_tensor[comm_phase] =
+          make_owned_index_tensor(upmap, device);
+      comm_index_unpack_reverse_tensor[comm_phase] =
+          make_owned_index_tensor(idx_map_reverse, device);
     }
   }
   comm_preprocess_done = true;
