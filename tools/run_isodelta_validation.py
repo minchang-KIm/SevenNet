@@ -17,12 +17,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 VALIDATION_COMMANDS = (
     (sys.executable, "tools/run_isodelta_static_checks.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_halo_static.py"),
+    (sys.executable, "tests/unit_tests/test_isodelta_benchmark_parser.py"),
     (
         sys.executable,
         "-m",
         "py_compile",
+        "tools/run_isodelta_lammps_benchmark.py",
         "tools/run_isodelta_static_checks.py",
         "tools/run_isodelta_validation.py",
+        "tests/unit_tests/test_isodelta_benchmark_parser.py",
         "tests/unit_tests/test_isodelta_halo_static.py",
     ),
     ("git", "diff", "--check"),

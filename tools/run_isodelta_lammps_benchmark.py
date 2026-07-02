@@ -1,0 +1,242 @@
+"""Run paired LAMMPS benchmarks for IsoDelta-Halo and baseline comparison.
+
+The script executes the same LAMMPS input twice per repeat: once with the
+metadata cache disabled and once with IsoDelta-Halo enabled. It stores raw logs
+and emits a JSON report that can be used directly in profiling tables.
+"""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import asdict, dataclass
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
+from typing import Any
+
+
+# Environment names mirror the C++ constants so the benchmark toggles the same
+# runtime controls that PairE3GNNParallel reads.
+DEFAULT_REPEAT_COUNT = 3
+LAMMPS_INPUT_FLAG = "-in"
+BASELINE_CASE = "baseline-disabled"
+ISODELTA_CASE = "isodelta-enabled"
+PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
+DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
+PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
+LOOP_TIME_RE = re.compile(
+    r"Loop time of\s+(?P<seconds>[-+]?\d+(?:\.\d+)?)\s+on\b",
+    re.IGNORECASE,
+)
+SUMMARY_RE = re.compile(r"IsoDelta-Halo summary:\s+(?P<body>.*)")
+SUMMARY_VALUE_RE = re.compile(
+    r"(?P<key>[A-Za-z0-9_-]+)=(?P<value>[-+]?\d+(?:\.\d+)?)"
+)
+
+
+@dataclass(frozen=True)
+class BenchmarkCase:
+    """Describe one benchmark variant and the environment overrides it needs."""
+
+    name: str
+    env_updates: dict[str, str]
+
+
+@dataclass(frozen=True)
+class BenchmarkResult:
+    """Store one run result in a JSON-friendly shape."""
+
+    case: str
+    repeat_index: int
+    returncode: int
+    loop_time_seconds: float | None
+    cache_summary: dict[str, float]
+    stdout_path: str
+    stderr_path: str
+
+
+BENCHMARK_CASES = (
+    BenchmarkCase(
+        name=BASELINE_CASE,
+        env_updates={
+            PRINT_INFO_ENV: "1",
+            DISABLE_CACHE_ENV: "1",
+            PROFILE_CACHE_ENV: "1",
+        },
+    ),
+    BenchmarkCase(
+        name=ISODELTA_CASE,
+        env_updates={
+            PRINT_INFO_ENV: "1",
+            PROFILE_CACHE_ENV: "1",
+        },
+    ),
+)
+
+
+def parse_loop_time(log_text: str) -> float | None:
+    """Extract the LAMMPS loop time from stdout/stderr text when present."""
+    match = LOOP_TIME_RE.search(log_text)
+    if match is None:
+        return None
+    return float(match.group("seconds"))
+
+
+def parse_cache_summary(log_text: str) -> dict[str, float]:
+    """Extract IsoDelta-Halo summary counters from profiling output."""
+    summary: dict[str, float] = {}
+    for summary_match in SUMMARY_RE.finditer(log_text):
+        body = summary_match.group("body")
+        for value_match in SUMMARY_VALUE_RE.finditer(body):
+            summary[value_match.group("key")] = float(value_match.group("value"))
+    return summary
+
+
+def parse_run_output(stdout_text: str, stderr_text: str) -> tuple[float | None, dict[str, float]]:
+    """Parse both streams because MPI launchers may route logs differently."""
+    combined_log = stdout_text + "\n" + stderr_text
+    return parse_loop_time(combined_log), parse_cache_summary(combined_log)
+
+
+def _case_environment(case: BenchmarkCase) -> dict[str, str]:
+    """Create an isolated environment for a benchmark case."""
+    env = os.environ.copy()
+    env.update(case.env_updates)
+    if case.name == ISODELTA_CASE:
+        env.pop(DISABLE_CACHE_ENV, None)
+    return env
+
+
+def _run_case(
+    command: list[str],
+    case: BenchmarkCase,
+    repeat_index: int,
+    output_dir: Path,
+    keep_going: bool,
+) -> BenchmarkResult:
+    """Run one case, persist logs, parse metrics, and optionally fail fast."""
+    stdout_path = output_dir / f"{case.name}_repeat{repeat_index}.stdout.log"
+    stderr_path = output_dir / f"{case.name}_repeat{repeat_index}.stderr.log"
+    completed = subprocess.run(
+        command,
+        cwd=output_dir,
+        env=_case_environment(case),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    stdout_path.write_text(completed.stdout, encoding="utf-8")
+    stderr_path.write_text(completed.stderr, encoding="utf-8")
+    loop_time, cache_summary = parse_run_output(completed.stdout, completed.stderr)
+
+    result = BenchmarkResult(
+        case=case.name,
+        repeat_index=repeat_index,
+        returncode=completed.returncode,
+        loop_time_seconds=loop_time,
+        cache_summary=cache_summary,
+        stdout_path=str(stdout_path),
+        stderr_path=str(stderr_path),
+    )
+    if completed.returncode != 0 and not keep_going:
+        raise RuntimeError(
+            f"{case.name} repeat {repeat_index} failed with exit code "
+            f"{completed.returncode}. See {stderr_path}"
+        )
+    return result
+
+
+def _build_command(lammps_command: str, input_path: Path) -> list[str]:
+    """Build a LAMMPS command without relying on shell-specific quoting."""
+    return [*shlex.split(lammps_command), LAMMPS_INPUT_FLAG, str(input_path)]
+
+
+def _summarize(results: list[BenchmarkResult]) -> dict[str, Any]:
+    """Compute simple aggregate metrics for quick terminal inspection."""
+    summary: dict[str, Any] = {"runs": len(results), "cases": {}}
+    for case_name in (BASELINE_CASE, ISODELTA_CASE):
+        case_times = [
+            result.loop_time_seconds
+            for result in results
+            if result.case == case_name and result.loop_time_seconds is not None
+        ]
+        if case_times:
+            summary["cases"][case_name] = {
+                "mean_loop_time_seconds": sum(case_times) / len(case_times),
+                "valid_loop_time_count": len(case_times),
+            }
+        else:
+            summary["cases"][case_name] = {
+                "mean_loop_time_seconds": None,
+                "valid_loop_time_count": 0,
+            }
+    baseline_mean = summary["cases"][BASELINE_CASE]["mean_loop_time_seconds"]
+    isodelta_mean = summary["cases"][ISODELTA_CASE]["mean_loop_time_seconds"]
+    if baseline_mean and isodelta_mean:
+        summary["speedup_vs_disabled_cache"] = baseline_mean / isodelta_mean
+    else:
+        summary["speedup_vs_disabled_cache"] = None
+    return summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Parse CLI arguments, run paired benchmarks, and write the JSON report."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--lammps-command", required=True, help="Example: lmp")
+    parser.add_argument("--input", required=True, type=Path, help="LAMMPS input script")
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=DEFAULT_REPEAT_COUNT,
+        help="Number of baseline/enabled pairs to run",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("isodelta_benchmark_runs"),
+        help="Directory for logs and JSON report",
+    )
+    parser.add_argument(
+        "--keep-going",
+        action="store_true",
+        help="Write partial reports even if one benchmark command fails",
+    )
+    args = parser.parse_args(argv)
+
+    input_path = args.input.resolve()
+    output_dir = args.output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    command = _build_command(args.lammps_command, input_path)
+
+    results: list[BenchmarkResult] = []
+    for repeat_index in range(args.repeat):
+        for case in BENCHMARK_CASES:
+            results.append(
+                _run_case(
+                    command=command,
+                    case=case,
+                    repeat_index=repeat_index,
+                    output_dir=output_dir,
+                    keep_going=args.keep_going,
+                )
+            )
+
+    report = {
+        "command": command,
+        "input": str(input_path),
+        "summary": _summarize(results),
+        "results": [asdict(result) for result in results],
+    }
+    report_path = output_dir / "isodelta_benchmark_report.json"
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(json.dumps(report["summary"], indent=2))
+    print(f"IsoDelta-Halo benchmark report written to {report_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
