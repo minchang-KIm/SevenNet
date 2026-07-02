@@ -120,6 +120,13 @@ def _trace_evidence(model_name: str = "MACE") -> dict[str, object]:
             "estimated_average_speedup": 1.18,
             "estimated_worst_case_speedup": 1.18,
         },
+        "model_agnostic_requirements": {
+            "uses_ordered_graph_node_tags": True,
+            "uses_edge_count_shape_guard": True,
+            "uses_neighbor_rebuild_guard": True,
+            "uses_comm_topology_guard": True,
+            "uses_comm_list_tag_order_guard": True,
+        },
     }
 
 

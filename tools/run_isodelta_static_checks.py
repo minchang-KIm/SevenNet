@@ -313,6 +313,9 @@ def main() -> None:
         and "MAX_PERCENT_VALUE" in mlip_trace_check
         and "TRACE_COUNT_TOLERANCE" in mlip_trace_check
         and "TRACE_COUNT_RESIDUAL_KEY" in mlip_trace_check
+        and "MODEL_AGNOSTIC_REQUIREMENTS_KEY" in mlip_trace_check
+        and "REQUIRED_MODEL_AGNOSTIC_REQUIREMENTS" in mlip_trace_check
+        and "must be true" in mlip_trace_check
         and "must match hits / attempts" in mlip_trace_check
         and "must match attempts - hits" in mlip_trace_check
         and "trace_schema" in mlip_trace_check
@@ -360,6 +363,12 @@ def main() -> None:
         and "hits / attempts" in doc
         and "attempts - hits" in doc,
         "IsoDelta-Halo guide must document trace evidence counter consistency",
+    )
+    _require(
+        "model_agnostic_requirements" in doc
+        and "ordered graph node tags" in doc
+        and "communication list" in doc,
+        "IsoDelta-Halo guide must document trace reuse guard evidence",
     )
     _require(
         "check_isodelta_evidence_bundle.py" in doc

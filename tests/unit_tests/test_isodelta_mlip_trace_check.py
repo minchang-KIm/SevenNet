@@ -114,6 +114,9 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
             evidence["trace_count_residual"],
             EXPECTED_ZERO_TRACE_COUNT_RESIDUAL,
         )
+        self.assertTrue(
+            evidence["model_agnostic_requirements"]["uses_comm_topology_guard"]
+        )
         self.assertAlmostEqual(
             evidence["timing"]["estimated_average_speedup"],
             EXPECTED_STABLE_AVERAGE_SPEEDUP,
@@ -155,6 +158,34 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_mlip_trace.TraceCheckError,
             "must be nonnegative",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_missing_model_agnostic_guards(self) -> None:
+        """Precomputed trace evidence should prove every required reuse guard."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        del evidence["model_agnostic_requirements"]["uses_comm_topology_guard"]
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "uses_comm_topology_guard",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_disabled_model_agnostic_guard(self) -> None:
+        """Required reuse guard flags should be explicit true booleans."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["model_agnostic_requirements"]["uses_comm_topology_guard"] = False
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "must be true",
         ):
             isodelta_mlip_trace.validate_trace_evidence(
                 evidence,

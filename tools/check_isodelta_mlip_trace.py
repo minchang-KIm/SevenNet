@@ -72,6 +72,14 @@ HITS_KEY = "hits"
 HIT_RATE_PERCENT_KEY = "hit_rate_percent"
 MISS_BREAKDOWN_KEY = "miss_breakdown"
 TRACE_COUNT_RESIDUAL_KEY = "trace_count_residual"
+MODEL_AGNOSTIC_REQUIREMENTS_KEY = "model_agnostic_requirements"
+REQUIRED_MODEL_AGNOSTIC_REQUIREMENTS = (
+    "uses_ordered_graph_node_tags",
+    "uses_edge_count_shape_guard",
+    "uses_neighbor_rebuild_guard",
+    "uses_comm_topology_guard",
+    "uses_comm_list_tag_order_guard",
+)
 MISS_REASONS = (
     MISS_DISABLED,
     MISS_NO_CACHE,
@@ -551,12 +559,9 @@ def evaluate_trace(
             hit_flags,
             cache_lookup_overhead_seconds,
         ),
-        "model_agnostic_requirements": {
-            "uses_ordered_graph_node_tags": True,
-            "uses_edge_count_shape_guard": True,
-            "uses_neighbor_rebuild_guard": True,
-            "uses_comm_topology_guard": True,
-            "uses_comm_list_tag_order_guard": True,
+        MODEL_AGNOSTIC_REQUIREMENTS_KEY: {
+            requirement: True
+            for requirement in REQUIRED_MODEL_AGNOSTIC_REQUIREMENTS
         },
     }
 
@@ -610,6 +615,19 @@ def validate_trace_evidence(
         trace_count_residual <= TRACE_COUNT_TOLERANCE,
         f"{MISS_BREAKDOWN_KEY} counters must match attempts - hits",
     )
+    model_agnostic_requirements = _as_mapping(
+        evidence.get(MODEL_AGNOSTIC_REQUIREMENTS_KEY),
+        MODEL_AGNOSTIC_REQUIREMENTS_KEY,
+    )
+    for requirement in REQUIRED_MODEL_AGNOSTIC_REQUIREMENTS:
+        requirement_value = _as_bool(
+            model_agnostic_requirements.get(requirement),
+            f"{MODEL_AGNOSTIC_REQUIREMENTS_KEY}.{requirement}",
+        )
+        _require(
+            requirement_value,
+            f"{MODEL_AGNOSTIC_REQUIREMENTS_KEY}.{requirement} must be true",
+        )
     timing = _as_mapping(evidence.get("timing"), "timing")
     metadata_fraction = timing.get("metadata_fraction_percent")
     if thresholds.min_metadata_fraction_percent > DEFAULT_MIN_METADATA_FRACTION_PERCENT:
