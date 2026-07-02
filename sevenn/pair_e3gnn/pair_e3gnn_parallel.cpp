@@ -346,7 +346,12 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
 
   auto output = model_part.forward({input_dict}).toGenericDict();
 
-  comm_preprocess();
+  if (!try_reuse_comm_preprocess_cache(nlocal, ghost_node_num, nedges,
+                                       graph_index_to_i)) {
+    comm_preprocess();
+    store_comm_preprocess_cache(nlocal, ghost_node_num, nedges,
+                                graph_index_to_i);
+  }
 
   // extra_graph_idx_map is set from comm_preprocess();
   // last one is for trash values. See pack_forward_init
@@ -515,16 +520,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
     }
   }
 
-  // clean up comm preprocess variables
-  comm_preprocess_done = false;
-  for (int i = 0; i < 6; i++) {
-    // array of vector<long>
-    comm_index_pack_forward[i].clear();
-    comm_index_unpack_forward[i].clear();
-    comm_index_unpack_reverse[i].clear();
-  }
-
-  extra_graph_idx_map.clear();
+  clear_comm_preprocess_work();
 }
 
 // allocate arrays (called from coeff)
@@ -689,10 +685,105 @@ void PairE3GNNParallel::init_style() {
 double PairE3GNNParallel::init_one(int i, int j) { return cutoff; }
 
 void PairE3GNNParallel::notify_proc_ids(const int *sendproc, const int *recvproc) {
-  for (int iswap = 0; iswap < 6; iswap++) {
+  for (int iswap = 0; iswap < kCommPhaseCount; iswap++) {
     this->sendproc[iswap] = sendproc[iswap];
     this->recvproc[iswap]= recvproc[iswap];
   }
+}
+
+bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
+    int nlocal, int ghost_node_num, int nedges, const int *graph_index_to_i) {
+  if (!comm_cache_valid) {
+    return false;
+  }
+  if (neighbor->ago <= kNeighborListJustBuiltAgo) {
+    return false;
+  }
+  if (nlocal != comm_cache_nlocal ||
+      ghost_node_num != comm_cache_ghost_node_num ||
+      graph_size != comm_cache_graph_size || nedges != comm_cache_nedges) {
+    return false;
+  }
+  if (comm_cache_graph_tags.size() != static_cast<size_t>(graph_size)) {
+    return false;
+  }
+
+  tagint *tag = atom->tag;
+  for (int graph_idx = 0; graph_idx < graph_size; graph_idx++) {
+    const int atom_idx = graph_index_to_i[graph_idx];
+    if (tag[atom_idx] != comm_cache_graph_tags[graph_idx]) {
+      return false;
+    }
+  }
+
+  extra_graph_idx_map = comm_cache_extra_graph_idx_map;
+  for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
+    comm_index_pack_forward[comm_phase] =
+        comm_cache_index_pack_forward[comm_phase];
+    comm_index_unpack_forward[comm_phase] =
+        comm_cache_index_unpack_forward[comm_phase];
+    comm_index_unpack_reverse[comm_phase] =
+        comm_cache_index_unpack_reverse[comm_phase];
+    comm_index_pack_forward_tensor[comm_phase] =
+        comm_cache_index_pack_forward_tensor[comm_phase];
+    comm_index_unpack_forward_tensor[comm_phase] =
+        comm_cache_index_unpack_forward_tensor[comm_phase];
+    comm_index_unpack_reverse_tensor[comm_phase] =
+        comm_cache_index_unpack_reverse_tensor[comm_phase];
+  }
+
+  comm_preprocess_done = true;
+  if (print_info) {
+    std::cout << world_rank
+              << " IsoDelta-Halo: reused communication metadata cache"
+              << std::endl;
+  }
+  return true;
+}
+
+void PairE3GNNParallel::store_comm_preprocess_cache(
+    int nlocal, int ghost_node_num, int nedges, const int *graph_index_to_i) {
+  comm_cache_nlocal = nlocal;
+  comm_cache_ghost_node_num = ghost_node_num;
+  comm_cache_graph_size = graph_size;
+  comm_cache_nedges = nedges;
+
+  tagint *tag = atom->tag;
+  comm_cache_graph_tags.clear();
+  comm_cache_graph_tags.reserve(graph_size);
+  for (int graph_idx = 0; graph_idx < graph_size; graph_idx++) {
+    const int atom_idx = graph_index_to_i[graph_idx];
+    comm_cache_graph_tags.push_back(tag[atom_idx]);
+  }
+
+  comm_cache_extra_graph_idx_map = extra_graph_idx_map;
+  for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
+    comm_cache_index_pack_forward[comm_phase] =
+        comm_index_pack_forward[comm_phase];
+    comm_cache_index_unpack_forward[comm_phase] =
+        comm_index_unpack_forward[comm_phase];
+    comm_cache_index_unpack_reverse[comm_phase] =
+        comm_index_unpack_reverse[comm_phase];
+    comm_cache_index_pack_forward_tensor[comm_phase] =
+        comm_index_pack_forward_tensor[comm_phase];
+    comm_cache_index_unpack_forward_tensor[comm_phase] =
+        comm_index_unpack_forward_tensor[comm_phase];
+    comm_cache_index_unpack_reverse_tensor[comm_phase] =
+        comm_index_unpack_reverse_tensor[comm_phase];
+  }
+
+  comm_cache_valid = true;
+}
+
+void PairE3GNNParallel::clear_comm_preprocess_work() {
+  comm_preprocess_done = false;
+  for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
+    comm_index_pack_forward[comm_phase].clear();
+    comm_index_unpack_forward[comm_phase].clear();
+    comm_index_unpack_reverse[comm_phase].clear();
+  }
+
+  extra_graph_idx_map.clear();
 }
 
 void PairE3GNNParallel::comm_preprocess() {
@@ -704,7 +795,7 @@ void PairE3GNNParallel::comm_preprocess() {
   comm_brick->forward_comm(this);
 
   std::map<int, std::set<int>> already_met_map;
-  for (int comm_phase = 0; comm_phase < 6; comm_phase++) {
+  for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
     const int n = comm_index_pack_forward[comm_phase].size();
     int sproc = this->sendproc[comm_phase];
     if (already_met_map.count(sproc) == 0) {
@@ -769,8 +860,8 @@ void PairE3GNNParallel::pack_forward_init(int n, int *list_send,
         idx_map.push_back(extra_graph_idx_map[list_i]);
       } else {
         // unknown atom at pack forward, ghost atom outside cutoff?
-        extra_graph_idx_map[i] = graph_size + extra_graph_idx_map.size();
-        idx_map.push_back(extra_graph_idx_map[i]); // same as list_i in pack
+        extra_graph_idx_map[list_i] = graph_size + extra_graph_idx_map.size();
+        idx_map.push_back(extra_graph_idx_map[list_i]);
       }
     }
   }

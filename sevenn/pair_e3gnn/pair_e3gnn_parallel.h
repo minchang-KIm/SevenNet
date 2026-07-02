@@ -22,11 +22,17 @@ PairStyle(e3gnn/parallel, PairE3GNNParallel)
 #include "pair.h"
 
 #include <torch/torch.h>
+#include <unordered_map>
 #include <vector>
 
 namespace LAMMPS_NS {
 class PairE3GNNParallel : public Pair {
 private:
+  // LAMMPS brick communication uses six directional phases: x/y/z forward
+  // and reverse sweeps. Keeping this named avoids hidden phase-count coupling.
+  static constexpr int kCommPhaseCount = 6;
+  static constexpr int kNeighborListJustBuiltAgo = 0;
+
   double cutoff;
   double cutoff_square;
   std::vector<torch::jit::Module> model_list;
@@ -49,20 +55,41 @@ private:
   std::unordered_map<int, long> extra_graph_idx_map;
   // To use scatter, store long instead of int
   // array of vector
-  std::vector<long> comm_index_pack_forward[6];
-  std::vector<long> comm_index_unpack_forward[6];
-  std::vector<long> comm_index_unpack_reverse[6];
+  std::vector<long> comm_index_pack_forward[kCommPhaseCount];
+  std::vector<long> comm_index_unpack_forward[kCommPhaseCount];
+  std::vector<long> comm_index_unpack_reverse[kCommPhaseCount];
 
-  // its size is 6 and initialized at comm_preprocess()
-  torch::Tensor comm_index_pack_forward_tensor[6];
-  torch::Tensor comm_index_unpack_forward_tensor[6];
-  torch::Tensor comm_index_unpack_reverse_tensor[6];
+  // its size is kCommPhaseCount and initialized at comm_preprocess()
+  torch::Tensor comm_index_pack_forward_tensor[kCommPhaseCount];
+  torch::Tensor comm_index_unpack_forward_tensor[kCommPhaseCount];
+  torch::Tensor comm_index_unpack_reverse_tensor[kCommPhaseCount];
+
+  // IsoDelta-Halo cache: only communication metadata and CUDA index tensors are
+  // reused. Edge vectors, embeddings, messages, energies, and forces are still
+  // recomputed every timestep by the original SevenNet path.
+  bool comm_cache_valid = false;
+  int comm_cache_nlocal = 0;
+  int comm_cache_ghost_node_num = 0;
+  int comm_cache_graph_size = 0;
+  int comm_cache_nedges = 0;
+  std::vector<tagint> comm_cache_graph_tags;
+  std::unordered_map<int, long> comm_cache_extra_graph_idx_map;
+  std::vector<long> comm_cache_index_pack_forward[kCommPhaseCount];
+  std::vector<long> comm_cache_index_unpack_forward[kCommPhaseCount];
+  std::vector<long> comm_cache_index_unpack_reverse[kCommPhaseCount];
+  torch::Tensor comm_cache_index_pack_forward_tensor[kCommPhaseCount];
+  torch::Tensor comm_cache_index_unpack_forward_tensor[kCommPhaseCount];
+  torch::Tensor comm_cache_index_unpack_reverse_tensor[kCommPhaseCount];
+
+  bool try_reuse_comm_preprocess_cache(int, int, int, const int *);
+  void store_comm_preprocess_cache(int, int, int, const int *);
+  void clear_comm_preprocess_work();
 
   // to use tag_to_graph_idx inside comm methods
   int *tag_to_graph_idx_ptr = nullptr;
 
-  int sendproc[6];
-  int recvproc[6];
+  int sendproc[kCommPhaseCount];
+  int recvproc[kCommPhaseCount];
 
 public:
   PairE3GNNParallel(class LAMMPS *);
