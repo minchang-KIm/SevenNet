@@ -520,6 +520,13 @@ def main() -> None:
         "benchmark report checker must validate miss-counter consistency",
     )
     _require(
+        "DISABLED_CACHE_EXPECTED_HITS" in report_check
+        and "baseline-disabled" in report_check
+        and "miss_disabled" in report_check
+        and "must match attempts" in report_check,
+        "benchmark report checker must validate disabled baseline cache evidence",
+    )
+    _require(
         "REQUIRED_CACHE_MISS_KEYS" in report_check
         and "miss_comm-list-tag-order-changed" in report_check
         and "verified_cache_miss_key_count" in report_check,
@@ -587,6 +594,11 @@ def main() -> None:
         "attempts - hits" in doc
         and "miss breakdown table" in doc,
         "IsoDelta-Halo guide must document miss-counter consistency",
+    )
+    _require(
+        "miss_disabled` equal to `attempts`" in doc
+        and "zero hit rate" in doc,
+        "IsoDelta-Halo guide must document disabled baseline cache evidence",
     )
     _require(
         "sample_variance_loop_time_seconds" in doc

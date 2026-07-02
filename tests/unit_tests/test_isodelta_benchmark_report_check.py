@@ -32,6 +32,14 @@ PERCENT_SCALE = 100.0
 SECOND_ENABLED_ATTEMPTS = 11.0
 SECOND_ENABLED_HITS = 9.0
 EXPECTED_ZERO_RESIDUAL = 0.0
+DEFAULT_CACHE_ATTEMPTS = 10.0
+ZERO_CACHE_COUNT = 0.0
+ZERO_HIT_RATE_PERCENT = 0.0
+DEFAULT_ENABLED_NO_CACHE_MISSES = 1.0
+DEFAULT_ENABLED_NEIGHBOR_REBUILT_MISSES = 1.0
+ONE_CACHE_COUNT = 1.0
+WRONG_BASELINE_HIT_RATE_PERCENT = 10.0
+WRONG_BASELINE_DISABLED_MISSES = 9.0
 RUN_TIMEOUT_SECONDS = 3600.0
 BASELINE_MEAN_LOOP_TIME_SECONDS = 11.5
 BASELINE_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.5
@@ -56,21 +64,36 @@ def _cache_summary(
     attempts: float,
     hits: float,
     hit_rate_percent: float,
+    miss_disabled: float = ZERO_CACHE_COUNT,
+    miss_no_cache: float = DEFAULT_ENABLED_NO_CACHE_MISSES,
+    miss_neighbor_list_rebuilt: float = DEFAULT_ENABLED_NEIGHBOR_REBUILT_MISSES,
 ) -> dict[str, float]:
     """Create a cache summary with every IsoDelta-Halo miss counter."""
     return {
         "attempts": attempts,
         "hits": hits,
         "hit_rate_percent": hit_rate_percent,
-        "miss_disabled": 0.0,
-        "miss_no-cache": 1.0,
-        "miss_neighbor-list-rebuilt": 1.0,
+        "miss_disabled": miss_disabled,
+        "miss_no-cache": miss_no_cache,
+        "miss_neighbor-list-rebuilt": miss_neighbor_list_rebuilt,
         "miss_shape-changed": 0.0,
         "miss_tag-count-changed": 0.0,
         "miss_tag-order-changed": 0.0,
         "miss_comm-topology-changed": 0.0,
         "miss_comm-list-tag-order-changed": 0.0,
     }
+
+
+def _disabled_cache_summary(attempts: float) -> dict[str, float]:
+    """Create the cache summary shape produced by the disabled baseline."""
+    return _cache_summary(
+        attempts=attempts,
+        hits=ZERO_CACHE_COUNT,
+        hit_rate_percent=ZERO_HIT_RATE_PERCENT,
+        miss_disabled=attempts,
+        miss_no_cache=ZERO_CACHE_COUNT,
+        miss_neighbor_list_rebuilt=ZERO_CACHE_COUNT,
+    )
 
 
 def _valid_report() -> dict[str, object]:
@@ -137,11 +160,7 @@ def _valid_report() -> dict[str, object]:
                 "repeat_index": 0,
                 "returncode": 0,
                 "loop_time_seconds": 12.0,
-                "cache_summary": _cache_summary(
-                    attempts=10.0,
-                    hits=0.0,
-                    hit_rate_percent=0.0,
-                ),
+                "cache_summary": _disabled_cache_summary(DEFAULT_CACHE_ATTEMPTS),
             },
             {
                 "case": "isodelta-enabled",
@@ -149,7 +168,7 @@ def _valid_report() -> dict[str, object]:
                 "returncode": 0,
                 "loop_time_seconds": 10.0,
                 "cache_summary": _cache_summary(
-                    attempts=10.0,
+                    attempts=DEFAULT_CACHE_ATTEMPTS,
                     hits=8.0,
                     hit_rate_percent=80.0,
                 ),
@@ -159,11 +178,7 @@ def _valid_report() -> dict[str, object]:
                 "repeat_index": 1,
                 "returncode": 0,
                 "loop_time_seconds": 11.0,
-                "cache_summary": _cache_summary(
-                    attempts=10.0,
-                    hits=0.0,
-                    hit_rate_percent=0.0,
-                ),
+                "cache_summary": _disabled_cache_summary(DEFAULT_CACHE_ATTEMPTS),
             },
             {
                 "case": "isodelta-enabled",
@@ -540,6 +555,49 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
             "returncode 2",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_baseline_cache_hits(self) -> None:
+        """Disabled baseline profiling should not report cache hits."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        baseline_result = results[0]
+        assert isinstance(baseline_result, dict)
+        cache_summary = baseline_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["hits"] = ONE_CACHE_COUNT
+        cache_summary["hit_rate_percent"] = WRONG_BASELINE_HIT_RATE_PERCENT
+        cache_summary["miss_disabled"] = WRONG_BASELINE_DISABLED_MISSES
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "baseline-disabled cache_summary.hits",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_wrong_baseline_disabled_misses(self) -> None:
+        """Disabled baseline misses should account for every cache attempt."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        baseline_result = results[0]
+        assert isinstance(baseline_result, dict)
+        cache_summary = baseline_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["miss_disabled"] = WRONG_BASELINE_DISABLED_MISSES
+        cache_summary["miss_no-cache"] = ONE_CACHE_COUNT
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "miss_disabled",
         ):
             isodelta_report_check.validate_report(
                 report,

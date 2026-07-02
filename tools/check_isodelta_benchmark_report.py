@@ -98,6 +98,8 @@ CACHE_HIT_RATE_TOLERANCE_PERCENT = 1.0e-9
 CACHE_COUNT_TOLERANCE = 1.0e-9
 TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
 TIMING_RELATIVE_TOLERANCE = 1.0e-9
+DISABLED_CACHE_EXPECTED_HITS = 0.0
+DISABLED_CACHE_EXPECTED_HIT_RATE_PERCENT = 0.0
 
 
 class ReportCheckError(ValueError):
@@ -635,7 +637,8 @@ def _check_cache_evidence(
     verified_miss_keys: set[str] = set()
     for index, result in enumerate(_results(report)):
         result_map = _as_mapping(result, f"{RESULTS_KEY}[{index}]")
-        if result_map.get(CASE_KEY) != ISODELTA_CASE:
+        case_name = result_map.get(CASE_KEY)
+        if case_name not in EXPECTED_CASES:
             continue
         cache_summary = _as_mapping(
             result_map.get(CACHE_SUMMARY_KEY),
@@ -682,10 +685,8 @@ def _check_cache_evidence(
                 "must match hits / attempts"
             ),
         )
-        attempt_counts.append(attempts)
-        hit_counts.append(hits)
-        hit_rates.append(hit_rate_percent)
         miss_count_sum = 0.0
+        miss_counts: dict[str, float] = {}
         for miss_key in REQUIRED_CACHE_MISS_KEYS:
             miss_count = _as_number(
                 cache_summary.get(miss_key),
@@ -696,6 +697,7 @@ def _check_cache_evidence(
                 f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{miss_key} must be nonnegative",
             )
             miss_count_sum += miss_count
+            miss_counts[miss_key] = miss_count
             verified_miss_keys.add(miss_key)
         expected_miss_count = attempts - hits
         cache_count_residual = abs(miss_count_sum - expected_miss_count)
@@ -707,6 +709,28 @@ def _check_cache_evidence(
             ),
         )
         cache_count_residuals.append(cache_count_residual)
+        if case_name == BASELINE_CASE:
+            _require(
+                abs(hits - DISABLED_CACHE_EXPECTED_HITS) <= CACHE_COUNT_TOLERANCE,
+                f"{BASELINE_CASE} {CACHE_SUMMARY_KEY}.{HITS_KEY} must be zero",
+            )
+            _require(
+                abs(hit_rate_percent - DISABLED_CACHE_EXPECTED_HIT_RATE_PERCENT)
+                <= CACHE_HIT_RATE_TOLERANCE_PERCENT,
+                f"{BASELINE_CASE} {CACHE_SUMMARY_KEY}.{HIT_RATE_KEY} must be zero",
+            )
+            disabled_misses = miss_counts["miss_disabled"]
+            _require(
+                abs(disabled_misses - attempts) <= CACHE_COUNT_TOLERANCE,
+                (
+                    f"{BASELINE_CASE} {CACHE_SUMMARY_KEY}.miss_disabled "
+                    "must match attempts"
+                ),
+            )
+        if case_name == ISODELTA_CASE:
+            attempt_counts.append(attempts)
+            hit_counts.append(hits)
+            hit_rates.append(hit_rate_percent)
 
     _require(hit_rates, f"no {ISODELTA_CASE} cache hit-rate entries found")
     min_seen_attempts = min(attempt_counts)

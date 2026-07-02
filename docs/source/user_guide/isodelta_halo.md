@@ -337,6 +337,9 @@ It also checks `provenance.case_environment_overrides` to prove that the
 `SEVENN_ISODELTA_HALO_DISABLE=1`, and `SEVENN_ISODELTA_HALO_PROFILE=1`, while
 the `isodelta-enabled` case recorded `SEVENN_PRINT_INFO=1` and
 `SEVENN_ISODELTA_HALO_PROFILE=1` with no disable flag.
+For the `baseline-disabled` cache summary, the checker requires zero hits,
+zero hit rate, and `miss_disabled` equal to `attempts`; this proves the baseline
+run did not accidentally reuse IsoDelta-Halo metadata.
 It also validates that every `repeat_index` has exactly one `baseline-disabled`
 run and one `isodelta-enabled` run, then reports `paired_repeat_count` in the
 evidence summary.

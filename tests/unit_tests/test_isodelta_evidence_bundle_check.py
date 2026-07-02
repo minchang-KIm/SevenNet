@@ -49,6 +49,8 @@ ZERO_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.0
 ZERO_SAMPLE_STDDEV_LOOP_TIME_SECONDS = 0.0
 EXPECTED_RESULT_COUNT = 4
 EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+ZERO_CACHE_COUNT = 0.0
+ZERO_HIT_RATE_PERCENT = 0.0
 PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
@@ -59,6 +61,8 @@ def _cache_summary(
     attempts: float = MIN_ENABLED_ATTEMPTS,
     hits: float = MIN_ENABLED_HITS,
     hit_rate_percent: float | None = None,
+    miss_disabled: float = ZERO_CACHE_COUNT,
+    miss_no_cache: float | None = None,
 ) -> dict[str, float]:
     """Create a complete IsoDelta-Halo cache summary for one run."""
     resolved_hit_rate_percent = (
@@ -66,12 +70,15 @@ def _cache_summary(
         if hit_rate_percent is None
         else hit_rate_percent
     )
+    resolved_no_cache_misses = (
+        attempts - hits if miss_no_cache is None else miss_no_cache
+    )
     return {
         "attempts": attempts,
         "hits": hits,
         "hit_rate_percent": resolved_hit_rate_percent,
-        "miss_disabled": 0.0,
-        "miss_no-cache": attempts - hits,
+        "miss_disabled": miss_disabled,
+        "miss_no-cache": resolved_no_cache_misses,
         "miss_neighbor-list-rebuilt": 0.0,
         "miss_shape-changed": 0.0,
         "miss_tag-count-changed": 0.0,
@@ -79,6 +86,17 @@ def _cache_summary(
         "miss_comm-topology-changed": 0.0,
         "miss_comm-list-tag-order-changed": 0.0,
     }
+
+
+def _disabled_cache_summary(attempts: float = MIN_ENABLED_ATTEMPTS) -> dict[str, float]:
+    """Create a cache summary proving that the baseline ran with the cache off."""
+    return _cache_summary(
+        attempts=attempts,
+        hits=ZERO_CACHE_COUNT,
+        hit_rate_percent=ZERO_HIT_RATE_PERCENT,
+        miss_disabled=attempts,
+        miss_no_cache=ZERO_CACHE_COUNT,
+    )
 
 
 def _benchmark_report() -> dict[str, object]:
@@ -147,7 +165,7 @@ def _benchmark_report() -> dict[str, object]:
                 "repeat_index": 0,
                 "returncode": 0,
                 "loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
-                "cache_summary": _cache_summary(hits=0.0, hit_rate_percent=0.0),
+                "cache_summary": _disabled_cache_summary(),
             },
             {
                 "case": "isodelta-enabled",
@@ -161,7 +179,7 @@ def _benchmark_report() -> dict[str, object]:
                 "repeat_index": 1,
                 "returncode": 0,
                 "loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
-                "cache_summary": _cache_summary(hits=0.0, hit_rate_percent=0.0),
+                "cache_summary": _disabled_cache_summary(),
             },
             {
                 "case": "isodelta-enabled",
