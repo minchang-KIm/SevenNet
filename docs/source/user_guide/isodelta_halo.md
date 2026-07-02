@@ -257,8 +257,11 @@ python tools/run_isodelta_lammps_benchmark.py \
 
 The runner executes each repeat twice:
 
-- `baseline-disabled`: `SEVENN_ISODELTA_HALO_DISABLE=1`
-- `isodelta-enabled`: cache enabled with profiling
+- `baseline-disabled`: `SEVENN_PRINT_INFO=1`,
+  `SEVENN_ISODELTA_HALO_DISABLE=1`, and
+  `SEVENN_ISODELTA_HALO_PROFILE=1`
+- `isodelta-enabled`: `SEVENN_PRINT_INFO=1` and
+  `SEVENN_ISODELTA_HALO_PROFILE=1`, with no disable flag
 
 LAMMPS runs in the input file directory by default, so relative model and data
 paths inside the input script keep working. Use `--work-dir` when the benchmark
@@ -329,6 +332,11 @@ reason counters, which keeps failed reuse diagnosable instead of reducing the
 experiment to a single speedup number.
 The report checker validates `run_timeout_seconds` as a positive finite value,
 so accepted benchmark evidence proves that each LAMMPS invocation was bounded.
+It also checks `provenance.case_environment_overrides` to prove that the
+`baseline-disabled` case recorded `SEVENN_PRINT_INFO=1`,
+`SEVENN_ISODELTA_HALO_DISABLE=1`, and `SEVENN_ISODELTA_HALO_PROFILE=1`, while
+the `isodelta-enabled` case recorded `SEVENN_PRINT_INFO=1` and
+`SEVENN_ISODELTA_HALO_PROFILE=1` with no disable flag.
 It also validates that every `repeat_index` has exactly one `baseline-disabled`
 run and one `isodelta-enabled` run, then reports `paired_repeat_count` in the
 evidence summary.

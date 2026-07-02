@@ -466,6 +466,9 @@ def main() -> None:
         and "_check_provenance" in report_check
         and "EXPECTED_REPORT_SCHEMA_VERSION" in report_check
         and "CASE_ENVIRONMENT_OVERRIDES_KEY" in report_check
+        and "REQUIRED_CASE_ENVIRONMENT_OVERRIDES" in report_check
+        and "SEVENN_ISODELTA_HALO_DISABLE" in report_check
+        and "must be absent for enabled case" in report_check
         and "RUN_TIMEOUT_SECONDS_KEY" in report_check
         and "_check_run_timeout" in report_check
         and "SUMMARY_RUNS_KEY" in report_check
@@ -532,6 +535,12 @@ def main() -> None:
         and "provenance.git_branch" in doc
         and "provenance.git_dirty" in doc,
         "IsoDelta-Halo guide must document provenance validation",
+    )
+    _require(
+        "SEVENN_PRINT_INFO=1" in doc
+        and "SEVENN_ISODELTA_HALO_DISABLE=1" in doc
+        and "no disable flag" in doc,
+        "IsoDelta-Halo guide must document case runtime env provenance",
     )
     _require(
         "run_timeout_seconds" in doc

@@ -64,6 +64,21 @@ BASELINE_CASE = "baseline-disabled"
 ISODELTA_CASE = "isodelta-enabled"
 EXPECTED_CASES = frozenset((BASELINE_CASE, ISODELTA_CASE))
 EXPECTED_CASE_COUNT_PER_REPEAT = len(EXPECTED_CASES)
+PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
+DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
+PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
+ENV_FLAG_ENABLED = "1"
+REQUIRED_CASE_ENVIRONMENT_OVERRIDES = {
+    BASELINE_CASE: {
+        PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+        DISABLE_CACHE_ENV: ENV_FLAG_ENABLED,
+        PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
+    },
+    ISODELTA_CASE: {
+        PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+        PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
+    },
+}
 DEFAULT_MAX_ABS_THERMO_DELTA = 1.0e-8
 DEFAULT_MIN_PAIRED_THERMO_COUNT = 1
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
@@ -219,6 +234,27 @@ def _results(report: dict[str, Any]) -> list[Any]:
     return _as_sequence(report.get(RESULTS_KEY), RESULTS_KEY)
 
 
+def _check_case_environment_overrides(overrides: dict[str, Any]) -> None:
+    """Require provenance to prove the disabled and enabled runtime controls."""
+    for case_name, expected_env in REQUIRED_CASE_ENVIRONMENT_OVERRIDES.items():
+        field_prefix = f"{PROVENANCE_KEY}.{CASE_ENVIRONMENT_OVERRIDES_KEY}.{case_name}"
+        case_overrides = _as_mapping(overrides.get(case_name), field_prefix)
+        for env_name, expected_value in expected_env.items():
+            actual_value = _as_nonempty_string(
+                case_overrides.get(env_name),
+                f"{field_prefix}.{env_name}",
+            )
+            _require(
+                actual_value == expected_value,
+                f"{field_prefix}.{env_name} must be {expected_value!r}",
+            )
+        if case_name == ISODELTA_CASE:
+            _require(
+                DISABLE_CACHE_ENV not in case_overrides,
+                f"{field_prefix}.{DISABLE_CACHE_ENV} must be absent for enabled case",
+            )
+
+
 def _check_provenance(report: dict[str, Any]) -> dict[str, Any]:
     """Require reproducibility metadata for a publishable benchmark report."""
     provenance = _as_mapping(report.get(PROVENANCE_KEY), PROVENANCE_KEY)
@@ -261,11 +297,7 @@ def _check_provenance(report: dict[str, Any]) -> dict[str, Any]:
         provenance.get(CASE_ENVIRONMENT_OVERRIDES_KEY),
         f"{PROVENANCE_KEY}.{CASE_ENVIRONMENT_OVERRIDES_KEY}",
     )
-    for case_name in EXPECTED_CASES:
-        _as_mapping(
-            case_environment_overrides.get(case_name),
-            f"{PROVENANCE_KEY}.{CASE_ENVIRONMENT_OVERRIDES_KEY}.{case_name}",
-        )
+    _check_case_environment_overrides(case_environment_overrides)
     return {
         "report_schema_version": schema_version,
         "git_commit": git_commit,

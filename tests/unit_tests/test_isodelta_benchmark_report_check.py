@@ -45,6 +45,11 @@ EXPECTED_RESULT_COUNT = 4
 EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
 EXPECTED_GIT_COMMIT = "0123456789abcdef"
 EXPECTED_GIT_BRANCH = "isodelta-halo-runtime"
+PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
+DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
+PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
+ENV_FLAG_ENABLED = "1"
+ENV_FLAG_DISABLED = "0"
 
 
 def _cache_summary(
@@ -80,8 +85,15 @@ def _valid_report() -> dict[str, object]:
             "python_version": "3.13.0",
             "platform": "test-platform",
             "case_environment_overrides": {
-                "baseline-disabled": {"SEVENN_ISODELTA_HALO_DISABLE": "1"},
-                "isodelta-enabled": {"SEVENN_ISODELTA_HALO_PROFILE": "1"},
+                "baseline-disabled": {
+                    PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+                    DISABLE_CACHE_ENV: ENV_FLAG_ENABLED,
+                    PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
+                },
+                "isodelta-enabled": {
+                    PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+                    PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
+                },
             },
         },
         "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
@@ -266,6 +278,46 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
             "report_schema_version",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_wrong_baseline_env_override(self) -> None:
+        """Baseline evidence should prove that IsoDelta-Halo was disabled."""
+        report = _valid_report()
+        provenance = report["provenance"]
+        assert isinstance(provenance, dict)
+        overrides = provenance["case_environment_overrides"]
+        assert isinstance(overrides, dict)
+        baseline = overrides["baseline-disabled"]
+        assert isinstance(baseline, dict)
+        baseline[DISABLE_CACHE_ENV] = ENV_FLAG_DISABLED
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            DISABLE_CACHE_ENV,
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_disabled_env_in_enabled_case(self) -> None:
+        """Enabled evidence should prove that the disable flag was absent."""
+        report = _valid_report()
+        provenance = report["provenance"]
+        assert isinstance(provenance, dict)
+        overrides = provenance["case_environment_overrides"]
+        assert isinstance(overrides, dict)
+        enabled = overrides["isodelta-enabled"]
+        assert isinstance(enabled, dict)
+        enabled[DISABLE_CACHE_ENV] = ENV_FLAG_ENABLED
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "must be absent",
         ):
             isodelta_report_check.validate_report(
                 report,

@@ -49,6 +49,10 @@ ZERO_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.0
 ZERO_SAMPLE_STDDEV_LOOP_TIME_SECONDS = 0.0
 EXPECTED_RESULT_COUNT = 4
 EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
+DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
+PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
+ENV_FLAG_ENABLED = "1"
 
 
 def _cache_summary(
@@ -89,8 +93,15 @@ def _benchmark_report() -> dict[str, object]:
             "python_version": "3.13.0",
             "platform": "test-platform",
             "case_environment_overrides": {
-                "baseline-disabled": {"SEVENN_ISODELTA_HALO_DISABLE": "1"},
-                "isodelta-enabled": {"SEVENN_ISODELTA_HALO_PROFILE": "1"},
+                "baseline-disabled": {
+                    PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+                    DISABLE_CACHE_ENV: ENV_FLAG_ENABLED,
+                    PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
+                },
+                "isodelta-enabled": {
+                    PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+                    PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
+                },
             },
         },
         "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
