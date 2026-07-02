@@ -14,6 +14,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.cpp"
 HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
+COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
+COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
 BENCHMARK_PATH = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
@@ -35,13 +37,19 @@ def main() -> None:
     """Validate that the cache remains metadata-only and conservatively gated."""
     cpp = _read(CPP_PATH)
     header = _read(HEADER_PATH)
+    comm_brick_cpp = _read(COMM_BRICK_CPP_PATH)
+    comm_brick_header = _read(COMM_BRICK_HEADER_PATH)
     benchmark = _read(BENCHMARK_PATH)
     prereq = _read(PREREQ_PATH)
     doc = _read(DOC_PATH)
     doc_index = _read(DOC_INDEX_PATH)
-    combined = cpp + "\n" + header
+    combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
 
     _require("kCommPhaseCount = 6" in header, "named comm phase count missing")
+    _require(
+        "kCommCacheMissReasonCount = 7" in header,
+        "cache miss reason count must include topology changes",
+    )
     _require("[6]" not in cpp, "raw six-phase array/magic count remains in cpp")
     _require("[6]" not in header, "raw six-phase array/magic count remains in header")
     for include_name in ("<cstring>", "<iostream>", "<list>", "<map>", "<set>"):
@@ -52,6 +60,24 @@ def main() -> None:
     _require(
         "std::vector<long> &upmap = comm_index_unpack_forward[comm_phase];" in cpp,
         "CUDA unpack tensor creation must not copy the unpack vector first",
+    )
+    for accessor_name in (
+        "e3gnn_nswap",
+        "e3gnn_sendnum",
+        "e3gnn_recvnum",
+        "e3gnn_sendproc",
+        "e3gnn_recvproc",
+        "e3gnn_firstrecv",
+    ):
+        _require(
+            accessor_name in comm_brick_header and f"CommBrick::{accessor_name}" in comm_brick_cpp,
+            f"CommBrick topology accessor missing: {accessor_name}",
+        )
+    _require(
+        "comm_topology_matches_cache" in combined
+        and "store_comm_topology_signature" in combined
+        and "comm-topology-changed" in cpp,
+        "cache reuse must compare and report communication topology signatures",
     )
 
     _require(
@@ -158,6 +184,11 @@ def main() -> None:
         "SEVENN_ISODELTA_HALO_DISABLE" in doc
         and "SEVENN_ISODELTA_HALO_PROFILE" in doc,
         "IsoDelta-Halo guide must document runtime controls",
+    )
+    _require(
+        "miss_comm-topology-changed" in doc
+        and "CommBrick communication topology" in doc,
+        "IsoDelta-Halo guide must document topology-guarded cache reuse",
     )
     _require(
         "isodelta_halo" in doc_index,

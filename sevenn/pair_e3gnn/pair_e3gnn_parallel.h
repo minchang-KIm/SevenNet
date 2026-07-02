@@ -41,12 +41,14 @@ private:
     kShapeChanged,
     kTagCountChanged,
     kTagOrderChanged,
+    kCommTopologyChanged,
   };
-  static constexpr int kCommCacheMissReasonCount = 6;
+  static constexpr int kCommCacheMissReasonCount = 7;
   static_assert(
-      static_cast<int>(CommCacheMissReason::kTagOrderChanged) + 1 ==
+      static_cast<int>(CommCacheMissReason::kCommTopologyChanged) + 1 ==
           kCommCacheMissReasonCount,
       "CommCacheMissReason count must match the enum entries.");
+  static constexpr int kInactiveCommPhaseValue = -1;
 
   double cutoff;
   double cutoff_square;
@@ -92,7 +94,13 @@ private:
   int comm_cache_ghost_node_num = 0;
   int comm_cache_graph_size = 0;
   int comm_cache_nedges = 0;
+  int comm_cache_nswap = 0;
   std::vector<tagint> comm_cache_graph_tags;
+  std::array<int, kCommPhaseCount> comm_cache_sendnum = {};
+  std::array<int, kCommPhaseCount> comm_cache_recvnum = {};
+  std::array<int, kCommPhaseCount> comm_cache_sendproc = {};
+  std::array<int, kCommPhaseCount> comm_cache_recvproc = {};
+  std::array<int, kCommPhaseCount> comm_cache_firstrecv = {};
   std::unordered_map<int, long> comm_cache_extra_graph_idx_map;
   std::vector<long> comm_cache_index_pack_forward[kCommPhaseCount];
   std::vector<long> comm_cache_index_unpack_forward[kCommPhaseCount];
@@ -104,6 +112,8 @@ private:
   bool try_reuse_comm_preprocess_cache(int, int, int, const int *);
   void store_comm_preprocess_cache(int, int, int, const int *);
   void clear_comm_preprocess_work();
+  bool comm_topology_matches_cache() const;
+  void store_comm_topology_signature();
   void record_comm_cache_miss(CommCacheMissReason);
   static const char *comm_cache_miss_reason_name(CommCacheMissReason);
   void print_comm_cache_summary() const;

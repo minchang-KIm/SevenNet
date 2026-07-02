@@ -15,6 +15,8 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.cpp"
 HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
+COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
+COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
 
 
 class IsoDeltaHaloStaticTest(unittest.TestCase):
@@ -25,7 +27,17 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         """Load source text once so individual tests stay focused."""
         cls.cpp = CPP_PATH.read_text(encoding="utf-8")
         cls.header = HEADER_PATH.read_text(encoding="utf-8")
-        cls.combined = cls.cpp + "\n" + cls.header
+        cls.comm_brick_cpp = COMM_BRICK_CPP_PATH.read_text(encoding="utf-8")
+        cls.comm_brick_header = COMM_BRICK_HEADER_PATH.read_text(encoding="utf-8")
+        cls.combined = (
+            cls.cpp
+            + "\n"
+            + cls.header
+            + "\n"
+            + cls.comm_brick_cpp
+            + "\n"
+            + cls.comm_brick_header
+        )
 
     def test_named_comm_phase_count_replaces_raw_six(self) -> None:
         """The LAMMPS six-phase detail should be a named constant."""
@@ -59,6 +71,9 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("neighbor->ago <= kNeighborListJustBuiltAgo", self.cpp)
         self.assertIn("comm_cache_graph_tags", self.combined)
         self.assertIn("tag[atom_idx] != comm_cache_graph_tags[graph_idx]", self.cpp)
+        self.assertIn("comm_topology_matches_cache", self.combined)
+        self.assertIn("store_comm_topology_signature", self.combined)
+        self.assertIn("comm-topology-changed", self.cpp)
 
     def test_cache_miss_rebuilds_and_stores_metadata(self) -> None:
         """A miss must rebuild first and store only when the cache is enabled."""
@@ -89,6 +104,19 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("comm_cache_hits++", self.cpp)
         self.assertIn("record_comm_cache_miss", self.combined)
         self.assertIn("hit_rate_percent", self.cpp)
+
+    def test_comm_brick_exposes_read_only_topology_accessors(self) -> None:
+        """The pair cache should compare current CommBrick topology before reuse."""
+        for accessor_name in (
+            "e3gnn_nswap",
+            "e3gnn_sendnum",
+            "e3gnn_recvnum",
+            "e3gnn_sendproc",
+            "e3gnn_recvproc",
+            "e3gnn_firstrecv",
+        ):
+            self.assertIn(accessor_name, self.comm_brick_header)
+            self.assertIn(f"CommBrick::{accessor_name}", self.comm_brick_cpp)
 
 
 if __name__ == "__main__":

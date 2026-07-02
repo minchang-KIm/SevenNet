@@ -51,6 +51,12 @@ public:
   // patched from SevenNet //
   void forward_comm(class PairE3GNNParallel *);
   void reverse_comm(class PairE3GNNParallel *);
+  int e3gnn_nswap() const;
+  int e3gnn_sendnum(int) const;
+  int e3gnn_recvnum(int) const;
+  int e3gnn_sendproc(int) const;
+  int e3gnn_recvproc(int) const;
+  int e3gnn_firstrecv(int) const;
   // patched from SevenNet //
 
 protected:

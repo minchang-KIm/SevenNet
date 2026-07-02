@@ -739,6 +739,8 @@ const char *PairE3GNNParallel::comm_cache_miss_reason_name(
     return "tag-count-changed";
   case CommCacheMissReason::kTagOrderChanged:
     return "tag-order-changed";
+  case CommCacheMissReason::kCommTopologyChanged:
+    return "comm-topology-changed";
   }
   return "unknown";
 }
@@ -789,6 +791,10 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
   }
   if (comm_cache_graph_tags.size() != static_cast<size_t>(graph_size)) {
     record_comm_cache_miss(CommCacheMissReason::kTagCountChanged);
+    return false;
+  }
+  if (!comm_topology_matches_cache()) {
+    record_comm_cache_miss(CommCacheMissReason::kCommTopologyChanged);
     return false;
   }
 
@@ -842,6 +848,7 @@ void PairE3GNNParallel::store_comm_preprocess_cache(
     comm_cache_graph_tags.push_back(tag[atom_idx]);
   }
 
+  store_comm_topology_signature();
   comm_cache_extra_graph_idx_map = extra_graph_idx_map;
   for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
     comm_cache_index_pack_forward[comm_phase] =
@@ -870,6 +877,69 @@ void PairE3GNNParallel::clear_comm_preprocess_work() {
   }
 
   extra_graph_idx_map.clear();
+}
+
+bool PairE3GNNParallel::comm_topology_matches_cache() const {
+  CommBrick *comm_brick = dynamic_cast<CommBrick *>(comm);
+  if (comm_brick == nullptr) {
+    return false;
+  }
+
+  const int current_nswap = comm_brick->e3gnn_nswap();
+  if (current_nswap != comm_cache_nswap ||
+      current_nswap > kCommPhaseCount) {
+    return false;
+  }
+  for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
+    const bool active_phase = comm_phase < current_nswap;
+    const int current_sendnum = active_phase
+                                    ? comm_brick->e3gnn_sendnum(comm_phase)
+                                    : kInactiveCommPhaseValue;
+    const int current_recvnum = active_phase
+                                    ? comm_brick->e3gnn_recvnum(comm_phase)
+                                    : kInactiveCommPhaseValue;
+    const int current_sendproc = active_phase
+                                     ? comm_brick->e3gnn_sendproc(comm_phase)
+                                     : kInactiveCommPhaseValue;
+    const int current_recvproc = active_phase
+                                     ? comm_brick->e3gnn_recvproc(comm_phase)
+                                     : kInactiveCommPhaseValue;
+    const int current_firstrecv = active_phase
+                                      ? comm_brick->e3gnn_firstrecv(comm_phase)
+                                      : kInactiveCommPhaseValue;
+
+    if (current_sendnum != comm_cache_sendnum[comm_phase] ||
+        current_recvnum != comm_cache_recvnum[comm_phase] ||
+        current_sendproc != comm_cache_sendproc[comm_phase] ||
+        current_recvproc != comm_cache_recvproc[comm_phase] ||
+        current_firstrecv != comm_cache_firstrecv[comm_phase]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void PairE3GNNParallel::store_comm_topology_signature() {
+  CommBrick *comm_brick = dynamic_cast<CommBrick *>(comm);
+  comm_cache_nswap =
+      comm_brick == nullptr ? kInactiveCommPhaseValue : comm_brick->e3gnn_nswap();
+
+  comm_cache_sendnum.fill(kInactiveCommPhaseValue);
+  comm_cache_recvnum.fill(kInactiveCommPhaseValue);
+  comm_cache_sendproc.fill(kInactiveCommPhaseValue);
+  comm_cache_recvproc.fill(kInactiveCommPhaseValue);
+  comm_cache_firstrecv.fill(kInactiveCommPhaseValue);
+
+  if (comm_brick == nullptr || comm_cache_nswap > kCommPhaseCount) {
+    return;
+  }
+  for (int comm_phase = 0; comm_phase < comm_cache_nswap; comm_phase++) {
+    comm_cache_sendnum[comm_phase] = comm_brick->e3gnn_sendnum(comm_phase);
+    comm_cache_recvnum[comm_phase] = comm_brick->e3gnn_recvnum(comm_phase);
+    comm_cache_sendproc[comm_phase] = comm_brick->e3gnn_sendproc(comm_phase);
+    comm_cache_recvproc[comm_phase] = comm_brick->e3gnn_recvproc(comm_phase);
+    comm_cache_firstrecv[comm_phase] = comm_brick->e3gnn_firstrecv(comm_phase);
+  }
 }
 
 void PairE3GNNParallel::comm_preprocess() {

@@ -18,6 +18,11 @@ It does not cache geometry values, edge vectors, embeddings, messages, energy,
 or force. Those values are recomputed every step by the original SevenNet model
 path.
 
+Before a cache hit is accepted, the runtime checks graph size, edge count, graph
+tag order, neighbor-list age, and the current CommBrick communication topology
+signature. The topology signature includes phase count, send/receive counts,
+send/receive ranks, and first-receive offsets.
+
 ## Why This Is Model-Agnostic
 
 The method is placed below the MLIP model and above the LAMMPS brick
@@ -119,6 +124,7 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `results.*.final_thermo_observables`
 - `results.*.cache_summary.miss_neighbor-list-rebuilt`
 - `results.*.cache_summary.miss_shape-changed`
+- `results.*.cache_summary.miss_comm-topology-changed`
 - `results.*.cache_summary.miss_tag-order-changed`
 
 For a publishable performance claim, report the mean and variance across

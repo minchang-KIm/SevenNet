@@ -83,6 +83,20 @@ CommBrick::~CommBrick()
 }
 
 /* ---------------------------------------------------------------------- */
+
+int CommBrick::e3gnn_nswap() const { return nswap; }
+
+int CommBrick::e3gnn_sendnum(int iswap) const { return sendnum[iswap]; }
+
+int CommBrick::e3gnn_recvnum(int iswap) const { return recvnum[iswap]; }
+
+int CommBrick::e3gnn_sendproc(int iswap) const { return sendproc[iswap]; }
+
+int CommBrick::e3gnn_recvproc(int iswap) const { return recvproc[iswap]; }
+
+int CommBrick::e3gnn_firstrecv(int iswap) const { return firstrecv[iswap]; }
+
+/* ---------------------------------------------------------------------- */
 //IMPORTANT: we *MUST* pass "*oldcomm" to the Comm initializer here, as
 //           the code below *requires* that the (implicit) copy constructor
 //           for Comm is run and thus creating a shallow copy of "oldcomm".
