@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import json
+import math
 import platform
 from pathlib import Path
 import subprocess
@@ -29,6 +30,7 @@ REPORT_CHECK_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 EVIDENCE_BUNDLE_CHECK_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_evidence_bundle.py"
 DEFAULT_OUTPUT_DIR = Path("isodelta_experiment_runs")
 DEFAULT_REPEAT_COUNT = 3
+MIN_REPEAT_COUNT = 1
 DEFAULT_MAX_ABS_THERMO_DELTA = 1.0e-8
 DEFAULT_MIN_PAIRED_THERMO_COUNT = 1
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
@@ -38,6 +40,12 @@ DEFAULT_MIN_TRACE_COUNT = 1
 DEFAULT_MIN_TRACE_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT = 0.0
 DEFAULT_BINARY_TIMEOUT_SECONDS = 60.0
+MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
+MIN_POSITIVE_SPEEDUP = 0.0
+MIN_NONNEGATIVE_VALUE = 0.0
+MIN_COUNT_VALUE = 0
+MIN_PERCENT_VALUE = 0.0
+MAX_PERCENT_VALUE = 100.0
 GIT_METADATA_TIMEOUT_SECONDS = 10.0
 LOG_DIR_NAME = "logs"
 BENCHMARK_DIR_NAME = "benchmark"
@@ -121,6 +129,97 @@ class ExperimentCommandResult:
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
+def _require_valid_config(condition: bool, message: str) -> None:
+    """Raise a configuration error before launching external commands."""
+    if not condition:
+        raise ValueError(message)
+
+
+def _validate_finite(value: float, field_name: str) -> None:
+    """Reject NaN and infinity in numeric experiment gates."""
+    _require_valid_config(math.isfinite(value), f"{field_name} must be finite")
+
+
+def _validate_percent(value: float, field_name: str) -> None:
+    """Require a percentage threshold to stay within its physical range."""
+    _validate_finite(value, field_name)
+    _require_valid_config(
+        MIN_PERCENT_VALUE <= value <= MAX_PERCENT_VALUE,
+        f"{field_name} must be between {MIN_PERCENT_VALUE:g} and {MAX_PERCENT_VALUE:g}",
+    )
+
+
+def validate_config(config: ExperimentConfig) -> None:
+    """Reject experiment settings that cannot produce auditable evidence."""
+    _require_valid_config(
+        bool(config.lammps_command.strip()),
+        "lammps_command must not be empty",
+    )
+    _require_valid_config(
+        config.repeat_count >= MIN_REPEAT_COUNT,
+        f"repeat_count must be at least {MIN_REPEAT_COUNT}",
+    )
+    _validate_finite(config.binary_timeout_seconds, "binary_timeout_seconds")
+    _require_valid_config(
+        config.binary_timeout_seconds > MIN_POSITIVE_TIMEOUT_SECONDS,
+        "binary_timeout_seconds must be positive",
+    )
+    _validate_finite(config.max_abs_thermo_delta, "max_abs_thermo_delta")
+    _require_valid_config(
+        config.max_abs_thermo_delta >= MIN_NONNEGATIVE_VALUE,
+        "max_abs_thermo_delta must be nonnegative",
+    )
+    _require_valid_config(
+        config.min_paired_thermo_count >= MIN_REPEAT_COUNT,
+        "min_paired_thermo_count must be at least one",
+    )
+    _require_valid_config(
+        config.min_enabled_cache_attempts >= MIN_COUNT_VALUE,
+        "min_enabled_cache_attempts must be nonnegative",
+    )
+    _require_valid_config(
+        config.min_enabled_cache_hits >= MIN_COUNT_VALUE,
+        "min_enabled_cache_hits must be nonnegative",
+    )
+    _require_valid_config(
+        config.min_enabled_cache_hits <= config.min_enabled_cache_attempts,
+        "min_enabled_cache_hits cannot exceed min_enabled_cache_attempts",
+    )
+    _require_valid_config(
+        config.min_trace_count >= MIN_REPEAT_COUNT,
+        "min_trace_count must be at least one",
+    )
+    if config.min_speedup is not None:
+        _validate_finite(config.min_speedup, "min_speedup")
+        _require_valid_config(
+            config.min_speedup > MIN_POSITIVE_SPEEDUP,
+            "min_speedup must be positive when provided",
+        )
+    if config.min_trace_estimated_speedup is not None:
+        _validate_finite(
+            config.min_trace_estimated_speedup,
+            "min_trace_estimated_speedup",
+        )
+        _require_valid_config(
+            config.min_trace_estimated_speedup > MIN_POSITIVE_SPEEDUP,
+            "min_trace_estimated_speedup must be positive when provided",
+        )
+    _validate_percent(config.min_hit_rate_percent, "min_hit_rate_percent")
+    _validate_percent(
+        config.min_trace_hit_rate_percent,
+        "min_trace_hit_rate_percent",
+    )
+    _validate_percent(
+        config.min_trace_metadata_fraction_percent,
+        "min_trace_metadata_fraction_percent",
+    )
+    for model_name in config.required_trace_models:
+        _require_valid_config(
+            bool(model_name.strip()),
+            "required_trace_models must not include empty names",
+        )
+
+
 def _python_script_command(script_path: Path) -> list[str]:
     """Build a Python command that works from Windows and POSIX shells."""
     return [sys.executable, str(script_path)]
@@ -161,6 +260,7 @@ def collect_run_provenance() -> dict[str, str | bool | None]:
 
 def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentCommand]:
     """Build the ordered commands that make up the full experiment gate."""
+    validate_config(config)
     log_dir = config.output_dir / LOG_DIR_NAME
 
     prereq_argv = _python_script_command(PREREQ_SCRIPT)
@@ -357,6 +457,7 @@ def run_experiment(
     runner: CommandRunner = subprocess.run,
 ) -> int:
     """Run the full gate and stop on the first failed command."""
+    validate_config(config)
     config.output_dir.mkdir(parents=True, exist_ok=True)
     command_results: list[ExperimentCommandResult] = []
     failed_stage: str | None = None
@@ -494,7 +595,7 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         help="Timeout for the LAMMPS help smoke check",
     )
     args = parser.parse_args(argv)
-    return ExperimentConfig(
+    config = ExperimentConfig(
         lammps_command=args.lammps_command,
         input_path=args.input,
         output_dir=args.output_dir,
@@ -518,6 +619,11 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         min_trace_metadata_fraction_percent=args.min_trace_metadata_fraction_percent,
         binary_timeout_seconds=args.binary_timeout_seconds,
     )
+    try:
+        validate_config(config)
+    except ValueError as exc:
+        parser.error(str(exc))
+    return config
 
 
 def main(argv: list[str] | None = None) -> int:

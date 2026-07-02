@@ -92,6 +92,37 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIn("--min-trace-estimated-speedup", commands[-1].argv)
         self.assertIn(str(config.bundle_evidence_report_path()), commands[-1].argv)
 
+    def test_validate_config_rejects_zero_repeat_count(self) -> None:
+        """The experiment driver should not build empty paired benchmarks."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            repeat_count=0,
+        )
+        with self.assertRaisesRegex(ValueError, "repeat_count"):
+            isodelta_experiment.validate_config(config)
+
+    def test_validate_config_rejects_nonpositive_binary_timeout(self) -> None:
+        """A binary smoke test timeout must be positive to be meaningful."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            binary_timeout_seconds=0.0,
+        )
+        with self.assertRaisesRegex(ValueError, "binary_timeout_seconds"):
+            isodelta_experiment.validate_config(config)
+
+    def test_validate_config_rejects_impossible_cache_gate(self) -> None:
+        """Minimum cache hits cannot exceed the minimum attempts threshold."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            min_enabled_cache_attempts=1,
+            min_enabled_cache_hits=2,
+        )
+        with self.assertRaisesRegex(ValueError, "min_enabled_cache_hits"):
+            isodelta_experiment.validate_config(config)
+
     def test_run_experiment_stops_on_first_failed_stage(self) -> None:
         """A failing gate should write a partial report and skip later stages."""
         executed: list[str] = []

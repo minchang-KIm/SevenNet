@@ -404,6 +404,13 @@ def main() -> None:
         "benchmark runner must report repeat variance statistics",
     )
     _require(
+        "MIN_REPEAT_COUNT" in benchmark
+        and "validate_benchmark_options" in benchmark
+        and "repeat_count must be at least" in benchmark
+        and "parser.error(str(exc))" in benchmark,
+        "benchmark runner must reject empty repeat sets",
+    )
+    _require(
         "check_isodelta_build_prereqs.py" in experiment
         and "check_isodelta_lammps_binary.py" in experiment
         and "run_isodelta_lammps_benchmark.py" in experiment
@@ -416,6 +423,14 @@ def main() -> None:
         and "bundle_evidence.json" in experiment
         and "isodelta_experiment_report.json" in experiment,
         "experiment driver must connect all runtime validation stages",
+    )
+    _require(
+        "validate_config" in experiment
+        and "MIN_POSITIVE_TIMEOUT_SECONDS" in experiment
+        and "binary_timeout_seconds must be positive" in experiment
+        and "min_enabled_cache_hits cannot exceed min_enabled_cache_attempts" in experiment
+        and "required_trace_models must not include empty names" in experiment,
+        "experiment driver must reject meaningless experiment options",
     )
     _require(
         "EXPERIMENT_REPORT_SCHEMA_VERSION" in experiment
@@ -485,6 +500,11 @@ def main() -> None:
         "sample_variance_loop_time_seconds" in doc
         and "sample_stddev_loop_time_seconds" in doc,
         "IsoDelta-Halo guide must document repeat variance fields",
+    )
+    _require(
+        "`--repeat` must be at least 1" in doc
+        and "`--binary-timeout-seconds` must be positive" in doc,
+        "IsoDelta-Halo guide must document experiment option sanity checks",
     )
     _require(
         "check_isodelta_benchmark_report.py" in doc

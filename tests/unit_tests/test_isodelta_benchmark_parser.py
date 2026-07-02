@@ -202,6 +202,11 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         command = isodelta_benchmark._build_command("mpiexec -n 2 lmp", Path("in.test"))
         self.assertEqual(command, ["mpiexec", "-n", "2", "lmp", "-in", "in.test"])
 
+    def test_validate_benchmark_options_rejects_empty_repeat_set(self) -> None:
+        """A benchmark with zero pairs cannot support a performance claim."""
+        with self.assertRaisesRegex(ValueError, "repeat_count"):
+            isodelta_benchmark.validate_benchmark_options(0)
+
     def test_collect_run_provenance_records_git_and_runtime_context(self) -> None:
         """Benchmark reports should carry enough context for audit trails."""
         provenance = isodelta_benchmark.collect_run_provenance()

@@ -206,6 +206,10 @@ The driver runs the prerequisite checker, binary smoke check, paired benchmark,
 and report correctness gate in that order. It writes stage logs and
 `isodelta_experiment_report.json`; archive that report with the benchmark JSON
 when using the numbers in a manuscript.
+The driver rejects empty or impossible evidence settings before launching
+external commands. `--repeat` must be at least 1.
+`--binary-timeout-seconds` must be positive. Percentage gates must stay between
+0 and 100, and minimum cache hits cannot exceed minimum cache attempts.
 Both the experiment report and benchmark report include a `provenance` object
 with schema version, Git commit, Git branch, dirty-worktree state, Python
 runtime, platform string, and benchmark environment overrides. Treat a dirty
@@ -249,6 +253,8 @@ The runner executes each repeat twice:
 LAMMPS runs in the input file directory by default, so relative model and data
 paths inside the input script keep working. Use `--work-dir` when the benchmark
 must run elsewhere.
+The runner rejects `--repeat` values below 1 because a zero-repeat report has
+no paired timing, cache-hit, or final-thermo evidence to audit.
 
 ## Report Fields
 

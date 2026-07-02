@@ -26,7 +26,9 @@ from typing import Any
 REPO_ROOT_PARENT_DEPTH = 1
 REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+DEFAULT_OUTPUT_DIR = Path("isodelta_benchmark_runs")
 DEFAULT_REPEAT_COUNT = 3
+MIN_REPEAT_COUNT = 1
 PERCENT_SCALE = 100.0
 GIT_METADATA_TIMEOUT_SECONDS = 10.0
 LAMMPS_INPUT_FLAG = "-in"
@@ -105,6 +107,12 @@ BENCHMARK_CASES = (
         },
     ),
 )
+
+
+def validate_benchmark_options(repeat_count: int) -> None:
+    """Reject benchmark options that cannot produce paired timing evidence."""
+    if repeat_count < MIN_REPEAT_COUNT:
+        raise ValueError(f"repeat_count must be at least {MIN_REPEAT_COUNT}")
 
 
 def parse_loop_time(log_text: str) -> float | None:
@@ -381,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("isodelta_benchmark_runs"),
+        default=DEFAULT_OUTPUT_DIR,
         help="Directory for logs and JSON report",
     )
     parser.add_argument(
@@ -395,6 +403,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Write partial reports even if one benchmark command fails",
     )
     args = parser.parse_args(argv)
+    try:
+        validate_benchmark_options(args.repeat)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     input_path = args.input.resolve()
     output_dir = args.output_dir.resolve()
