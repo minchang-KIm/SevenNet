@@ -84,6 +84,9 @@ DEFAULT_CACHE_LOOKUP_OVERHEAD_SECONDS = 0.0
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_METADATA_FRACTION_PERCENT = 0.0
 MIN_NONNEGATIVE_VALUE = 0.0
+MIN_PERCENT_VALUE = 0.0
+MAX_PERCENT_VALUE = PERCENT_SCALE
+MIN_POSITIVE_SPEEDUP = 0.0
 
 
 class TraceCheckError(ValueError):
@@ -217,6 +220,28 @@ def _require(condition: bool, message: str) -> None:
     """Raise a compact checker error when a schema or evidence rule fails."""
     if not condition:
         raise TraceCheckError(message)
+
+
+def _validate_percent(value: float, field_name: str) -> None:
+    """Require a percentage threshold to stay in the physical range."""
+    _require(
+        MIN_PERCENT_VALUE <= value <= MAX_PERCENT_VALUE,
+        f"{field_name} must be between {MIN_PERCENT_VALUE:g} and {MAX_PERCENT_VALUE:g}",
+    )
+
+
+def validate_thresholds(thresholds: TraceThresholds) -> None:
+    """Reject trace acceptance criteria that cannot support a claim."""
+    _validate_percent(thresholds.min_hit_rate_percent, "min_hit_rate_percent")
+    _validate_percent(
+        thresholds.min_metadata_fraction_percent,
+        "min_metadata_fraction_percent",
+    )
+    if thresholds.min_estimated_speedup is not None:
+        _require(
+            thresholds.min_estimated_speedup > MIN_POSITIVE_SPEEDUP,
+            "min_estimated_speedup must be positive when provided",
+        )
 
 
 def _as_mapping(value: Any, field_name: str) -> dict[str, Any]:
@@ -534,6 +559,7 @@ def validate_trace_evidence(
     thresholds: TraceThresholds,
 ) -> dict[str, Any]:
     """Gate evaluated trace evidence before using it as a generality claim."""
+    validate_thresholds(thresholds)
     hit_rate_percent = _as_number(
         evidence.get("hit_rate_percent"),
         "hit_rate_percent",

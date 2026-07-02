@@ -291,6 +291,8 @@ def main() -> None:
         and "MISS_COMM_TOPOLOGY_CHANGED" in mlip_trace_check
         and "MISS_COMM_LIST_TAG_ORDER_CHANGED" in mlip_trace_check
         and "TraceThresholds" in mlip_trace_check
+        and "validate_thresholds" in mlip_trace_check
+        and "MAX_PERCENT_VALUE" in mlip_trace_check
         and "trace_schema" in mlip_trace_check
         and "--print-schema" in mlip_trace_check
         and "estimated_average_speedup" in mlip_trace_check

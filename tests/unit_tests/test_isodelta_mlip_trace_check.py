@@ -38,6 +38,8 @@ EXPECTED_STABLE_HIT_RATE_PERCENT = 75.0
 MIN_STABLE_TRACE_SPEEDUP = 1.15
 MIN_STABLE_TRACE_METADATA_FRACTION_PERCENT = 20.0
 EXPECTED_STABLE_AVERAGE_SPEEDUP = 40.0 / 34.0
+OUT_OF_RANGE_PERCENT = 101.0
+INVALID_SPEEDUP_THRESHOLD = 0.0
 
 
 def _phase(
@@ -176,6 +178,30 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         self.assertIn("send_tags", schema["required_comm_phase_fields"])
         self.assertIn("recv_tags", schema["required_comm_phase_fields"])
         self.assertIn("estimated_worst_case_speedup", schema["timing_estimates"])
+
+    def test_validate_thresholds_rejects_out_of_range_percent(self) -> None:
+        """Trace gates should reject impossible percentage thresholds."""
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "min_hit_rate_percent",
+        ):
+            isodelta_mlip_trace.validate_thresholds(
+                isodelta_mlip_trace.TraceThresholds(
+                    min_hit_rate_percent=OUT_OF_RANGE_PERCENT,
+                )
+            )
+
+    def test_validate_thresholds_rejects_nonpositive_speedup(self) -> None:
+        """Trace gates should reject nonpositive speedup thresholds."""
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "min_estimated_speedup",
+        ):
+            isodelta_mlip_trace.validate_thresholds(
+                isodelta_mlip_trace.TraceThresholds(
+                    min_estimated_speedup=INVALID_SPEEDUP_THRESHOLD,
+                )
+            )
 
     def test_main_prints_schema_without_trace(self) -> None:
         """The CLI should let researchers inspect the trace format first."""
