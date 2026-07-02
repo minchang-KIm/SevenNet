@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import json
+import platform
 from pathlib import Path
 import subprocess
 import sys
@@ -18,7 +19,9 @@ from typing import Callable
 
 # All filenames and defaults are named so experimental acceptance criteria stay
 # visible in one place rather than being hidden in command construction.
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT_PARENT_DEPTH = 1
+REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
+EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
 PREREQ_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 BENCHMARK_SCRIPT = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
@@ -35,6 +38,7 @@ DEFAULT_MIN_TRACE_COUNT = 1
 DEFAULT_MIN_TRACE_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT = 0.0
 DEFAULT_BINARY_TIMEOUT_SECONDS = 60.0
+GIT_METADATA_TIMEOUT_SECONDS = 10.0
 LOG_DIR_NAME = "logs"
 BENCHMARK_DIR_NAME = "benchmark"
 EXPERIMENT_REPORT_NAME = "isodelta_experiment_report.json"
@@ -120,6 +124,39 @@ CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 def _python_script_command(script_path: Path) -> list[str]:
     """Build a Python command that works from Windows and POSIX shells."""
     return [sys.executable, str(script_path)]
+
+
+def _run_metadata_command(argv: list[str]) -> str | None:
+    """Run a short metadata command and return stripped stdout when it works."""
+    try:
+        completed = subprocess.run(
+            argv,
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=GIT_METADATA_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != SUCCESS_RETURN_CODE:
+        return None
+    return completed.stdout.strip()
+
+
+def collect_run_provenance() -> dict[str, str | bool | None]:
+    """Collect driver provenance so experiment reports can be audited later."""
+    git_status_short = _run_metadata_command(["git", "status", "--short"])
+    return {
+        "report_schema_version": EXPERIMENT_REPORT_SCHEMA_VERSION,
+        "git_commit": _run_metadata_command(["git", "rev-parse", "HEAD"]),
+        "git_branch": _run_metadata_command(["git", "branch", "--show-current"]),
+        "git_dirty": bool(git_status_short),
+        "git_status_short": git_status_short,
+        "python_executable": sys.executable,
+        "python_version": sys.version,
+        "platform": platform.platform(),
+    }
 
 
 def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentCommand]:
@@ -298,6 +335,7 @@ def _write_report(
     payload = {
         "ok": ok,
         "failed_stage": failed_stage,
+        "provenance": collect_run_provenance(),
         "config": config_payload,
         "benchmark_report": str(config.benchmark_report_path()),
         "bundle_evidence_report": (

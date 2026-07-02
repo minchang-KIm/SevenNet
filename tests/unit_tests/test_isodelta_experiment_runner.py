@@ -31,6 +31,9 @@ sys.modules[SPEC.name] = isodelta_experiment
 SPEC.loader.exec_module(isodelta_experiment)
 
 
+EXPECTED_EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
+
+
 class IsoDeltaExperimentRunnerTest(unittest.TestCase):
     """Check the experiment runner without depending on a LAMMPS binary."""
 
@@ -121,6 +124,10 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["failed_stage"], "binary-smoke")
         self.assertEqual(len(report["commands"]), 2)
+        self.assertEqual(
+            report["provenance"]["report_schema_version"],
+            EXPECTED_EXPERIMENT_REPORT_SCHEMA_VERSION,
+        )
 
     def test_run_experiment_writes_success_report(self) -> None:
         """A fully passing run should write all command results."""
@@ -155,6 +162,8 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIsNone(report["failed_stage"])
         self.assertEqual(len(report["commands"]), 4)
         self.assertEqual(report["benchmark_report"], str(config.benchmark_report_path()))
+        self.assertIn("git_commit", report["provenance"])
+        self.assertIn("python_executable", report["provenance"])
 
     def test_run_experiment_writes_bundle_report_path_when_requested(self) -> None:
         """The success report should expose the optional bundle evidence output."""

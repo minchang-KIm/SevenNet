@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass
 import json
 import math
 import os
+import platform
 from pathlib import Path
 import re
 import shlex
@@ -22,8 +23,12 @@ from typing import Any
 
 # Environment names mirror the C++ constants so the benchmark toggles the same
 # runtime controls that PairE3GNNParallel reads.
+REPO_ROOT_PARENT_DEPTH = 1
+REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
+REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
 DEFAULT_REPEAT_COUNT = 3
 PERCENT_SCALE = 100.0
+GIT_METADATA_TIMEOUT_SECONDS = 10.0
 LAMMPS_INPUT_FLAG = "-in"
 BASELINE_CASE = "baseline-disabled"
 ISODELTA_CASE = "isodelta-enabled"
@@ -108,6 +113,42 @@ def parse_loop_time(log_text: str) -> float | None:
     if match is None:
         return None
     return float(match.group("seconds"))
+
+
+def _run_metadata_command(argv: list[str]) -> str | None:
+    """Run a short metadata command and return stripped stdout when it works."""
+    try:
+        completed = subprocess.run(
+            argv,
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=GIT_METADATA_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip()
+
+
+def collect_run_provenance() -> dict[str, Any]:
+    """Collect report provenance so benchmark numbers remain auditable."""
+    git_status_short = _run_metadata_command(["git", "status", "--short"])
+    return {
+        "report_schema_version": REPORT_SCHEMA_VERSION,
+        "git_commit": _run_metadata_command(["git", "rev-parse", "HEAD"]),
+        "git_branch": _run_metadata_command(["git", "branch", "--show-current"]),
+        "git_dirty": bool(git_status_short),
+        "git_status_short": git_status_short,
+        "python_executable": sys.executable,
+        "python_version": sys.version,
+        "platform": platform.platform(),
+        "case_environment_overrides": {
+            case.name: case.env_updates for case in BENCHMARK_CASES
+        },
+    }
 
 
 def parse_cache_summary(log_text: str) -> dict[str, float]:
@@ -376,6 +417,7 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     report = {
+        "provenance": collect_run_provenance(),
         "command": command,
         "input": str(input_path),
         "work_dir": str(work_dir),

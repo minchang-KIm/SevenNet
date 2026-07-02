@@ -363,6 +363,14 @@ def main() -> None:
         "benchmark runner must aggregate cache summaries across MPI ranks",
     )
     _require(
+        "REPORT_SCHEMA_VERSION" in benchmark
+        and "collect_run_provenance" in benchmark
+        and "git_commit" in benchmark
+        and "case_environment_overrides" in benchmark
+        and '"provenance": collect_run_provenance()' in benchmark,
+        "benchmark runner must include report provenance metadata",
+    )
+    _require(
         "sample_variance_loop_time_seconds" in benchmark
         and "sample_stddev_loop_time_seconds" in benchmark
         and "MIN_SAMPLE_VARIANCE_COUNT" in benchmark,
@@ -381,6 +389,13 @@ def main() -> None:
         and "bundle_evidence.json" in experiment
         and "isodelta_experiment_report.json" in experiment,
         "experiment driver must connect all runtime validation stages",
+    )
+    _require(
+        "EXPERIMENT_REPORT_SCHEMA_VERSION" in experiment
+        and "collect_run_provenance" in experiment
+        and "git_dirty" in experiment
+        and '"provenance": collect_run_provenance()' in experiment,
+        "experiment driver must include report provenance metadata",
     )
     _require(
         "DEFAULT_MAX_ABS_THERMO_DELTA" in report_check
@@ -413,6 +428,12 @@ def main() -> None:
         "final_thermo_delta_vs_disabled_cache" in doc
         and "final_thermo_observables" in doc,
         "IsoDelta-Halo guide must document final thermo consistency fields",
+    )
+    _require(
+        "provenance.report_schema_version" in doc
+        and "provenance.git_commit" in doc
+        and "case_environment_overrides" in doc,
+        "IsoDelta-Halo guide must document report provenance fields",
     )
     _require(
         "summary_rank_count" in doc

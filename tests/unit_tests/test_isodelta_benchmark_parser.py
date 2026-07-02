@@ -30,6 +30,7 @@ AGGREGATED_HITS = 18.0
 AGGREGATED_HIT_RATE_PERCENT = 60.0
 AGGREGATED_NO_CACHE_MISSES = 3.0
 AGGREGATED_SHAPE_CHANGED_MISSES = 3.0
+EXPECTED_BENCHMARK_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
 
 
 class IsoDeltaBenchmarkParserTest(unittest.TestCase):
@@ -200,6 +201,23 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         """The runner should build commands without shell-specific quoting."""
         command = isodelta_benchmark._build_command("mpiexec -n 2 lmp", Path("in.test"))
         self.assertEqual(command, ["mpiexec", "-n", "2", "lmp", "-in", "in.test"])
+
+    def test_collect_run_provenance_records_git_and_runtime_context(self) -> None:
+        """Benchmark reports should carry enough context for audit trails."""
+        provenance = isodelta_benchmark.collect_run_provenance()
+        self.assertEqual(
+            provenance["report_schema_version"],
+            EXPECTED_BENCHMARK_REPORT_SCHEMA_VERSION,
+        )
+        self.assertIn("git_commit", provenance)
+        self.assertIn("git_branch", provenance)
+        self.assertIn("git_dirty", provenance)
+        self.assertIn("python_executable", provenance)
+        self.assertIn("platform", provenance)
+        self.assertIn(
+            isodelta_benchmark.ISODELTA_CASE,
+            provenance["case_environment_overrides"],
+        )
 
     def test_work_dir_defaults_to_input_directory(self) -> None:
         """Relative files in LAMMPS inputs should resolve beside the input file."""

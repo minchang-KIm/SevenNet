@@ -200,6 +200,10 @@ The driver runs the prerequisite checker, binary smoke check, paired benchmark,
 and report correctness gate in that order. It writes stage logs and
 `isodelta_experiment_report.json`; archive that report with the benchmark JSON
 when using the numbers in a manuscript.
+Both the experiment report and benchmark report include a `provenance` object
+with schema version, Git commit, Git branch, dirty-worktree state, Python
+runtime, platform string, and benchmark environment overrides. Treat a dirty
+worktree as a signal to archive the exact diff beside the raw logs.
 
 To append the publication evidence bundle gate to the same driver run, add one
 or more trace evidence files:
@@ -244,6 +248,10 @@ must run elsewhere.
 
 The runner writes `isodelta_benchmark_report.json`. Important fields are:
 
+- `provenance.report_schema_version`
+- `provenance.git_commit`
+- `provenance.git_dirty`
+- `provenance.case_environment_overrides`
 - `summary.cases.*.mean_loop_time_seconds`
 - `summary.cases.*.sample_variance_loop_time_seconds`
 - `summary.cases.*.sample_stddev_loop_time_seconds`
