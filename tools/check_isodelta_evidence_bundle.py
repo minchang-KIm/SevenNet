@@ -23,6 +23,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
 DEFAULT_MIN_TRACE_COUNT = 1
+MIN_COUNT_VALUE = 0
+MIN_REQUIRED_TRACE_COUNT = 1
+MIN_NONNEGATIVE_VALUE = 0.0
+MIN_PERCENT_VALUE = 0.0
+MAX_PERCENT_VALUE = 100.0
+MIN_POSITIVE_SPEEDUP = 0.0
 MODEL_KEY = "model"
 STATUS_KEY = "status"
 PASSED_STATUS = "passed"
@@ -74,6 +80,67 @@ def _load_json_object(path: Path, field_name: str) -> dict[str, Any]:
     return payload
 
 
+def _require(condition: bool, message: str) -> None:
+    """Raise a bundle-check error with a concise validation message."""
+    if not condition:
+        raise EvidenceBundleError(message)
+
+
+def _validate_percent(value: float, field_name: str) -> None:
+    """Require a percentage threshold to stay within the physical range."""
+    _require(
+        MIN_PERCENT_VALUE <= value <= MAX_PERCENT_VALUE,
+        f"{field_name} must be between {MIN_PERCENT_VALUE:g} and {MAX_PERCENT_VALUE:g}",
+    )
+
+
+def validate_thresholds(thresholds: BundleThresholds) -> None:
+    """Reject acceptance criteria that would make the bundle gate meaningless."""
+    _require(
+        thresholds.max_abs_thermo_delta >= MIN_NONNEGATIVE_VALUE,
+        "max_abs_thermo_delta must be nonnegative",
+    )
+    _require(
+        thresholds.min_paired_thermo_count >= MIN_REQUIRED_TRACE_COUNT,
+        "min_paired_thermo_count must be at least one",
+    )
+    _require(
+        thresholds.min_enabled_cache_attempts >= MIN_COUNT_VALUE,
+        "min_enabled_cache_attempts must be nonnegative",
+    )
+    _require(
+        thresholds.min_enabled_cache_hits >= MIN_COUNT_VALUE,
+        "min_enabled_cache_hits must be nonnegative",
+    )
+    _require(
+        thresholds.min_enabled_cache_hits <= thresholds.min_enabled_cache_attempts,
+        "min_enabled_cache_hits cannot exceed min_enabled_cache_attempts",
+    )
+    _require(
+        thresholds.min_trace_count >= MIN_REQUIRED_TRACE_COUNT,
+        "min_trace_count must be at least one",
+    )
+    if thresholds.min_speedup is not None:
+        _require(
+            thresholds.min_speedup > MIN_POSITIVE_SPEEDUP,
+            "min_speedup must be positive when provided",
+        )
+    if thresholds.min_trace_estimated_speedup is not None:
+        _require(
+            thresholds.min_trace_estimated_speedup > MIN_POSITIVE_SPEEDUP,
+            "min_trace_estimated_speedup must be positive when provided",
+        )
+    _validate_percent(thresholds.min_hit_rate_percent, "min_hit_rate_percent")
+    _validate_percent(
+        thresholds.min_trace_hit_rate_percent,
+        "min_trace_hit_rate_percent",
+    )
+    _validate_percent(
+        thresholds.min_trace_metadata_fraction_percent,
+        "min_trace_metadata_fraction_percent",
+    )
+
+
 def _validate_trace_evidence_file(
     path: Path,
     thresholds: BundleThresholds,
@@ -119,6 +186,7 @@ def validate_bundle(
     thresholds: BundleThresholds,
 ) -> dict[str, Any]:
     """Validate benchmark and portability evidence as one paper gate."""
+    validate_thresholds(thresholds)
     if len(trace_evidence_paths) < thresholds.min_trace_count:
         raise EvidenceBundleError(
             f"trace evidence count {len(trace_evidence_paths)} is below "

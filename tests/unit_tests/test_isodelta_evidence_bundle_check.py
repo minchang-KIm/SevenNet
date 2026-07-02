@@ -40,6 +40,7 @@ MIN_ENABLED_ATTEMPTS = 10
 MIN_ENABLED_HITS = 8
 MIN_TRACE_METADATA_FRACTION_PERCENT = 20.0
 MIN_TRACE_ESTIMATED_SPEEDUP = 1.15
+OUT_OF_RANGE_PERCENT = 101.0
 
 
 def _cache_summary(
@@ -172,6 +173,82 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
                     required_models=["NequIP"],
                     thresholds=_thresholds(),
                 )
+
+    def test_validate_bundle_rejects_meaningless_thresholds(self) -> None:
+        """Bundle gates should reject thresholds that cannot support a paper claim."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            benchmark_path = Path(tmpdir) / "benchmark.json"
+            trace_path = Path(tmpdir) / "mace_trace_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                isodelta_evidence_bundle.EvidenceBundleError,
+                "min_trace_count",
+            ):
+                isodelta_evidence_bundle.validate_bundle(
+                    benchmark_report=benchmark_path,
+                    trace_evidence_paths=[trace_path],
+                    required_models=["MACE"],
+                    thresholds=isodelta_evidence_bundle.BundleThresholds(
+                        max_abs_thermo_delta=MAX_ABS_THERMO_DELTA,
+                        min_paired_thermo_count=MIN_PAIRED_THERMO_COUNT,
+                        min_speedup=MIN_SPEEDUP,
+                        min_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                        min_enabled_cache_attempts=MIN_ENABLED_ATTEMPTS,
+                        min_enabled_cache_hits=MIN_ENABLED_HITS,
+                        min_trace_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                        min_trace_estimated_speedup=MIN_TRACE_ESTIMATED_SPEEDUP,
+                        min_trace_metadata_fraction_percent=(
+                            MIN_TRACE_METADATA_FRACTION_PERCENT
+                        ),
+                        min_trace_count=0,
+                    ),
+                )
+
+    def test_validate_thresholds_rejects_impossible_cache_gate(self) -> None:
+        """Minimum cache hits should not exceed minimum cache attempts."""
+        with self.assertRaisesRegex(
+            isodelta_evidence_bundle.EvidenceBundleError,
+            "min_enabled_cache_hits",
+        ):
+            isodelta_evidence_bundle.validate_thresholds(
+                isodelta_evidence_bundle.BundleThresholds(
+                    max_abs_thermo_delta=MAX_ABS_THERMO_DELTA,
+                    min_paired_thermo_count=MIN_PAIRED_THERMO_COUNT,
+                    min_speedup=MIN_SPEEDUP,
+                    min_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                    min_enabled_cache_attempts=MIN_ENABLED_ATTEMPTS,
+                    min_enabled_cache_hits=MIN_ENABLED_ATTEMPTS + 1,
+                    min_trace_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                    min_trace_estimated_speedup=MIN_TRACE_ESTIMATED_SPEEDUP,
+                    min_trace_metadata_fraction_percent=(
+                        MIN_TRACE_METADATA_FRACTION_PERCENT
+                    ),
+                )
+            )
+
+    def test_validate_thresholds_rejects_out_of_range_percent(self) -> None:
+        """Percent thresholds should stay inside the zero-to-hundred range."""
+        with self.assertRaisesRegex(
+            isodelta_evidence_bundle.EvidenceBundleError,
+            "min_trace_hit_rate_percent",
+        ):
+            isodelta_evidence_bundle.validate_thresholds(
+                isodelta_evidence_bundle.BundleThresholds(
+                    max_abs_thermo_delta=MAX_ABS_THERMO_DELTA,
+                    min_paired_thermo_count=MIN_PAIRED_THERMO_COUNT,
+                    min_speedup=MIN_SPEEDUP,
+                    min_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                    min_enabled_cache_attempts=MIN_ENABLED_ATTEMPTS,
+                    min_enabled_cache_hits=MIN_ENABLED_HITS,
+                    min_trace_hit_rate_percent=OUT_OF_RANGE_PERCENT,
+                    min_trace_estimated_speedup=MIN_TRACE_ESTIMATED_SPEEDUP,
+                    min_trace_metadata_fraction_percent=(
+                        MIN_TRACE_METADATA_FRACTION_PERCENT
+                    ),
+                )
+            )
 
     def test_main_reads_files_and_writes_bundle_evidence(self) -> None:
         """The CLI should persist the combined evidence summary."""

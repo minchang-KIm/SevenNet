@@ -301,6 +301,9 @@ def main() -> None:
         "check_isodelta_benchmark_report.py" in evidence_bundle_check
         and "check_isodelta_mlip_trace.py" in evidence_bundle_check
         and "validate_bundle" in evidence_bundle_check
+        and "validate_thresholds" in evidence_bundle_check
+        and "MIN_REQUIRED_TRACE_COUNT" in evidence_bundle_check
+        and "MAX_PERCENT_VALUE" in evidence_bundle_check
         and "--require-trace-model" in evidence_bundle_check
         and "min_trace_estimated_speedup" in evidence_bundle_check,
         "evidence bundle checker must gate benchmark and trace evidence together",
