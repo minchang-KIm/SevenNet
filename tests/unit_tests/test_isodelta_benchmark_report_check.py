@@ -208,6 +208,41 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                 isodelta_report_check.ReportThresholds(),
             )
 
+    def test_validate_thresholds_rejects_impossible_cache_gate(self) -> None:
+        """Cache-hit thresholds should not exceed the required attempts."""
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "cannot exceed",
+        ):
+            isodelta_report_check.validate_thresholds(
+                isodelta_report_check.ReportThresholds(
+                    min_enabled_cache_attempts=2,
+                    min_enabled_cache_hits=3,
+                )
+            )
+
+    def test_validate_thresholds_rejects_out_of_range_percent(self) -> None:
+        """Percentage thresholds should stay in the physical range."""
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "between 0 and 100",
+        ):
+            isodelta_report_check.validate_thresholds(
+                isodelta_report_check.ReportThresholds(
+                    min_hit_rate_percent=125.0,
+                )
+            )
+
+    def test_validate_thresholds_rejects_nonpositive_speedup(self) -> None:
+        """Speedup thresholds should require a positive multiplier."""
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "positive",
+        ):
+            isodelta_report_check.validate_thresholds(
+                isodelta_report_check.ReportThresholds(min_speedup=0.0)
+            )
+
     def test_main_reads_json_report_and_returns_success(self) -> None:
         """The CLI should return zero for a valid benchmark report file."""
         with tempfile.TemporaryDirectory() as tmpdir:

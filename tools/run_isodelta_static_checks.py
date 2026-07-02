@@ -364,6 +364,9 @@ def main() -> None:
     _require(
         "DEFAULT_MAX_ABS_THERMO_DELTA" in report_check
         and "validate_report" in report_check
+        and "validate_thresholds" in report_check
+        and "MIN_REQUIRED_PAIRED_THERMO_COUNT" in report_check
+        and "MAX_PERCENT_VALUE" in report_check
         and "min_speedup" in report_check,
         "benchmark report checker must gate thermo consistency and effect",
     )

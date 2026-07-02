@@ -44,6 +44,12 @@ DEFAULT_MIN_PAIRED_THERMO_COUNT = 1
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS = 1
 DEFAULT_MIN_ENABLED_CACHE_HITS = 0
+MIN_COUNT_VALUE = 0
+MIN_REQUIRED_PAIRED_THERMO_COUNT = 1
+MIN_NONNEGATIVE_VALUE = 0.0
+MIN_PERCENT_VALUE = 0.0
+MAX_PERCENT_VALUE = 100.0
+MIN_POSITIVE_SPEEDUP = 0.0
 
 
 class ReportCheckError(ValueError):
@@ -75,6 +81,44 @@ def _require(condition: bool, message: str) -> None:
     """Raise a report-check error with a concise message."""
     if not condition:
         raise ReportCheckError(message)
+
+
+def _validate_percent(value: float, field_name: str) -> None:
+    """Require a percentage threshold to stay within the physical range."""
+    _require(
+        MIN_PERCENT_VALUE <= value <= MAX_PERCENT_VALUE,
+        f"{field_name} must be between {MIN_PERCENT_VALUE:g} and {MAX_PERCENT_VALUE:g}",
+    )
+
+
+def validate_thresholds(thresholds: ReportThresholds) -> None:
+    """Reject report acceptance criteria that would make evidence meaningless."""
+    _require(
+        thresholds.max_abs_thermo_delta >= MIN_NONNEGATIVE_VALUE,
+        "max_abs_thermo_delta must be nonnegative",
+    )
+    _require(
+        thresholds.min_paired_thermo_count >= MIN_REQUIRED_PAIRED_THERMO_COUNT,
+        "min_paired_thermo_count must be at least one",
+    )
+    _require(
+        thresholds.min_enabled_cache_attempts >= MIN_COUNT_VALUE,
+        "min_enabled_cache_attempts must be nonnegative",
+    )
+    _require(
+        thresholds.min_enabled_cache_hits >= MIN_COUNT_VALUE,
+        "min_enabled_cache_hits must be nonnegative",
+    )
+    _require(
+        thresholds.min_enabled_cache_hits <= thresholds.min_enabled_cache_attempts,
+        "min_enabled_cache_hits cannot exceed min_enabled_cache_attempts",
+    )
+    if thresholds.min_speedup is not None:
+        _require(
+            thresholds.min_speedup > MIN_POSITIVE_SPEEDUP,
+            "min_speedup must be positive when provided",
+        )
+    _validate_percent(thresholds.min_hit_rate_percent, "min_hit_rate_percent")
 
 
 def _as_mapping(value: Any, field_name: str) -> dict[str, Any]:
@@ -260,6 +304,7 @@ def validate_report(
     report: dict[str, Any], thresholds: ReportThresholds
 ) -> dict[str, Any]:
     """Validate one report and return a compact evidence summary."""
+    validate_thresholds(thresholds)
     summary = _summary(report)
     successful_run_count = (
         _check_successful_runs(report) if thresholds.require_successful_runs else None
