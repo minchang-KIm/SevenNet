@@ -356,6 +356,10 @@ def main() -> None:
         and "check_isodelta_mlip_trace.py" in evidence_bundle_check
         and "validate_bundle" in evidence_bundle_check
         and "validate_thresholds" in evidence_bundle_check
+        and "_validate_unique_trace_evidence_paths" in evidence_bundle_check
+        and "_validate_required_model_names" in evidence_bundle_check
+        and "duplicate trace evidence paths" in evidence_bundle_check
+        and "duplicate required trace models" in evidence_bundle_check
         and "MIN_REQUIRED_TRACE_COUNT" in evidence_bundle_check
         and "MAX_PERCENT_VALUE" in evidence_bundle_check
         and "--require-trace-model" in evidence_bundle_check
@@ -404,6 +408,13 @@ def main() -> None:
         and "bundle_evidence.json" in doc
         and "--require-trace-model" in doc,
         "IsoDelta-Halo guide must document the evidence bundle checker",
+    )
+    _require(
+        "duplicate trace evidence paths" in doc
+        and "duplicate" in doc
+        and "empty required model labels" in doc
+        and "min_trace_count" in doc,
+        "IsoDelta-Halo guide must document bundle input validation",
     )
     _require(
         "parse_final_thermo_observables" in benchmark

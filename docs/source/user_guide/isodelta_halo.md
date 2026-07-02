@@ -401,8 +401,10 @@ python tools/check_isodelta_evidence_bundle.py \
 
 Use one `--trace-evidence` argument per model trace and one
 `--require-trace-model` argument for every model label that must appear in the
-claim. The resulting `bundle_evidence.json` is the file to archive beside raw
-LAMMPS logs, trace JSON, and plotting scripts.
+claim. The bundle checker rejects duplicate trace evidence paths and duplicate
+or empty required model labels, so `min_trace_count` cannot be satisfied by
+reusing the same artifact. The resulting `bundle_evidence.json` is the file to
+archive beside raw LAMMPS logs, trace JSON, and plotting scripts.
 
 ## Expected Evidence For A Paper
 

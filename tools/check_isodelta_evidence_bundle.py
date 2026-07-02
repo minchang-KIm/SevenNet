@@ -12,6 +12,7 @@ import argparse
 from dataclasses import asdict, dataclass
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -34,6 +35,7 @@ STATUS_KEY = "status"
 PASSED_STATUS = "passed"
 TRACE_EVIDENCE_KEY = "trace_evidence"
 BENCHMARK_EVIDENCE_KEY = "benchmark_evidence"
+PATH_SEPARATOR = ", "
 
 
 class EvidenceBundleError(ValueError):
@@ -92,6 +94,48 @@ def _validate_percent(value: float, field_name: str) -> None:
         MIN_PERCENT_VALUE <= value <= MAX_PERCENT_VALUE,
         f"{field_name} must be between {MIN_PERCENT_VALUE:g} and {MAX_PERCENT_VALUE:g}",
     )
+
+
+def _canonical_path_key(path: Path) -> str:
+    """Return a stable path key for duplicate evidence detection."""
+    return os.path.normcase(str(path.expanduser().resolve(strict=False)))
+
+
+def _validate_unique_trace_evidence_paths(trace_evidence_paths: list[Path]) -> None:
+    """Reject duplicate trace paths before counting portability evidence."""
+    seen_paths: dict[str, Path] = {}
+    duplicate_paths: list[str] = []
+    for path in trace_evidence_paths:
+        path_key = _canonical_path_key(path)
+        if path_key in seen_paths:
+            duplicate_paths.append(str(path))
+        else:
+            seen_paths[path_key] = path
+    _require(
+        not duplicate_paths,
+        "duplicate trace evidence paths: " + PATH_SEPARATOR.join(duplicate_paths),
+    )
+
+
+def _validate_required_model_names(required_models: list[str]) -> list[str]:
+    """Return sorted required model labels after rejecting empty or duplicate names."""
+    _require(
+        all(isinstance(model, str) and model.strip() for model in required_models),
+        "required trace models must not include empty names",
+    )
+    normalized_models = [model.strip() for model in required_models]
+    duplicate_models = sorted(
+        {
+            model
+            for model in normalized_models
+            if normalized_models.count(model) > 1
+        }
+    )
+    _require(
+        not duplicate_models,
+        "duplicate required trace models: " + PATH_SEPARATOR.join(duplicate_models),
+    )
+    return sorted(normalized_models)
 
 
 def validate_thresholds(thresholds: BundleThresholds) -> None:
@@ -187,6 +231,8 @@ def validate_bundle(
 ) -> dict[str, Any]:
     """Validate benchmark and portability evidence as one paper gate."""
     validate_thresholds(thresholds)
+    _validate_unique_trace_evidence_paths(trace_evidence_paths)
+    normalized_required_models = _validate_required_model_names(required_models)
     if len(trace_evidence_paths) < thresholds.min_trace_count:
         raise EvidenceBundleError(
             f"trace evidence count {len(trace_evidence_paths)} is below "
@@ -214,7 +260,10 @@ def validate_bundle(
         _validate_trace_evidence_file(path, thresholds)
         for path in trace_evidence_paths
     ]
-    validated_models = _validate_required_models(trace_evidence, required_models)
+    validated_models = _validate_required_models(
+        trace_evidence,
+        normalized_required_models,
+    )
     return {
         STATUS_KEY: PASSED_STATUS,
         "thresholds": asdict(thresholds),
@@ -222,7 +271,7 @@ def validate_bundle(
         TRACE_EVIDENCE_KEY: trace_evidence,
         "trace_model_count": len(validated_models),
         "trace_models": validated_models,
-        "required_trace_models": sorted(required_models),
+        "required_trace_models": normalized_required_models,
     }
 
 

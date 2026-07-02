@@ -297,6 +297,76 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
                     thresholds=_thresholds(),
                 )
 
+    def test_validate_bundle_rejects_duplicate_trace_paths(self) -> None:
+        """One trace evidence file should not satisfy count gates twice."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            benchmark_path = Path(tmpdir) / "benchmark.json"
+            trace_path = Path(tmpdir) / "mace_trace_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                isodelta_evidence_bundle.EvidenceBundleError,
+                "duplicate trace evidence paths",
+            ):
+                isodelta_evidence_bundle.validate_bundle(
+                    benchmark_report=benchmark_path,
+                    trace_evidence_paths=[trace_path, trace_path],
+                    required_models=["MACE"],
+                    thresholds=isodelta_evidence_bundle.BundleThresholds(
+                        max_abs_thermo_delta=MAX_ABS_THERMO_DELTA,
+                        min_paired_thermo_count=MIN_PAIRED_THERMO_COUNT,
+                        min_speedup=MIN_SPEEDUP,
+                        min_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                        min_enabled_cache_attempts=MIN_ENABLED_ATTEMPTS,
+                        min_enabled_cache_hits=MIN_ENABLED_HITS,
+                        min_trace_hit_rate_percent=MIN_HIT_RATE_PERCENT,
+                        min_trace_estimated_speedup=MIN_TRACE_ESTIMATED_SPEEDUP,
+                        min_trace_metadata_fraction_percent=(
+                            MIN_TRACE_METADATA_FRACTION_PERCENT
+                        ),
+                        min_trace_count=2,
+                    ),
+                )
+
+    def test_validate_bundle_rejects_duplicate_required_models(self) -> None:
+        """Required model labels should not be duplicated in bundle evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            benchmark_path = Path(tmpdir) / "benchmark.json"
+            trace_path = Path(tmpdir) / "mace_trace_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                isodelta_evidence_bundle.EvidenceBundleError,
+                "duplicate required trace models",
+            ):
+                isodelta_evidence_bundle.validate_bundle(
+                    benchmark_report=benchmark_path,
+                    trace_evidence_paths=[trace_path],
+                    required_models=["MACE", "MACE"],
+                    thresholds=_thresholds(),
+                )
+
+    def test_validate_bundle_rejects_empty_required_model(self) -> None:
+        """Required model labels should be non-empty strings."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            benchmark_path = Path(tmpdir) / "benchmark.json"
+            trace_path = Path(tmpdir) / "mace_trace_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                isodelta_evidence_bundle.EvidenceBundleError,
+                "empty names",
+            ):
+                isodelta_evidence_bundle.validate_bundle(
+                    benchmark_report=benchmark_path,
+                    trace_evidence_paths=[trace_path],
+                    required_models=[" "],
+                    thresholds=_thresholds(),
+                )
+
     def test_validate_bundle_rejects_meaningless_thresholds(self) -> None:
         """Bundle gates should reject thresholds that cannot support a paper claim."""
         with tempfile.TemporaryDirectory() as tmpdir:
