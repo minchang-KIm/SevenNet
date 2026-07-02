@@ -43,6 +43,8 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
             require_torch=True,
             min_speedup=1.05,
             min_hit_rate_percent=50.0,
+            min_enabled_cache_attempts=4,
+            min_enabled_cache_hits=2,
         )
         commands = isodelta_experiment.build_experiment_commands(config)
         self.assertEqual(
@@ -54,6 +56,10 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIn("--repeat", commands[2].argv)
         self.assertIn("5", commands[2].argv)
         self.assertIn("--min-speedup", commands[3].argv)
+        self.assertIn("--min-enabled-cache-attempts", commands[3].argv)
+        self.assertIn("4", commands[3].argv)
+        self.assertIn("--min-enabled-cache-hits", commands[3].argv)
+        self.assertIn("2", commands[3].argv)
         self.assertIn(str(config.benchmark_report_path()), commands[3].argv)
 
     def test_run_experiment_stops_on_first_failed_stage(self) -> None:

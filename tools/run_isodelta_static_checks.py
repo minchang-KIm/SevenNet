@@ -231,6 +231,8 @@ def main() -> None:
         and "check_isodelta_lammps_binary.py" in experiment
         and "run_isodelta_lammps_benchmark.py" in experiment
         and "check_isodelta_benchmark_report.py" in experiment
+        and "--min-enabled-cache-attempts" in experiment
+        and "--min-enabled-cache-hits" in experiment
         and "isodelta_experiment_report.json" in experiment,
         "experiment driver must connect all runtime validation stages",
     )
@@ -239,6 +241,12 @@ def main() -> None:
         and "validate_report" in report_check
         and "min_speedup" in report_check,
         "benchmark report checker must gate thermo consistency and effect",
+    )
+    _require(
+        "DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS" in report_check
+        and "DEFAULT_MIN_ENABLED_CACHE_HITS" in report_check
+        and "min_enabled_cache_hits" in report_check,
+        "benchmark report checker must gate cache activity evidence",
     )
     _require(
         "final_thermo_delta_vs_disabled_cache" in doc
@@ -255,6 +263,11 @@ def main() -> None:
         and "--max-abs-thermo-delta" in doc
         and "--min-speedup" in doc,
         "IsoDelta-Halo guide must document the benchmark report checker",
+    )
+    _require(
+        "--min-enabled-cache-attempts" in doc
+        and "--min-enabled-cache-hits" in doc,
+        "IsoDelta-Halo guide must document cache activity gates",
     )
     _require(
         "run_isodelta_experiment.py" in doc

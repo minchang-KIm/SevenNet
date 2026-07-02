@@ -28,6 +28,8 @@ DEFAULT_REPEAT_COUNT = 3
 DEFAULT_MAX_ABS_THERMO_DELTA = 1.0e-8
 DEFAULT_MIN_PAIRED_THERMO_COUNT = 1
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
+DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS = 1
+DEFAULT_MIN_ENABLED_CACHE_HITS = 0
 DEFAULT_BINARY_TIMEOUT_SECONDS = 60.0
 LOG_DIR_NAME = "logs"
 BENCHMARK_DIR_NAME = "benchmark"
@@ -53,6 +55,8 @@ class ExperimentConfig:
     min_paired_thermo_count: int = DEFAULT_MIN_PAIRED_THERMO_COUNT
     min_speedup: float | None = None
     min_hit_rate_percent: float = DEFAULT_MIN_HIT_RATE_PERCENT
+    min_enabled_cache_attempts: int = DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS
+    min_enabled_cache_hits: int = DEFAULT_MIN_ENABLED_CACHE_HITS
     binary_timeout_seconds: float = DEFAULT_BINARY_TIMEOUT_SECONDS
 
     def benchmark_output_dir(self) -> Path:
@@ -141,6 +145,10 @@ def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentComman
         str(config.min_paired_thermo_count),
         "--min-hit-rate-percent",
         str(config.min_hit_rate_percent),
+        "--min-enabled-cache-attempts",
+        str(config.min_enabled_cache_attempts),
+        "--min-enabled-cache-hits",
+        str(config.min_enabled_cache_hits),
     ]
     if config.min_speedup is not None:
         report_argv.extend(["--min-speedup", str(config.min_speedup)])
@@ -314,6 +322,18 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         help="Minimum cache hit rate required for every enabled run",
     )
     parser.add_argument(
+        "--min-enabled-cache-attempts",
+        type=int,
+        default=DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS,
+        help="Minimum cache reuse attempts required for every enabled run",
+    )
+    parser.add_argument(
+        "--min-enabled-cache-hits",
+        type=int,
+        default=DEFAULT_MIN_ENABLED_CACHE_HITS,
+        help="Minimum cache hits required for every enabled run",
+    )
+    parser.add_argument(
         "--binary-timeout-seconds",
         type=float,
         default=DEFAULT_BINARY_TIMEOUT_SECONDS,
@@ -334,6 +354,8 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         min_paired_thermo_count=args.min_paired_thermo_count,
         min_speedup=args.min_speedup,
         min_hit_rate_percent=args.min_hit_rate_percent,
+        min_enabled_cache_attempts=args.min_enabled_cache_attempts,
+        min_enabled_cache_hits=args.min_enabled_cache_hits,
         binary_timeout_seconds=args.binary_timeout_seconds,
     )
 

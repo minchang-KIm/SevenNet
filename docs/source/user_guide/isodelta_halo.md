@@ -119,7 +119,9 @@ python tools/run_isodelta_experiment.py \
   --max-abs-thermo-delta 1.0e-8 \
   --min-paired-thermo-count 5 \
   --min-speedup 1.05 \
-  --min-hit-rate-percent 50.0
+  --min-hit-rate-percent 50.0 \
+  --min-enabled-cache-attempts 5 \
+  --min-enabled-cache-hits 1
 ```
 
 The driver runs the prerequisite checker, binary smoke check, paired benchmark,
@@ -181,13 +183,16 @@ python tools/check_isodelta_benchmark_report.py \
   --max-abs-thermo-delta 1.0e-8 \
   --min-paired-thermo-count 5 \
   --min-speedup 1.05 \
-  --min-hit-rate-percent 50.0
+  --min-hit-rate-percent 50.0 \
+  --min-enabled-cache-attempts 5 \
+  --min-enabled-cache-hits 1
 ```
 
 `--max-abs-thermo-delta` should match the precision and observable scale of the
-target simulation. `--min-speedup` and `--min-hit-rate-percent` are effect
-gates: use them when making a performance claim, and archive the command with
-the benchmark report so the acceptance rule is reproducible.
+target simulation. `--min-speedup`, `--min-hit-rate-percent`,
+`--min-enabled-cache-attempts`, and `--min-enabled-cache-hits` are effect gates:
+use them when making a performance claim, and archive the command with the
+benchmark report so the acceptance rule is reproducible.
 
 For a publishable performance claim, report the mean and variance across
 multiple repeats, include cache hit rate, and show that final thermodynamic

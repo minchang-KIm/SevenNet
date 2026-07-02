@@ -41,17 +41,29 @@ def _valid_report() -> dict[str, object]:
             {
                 "case": "baseline-disabled",
                 "returncode": 0,
-                "cache_summary": {"hit_rate_percent": 0.0},
+                "cache_summary": {
+                    "attempts": 10.0,
+                    "hits": 0.0,
+                    "hit_rate_percent": 0.0,
+                },
             },
             {
                 "case": "isodelta-enabled",
                 "returncode": 0,
-                "cache_summary": {"hit_rate_percent": 80.0},
+                "cache_summary": {
+                    "attempts": 10.0,
+                    "hits": 8.0,
+                    "hit_rate_percent": 80.0,
+                },
             },
             {
                 "case": "isodelta-enabled",
                 "returncode": 0,
-                "cache_summary": {"hit_rate_percent": 82.0},
+                "cache_summary": {
+                    "attempts": 11.0,
+                    "hits": 9.0,
+                    "hit_rate_percent": 82.0,
+                },
             },
         ],
     }
@@ -67,6 +79,8 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
             min_paired_thermo_count=2,
             min_speedup=1.1,
             min_hit_rate_percent=75.0,
+            min_enabled_cache_attempts=10,
+            min_enabled_cache_hits=8,
         )
         evidence = isodelta_report_check.validate_report(_valid_report(), thresholds)
         self.assertEqual(evidence["status"], "passed")
@@ -74,6 +88,8 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
             evidence["checked_observables"],
             ["PotEng", "TotEng"],
         )
+        self.assertEqual(evidence["min_enabled_cache_attempts"], 10.0)
+        self.assertEqual(evidence["min_enabled_cache_hits"], 8.0)
         self.assertEqual(evidence["min_enabled_hit_rate_percent"], 80.0)
 
     def test_validate_report_rejects_large_thermo_delta(self) -> None:
@@ -127,6 +143,29 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                 isodelta_report_check.ReportThresholds(),
             )
 
+    def test_validate_report_rejects_missing_cache_activity(self) -> None:
+        """Enabled runs should prove cache attempts and hits, not just speedup."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["hits"] = 0.0
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "minimum enabled hits",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(
+                    min_enabled_cache_attempts=1,
+                    min_enabled_cache_hits=1,
+                ),
+            )
+
     def test_main_reads_json_report_and_returns_success(self) -> None:
         """The CLI should return zero for a valid benchmark report file."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -142,6 +181,10 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                     "1.1",
                     "--min-hit-rate-percent",
                     "75.0",
+                    "--min-enabled-cache-attempts",
+                    "10",
+                    "--min-enabled-cache-hits",
+                    "8",
                 ]
             )
         self.assertEqual(exit_code, 0)

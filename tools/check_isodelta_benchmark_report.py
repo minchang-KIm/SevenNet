@@ -21,6 +21,8 @@ RESULTS_KEY = "results"
 CASE_KEY = "case"
 RETURNCODE_KEY = "returncode"
 CACHE_SUMMARY_KEY = "cache_summary"
+ATTEMPTS_KEY = "attempts"
+HITS_KEY = "hits"
 HIT_RATE_KEY = "hit_rate_percent"
 SPEEDUP_KEY = "speedup_vs_disabled_cache"
 FINAL_THERMO_DELTA_KEY = "final_thermo_delta_vs_disabled_cache"
@@ -30,6 +32,8 @@ ISODELTA_CASE = "isodelta-enabled"
 DEFAULT_MAX_ABS_THERMO_DELTA = 1.0e-8
 DEFAULT_MIN_PAIRED_THERMO_COUNT = 1
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
+DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS = 1
+DEFAULT_MIN_ENABLED_CACHE_HITS = 0
 
 
 class ReportCheckError(ValueError):
@@ -44,6 +48,8 @@ class ReportThresholds:
     min_paired_thermo_count: int = DEFAULT_MIN_PAIRED_THERMO_COUNT
     min_speedup: float | None = None
     min_hit_rate_percent: float = DEFAULT_MIN_HIT_RATE_PERCENT
+    min_enabled_cache_attempts: int = DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS
+    min_enabled_cache_hits: int = DEFAULT_MIN_ENABLED_CACHE_HITS
     require_successful_runs: bool = True
 
 
@@ -169,9 +175,16 @@ def _check_speedup(summary: dict[str, Any], min_speedup: float | None) -> float 
     return speedup
 
 
-def _check_hit_rate(report: dict[str, Any], min_hit_rate_percent: float) -> float:
-    """Require every enabled run to report enough cache hits."""
+def _check_cache_evidence(
+    report: dict[str, Any],
+    min_hit_rate_percent: float,
+    min_enabled_cache_attempts: int,
+    min_enabled_cache_hits: int,
+) -> dict[str, float]:
+    """Require every enabled run to report enough cache activity."""
     hit_rates: list[float] = []
+    attempt_counts: list[float] = []
+    hit_counts: list[float] = []
     for index, result in enumerate(_results(report)):
         result_map = _as_mapping(result, f"{RESULTS_KEY}[{index}]")
         if result_map.get(CASE_KEY) != ISODELTA_CASE:
@@ -179,6 +192,18 @@ def _check_hit_rate(report: dict[str, Any], min_hit_rate_percent: float) -> floa
         cache_summary = _as_mapping(
             result_map.get(CACHE_SUMMARY_KEY),
             f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}",
+        )
+        attempt_counts.append(
+            _as_number(
+                cache_summary.get(ATTEMPTS_KEY),
+                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{ATTEMPTS_KEY}",
+            )
+        )
+        hit_counts.append(
+            _as_number(
+                cache_summary.get(HITS_KEY),
+                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HITS_KEY}",
+            )
         )
         hit_rates.append(
             _as_number(
@@ -188,13 +213,29 @@ def _check_hit_rate(report: dict[str, Any], min_hit_rate_percent: float) -> floa
         )
 
     _require(hit_rates, f"no {ISODELTA_CASE} cache hit-rate entries found")
+    min_seen_attempts = min(attempt_counts)
+    min_seen_hits = min(hit_counts)
     min_seen_hit_rate = min(hit_rates)
+    _require(
+        min_seen_attempts >= min_enabled_cache_attempts,
+        f"minimum enabled attempts {min_seen_attempts:g} is below "
+        f"{min_enabled_cache_attempts:g}",
+    )
+    _require(
+        min_seen_hits >= min_enabled_cache_hits,
+        f"minimum enabled hits {min_seen_hits:g} is below "
+        f"{min_enabled_cache_hits:g}",
+    )
     _require(
         min_seen_hit_rate >= min_hit_rate_percent,
         f"minimum enabled hit rate {min_seen_hit_rate:g}% is below "
         f"{min_hit_rate_percent:g}%",
     )
-    return min_seen_hit_rate
+    return {
+        "min_enabled_cache_attempts": min_seen_attempts,
+        "min_enabled_cache_hits": min_seen_hits,
+        "min_enabled_hit_rate_percent": min_seen_hit_rate,
+    }
 
 
 def validate_report(
@@ -207,7 +248,12 @@ def validate_report(
     )
     checked_observables, max_seen_delta = _check_thermo_deltas(summary, thresholds)
     speedup = _check_speedup(summary, thresholds.min_speedup)
-    min_seen_hit_rate = _check_hit_rate(report, thresholds.min_hit_rate_percent)
+    cache_evidence = _check_cache_evidence(
+        report,
+        thresholds.min_hit_rate_percent,
+        thresholds.min_enabled_cache_attempts,
+        thresholds.min_enabled_cache_hits,
+    )
     return {
         "status": "passed",
         "thresholds": asdict(thresholds),
@@ -215,7 +261,7 @@ def validate_report(
         "checked_observables": checked_observables,
         "max_seen_abs_thermo_delta": max_seen_delta,
         "speedup_vs_disabled_cache": speedup,
-        "min_enabled_hit_rate_percent": min_seen_hit_rate,
+        **cache_evidence,
     }
 
 
@@ -247,6 +293,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Minimum cache hit rate required for every enabled run",
     )
     parser.add_argument(
+        "--min-enabled-cache-attempts",
+        type=int,
+        default=DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS,
+        help="Minimum cache reuse attempts required for every enabled run",
+    )
+    parser.add_argument(
+        "--min-enabled-cache-hits",
+        type=int,
+        default=DEFAULT_MIN_ENABLED_CACHE_HITS,
+        help="Minimum cache hits required for every enabled run",
+    )
+    parser.add_argument(
         "--allow-failed-runs",
         action="store_true",
         help="Skip returncode checks when inspecting partial keep-going reports",
@@ -258,6 +316,8 @@ def main(argv: list[str] | None = None) -> int:
         min_paired_thermo_count=args.min_paired_thermo_count,
         min_speedup=args.min_speedup,
         min_hit_rate_percent=args.min_hit_rate_percent,
+        min_enabled_cache_attempts=args.min_enabled_cache_attempts,
+        min_enabled_cache_hits=args.min_enabled_cache_hits,
         require_successful_runs=not args.allow_failed_runs,
     )
     try:
