@@ -181,6 +181,9 @@ python tools/check_isodelta_lammps_binary.py \
 
 This command runs LAMMPS help output and checks for `e3gnn/parallel`. It is a
 fast registration check, not a numerical correctness test.
+The smoke checker rejects an empty `--lammps-command`, and
+`--timeout-seconds` must be positive so a failed launch cannot masquerade as a
+valid registration check.
 
 ## End-to-End Experiment Driver
 

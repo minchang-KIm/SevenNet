@@ -301,7 +301,15 @@ def main() -> None:
         "LAMMPS binary smoke checker must verify e3gnn/parallel registration",
     )
     _require(
-        "check_isodelta_lammps_binary.py" in doc,
+        "validate_binary_check_options" in binary_check
+        and "MIN_POSITIVE_TIMEOUT_SECONDS" in binary_check
+        and "timeout_seconds must be positive" in binary_check
+        and "lammps_command must not be empty" in binary_check,
+        "LAMMPS binary smoke checker must reject meaningless options",
+    )
+    _require(
+        "check_isodelta_lammps_binary.py" in doc
+        and "`--timeout-seconds` must be positive" in doc,
         "IsoDelta-Halo guide must document the LAMMPS binary smoke checker",
     )
     _require(

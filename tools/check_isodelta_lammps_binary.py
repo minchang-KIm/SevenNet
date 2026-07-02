@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import json
+import math
 import shlex
 import subprocess
 import sys
@@ -20,6 +21,7 @@ HELP_FLAG = "-h"
 PAIR_STYLE_NAME = "e3gnn/parallel"
 SUCCESS_RETURN_CODE = 0
 DEFAULT_TIMEOUT_SECONDS = 60.0
+MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
 
 
 @dataclass(frozen=True)
@@ -31,9 +33,29 @@ class BinaryCheckResult:
     detail: str
 
 
+def _split_lammps_command(lammps_command: str) -> list[str]:
+    """Split a user command and reject empty command lines."""
+    command_tokens = shlex.split(lammps_command)
+    if not command_tokens:
+        raise ValueError("lammps_command must not be empty")
+    return command_tokens
+
+
+def validate_binary_check_options(
+    lammps_command: str,
+    timeout_seconds: float,
+) -> None:
+    """Reject smoke-check settings that cannot run a meaningful command."""
+    _split_lammps_command(lammps_command)
+    if not math.isfinite(timeout_seconds):
+        raise ValueError("timeout_seconds must be finite")
+    if timeout_seconds <= MIN_POSITIVE_TIMEOUT_SECONDS:
+        raise ValueError("timeout_seconds must be positive")
+
+
 def build_help_command(lammps_command: str) -> list[str]:
     """Append the LAMMPS help flag without depending on shell quoting."""
-    return [*shlex.split(lammps_command), HELP_FLAG]
+    return [*_split_lammps_command(lammps_command), HELP_FLAG]
 
 
 def parse_pair_style_available(help_text: str) -> bool:
@@ -46,6 +68,7 @@ def check_lammps_binary(
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> list[BinaryCheckResult]:
     """Run the LAMMPS help command and check for the parallel pair style."""
+    validate_binary_check_options(lammps_command, timeout_seconds)
     command = build_help_command(lammps_command)
     try:
         completed = subprocess.run(
@@ -86,6 +109,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Maximum seconds to wait for the help command",
     )
     args = parser.parse_args(argv)
+    try:
+        validate_binary_check_options(args.lammps_command, args.timeout_seconds)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     results = check_lammps_binary(args.lammps_command, args.timeout_seconds)
     report = {"ok": all(result.ok for result in results), "checks": [asdict(result) for result in results]}

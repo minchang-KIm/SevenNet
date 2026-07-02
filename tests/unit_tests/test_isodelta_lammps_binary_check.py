@@ -40,6 +40,19 @@ class IsoDeltaLammpsBinaryCheckTest(unittest.TestCase):
         help_text = "Pair styles:\n  eam lj/cut\n"
         self.assertFalse(isodelta_binary_check.parse_pair_style_available(help_text))
 
+    def test_validate_binary_check_options_rejects_empty_command(self) -> None:
+        """The smoke checker should not run a missing LAMMPS command."""
+        with self.assertRaisesRegex(ValueError, "lammps_command"):
+            isodelta_binary_check.validate_binary_check_options(
+                "",
+                isodelta_binary_check.DEFAULT_TIMEOUT_SECONDS,
+            )
+
+    def test_validate_binary_check_options_rejects_nonpositive_timeout(self) -> None:
+        """The help command timeout must be positive."""
+        with self.assertRaisesRegex(ValueError, "timeout_seconds"):
+            isodelta_binary_check.validate_binary_check_options("lmp", 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
