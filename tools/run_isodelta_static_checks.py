@@ -21,6 +21,7 @@ EXPERIMENT_PATH = REPO_ROOT / "tools" / "run_isodelta_experiment.py"
 REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
+MLIP_TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
 PATCH_SCRIPT_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "patch_lammps.sh"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "isodelta-halo.yml"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
@@ -49,6 +50,7 @@ def main() -> None:
     report_check = _read(REPORT_CHECK_PATH)
     prereq = _read(PREREQ_PATH)
     binary_check = _read(BINARY_CHECK_PATH)
+    mlip_trace_check = _read(MLIP_TRACE_CHECK_PATH)
     patch_script = _read(PATCH_SCRIPT_PATH)
     workflow = _read(WORKFLOW_PATH)
     doc = _read(DOC_PATH)
@@ -260,6 +262,25 @@ def main() -> None:
     _require(
         "check_isodelta_lammps_binary.py" in doc,
         "IsoDelta-Halo guide must document the LAMMPS binary smoke checker",
+    )
+    _require(
+        "MODEL_KEY = \"model\"" in mlip_trace_check
+        and "MISS_COMM_TOPOLOGY_CHANGED" in mlip_trace_check
+        and "MISS_COMM_LIST_TAG_ORDER_CHANGED" in mlip_trace_check
+        and "TraceThresholds" in mlip_trace_check
+        and "estimated_average_speedup" in mlip_trace_check
+        and "estimated_worst_case_speedup" in mlip_trace_check,
+        "MLIP trace checker must expose model-agnostic reuse and speedup evidence",
+    )
+    _require(
+        "check_isodelta_mlip_trace.py" in doc
+        and "graph_node_tags" in doc
+        and "comm_phases" in doc
+        and "estimated_average_speedup" in doc
+        and "MACE" in doc
+        and "NequIP" in doc
+        and "Allegro" in doc,
+        "IsoDelta-Halo guide must document the model-agnostic trace checker",
     )
     _require(
         "parse_final_thermo_observables" in benchmark

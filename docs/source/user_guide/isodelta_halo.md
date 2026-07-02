@@ -39,6 +39,47 @@ This makes the approach portable to SevenNet-like, NequIP-like, MACE-like, and
 Allegro-like runtimes as long as their domain decomposition exposes stable halo
 routing metadata between neighbor-list rebuilds.
 
+## Model-Agnostic Trace Check
+
+Use `tools/check_isodelta_mlip_trace.py` when evaluating whether the same
+runtime idea applies beyond the SevenNet baseline. The checker does not import
+another MLIP implementation. Instead, it reads a JSON trace with the fields that
+all cutoff-graph, halo-exchange MLIP runtimes can export:
+
+- `model`: label such as `SevenNet`, `NequIP`, `MACE`, or `Allegro`
+- `steps.*.neighbor_list_rebuilt`
+- `steps.*.graph_node_tags`
+- `steps.*.edge_count`
+- `steps.*.comm_phases`
+- `steps.*.comm_phases.*.send_rank`
+- `steps.*.comm_phases.*.recv_rank`
+- `steps.*.comm_phases.*.send_count`
+- `steps.*.comm_phases.*.recv_count`
+- `steps.*.comm_phases.*.first_recv`
+- `steps.*.comm_phases.*.send_tags`
+- `steps.*.comm_phases.*.recv_tags`
+- optional `steps.*.step_time_seconds`
+- optional `steps.*.metadata_build_time_seconds`
+
+Run the checker on a trace from any distributed MLIP runtime:
+
+```bash
+python tools/check_isodelta_mlip_trace.py \
+  --trace mace_halo_trace.json \
+  --min-hit-rate-percent 50.0 \
+  --min-estimated-speedup 1.05 \
+  --min-metadata-fraction-percent 5.0 \
+  --output mace_isodelta_trace_evidence.json
+```
+
+The output includes `hit_rate_percent`, a miss breakdown using the same reason
+names as the C++ cache, `estimated_average_speedup`, and
+`estimated_worst_case_speedup`. A trace passes only when graph node tags, edge
+count, neighbor-list rebuild state, communication topology, and phase-local
+send/receive tag order show that reuse would be safe. This lets a paper compare
+SevenNet implementation results with NequIP/MACE/Allegro trace evidence without
+claiming that another model's kernels were modified.
+
 ## Runtime Controls
 
 Set these environment variables before launching LAMMPS:
