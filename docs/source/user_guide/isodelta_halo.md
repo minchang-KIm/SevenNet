@@ -75,6 +75,9 @@ The validation script checks:
 
 This does not replace a full LAMMPS/LibTorch build. It is a fast local guard so
 the implementation does not drift while runtime environments are being prepared.
+The same dependency-free gate runs as the `IsoDelta-Halo lightweight validation`
+GitHub Actions workflow in `.github/workflows/isodelta-halo.yml`
+whenever IsoDelta-Halo sources, validation tools, tests, or this guide change.
 
 ## Build Prerequisite Check
 

@@ -22,6 +22,7 @@ REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 PATCH_SCRIPT_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "patch_lammps.sh"
+WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "isodelta-halo.yml"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
 DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
 
@@ -49,6 +50,7 @@ def main() -> None:
     prereq = _read(PREREQ_PATH)
     binary_check = _read(BINARY_CHECK_PATH)
     patch_script = _read(PATCH_SCRIPT_PATH)
+    workflow = _read(WORKFLOW_PATH)
     doc = _read(DOC_PATH)
     doc_index = _read(DOC_INDEX_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
@@ -226,6 +228,14 @@ def main() -> None:
         "LAMMPS patch script must not contain temporary implementation notes",
     )
     _require(
+        workflow.lstrip().startswith("#")
+        and "Run IsoDelta-Halo validation" in workflow
+        and "python tools/run_isodelta_validation.py" in workflow
+        and "sevenn/pair_e3gnn/**" in workflow
+        and "tools/run_isodelta_*.py" in workflow,
+        "IsoDelta-Halo workflow must run the lightweight validation gate",
+    )
+    _require(
         "check_isodelta_build_prereqs.py" in doc,
         "IsoDelta-Halo guide must document the build prerequisite checker",
     )
@@ -307,6 +317,11 @@ def main() -> None:
         "SEVENN_ISODELTA_HALO_DISABLE" in doc
         and "SEVENN_ISODELTA_HALO_PROFILE" in doc,
         "IsoDelta-Halo guide must document runtime controls",
+    )
+    _require(
+        "IsoDelta-Halo lightweight validation" in doc
+        and ".github/workflows/isodelta-halo.yml" in doc,
+        "IsoDelta-Halo guide must document the CI validation workflow",
     )
     for miss_key in (
         "miss_disabled",

@@ -1,0 +1,43 @@
+# IsoDelta-Halo lightweight validation is dependency-free by design: it guards
+# the communication metadata cache and experiment tooling before heavy LAMMPS
+# or LibTorch jobs are available.
+name: IsoDelta-Halo lightweight validation
+
+on:
+  push:
+    paths:
+      - ".github/workflows/isodelta-halo.yml"
+      - "docs/source/user_guide/isodelta_halo.md"
+      - "sevenn/pair_e3gnn/**"
+      - "tests/unit_tests/test_isodelta_*.py"
+      - "tools/check_isodelta_*.py"
+      - "tools/run_isodelta_*.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/isodelta-halo.yml"
+      - "docs/source/user_guide/isodelta_halo.md"
+      - "sevenn/pair_e3gnn/**"
+      - "tests/unit_tests/test_isodelta_*.py"
+      - "tools/check_isodelta_*.py"
+      - "tools/run_isodelta_*.py"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lightweight-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run IsoDelta-Halo validation
+        run: python tools/run_isodelta_validation.py
