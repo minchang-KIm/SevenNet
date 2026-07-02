@@ -500,7 +500,12 @@ def main() -> None:
         and "--trace-evidence" in experiment
         and "--require-trace-model" in experiment
         and "--min-distinct-trace-models" in experiment
+        and "should_run_bundle_gate" in experiment
+        and "DEFAULT_MIN_DISTINCT_TRACE_MODELS" in experiment
         and "min_distinct_trace_models must be at least one" in experiment
+        and "trace_evidence_paths count must be at least min_trace_count" in experiment
+        and "duplicate trace evidence paths" in experiment
+        and "duplicate required_trace_models" in experiment
         and "bundle_evidence.json" in experiment
         and "isodelta_experiment_report.json" in experiment,
         "experiment driver must connect all runtime validation stages",
@@ -703,6 +708,13 @@ def main() -> None:
         "run_isodelta_experiment.py" in doc
         and "isodelta_experiment_report.json" in doc,
         "IsoDelta-Halo guide must document the end-to-end experiment driver",
+    )
+    _require(
+        "Trace-specific gates" in doc
+        and "no trace evidence files are supplied" in doc
+        and "trace evidence path is duplicated" in doc
+        and "required trace model label is empty or duplicated" in doc,
+        "IsoDelta-Halo guide must document experiment bundle fail-fast checks",
     )
     _require(
         "SEVENN_ISODELTA_HALO_DISABLE" in doc

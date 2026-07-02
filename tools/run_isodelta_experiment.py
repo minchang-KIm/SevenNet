@@ -11,6 +11,7 @@ import argparse
 from dataclasses import asdict, dataclass
 import json
 import math
+import os
 import platform
 from pathlib import Path
 import subprocess
@@ -49,6 +50,7 @@ MIN_COUNT_VALUE = 0
 MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = 100.0
 GIT_METADATA_TIMEOUT_SECONDS = 10.0
+PATH_SEPARATOR = ", "
 LOG_DIR_NAME = "logs"
 BENCHMARK_DIR_NAME = "benchmark"
 EXPERIMENT_REPORT_NAME = "isodelta_experiment_report.json"
@@ -106,7 +108,16 @@ class ExperimentConfig:
 
     def should_run_bundle_gate(self) -> bool:
         """Return whether trace evidence options request the bundle gate."""
-        return bool(self.trace_evidence_paths or self.required_trace_models)
+        return bool(
+            self.trace_evidence_paths
+            or self.required_trace_models
+            or self.min_trace_count != DEFAULT_MIN_TRACE_COUNT
+            or self.min_distinct_trace_models != DEFAULT_MIN_DISTINCT_TRACE_MODELS
+            or self.min_trace_hit_rate_percent != DEFAULT_MIN_TRACE_HIT_RATE_PERCENT
+            or self.min_trace_estimated_speedup is not None
+            or self.min_trace_metadata_fraction_percent
+            != DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT
+        )
 
 
 @dataclass(frozen=True)
@@ -150,6 +161,27 @@ def _validate_percent(value: float, field_name: str) -> None:
     _require_valid_config(
         MIN_PERCENT_VALUE <= value <= MAX_PERCENT_VALUE,
         f"{field_name} must be between {MIN_PERCENT_VALUE:g} and {MAX_PERCENT_VALUE:g}",
+    )
+
+
+def _canonical_path_key(path: Path) -> str:
+    """Return a stable path key for duplicate trace evidence detection."""
+    return os.path.normcase(str(path.expanduser().resolve(strict=False)))
+
+
+def _validate_unique_trace_evidence_paths(trace_evidence_paths: tuple[Path, ...]) -> None:
+    """Reject duplicate trace files before launching expensive experiment stages."""
+    seen_paths: dict[str, Path] = {}
+    duplicate_paths: list[str] = []
+    for path in trace_evidence_paths:
+        path_key = _canonical_path_key(path)
+        if path_key in seen_paths:
+            duplicate_paths.append(str(path))
+        else:
+            seen_paths[path_key] = path
+    _require_valid_config(
+        not duplicate_paths,
+        "duplicate trace evidence paths: " + PATH_SEPARATOR.join(duplicate_paths),
     )
 
 
@@ -226,10 +258,40 @@ def validate_config(config: ExperimentConfig) -> None:
         config.min_trace_metadata_fraction_percent,
         "min_trace_metadata_fraction_percent",
     )
+    normalized_required_trace_models: list[str] = []
     for model_name in config.required_trace_models:
+        normalized_model_name = model_name.strip()
         _require_valid_config(
-            bool(model_name.strip()),
+            bool(normalized_model_name),
             "required_trace_models must not include empty names",
+        )
+        normalized_required_trace_models.append(normalized_model_name)
+    duplicate_required_trace_models = sorted(
+        {
+            model_name
+            for model_name in normalized_required_trace_models
+            if normalized_required_trace_models.count(model_name) > 1
+        }
+    )
+    _require_valid_config(
+        not duplicate_required_trace_models,
+        "duplicate required_trace_models: "
+        + PATH_SEPARATOR.join(duplicate_required_trace_models),
+    )
+    if config.should_run_bundle_gate():
+        trace_evidence_count = len(config.trace_evidence_paths)
+        _validate_unique_trace_evidence_paths(config.trace_evidence_paths)
+        _require_valid_config(
+            trace_evidence_count >= config.min_trace_count,
+            "trace_evidence_paths count must be at least min_trace_count",
+        )
+        _require_valid_config(
+            trace_evidence_count >= config.min_distinct_trace_models,
+            "trace_evidence_paths count must be at least min_distinct_trace_models",
+        )
+        _require_valid_config(
+            trace_evidence_count >= len(normalized_required_trace_models),
+            "trace_evidence_paths count cannot be smaller than required_trace_models",
         )
 
 

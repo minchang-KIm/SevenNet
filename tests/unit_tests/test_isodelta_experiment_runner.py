@@ -33,6 +33,7 @@ SPEC.loader.exec_module(isodelta_experiment)
 
 EXPECTED_EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
 MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY = 2
+EMPTY_TRACE_EVIDENCE_COUNT = 0
 
 
 class IsoDeltaExperimentRunnerTest(unittest.TestCase):
@@ -78,8 +79,11 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
             input_path=Path("in.sevenn"),
             output_dir=Path("out"),
             min_speedup=1.05,
-            trace_evidence_paths=(Path("mace_trace_evidence.json"),),
-            required_trace_models=("MACE",),
+            trace_evidence_paths=(
+                Path("mace_trace_evidence.json"),
+                Path("nequip_trace_evidence.json"),
+            ),
+            required_trace_models=("MACE", "NequIP"),
             min_distinct_trace_models=MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY,
             min_trace_hit_rate_percent=50.0,
             min_trace_estimated_speedup=1.05,
@@ -92,8 +96,10 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIn("check_isodelta_evidence_bundle.py", commands[-1].argv[1])
         self.assertIn("--trace-evidence", commands[-1].argv)
         self.assertIn("mace_trace_evidence.json", commands[-1].argv)
+        self.assertIn("nequip_trace_evidence.json", commands[-1].argv)
         self.assertIn("--require-trace-model", commands[-1].argv)
         self.assertIn("MACE", commands[-1].argv)
+        self.assertIn("NequIP", commands[-1].argv)
         self.assertIn("--min-distinct-trace-models", commands[-1].argv)
         self.assertIn(str(MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY), commands[-1].argv)
         self.assertIn("--min-trace-estimated-speedup", commands[-1].argv)
@@ -148,6 +154,42 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
             min_distinct_trace_models=0,
         )
         with self.assertRaisesRegex(ValueError, "min_distinct_trace_models"):
+            isodelta_experiment.validate_config(config)
+
+    def test_validate_config_rejects_trace_threshold_without_evidence(self) -> None:
+        """Trace-specific thresholds should not be silently ignored."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            min_distinct_trace_models=MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY,
+        )
+        self.assertEqual(len(config.trace_evidence_paths), EMPTY_TRACE_EVIDENCE_COUNT)
+        with self.assertRaisesRegex(ValueError, "trace_evidence_paths"):
+            isodelta_experiment.validate_config(config)
+
+    def test_validate_config_rejects_duplicate_trace_evidence_paths(self) -> None:
+        """One trace evidence artifact should not be scheduled twice."""
+        trace_path = Path("mace_trace_evidence.json")
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            trace_evidence_paths=(trace_path, trace_path),
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate trace evidence paths"):
+            isodelta_experiment.validate_config(config)
+
+    def test_validate_config_rejects_duplicate_required_trace_models(self) -> None:
+        """Duplicate required model labels should fail before benchmark launch."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            trace_evidence_paths=(
+                Path("first_mace_trace_evidence.json"),
+                Path("second_mace_trace_evidence.json"),
+            ),
+            required_trace_models=("MACE", "MACE"),
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate required_trace_models"):
             isodelta_experiment.validate_config(config)
 
     def test_run_experiment_stops_on_first_failed_stage(self) -> None:

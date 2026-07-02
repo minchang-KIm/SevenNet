@@ -250,6 +250,11 @@ python tools/run_isodelta_experiment.py \
 
 When trace evidence is provided, the driver adds an `evidence-bundle` stage and
 writes `bundle_evidence.json` under the experiment output directory.
+Trace-specific gates such as `--min-distinct-trace-models`,
+`--min-trace-hit-rate-percent`, and `--min-trace-estimated-speedup` also request
+that bundle stage. The driver rejects those settings before launching LAMMPS if
+no trace evidence files are supplied, if a trace evidence path is duplicated, or
+if a required trace model label is empty or duplicated.
 
 ## Paired Benchmark
 
