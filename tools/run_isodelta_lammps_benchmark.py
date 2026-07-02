@@ -116,6 +116,7 @@ def _run_case(
     command: list[str],
     case: BenchmarkCase,
     repeat_index: int,
+    work_dir: Path,
     output_dir: Path,
     keep_going: bool,
 ) -> BenchmarkResult:
@@ -124,7 +125,7 @@ def _run_case(
     stderr_path = output_dir / f"{case.name}_repeat{repeat_index}.stderr.log"
     completed = subprocess.run(
         command,
-        cwd=output_dir,
+        cwd=work_dir,
         env=_case_environment(case),
         text=True,
         capture_output=True,
@@ -202,6 +203,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Directory for logs and JSON report",
     )
     parser.add_argument(
+        "--work-dir",
+        type=Path,
+        help="Directory where LAMMPS should run; defaults to the input directory",
+    )
+    parser.add_argument(
         "--keep-going",
         action="store_true",
         help="Write partial reports even if one benchmark command fails",
@@ -210,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
 
     input_path = args.input.resolve()
     output_dir = args.output_dir.resolve()
+    work_dir = args.work_dir.resolve() if args.work_dir else input_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
     command = _build_command(args.lammps_command, input_path)
 
@@ -221,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
                     command=command,
                     case=case,
                     repeat_index=repeat_index,
+                    work_dir=work_dir,
                     output_dir=output_dir,
                     keep_going=args.keep_going,
                 )
@@ -229,6 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     report = {
         "command": command,
         "input": str(input_path),
+        "work_dir": str(work_dir),
         "summary": _summarize(results),
         "results": [asdict(result) for result in results],
     }

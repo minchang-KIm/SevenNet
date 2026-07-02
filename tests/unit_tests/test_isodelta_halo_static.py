@@ -81,8 +81,10 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
 
     def test_cache_can_be_profiled_and_disabled(self) -> None:
         """Runtime toggles should expose fair baseline and profiling experiments."""
-        self.assertIn("SEVENN_ISODELTA_HALO_DISABLE", self.header)
-        self.assertIn("SEVENN_ISODELTA_HALO_PROFILE", self.header)
+        self.assertIn("SEVENN_ISODELTA_HALO_DISABLE", self.cpp)
+        self.assertIn("SEVENN_ISODELTA_HALO_PROFILE", self.cpp)
+        self.assertNotIn("static constexpr const char *", self.header)
+        self.assertIn("kIsoDeltaHaloPercentScale", self.cpp)
         self.assertIn("comm_cache_attempts++", self.cpp)
         self.assertIn("comm_cache_hits++", self.cpp)
         self.assertIn("record_comm_cache_miss", self.combined)

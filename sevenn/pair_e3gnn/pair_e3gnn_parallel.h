@@ -33,11 +33,6 @@ private:
   // and reverse sweeps. Keeping this named avoids hidden phase-count coupling.
   static constexpr int kCommPhaseCount = 6;
   static constexpr int kNeighborListJustBuiltAgo = 0;
-  static constexpr const char *kIsoDeltaHaloDisableEnv =
-      "SEVENN_ISODELTA_HALO_DISABLE";
-  static constexpr const char *kIsoDeltaHaloProfileEnv =
-      "SEVENN_ISODELTA_HALO_PROFILE";
-  static constexpr double kPercentScale = 100.0;
 
   enum class CommCacheMissReason {
     kDisabled = 0,

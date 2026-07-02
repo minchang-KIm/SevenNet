@@ -27,6 +27,11 @@ SPEC.loader.exec_module(isodelta_benchmark)
 class IsoDeltaBenchmarkParserTest(unittest.TestCase):
     """Check that profiling logs become stable numeric report fields."""
 
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Load the benchmark script source for CLI behavior checks."""
+        cls.source = BENCHMARK_SCRIPT.read_text(encoding="utf-8")
+
     def test_parse_loop_time_from_lammps_log(self) -> None:
         """LAMMPS loop-time lines should parse into seconds."""
         log_text = "Loop time of 12.3456 on 4 procs for 100 steps with 4096 atoms"
@@ -58,6 +63,12 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         """The runner should build commands without shell-specific quoting."""
         command = isodelta_benchmark._build_command("mpiexec -n 2 lmp", Path("in.test"))
         self.assertEqual(command, ["mpiexec", "-n", "2", "lmp", "-in", "in.test"])
+
+    def test_work_dir_defaults_to_input_directory(self) -> None:
+        """Relative files in LAMMPS inputs should resolve beside the input file."""
+        self.assertIn('--work-dir', self.source)
+        self.assertIn('work_dir = args.work_dir.resolve() if args.work_dir else input_path.parent', self.source)
+        self.assertIn('"work_dir": str(work_dir)', self.source)
 
 
 if __name__ == "__main__":

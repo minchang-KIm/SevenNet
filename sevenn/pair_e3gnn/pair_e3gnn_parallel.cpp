@@ -56,6 +56,14 @@ extern void pair_e3gnn_oeq_register_autograd();
 #define INTEGER_TYPE torch::TensorOptions().dtype(torch::kInt64)
 #define FLOAT_TYPE torch::TensorOptions().dtype(torch::kFloat)
 
+namespace {
+// Keep profiling toggles local to this translation unit to avoid C++14 static
+// data-member definitions while still naming every experiment-facing literal.
+constexpr const char *kIsoDeltaHaloDisableEnv = "SEVENN_ISODELTA_HALO_DISABLE";
+constexpr const char *kIsoDeltaHaloProfileEnv = "SEVENN_ISODELTA_HALO_PROFILE";
+constexpr double kIsoDeltaHaloPercentScale = 100.0;
+} // namespace
+
 DeviceBuffManager &DeviceBuffManager::getInstance() {
   static DeviceBuffManager instance;
   return instance;
@@ -738,7 +746,7 @@ void PairE3GNNParallel::print_comm_cache_summary() const {
   const double hit_percent =
       comm_cache_attempts == 0
           ? 0.0
-          : kPercentScale * static_cast<double>(comm_cache_hits) /
+          : kIsoDeltaHaloPercentScale * static_cast<double>(comm_cache_hits) /
                 static_cast<double>(comm_cache_attempts);
   std::cout << world_rank << " IsoDelta-Halo summary: attempts="
             << comm_cache_attempts << " hits=" << comm_cache_hits

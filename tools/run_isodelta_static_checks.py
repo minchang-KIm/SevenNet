@@ -62,12 +62,20 @@ def main() -> None:
         "cache store must be skipped when IsoDelta-Halo is disabled",
     )
     _require(
-        'kIsoDeltaHaloDisableEnv =\n      "SEVENN_ISODELTA_HALO_DISABLE"' in header,
-        "cache disable environment variable is not named in the header",
+        'kIsoDeltaHaloDisableEnv = "SEVENN_ISODELTA_HALO_DISABLE"' in cpp,
+        "cache disable environment variable is not named in the cpp file",
     )
     _require(
-        'kIsoDeltaHaloProfileEnv =\n      "SEVENN_ISODELTA_HALO_PROFILE"' in header,
-        "cache profiling environment variable is not named in the header",
+        'kIsoDeltaHaloProfileEnv = "SEVENN_ISODELTA_HALO_PROFILE"' in cpp,
+        "cache profiling environment variable is not named in the cpp file",
+    )
+    _require(
+        "static constexpr const char *" not in header,
+        "header must not require out-of-class string pointer definitions",
+    )
+    _require(
+        "kIsoDeltaHaloPercentScale" in cpp,
+        "cache hit-rate scale must be a named cpp-local constant",
     )
     _require(
         "comm_cache_attempts++" in cpp and "comm_cache_hits++" in cpp,
