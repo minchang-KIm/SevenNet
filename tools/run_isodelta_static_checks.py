@@ -474,6 +474,11 @@ def main() -> None:
         and "_check_timing_summary" in report_check
         and "timing_speedup_residual" in report_check
         and "must match mean loop times" in report_check
+        and "SAMPLE_VARIANCE_LOOP_TIME_KEY" in report_check
+        and "SAMPLE_STDDEV_LOOP_TIME_KEY" in report_check
+        and "MIN_LOOP_TIME_KEY" in report_check
+        and "MAX_LOOP_TIME_KEY" in report_check
+        and "_require_optional_none" in report_check
         and "MAX_ABS_DELTA_KEY} must be nonnegative" in report_check
         and "PAIRED_COUNT_KEY} must be a positive integer" in report_check
         and "MIN_REQUIRED_PAIRED_THERMO_COUNT" in report_check
@@ -532,6 +537,7 @@ def main() -> None:
     _require(
         "results.*.loop_time_seconds" in doc
         and "recomputes case mean loop times" in doc
+        and "min/max and sample variance/stddev" in doc
         and "summary.speedup_vs_disabled_cache" in doc,
         "IsoDelta-Halo guide must document timing consistency evidence",
     )

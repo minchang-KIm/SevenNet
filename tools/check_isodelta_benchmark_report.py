@@ -42,6 +42,10 @@ REQUIRED_CACHE_MISS_KEYS = (
 )
 SPEEDUP_KEY = "speedup_vs_disabled_cache"
 MEAN_LOOP_TIME_KEY = "mean_loop_time_seconds"
+SAMPLE_VARIANCE_LOOP_TIME_KEY = "sample_variance_loop_time_seconds"
+SAMPLE_STDDEV_LOOP_TIME_KEY = "sample_stddev_loop_time_seconds"
+MIN_LOOP_TIME_KEY = "min_loop_time_seconds"
+MAX_LOOP_TIME_KEY = "max_loop_time_seconds"
 VALID_LOOP_TIME_COUNT_KEY = "valid_loop_time_count"
 FINAL_THERMO_DELTA_KEY = "final_thermo_delta_vs_disabled_cache"
 MAX_ABS_DELTA_KEY = "max_abs_delta"
@@ -63,6 +67,8 @@ MAX_PERCENT_VALUE = 100.0
 MIN_POSITIVE_SPEEDUP = 0.0
 MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
 MIN_POSITIVE_LOOP_TIME_SECONDS = 0.0
+MIN_SAMPLE_VARIANCE_COUNT = 2
+SAMPLE_VARIANCE_DEGREES_OF_FREEDOM = 1
 CACHE_HIT_RATE_TOLERANCE_PERCENT = 1.0e-9
 CACHE_COUNT_TOLERANCE = 1.0e-9
 TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
@@ -159,6 +165,11 @@ def _as_number(value: Any, field_name: str) -> float:
     numeric_value = float(value)
     _require(math.isfinite(numeric_value), f"{field_name} must be finite")
     return numeric_value
+
+
+def _require_optional_none(value: Any, field_name: str) -> None:
+    """Require an optional report field to be null when a statistic is undefined."""
+    _require(value is None, f"{field_name} must be null")
 
 
 def _is_close(
@@ -308,6 +319,8 @@ def _check_timing_summary(report: dict[str, Any], summary: dict[str, Any]) -> di
         loop_times = loop_times_by_case[case_name]
         _require(loop_times, f"no loop times recorded for {case_name}")
         expected_mean = sum(loop_times) / len(loop_times)
+        expected_min = min(loop_times)
+        expected_max = max(loop_times)
         case_summary = _as_mapping(
             summary_cases.get(case_name),
             f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}",
@@ -320,18 +333,87 @@ def _check_timing_summary(report: dict[str, Any], summary: dict[str, Any]) -> di
             case_summary.get(VALID_LOOP_TIME_COUNT_KEY),
             f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}.{VALID_LOOP_TIME_COUNT_KEY}",
         )
+        reported_min = _as_number(
+            case_summary.get(MIN_LOOP_TIME_KEY),
+            f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}.{MIN_LOOP_TIME_KEY}",
+        )
+        reported_max = _as_number(
+            case_summary.get(MAX_LOOP_TIME_KEY),
+            f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}.{MAX_LOOP_TIME_KEY}",
+        )
         _require(
             reported_mean > MIN_POSITIVE_LOOP_TIME_SECONDS,
             f"{case_name} {MEAN_LOOP_TIME_KEY} must be positive",
         )
         _require(
-            reported_count == len(loop_times),
+            reported_count == len(loop_times) and reported_count.is_integer(),
             f"{case_name} {VALID_LOOP_TIME_COUNT_KEY} must match raw loop times",
         )
         _require(
             _is_close(reported_mean, expected_mean),
             f"{case_name} {MEAN_LOOP_TIME_KEY} must match raw loop times",
         )
+        _require(
+            _is_close(reported_min, expected_min),
+            f"{case_name} {MIN_LOOP_TIME_KEY} must match raw loop times",
+        )
+        _require(
+            _is_close(reported_max, expected_max),
+            f"{case_name} {MAX_LOOP_TIME_KEY} must match raw loop times",
+        )
+        if len(loop_times) >= MIN_SAMPLE_VARIANCE_COUNT:
+            squared_delta_sum = sum(
+                (loop_time - expected_mean) ** 2 for loop_time in loop_times
+            )
+            expected_variance = squared_delta_sum / (
+                len(loop_times) - SAMPLE_VARIANCE_DEGREES_OF_FREEDOM
+            )
+            expected_stddev = math.sqrt(expected_variance)
+            reported_variance = _as_number(
+                case_summary.get(SAMPLE_VARIANCE_LOOP_TIME_KEY),
+                (
+                    f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}."
+                    f"{SAMPLE_VARIANCE_LOOP_TIME_KEY}"
+                ),
+            )
+            reported_stddev = _as_number(
+                case_summary.get(SAMPLE_STDDEV_LOOP_TIME_KEY),
+                (
+                    f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}."
+                    f"{SAMPLE_STDDEV_LOOP_TIME_KEY}"
+                ),
+            )
+            _require(
+                reported_variance >= MIN_NONNEGATIVE_VALUE,
+                f"{case_name} {SAMPLE_VARIANCE_LOOP_TIME_KEY} must be nonnegative",
+            )
+            _require(
+                reported_stddev >= MIN_NONNEGATIVE_VALUE,
+                f"{case_name} {SAMPLE_STDDEV_LOOP_TIME_KEY} must be nonnegative",
+            )
+            _require(
+                _is_close(reported_variance, expected_variance),
+                f"{case_name} {SAMPLE_VARIANCE_LOOP_TIME_KEY} must match raw loop times",
+            )
+            _require(
+                _is_close(reported_stddev, expected_stddev),
+                f"{case_name} {SAMPLE_STDDEV_LOOP_TIME_KEY} must match raw loop times",
+            )
+        else:
+            _require_optional_none(
+                case_summary.get(SAMPLE_VARIANCE_LOOP_TIME_KEY),
+                (
+                    f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}."
+                    f"{SAMPLE_VARIANCE_LOOP_TIME_KEY}"
+                ),
+            )
+            _require_optional_none(
+                case_summary.get(SAMPLE_STDDEV_LOOP_TIME_KEY),
+                (
+                    f"{SUMMARY_KEY}.{SUMMARY_CASES_KEY}.{case_name}."
+                    f"{SAMPLE_STDDEV_LOOP_TIME_KEY}"
+                ),
+            )
         mean_loop_times[case_name] = reported_mean
 
     expected_speedup = mean_loop_times[BASELINE_CASE] / mean_loop_times[ISODELTA_CASE]

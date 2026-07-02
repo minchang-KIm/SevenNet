@@ -330,9 +330,10 @@ run and one `isodelta-enabled` run, then reports `paired_repeat_count` in the
 evidence summary.
 For thermo deltas, `max_abs_delta` must be nonnegative and `paired_count` must
 be a whole positive count that does not exceed `paired_repeat_count`.
-For timing evidence, the checker recomputes case mean loop times from
-`results.*.loop_time_seconds` and rejects reports whose
-`summary.speedup_vs_disabled_cache` does not match those means.
+For timing evidence, the checker recomputes case mean loop times and
+min/max and sample variance/stddev from `results.*.loop_time_seconds`, then
+rejects reports whose `summary.speedup_vs_disabled_cache` does not match those
+means.
 It also requires `summary.runs` to match the number of `results` rows.
 When multiple MPI ranks print profiling summaries, the benchmark parser sums
 rank-local attempts, hits, and miss counters, then recomputes

@@ -34,7 +34,13 @@ SECOND_ENABLED_HITS = 9.0
 EXPECTED_ZERO_RESIDUAL = 0.0
 RUN_TIMEOUT_SECONDS = 3600.0
 BASELINE_MEAN_LOOP_TIME_SECONDS = 11.5
+BASELINE_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.5
+BASELINE_SAMPLE_STDDEV_LOOP_TIME_SECONDS = (
+    BASELINE_SAMPLE_VARIANCE_LOOP_TIME_SECONDS ** 0.5
+)
 ISODELTA_MEAN_LOOP_TIME_SECONDS = 10.0
+ISODELTA_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.0
+ISODELTA_SAMPLE_STDDEV_LOOP_TIME_SECONDS = 0.0
 EXPECTED_RESULT_COUNT = 4
 
 
@@ -69,10 +75,26 @@ def _valid_report() -> dict[str, object]:
             "cases": {
                 "baseline-disabled": {
                     "mean_loop_time_seconds": BASELINE_MEAN_LOOP_TIME_SECONDS,
+                    "sample_variance_loop_time_seconds": (
+                        BASELINE_SAMPLE_VARIANCE_LOOP_TIME_SECONDS
+                    ),
+                    "sample_stddev_loop_time_seconds": (
+                        BASELINE_SAMPLE_STDDEV_LOOP_TIME_SECONDS
+                    ),
+                    "min_loop_time_seconds": 11.0,
+                    "max_loop_time_seconds": 12.0,
                     "valid_loop_time_count": 2,
                 },
                 "isodelta-enabled": {
                     "mean_loop_time_seconds": ISODELTA_MEAN_LOOP_TIME_SECONDS,
+                    "sample_variance_loop_time_seconds": (
+                        ISODELTA_SAMPLE_VARIANCE_LOOP_TIME_SECONDS
+                    ),
+                    "sample_stddev_loop_time_seconds": (
+                        ISODELTA_SAMPLE_STDDEV_LOOP_TIME_SECONDS
+                    ),
+                    "min_loop_time_seconds": ISODELTA_MEAN_LOOP_TIME_SECONDS,
+                    "max_loop_time_seconds": ISODELTA_MEAN_LOOP_TIME_SECONDS,
                     "valid_loop_time_count": 2,
                 },
             },
@@ -266,6 +288,46 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
             "mean_loop_time_seconds",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_inconsistent_case_min_time(self) -> None:
+        """Summary min timing should be recomputed from raw loop times."""
+        report = _valid_report()
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        cases = summary["cases"]
+        assert isinstance(cases, dict)
+        baseline = cases["baseline-disabled"]
+        assert isinstance(baseline, dict)
+        baseline["min_loop_time_seconds"] = 1.0
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "min_loop_time_seconds",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_inconsistent_sample_variance(self) -> None:
+        """Summary timing variance should be recomputed from raw loop times."""
+        report = _valid_report()
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        cases = summary["cases"]
+        assert isinstance(cases, dict)
+        baseline = cases["baseline-disabled"]
+        assert isinstance(baseline, dict)
+        baseline["sample_variance_loop_time_seconds"] = 9.0
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "sample_variance_loop_time_seconds",
         ):
             isodelta_report_check.validate_report(
                 report,

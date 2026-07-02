@@ -45,6 +45,8 @@ PERCENT_SCALE = 100.0
 RUN_TIMEOUT_SECONDS = 3600.0
 BASELINE_LOOP_TIME_SECONDS = 12.0
 ISODELTA_LOOP_TIME_SECONDS = 10.0
+ZERO_SAMPLE_VARIANCE_LOOP_TIME_SECONDS = 0.0
+ZERO_SAMPLE_STDDEV_LOOP_TIME_SECONDS = 0.0
 EXPECTED_RESULT_COUNT = 4
 
 
@@ -84,10 +86,26 @@ def _benchmark_report() -> dict[str, object]:
             "cases": {
                 "baseline-disabled": {
                     "mean_loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
+                    "sample_variance_loop_time_seconds": (
+                        ZERO_SAMPLE_VARIANCE_LOOP_TIME_SECONDS
+                    ),
+                    "sample_stddev_loop_time_seconds": (
+                        ZERO_SAMPLE_STDDEV_LOOP_TIME_SECONDS
+                    ),
+                    "min_loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
+                    "max_loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
                     "valid_loop_time_count": 2,
                 },
                 "isodelta-enabled": {
                     "mean_loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                    "sample_variance_loop_time_seconds": (
+                        ZERO_SAMPLE_VARIANCE_LOOP_TIME_SECONDS
+                    ),
+                    "sample_stddev_loop_time_seconds": (
+                        ZERO_SAMPLE_STDDEV_LOOP_TIME_SECONDS
+                    ),
+                    "min_loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                    "max_loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
                     "valid_loop_time_count": 2,
                 },
             },
