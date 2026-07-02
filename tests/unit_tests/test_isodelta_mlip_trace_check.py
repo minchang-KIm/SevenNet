@@ -42,6 +42,7 @@ MIN_STABLE_TRACE_METADATA_FRACTION_PERCENT = 20.0
 EXPECTED_STABLE_AVERAGE_SPEEDUP = 40.0 / 34.0
 OUT_OF_RANGE_PERCENT = 101.0
 INVALID_SPEEDUP_THRESHOLD = 0.0
+FRACTIONAL_TRACE_COUNT = 1.5
 
 
 def _phase(
@@ -137,6 +138,34 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
                 isodelta_mlip_trace.TraceThresholds(),
             )
 
+    def test_validate_trace_rejects_fractional_attempts(self) -> None:
+        """Trace attempts should be whole reuse-decision counts."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["attempts"] = FRACTIONAL_TRACE_COUNT
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "nonnegative integer",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_fractional_hits(self) -> None:
+        """Trace hits should be whole reuse-decision counts."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["hits"] = FRACTIONAL_TRACE_COUNT
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "nonnegative integer",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
     def test_validate_trace_rejects_nonfinite_numeric_values(self) -> None:
         """Trace evidence should not accept NaN or infinity values."""
         evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
@@ -172,7 +201,21 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
 
         with self.assertRaisesRegex(
             isodelta_mlip_trace.TraceCheckError,
-            "must be nonnegative",
+            "nonnegative integer",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_fractional_miss_counter(self) -> None:
+        """Trace miss counters should be whole reuse-decision counts."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["miss_breakdown"]["miss_shape-changed"] = FRACTIONAL_TRACE_COUNT
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "nonnegative integer",
         ):
             isodelta_mlip_trace.validate_trace_evidence(
                 evidence,

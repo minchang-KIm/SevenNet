@@ -575,8 +575,8 @@ def validate_trace_evidence(
 ) -> dict[str, Any]:
     """Gate evaluated trace evidence before using it as a generality claim."""
     validate_thresholds(thresholds)
-    attempts = _as_number(evidence.get(ATTEMPTS_KEY), ATTEMPTS_KEY)
-    hits = _as_number(evidence.get(HITS_KEY), HITS_KEY)
+    attempts = _as_nonnegative_int(evidence.get(ATTEMPTS_KEY), ATTEMPTS_KEY)
+    hits = _as_nonnegative_int(evidence.get(HITS_KEY), HITS_KEY)
     hit_rate_percent = _as_number(
         evidence.get(HIT_RATE_PERCENT_KEY),
         HIT_RATE_PERCENT_KEY,
@@ -585,7 +585,6 @@ def validate_trace_evidence(
         attempts >= MIN_REQUIRED_TRACE_ATTEMPTS,
         f"{ATTEMPTS_KEY} must be at least one",
     )
-    _require(hits >= MIN_NONNEGATIVE_VALUE, f"{HITS_KEY} must be nonnegative")
     _require(hits <= attempts, f"{HITS_KEY} cannot exceed {ATTEMPTS_KEY}")
     _validate_percent(hit_rate_percent, HIT_RATE_PERCENT_KEY)
     expected_hit_rate = PERCENT_SCALE * hits / attempts
@@ -604,13 +603,9 @@ def validate_trace_evidence(
     miss_count_sum = 0.0
     for miss_reason in MISS_REASONS:
         miss_key = f"{MISS_REASON_PREFIX}{miss_reason}"
-        miss_count = _as_number(
+        miss_count = _as_nonnegative_int(
             miss_breakdown.get(miss_key),
             f"{MISS_BREAKDOWN_KEY}.{miss_key}",
-        )
-        _require(
-            miss_count >= MIN_NONNEGATIVE_VALUE,
-            f"{MISS_BREAKDOWN_KEY}.{miss_key} must be nonnegative",
         )
         miss_count_sum += miss_count
     trace_count_residual = abs(miss_count_sum - (attempts - hits))

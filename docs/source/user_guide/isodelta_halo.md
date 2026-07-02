@@ -87,7 +87,8 @@ SevenNet implementation results with NequIP/MACE/Allegro trace evidence without
 claiming that another model's kernels were modified.
 For precomputed trace evidence, the checker also verifies that `hit_rate_percent`
 matches `hits / attempts` and that the miss breakdown counters sum to
-`attempts - hits`. The evidence must also include
+`attempts - hits`. It treats `attempts`, `hits`, and each miss counter as
+whole nonnegative reuse-decision counts. The evidence must also include
 `model_agnostic_requirements` flags proving that ordered graph node tags, edge
 count, neighbor-list rebuilds, communication topology, and communication list
 tag order were all used as reuse guards.

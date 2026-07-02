@@ -325,6 +325,10 @@ def main() -> None:
         and "REQUIRED_MODEL_AGNOSTIC_REQUIREMENTS" in mlip_trace_check
         and "must be true" in mlip_trace_check
         and "math.isfinite" in mlip_trace_check
+        and "attempts = _as_nonnegative_int" in mlip_trace_check
+        and "hits = _as_nonnegative_int" in mlip_trace_check
+        and "miss_count = _as_nonnegative_int" in mlip_trace_check
+        and "must be a nonnegative integer" in mlip_trace_check
         and "must match hits / attempts" in mlip_trace_check
         and "must match attempts - hits" in mlip_trace_check
         and "trace_schema" in mlip_trace_check
@@ -372,6 +376,10 @@ def main() -> None:
         and "hits / attempts" in doc
         and "attempts - hits" in doc,
         "IsoDelta-Halo guide must document trace evidence counter consistency",
+    )
+    _require(
+        "whole nonnegative reuse-decision counts" in doc,
+        "IsoDelta-Halo guide must document trace count integer validation",
     )
     _require(
         "model_agnostic_requirements" in doc
