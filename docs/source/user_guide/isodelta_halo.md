@@ -86,6 +86,23 @@ send/receive tag order show that reuse would be safe. This lets a paper compare
 SevenNet implementation results with NequIP/MACE/Allegro trace evidence without
 claiming that another model's kernels were modified.
 
+### Portable Demo Traces
+
+Before writing a new exporter, generate the dependency-free demo bundle:
+
+```bash
+python tools/run_isodelta_mlip_trace_demo.py \
+  --output-dir isodelta_mlip_trace_demo
+```
+
+The demo writes trace and evidence JSON files for SevenNet, MACE, NequIP, and Allegro.
+These examples are not a substitute for traces from real production runs. They
+are a reference shape for exporter authors: each file uses the same
+ordered `graph_node_tags`, `comm_phases`, send/receive tag arrays, timing
+fields, and threshold gates that the publication checker expects. The summary
+file `isodelta_mlip_trace_demo_summary.json` records per-model hit rate,
+`estimated_average_speedup`, and `estimated_worst_case_speedup`.
+
 ## Runtime Controls
 
 Set these environment variables before launching LAMMPS:

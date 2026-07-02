@@ -23,6 +23,7 @@ EVIDENCE_BUNDLE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_evidence_bund
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 MLIP_TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
+MLIP_TRACE_DEMO_PATH = REPO_ROOT / "tools" / "run_isodelta_mlip_trace_demo.py"
 PATCH_SCRIPT_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "patch_lammps.sh"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "isodelta-halo.yml"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
@@ -53,6 +54,7 @@ def main() -> None:
     prereq = _read(PREREQ_PATH)
     binary_check = _read(BINARY_CHECK_PATH)
     mlip_trace_check = _read(MLIP_TRACE_CHECK_PATH)
+    mlip_trace_demo = _read(MLIP_TRACE_DEMO_PATH)
     patch_script = _read(PATCH_SCRIPT_PATH)
     workflow = _read(WORKFLOW_PATH)
     doc = _read(DOC_PATH)
@@ -309,6 +311,16 @@ def main() -> None:
         "MLIP trace checker must expose model-agnostic reuse and speedup evidence",
     )
     _require(
+        "DEMO_MODELS = (\"SevenNet\", \"MACE\", \"NequIP\", \"Allegro\")" in mlip_trace_demo
+        and "check_isodelta_mlip_trace.py" in mlip_trace_demo
+        and "build_demo_trace" in mlip_trace_demo
+        and "run_demo" in mlip_trace_demo
+        and "TraceThresholds" in mlip_trace_demo
+        and "estimated_average_speedup" in mlip_trace_demo
+        and "estimated_worst_case_speedup" in mlip_trace_demo,
+        "MLIP trace demo must generate validated multi-model portability evidence",
+    )
+    _require(
         "check_isodelta_benchmark_report.py" in evidence_bundle_check
         and "check_isodelta_mlip_trace.py" in evidence_bundle_check
         and "validate_bundle" in evidence_bundle_check
@@ -321,8 +333,10 @@ def main() -> None:
     )
     _require(
         "check_isodelta_mlip_trace.py" in doc
+        and "run_isodelta_mlip_trace_demo.py" in doc
         and "graph_node_tags" in doc
         and "comm_phases" in doc
+        and "SevenNet, MACE, NequIP, and Allegro" in doc
         and "--print-schema" in doc
         and "estimated_average_speedup" in doc
         and "MACE" in doc
