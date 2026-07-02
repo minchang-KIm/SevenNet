@@ -61,6 +61,12 @@ all cutoff-graph, halo-exchange MLIP runtimes can export:
 - optional `steps.*.step_time_seconds`
 - optional `steps.*.metadata_build_time_seconds`
 
+Print the expected trace schema before writing a new exporter:
+
+```bash
+python tools/check_isodelta_mlip_trace.py --print-schema
+```
+
 Run the checker on a trace from any distributed MLIP runtime:
 
 ```bash

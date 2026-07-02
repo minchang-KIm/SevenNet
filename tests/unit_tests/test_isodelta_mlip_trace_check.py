@@ -33,6 +33,11 @@ DEFAULT_FIRST_RECV = 100
 BASELINE_STEP_TIME_SECONDS = 10.0
 METADATA_BUILD_SECONDS = 2.0
 STABLE_TRACE_STEP_COUNT = 4
+EXPECTED_TRACE_SCHEMA_VERSION = "1.0"
+EXPECTED_STABLE_HIT_RATE_PERCENT = 75.0
+MIN_STABLE_TRACE_SPEEDUP = 1.15
+MIN_STABLE_TRACE_METADATA_FRACTION_PERCENT = 20.0
+EXPECTED_STABLE_AVERAGE_SPEEDUP = 40.0 / 34.0
 
 
 def _phase(
@@ -92,19 +97,19 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         evidence = isodelta_mlip_trace.validate_trace_evidence(
             isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE")),
             isodelta_mlip_trace.TraceThresholds(
-                min_hit_rate_percent=75.0,
-                min_estimated_speedup=1.15,
-                min_metadata_fraction_percent=20.0,
+                min_hit_rate_percent=EXPECTED_STABLE_HIT_RATE_PERCENT,
+                min_estimated_speedup=MIN_STABLE_TRACE_SPEEDUP,
+                min_metadata_fraction_percent=MIN_STABLE_TRACE_METADATA_FRACTION_PERCENT,
             ),
         )
 
         self.assertEqual(evidence["status"], "passed")
         self.assertEqual(evidence["model"], "MACE")
         self.assertEqual(evidence["hits"], 3.0)
-        self.assertEqual(evidence["hit_rate_percent"], 75.0)
+        self.assertEqual(evidence["hit_rate_percent"], EXPECTED_STABLE_HIT_RATE_PERCENT)
         self.assertAlmostEqual(
             evidence["timing"]["estimated_average_speedup"],
-            40.0 / 34.0,
+            EXPECTED_STABLE_AVERAGE_SPEEDUP,
         )
 
     def test_trace_rejects_unstable_tag_order_for_effect_gate(self) -> None:
@@ -162,6 +167,27 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
             float(STABLE_TRACE_STEP_COUNT),
         )
 
+    def test_trace_schema_documents_portable_export_fields(self) -> None:
+        """The checker should expose a schema for non-SevenNet trace exporters."""
+        schema = isodelta_mlip_trace.trace_schema()
+        self.assertEqual(schema["schema_version"], EXPECTED_TRACE_SCHEMA_VERSION)
+        self.assertIn("graph_node_tags", schema["required_step_fields"])
+        self.assertIn("comm_phases", schema["required_step_fields"])
+        self.assertIn("send_tags", schema["required_comm_phase_fields"])
+        self.assertIn("recv_tags", schema["required_comm_phase_fields"])
+        self.assertIn("estimated_worst_case_speedup", schema["timing_estimates"])
+
+    def test_main_prints_schema_without_trace(self) -> None:
+        """The CLI should let researchers inspect the trace format first."""
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            exit_code = isodelta_mlip_trace.main(["--print-schema"])
+
+        self.assertEqual(exit_code, 0)
+        schema = json.loads(stdout.getvalue())
+        self.assertEqual(schema["schema_version"], EXPECTED_TRACE_SCHEMA_VERSION)
+        self.assertIn("required_comm_phase_fields", schema)
+
     def test_main_reads_json_trace_and_writes_evidence(self) -> None:
         """The CLI should validate a portable trace and persist its evidence."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -175,11 +201,11 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
                         "--trace",
                         str(trace_path),
                         "--min-hit-rate-percent",
-                        "75.0",
+                        str(EXPECTED_STABLE_HIT_RATE_PERCENT),
                         "--min-estimated-speedup",
-                        "1.15",
+                        str(MIN_STABLE_TRACE_SPEEDUP),
                         "--min-metadata-fraction-percent",
-                        "20.0",
+                        str(MIN_STABLE_TRACE_METADATA_FRACTION_PERCENT),
                         "--output",
                         str(output_path),
                     ]

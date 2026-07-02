@@ -272,6 +272,8 @@ def main() -> None:
         and "MISS_COMM_TOPOLOGY_CHANGED" in mlip_trace_check
         and "MISS_COMM_LIST_TAG_ORDER_CHANGED" in mlip_trace_check
         and "TraceThresholds" in mlip_trace_check
+        and "trace_schema" in mlip_trace_check
+        and "--print-schema" in mlip_trace_check
         and "estimated_average_speedup" in mlip_trace_check
         and "estimated_worst_case_speedup" in mlip_trace_check,
         "MLIP trace checker must expose model-agnostic reuse and speedup evidence",
@@ -280,6 +282,7 @@ def main() -> None:
         "check_isodelta_mlip_trace.py" in doc
         and "graph_node_tags" in doc
         and "comm_phases" in doc
+        and "--print-schema" in doc
         and "estimated_average_speedup" in doc
         and "MACE" in doc
         and "NequIP" in doc

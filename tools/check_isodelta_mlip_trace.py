@@ -19,6 +19,7 @@ from typing import Any
 # JSON field names are centralized so the schema stays stable across trace
 # exporters written for SevenNet, NequIP, MACE, Allegro, or another MLIP.
 MODEL_KEY = "model"
+SCHEMA_VERSION_KEY = "schema_version"
 STEPS_KEY = "steps"
 STEP_ID_KEY = "step"
 NEIGHBOR_REBUILT_KEY = "neighbor_list_rebuilt"
@@ -34,6 +35,27 @@ SEND_TAGS_KEY = "send_tags"
 RECV_TAGS_KEY = "recv_tags"
 STEP_TIME_SECONDS_KEY = "step_time_seconds"
 METADATA_BUILD_SECONDS_KEY = "metadata_build_time_seconds"
+TRACE_SCHEMA_VERSION = "1.0"
+SCHEMA_REQUIRED_STEP_FIELDS = (
+    NEIGHBOR_REBUILT_KEY,
+    NODE_TAGS_KEY,
+    EDGE_COUNT_KEY,
+    COMM_PHASES_KEY,
+)
+SCHEMA_REQUIRED_PHASE_FIELDS = (
+    SEND_RANK_KEY,
+    RECV_RANK_KEY,
+    SEND_COUNT_KEY,
+    RECV_COUNT_KEY,
+    FIRST_RECV_KEY,
+    SEND_TAGS_KEY,
+    RECV_TAGS_KEY,
+)
+SCHEMA_OPTIONAL_STEP_FIELDS = (
+    STEP_ID_KEY,
+    STEP_TIME_SECONDS_KEY,
+    METADATA_BUILD_SECONDS_KEY,
+)
 
 MISS_DISABLED = "disabled"
 MISS_NO_CACHE = "no-cache"
@@ -146,6 +168,49 @@ def load_trace(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     _require(isinstance(payload, dict), "trace root must be a JSON object")
     return payload
+
+
+def trace_schema() -> dict[str, Any]:
+    """Return a compact schema description for portable MLIP trace exporters."""
+    return {
+        SCHEMA_VERSION_KEY: TRACE_SCHEMA_VERSION,
+        "root": {
+            MODEL_KEY: "optional string label such as SevenNet, NequIP, MACE, or Allegro",
+            STEPS_KEY: "non-empty array of per-MD-step metadata records",
+        },
+        "required_step_fields": list(SCHEMA_REQUIRED_STEP_FIELDS),
+        "optional_step_fields": list(SCHEMA_OPTIONAL_STEP_FIELDS),
+        "required_comm_phase_fields": list(SCHEMA_REQUIRED_PHASE_FIELDS),
+        "field_types": {
+            STEP_ID_KEY: "integer or string",
+            NEIGHBOR_REBUILT_KEY: "boolean",
+            NODE_TAGS_KEY: "ordered array of integer or string atom tags",
+            EDGE_COUNT_KEY: "nonnegative integer",
+            COMM_PHASES_KEY: "array of communication phase objects",
+            SEND_RANK_KEY: "nonnegative integer MPI rank",
+            RECV_RANK_KEY: "nonnegative integer MPI rank",
+            SEND_COUNT_KEY: "nonnegative integer equal to len(send_tags)",
+            RECV_COUNT_KEY: "nonnegative integer equal to len(recv_tags)",
+            FIRST_RECV_KEY: "nonnegative integer receive segment offset",
+            SEND_TAGS_KEY: "ordered array of integer or string atom tags",
+            RECV_TAGS_KEY: "ordered array of integer or string atom tags",
+            STEP_TIME_SECONDS_KEY: "optional nonnegative baseline step time",
+            METADATA_BUILD_SECONDS_KEY: "optional nonnegative metadata build time",
+        },
+        "reuse_guards": [
+            "neighbor-list rebuild state",
+            "graph node tag count",
+            "edge count",
+            "graph node tag order",
+            "communication topology",
+            "phase-local send and receive tag order",
+        ],
+        "timing_estimates": [
+            "metadata_fraction_percent",
+            "estimated_average_speedup",
+            "estimated_worst_case_speedup",
+        ],
+    }
 
 
 def _require(condition: bool, message: str) -> None:
@@ -511,7 +576,12 @@ def validate_trace_evidence(
 def main(argv: list[str] | None = None) -> int:
     """Parse CLI arguments, evaluate one trace, and print JSON evidence."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--trace", required=True, type=Path)
+    parser.add_argument("--trace", type=Path)
+    parser.add_argument(
+        "--print-schema",
+        action="store_true",
+        help="Print the portable trace schema and exit without evaluating a trace",
+    )
     parser.add_argument(
         "--cache-disabled",
         action="store_true",
@@ -546,6 +616,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path for the evaluated evidence JSON",
     )
     args = parser.parse_args(argv)
+
+    if args.print_schema:
+        print(json.dumps(trace_schema(), indent=2))
+        return 0
+    if args.trace is None:
+        parser.error("--trace is required unless --print-schema is used")
 
     thresholds = TraceThresholds(
         min_hit_rate_percent=args.min_hit_rate_percent,
