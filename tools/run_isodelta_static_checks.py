@@ -260,6 +260,12 @@ def main() -> None:
         "benchmark report checker must gate cache activity evidence",
     )
     _require(
+        "REQUIRED_CACHE_MISS_KEYS" in report_check
+        and "miss_comm-list-tag-order-changed" in report_check
+        and "verified_cache_miss_key_count" in report_check,
+        "benchmark report checker must require miss breakdown coverage",
+    )
+    _require(
         "final_thermo_delta_vs_disabled_cache" in doc
         and "final_thermo_observables" in doc,
         "IsoDelta-Halo guide must document final thermo consistency fields",
@@ -290,11 +296,23 @@ def main() -> None:
         and "SEVENN_ISODELTA_HALO_PROFILE" in doc,
         "IsoDelta-Halo guide must document runtime controls",
     )
+    for miss_key in (
+        "miss_disabled",
+        "miss_no-cache",
+        "miss_neighbor-list-rebuilt",
+        "miss_shape-changed",
+        "miss_tag-count-changed",
+        "miss_tag-order-changed",
+        "miss_comm-topology-changed",
+        "miss_comm-list-tag-order-changed",
+    ):
+        _require(
+            miss_key in doc,
+            f"IsoDelta-Halo guide must document cache miss key: {miss_key}",
+        )
     _require(
-        "miss_comm-topology-changed" in doc
-        and "miss_comm-list-tag-order-changed" in doc
-        and "sendlist tag order" in doc,
-        "IsoDelta-Halo guide must document topology and tag-order guards",
+        "sendlist tag order" in doc,
+        "IsoDelta-Halo guide must document tag-order guards",
     )
     _require(
         "isodelta_halo" in doc_index,

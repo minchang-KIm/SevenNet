@@ -27,6 +27,27 @@ sys.modules[SPEC.name] = isodelta_report_check
 SPEC.loader.exec_module(isodelta_report_check)
 
 
+def _cache_summary(
+    attempts: float,
+    hits: float,
+    hit_rate_percent: float,
+) -> dict[str, float]:
+    """Create a cache summary with every IsoDelta-Halo miss counter."""
+    return {
+        "attempts": attempts,
+        "hits": hits,
+        "hit_rate_percent": hit_rate_percent,
+        "miss_disabled": 0.0,
+        "miss_no-cache": 1.0,
+        "miss_neighbor-list-rebuilt": 1.0,
+        "miss_shape-changed": 0.0,
+        "miss_tag-count-changed": 0.0,
+        "miss_tag-order-changed": 0.0,
+        "miss_comm-topology-changed": 0.0,
+        "miss_comm-list-tag-order-changed": 0.0,
+    }
+
+
 def _valid_report() -> dict[str, object]:
     """Create a small benchmark report with passing correctness evidence."""
     return {
@@ -41,29 +62,29 @@ def _valid_report() -> dict[str, object]:
             {
                 "case": "baseline-disabled",
                 "returncode": 0,
-                "cache_summary": {
-                    "attempts": 10.0,
-                    "hits": 0.0,
-                    "hit_rate_percent": 0.0,
-                },
+                "cache_summary": _cache_summary(
+                    attempts=10.0,
+                    hits=0.0,
+                    hit_rate_percent=0.0,
+                ),
             },
             {
                 "case": "isodelta-enabled",
                 "returncode": 0,
-                "cache_summary": {
-                    "attempts": 10.0,
-                    "hits": 8.0,
-                    "hit_rate_percent": 80.0,
-                },
+                "cache_summary": _cache_summary(
+                    attempts=10.0,
+                    hits=8.0,
+                    hit_rate_percent=80.0,
+                ),
             },
             {
                 "case": "isodelta-enabled",
                 "returncode": 0,
-                "cache_summary": {
-                    "attempts": 11.0,
-                    "hits": 9.0,
-                    "hit_rate_percent": 82.0,
-                },
+                "cache_summary": _cache_summary(
+                    attempts=11.0,
+                    hits=9.0,
+                    hit_rate_percent=82.0,
+                ),
             },
         ],
     }
@@ -91,6 +112,7 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         self.assertEqual(evidence["min_enabled_cache_attempts"], 10.0)
         self.assertEqual(evidence["min_enabled_cache_hits"], 8.0)
         self.assertEqual(evidence["min_enabled_hit_rate_percent"], 80.0)
+        self.assertEqual(evidence["verified_cache_miss_key_count"], 8.0)
 
     def test_validate_report_rejects_large_thermo_delta(self) -> None:
         """Thermo drift above the configured tolerance should fail."""
@@ -164,6 +186,26 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                     min_enabled_cache_attempts=1,
                     min_enabled_cache_hits=1,
                 ),
+            )
+
+    def test_validate_report_rejects_missing_miss_breakdown(self) -> None:
+        """Enabled runs should include every miss counter for diagnosis."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        del cache_summary["miss_comm-list-tag-order-changed"]
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "miss_comm-list-tag-order-changed",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
             )
 
     def test_main_reads_json_report_and_returns_success(self) -> None:

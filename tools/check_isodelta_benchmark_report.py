@@ -24,6 +24,16 @@ CACHE_SUMMARY_KEY = "cache_summary"
 ATTEMPTS_KEY = "attempts"
 HITS_KEY = "hits"
 HIT_RATE_KEY = "hit_rate_percent"
+REQUIRED_CACHE_MISS_KEYS = (
+    "miss_disabled",
+    "miss_no-cache",
+    "miss_neighbor-list-rebuilt",
+    "miss_shape-changed",
+    "miss_tag-count-changed",
+    "miss_tag-order-changed",
+    "miss_comm-topology-changed",
+    "miss_comm-list-tag-order-changed",
+)
 SPEEDUP_KEY = "speedup_vs_disabled_cache"
 FINAL_THERMO_DELTA_KEY = "final_thermo_delta_vs_disabled_cache"
 MAX_ABS_DELTA_KEY = "max_abs_delta"
@@ -185,6 +195,7 @@ def _check_cache_evidence(
     hit_rates: list[float] = []
     attempt_counts: list[float] = []
     hit_counts: list[float] = []
+    verified_miss_keys: set[str] = set()
     for index, result in enumerate(_results(report)):
         result_map = _as_mapping(result, f"{RESULTS_KEY}[{index}]")
         if result_map.get(CASE_KEY) != ISODELTA_CASE:
@@ -211,6 +222,12 @@ def _check_cache_evidence(
                 f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{HIT_RATE_KEY}",
             )
         )
+        for miss_key in REQUIRED_CACHE_MISS_KEYS:
+            _as_number(
+                cache_summary.get(miss_key),
+                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{miss_key}",
+            )
+            verified_miss_keys.add(miss_key)
 
     _require(hit_rates, f"no {ISODELTA_CASE} cache hit-rate entries found")
     min_seen_attempts = min(attempt_counts)
@@ -235,6 +252,7 @@ def _check_cache_evidence(
         "min_enabled_cache_attempts": min_seen_attempts,
         "min_enabled_cache_hits": min_seen_hits,
         "min_enabled_hit_rate_percent": min_seen_hit_rate,
+        "verified_cache_miss_key_count": float(len(verified_miss_keys)),
     }
 
 

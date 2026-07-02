@@ -166,11 +166,14 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `results.*.cache_summary.hits`
 - `results.*.cache_summary.hit_rate_percent`
 - `results.*.final_thermo_observables`
+- `results.*.cache_summary.miss_disabled`
+- `results.*.cache_summary.miss_no-cache`
 - `results.*.cache_summary.miss_neighbor-list-rebuilt`
 - `results.*.cache_summary.miss_shape-changed`
+- `results.*.cache_summary.miss_tag-count-changed`
+- `results.*.cache_summary.miss_tag-order-changed`
 - `results.*.cache_summary.miss_comm-topology-changed`
 - `results.*.cache_summary.miss_comm-list-tag-order-changed`
-- `results.*.cache_summary.miss_tag-order-changed`
 
 ## Report Correctness Gate
 
@@ -193,6 +196,9 @@ target simulation. `--min-speedup`, `--min-hit-rate-percent`,
 `--min-enabled-cache-attempts`, and `--min-enabled-cache-hits` are effect gates:
 use them when making a performance claim, and archive the command with the
 benchmark report so the acceptance rule is reproducible.
+The checker also requires every enabled run to include all IsoDelta-Halo miss
+reason counters, which keeps failed reuse diagnosable instead of reducing the
+experiment to a single speedup number.
 
 For a publishable performance claim, report the mean and variance across
 multiple repeats, include cache hit rate, and show that final thermodynamic
