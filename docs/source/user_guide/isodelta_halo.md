@@ -273,6 +273,7 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `provenance.git_commit`
 - `provenance.git_dirty`
 - `provenance.case_environment_overrides`
+- `run_timeout_seconds`
 - `summary.cases.*.mean_loop_time_seconds`
 - `summary.cases.*.sample_variance_loop_time_seconds`
 - `summary.cases.*.sample_stddev_loop_time_seconds`
@@ -318,6 +319,8 @@ benchmark report so the acceptance rule is reproducible.
 The checker also requires every enabled run to include all IsoDelta-Halo miss
 reason counters, which keeps failed reuse diagnosable instead of reducing the
 experiment to a single speedup number.
+The report checker validates `run_timeout_seconds` as a positive finite value,
+so accepted benchmark evidence proves that each LAMMPS invocation was bounded.
 When multiple MPI ranks print profiling summaries, the benchmark parser sums
 rank-local attempts, hits, and miss counters, then recomputes
 `hit_rate_percent` from the aggregated hits and attempts. The report checker

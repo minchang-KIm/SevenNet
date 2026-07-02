@@ -42,6 +42,7 @@ MIN_TRACE_METADATA_FRACTION_PERCENT = 20.0
 MIN_TRACE_ESTIMATED_SPEEDUP = 1.15
 OUT_OF_RANGE_PERCENT = 101.0
 PERCENT_SCALE = 100.0
+RUN_TIMEOUT_SECONDS = 3600.0
 
 
 def _cache_summary(
@@ -73,6 +74,7 @@ def _cache_summary(
 def _benchmark_report() -> dict[str, object]:
     """Create a benchmark report that proves correctness and speedup."""
     return {
+        "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
         "summary": {
             "speedup_vs_disabled_cache": 1.2,
             "final_thermo_delta_vs_disabled_cache": {

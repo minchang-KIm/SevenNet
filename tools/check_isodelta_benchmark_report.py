@@ -19,6 +19,7 @@ from typing import Any
 # field names through the validation logic.
 SUMMARY_KEY = "summary"
 RESULTS_KEY = "results"
+RUN_TIMEOUT_SECONDS_KEY = "run_timeout_seconds"
 CASE_KEY = "case"
 RETURNCODE_KEY = "returncode"
 CACHE_SUMMARY_KEY = "cache_summary"
@@ -51,6 +52,7 @@ MIN_NONNEGATIVE_VALUE = 0.0
 MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = 100.0
 MIN_POSITIVE_SPEEDUP = 0.0
+MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
 CACHE_HIT_RATE_TOLERANCE_PERCENT = 1.0e-9
 CACHE_COUNT_TOLERANCE = 1.0e-9
 
@@ -155,6 +157,19 @@ def _summary(report: dict[str, Any]) -> dict[str, Any]:
 def _results(report: dict[str, Any]) -> list[Any]:
     """Return the report result list."""
     return _as_sequence(report.get(RESULTS_KEY), RESULTS_KEY)
+
+
+def _check_run_timeout(report: dict[str, Any]) -> float:
+    """Require the report to record a finite per-run timeout."""
+    run_timeout_seconds = _as_number(
+        report.get(RUN_TIMEOUT_SECONDS_KEY),
+        RUN_TIMEOUT_SECONDS_KEY,
+    )
+    _require(
+        run_timeout_seconds > MIN_POSITIVE_TIMEOUT_SECONDS,
+        f"{RUN_TIMEOUT_SECONDS_KEY} must be positive",
+    )
+    return run_timeout_seconds
 
 
 def _check_successful_runs(report: dict[str, Any]) -> int:
@@ -355,6 +370,7 @@ def validate_report(
     """Validate one report and return a compact evidence summary."""
     validate_thresholds(thresholds)
     summary = _summary(report)
+    run_timeout_seconds = _check_run_timeout(report)
     successful_run_count = (
         _check_successful_runs(report) if thresholds.require_successful_runs else None
     )
@@ -370,6 +386,7 @@ def validate_report(
         "status": "passed",
         "thresholds": asdict(thresholds),
         "successful_run_count": successful_run_count,
+        "run_timeout_seconds": run_timeout_seconds,
         "checked_observables": checked_observables,
         "max_seen_abs_thermo_delta": max_seen_delta,
         "speedup_vs_disabled_cache": speedup,

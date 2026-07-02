@@ -461,6 +461,8 @@ def main() -> None:
         "DEFAULT_MAX_ABS_THERMO_DELTA" in report_check
         and "validate_report" in report_check
         and "validate_thresholds" in report_check
+        and "RUN_TIMEOUT_SECONDS_KEY" in report_check
+        and "_check_run_timeout" in report_check
         and "MIN_REQUIRED_PAIRED_THERMO_COUNT" in report_check
         and "MAX_PERCENT_VALUE" in report_check
         and "math.isfinite" in report_check
@@ -502,6 +504,11 @@ def main() -> None:
         and "provenance.git_commit" in doc
         and "case_environment_overrides" in doc,
         "IsoDelta-Halo guide must document report provenance fields",
+    )
+    _require(
+        "run_timeout_seconds" in doc
+        and "report checker validates" in doc,
+        "IsoDelta-Halo guide must document report timeout evidence",
     )
     _require(
         "summary_rank_count" in doc

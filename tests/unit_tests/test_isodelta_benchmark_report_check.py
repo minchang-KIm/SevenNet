@@ -32,6 +32,7 @@ PERCENT_SCALE = 100.0
 SECOND_ENABLED_ATTEMPTS = 11.0
 SECOND_ENABLED_HITS = 9.0
 EXPECTED_ZERO_RESIDUAL = 0.0
+RUN_TIMEOUT_SECONDS = 3600.0
 
 
 def _cache_summary(
@@ -58,6 +59,7 @@ def _cache_summary(
 def _valid_report() -> dict[str, object]:
     """Create a small benchmark report with passing correctness evidence."""
     return {
+        "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
         "summary": {
             "speedup_vs_disabled_cache": 1.15,
             "final_thermo_delta_vs_disabled_cache": {
@@ -123,6 +125,35 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         self.assertEqual(evidence["min_enabled_hit_rate_percent"], 80.0)
         self.assertEqual(evidence["max_cache_count_residual"], EXPECTED_ZERO_RESIDUAL)
         self.assertEqual(evidence["verified_cache_miss_key_count"], 8.0)
+        self.assertEqual(evidence["run_timeout_seconds"], RUN_TIMEOUT_SECONDS)
+
+    def test_validate_report_rejects_missing_run_timeout(self) -> None:
+        """Paper evidence should record the timeout used for each run."""
+        report = _valid_report()
+        del report["run_timeout_seconds"]
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "run_timeout_seconds",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_nonpositive_run_timeout(self) -> None:
+        """A nonpositive timeout would not bound benchmark execution."""
+        report = _valid_report()
+        report["run_timeout_seconds"] = 0.0
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "run_timeout_seconds",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
 
     def test_validate_report_rejects_large_thermo_delta(self) -> None:
         """Thermo drift above the configured tolerance should fail."""
