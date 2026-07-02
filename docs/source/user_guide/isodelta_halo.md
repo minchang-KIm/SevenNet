@@ -104,6 +104,29 @@ python tools/check_isodelta_lammps_binary.py \
 This command runs LAMMPS help output and checks for `e3gnn/parallel`. It is a
 fast registration check, not a numerical correctness test.
 
+## End-to-End Experiment Driver
+
+For paper experiments, run the full gate as one command after building LAMMPS:
+
+```bash
+python tools/run_isodelta_experiment.py \
+  --lammps-command "mpiexec -n 4 lmp" \
+  --input /path/to/in.sevenn \
+  --lammps-root /path/to/lammps \
+  --require-torch \
+  --repeat 5 \
+  --output-dir isodelta_experiment_runs \
+  --max-abs-thermo-delta 1.0e-8 \
+  --min-paired-thermo-count 5 \
+  --min-speedup 1.05 \
+  --min-hit-rate-percent 50.0
+```
+
+The driver runs the prerequisite checker, binary smoke check, paired benchmark,
+and report correctness gate in that order. It writes stage logs and
+`isodelta_experiment_report.json`; archive that report with the benchmark JSON
+when using the numbers in a manuscript.
+
 ## Paired Benchmark
 
 Use the benchmark runner after building a LAMMPS binary that contains

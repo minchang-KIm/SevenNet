@@ -17,6 +17,7 @@ HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
 COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
 COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
 BENCHMARK_PATH = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
+EXPERIMENT_PATH = REPO_ROOT / "tools" / "run_isodelta_experiment.py"
 REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
@@ -42,6 +43,7 @@ def main() -> None:
     comm_brick_cpp = _read(COMM_BRICK_CPP_PATH)
     comm_brick_header = _read(COMM_BRICK_HEADER_PATH)
     benchmark = _read(BENCHMARK_PATH)
+    experiment = _read(EXPERIMENT_PATH)
     report_check = _read(REPORT_CHECK_PATH)
     prereq = _read(PREREQ_PATH)
     binary_check = _read(BINARY_CHECK_PATH)
@@ -208,6 +210,14 @@ def main() -> None:
         "benchmark runner must report final thermo consistency deltas",
     )
     _require(
+        "check_isodelta_build_prereqs.py" in experiment
+        and "check_isodelta_lammps_binary.py" in experiment
+        and "run_isodelta_lammps_benchmark.py" in experiment
+        and "check_isodelta_benchmark_report.py" in experiment
+        and "isodelta_experiment_report.json" in experiment,
+        "experiment driver must connect all runtime validation stages",
+    )
+    _require(
         "DEFAULT_MAX_ABS_THERMO_DELTA" in report_check
         and "validate_report" in report_check
         and "min_speedup" in report_check,
@@ -223,6 +233,11 @@ def main() -> None:
         and "--max-abs-thermo-delta" in doc
         and "--min-speedup" in doc,
         "IsoDelta-Halo guide must document the benchmark report checker",
+    )
+    _require(
+        "run_isodelta_experiment.py" in doc
+        and "isodelta_experiment_report.json" in doc,
+        "IsoDelta-Halo guide must document the end-to-end experiment driver",
     )
     _require(
         "SEVENN_ISODELTA_HALO_DISABLE" in doc
