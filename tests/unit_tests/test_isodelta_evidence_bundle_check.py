@@ -41,20 +41,26 @@ MIN_ENABLED_HITS = 8
 MIN_TRACE_METADATA_FRACTION_PERCENT = 20.0
 MIN_TRACE_ESTIMATED_SPEEDUP = 1.15
 OUT_OF_RANGE_PERCENT = 101.0
+PERCENT_SCALE = 100.0
 
 
 def _cache_summary(
     attempts: float = MIN_ENABLED_ATTEMPTS,
     hits: float = MIN_ENABLED_HITS,
-    hit_rate_percent: float = 80.0,
+    hit_rate_percent: float | None = None,
 ) -> dict[str, float]:
     """Create a complete IsoDelta-Halo cache summary for one run."""
+    resolved_hit_rate_percent = (
+        PERCENT_SCALE * hits / attempts
+        if hit_rate_percent is None
+        else hit_rate_percent
+    )
     return {
         "attempts": attempts,
         "hits": hits,
-        "hit_rate_percent": hit_rate_percent,
+        "hit_rate_percent": resolved_hit_rate_percent,
         "miss_disabled": 0.0,
-        "miss_no-cache": 1.0,
+        "miss_no-cache": attempts - hits,
         "miss_neighbor-list-rebuilt": 0.0,
         "miss_shape-changed": 0.0,
         "miss_tag-count-changed": 0.0,

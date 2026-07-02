@@ -51,6 +51,7 @@ MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = 100.0
 MIN_POSITIVE_SPEEDUP = 0.0
 CACHE_HIT_RATE_TOLERANCE_PERCENT = 1.0e-9
+CACHE_COUNT_TOLERANCE = 1.0e-9
 
 
 class ReportCheckError(ValueError):
@@ -240,6 +241,7 @@ def _check_cache_evidence(
     hit_rates: list[float] = []
     attempt_counts: list[float] = []
     hit_counts: list[float] = []
+    cache_count_residuals: list[float] = []
     verified_miss_keys: set[str] = set()
     for index, result in enumerate(_results(report)):
         result_map = _as_mapping(result, f"{RESULTS_KEY}[{index}]")
@@ -293,12 +295,28 @@ def _check_cache_evidence(
         attempt_counts.append(attempts)
         hit_counts.append(hits)
         hit_rates.append(hit_rate_percent)
+        miss_count_sum = 0.0
         for miss_key in REQUIRED_CACHE_MISS_KEYS:
-            _as_number(
+            miss_count = _as_number(
                 cache_summary.get(miss_key),
                 f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{miss_key}",
             )
+            _require(
+                miss_count >= MIN_NONNEGATIVE_VALUE,
+                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY}.{miss_key} must be nonnegative",
+            )
+            miss_count_sum += miss_count
             verified_miss_keys.add(miss_key)
+        expected_miss_count = attempts - hits
+        cache_count_residual = abs(miss_count_sum - expected_miss_count)
+        _require(
+            cache_count_residual <= CACHE_COUNT_TOLERANCE,
+            (
+                f"{RESULTS_KEY}[{index}].{CACHE_SUMMARY_KEY} miss counters "
+                "must match attempts - hits"
+            ),
+        )
+        cache_count_residuals.append(cache_count_residual)
 
     _require(hit_rates, f"no {ISODELTA_CASE} cache hit-rate entries found")
     min_seen_attempts = min(attempt_counts)
@@ -323,6 +341,7 @@ def _check_cache_evidence(
         "min_enabled_cache_attempts": min_seen_attempts,
         "min_enabled_cache_hits": min_seen_hits,
         "min_enabled_hit_rate_percent": min_seen_hit_rate,
+        "max_cache_count_residual": max(cache_count_residuals),
         "verified_cache_miss_key_count": float(len(verified_miss_keys)),
     }
 

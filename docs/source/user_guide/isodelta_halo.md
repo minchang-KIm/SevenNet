@@ -301,6 +301,9 @@ When multiple MPI ranks print profiling summaries, the benchmark parser sums
 rank-local attempts, hits, and miss counters, then recomputes
 `hit_rate_percent` from the aggregated hits and attempts. The report checker
 rejects cache summaries whose hit rate is inconsistent with those totals.
+It also rejects reports where the required miss reason counters do not sum to
+`attempts - hits`, so a miss breakdown table cannot silently drift away from
+the measured cache activity.
 
 For a publishable performance claim, report the mean and variance across
 multiple repeats, include cache hit rate, and show that final thermodynamic

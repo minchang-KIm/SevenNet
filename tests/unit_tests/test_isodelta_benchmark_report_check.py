@@ -30,6 +30,7 @@ SPEC.loader.exec_module(isodelta_report_check)
 PERCENT_SCALE = 100.0
 SECOND_ENABLED_ATTEMPTS = 11.0
 SECOND_ENABLED_HITS = 9.0
+EXPECTED_ZERO_RESIDUAL = 0.0
 
 
 def _cache_summary(
@@ -119,6 +120,7 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         self.assertEqual(evidence["min_enabled_cache_attempts"], 10.0)
         self.assertEqual(evidence["min_enabled_cache_hits"], 8.0)
         self.assertEqual(evidence["min_enabled_hit_rate_percent"], 80.0)
+        self.assertEqual(evidence["max_cache_count_residual"], EXPECTED_ZERO_RESIDUAL)
         self.assertEqual(evidence["verified_cache_miss_key_count"], 8.0)
 
     def test_validate_report_rejects_large_thermo_delta(self) -> None:
@@ -183,6 +185,7 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         assert isinstance(cache_summary, dict)
         cache_summary["hits"] = 0.0
         cache_summary["hit_rate_percent"] = 0.0
+        cache_summary["miss_no-cache"] = 9.0
 
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
@@ -230,6 +233,46 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_report_check.ReportCheckError,
             "cannot exceed attempts",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_inconsistent_miss_breakdown(self) -> None:
+        """Miss reason counters should sum to attempts minus cache hits."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["miss_shape-changed"] = 3.0
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "attempts - hits",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_negative_miss_counter(self) -> None:
+        """Miss reason counters should be nonnegative profiling counts."""
+        report = _valid_report()
+        results = report["results"]
+        assert isinstance(results, list)
+        enabled_result = results[1]
+        assert isinstance(enabled_result, dict)
+        cache_summary = enabled_result["cache_summary"]
+        assert isinstance(cache_summary, dict)
+        cache_summary["miss_shape-changed"] = -1.0
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "must be nonnegative",
         ):
             isodelta_report_check.validate_report(
                 report,

@@ -419,6 +419,13 @@ def main() -> None:
         "benchmark report checker must validate cache hit-rate consistency",
     )
     _require(
+        "CACHE_COUNT_TOLERANCE" in report_check
+        and "miss_count_sum" in report_check
+        and "max_cache_count_residual" in report_check
+        and "must match attempts - hits" in report_check,
+        "benchmark report checker must validate miss-counter consistency",
+    )
+    _require(
         "REQUIRED_CACHE_MISS_KEYS" in report_check
         and "miss_comm-list-tag-order-changed" in report_check
         and "verified_cache_miss_key_count" in report_check,
@@ -440,6 +447,11 @@ def main() -> None:
         and "recomputes" in doc
         and "aggregated hits and attempts" in doc,
         "IsoDelta-Halo guide must document MPI cache-summary aggregation",
+    )
+    _require(
+        "attempts - hits" in doc
+        and "miss breakdown table" in doc,
+        "IsoDelta-Halo guide must document miss-counter consistency",
     )
     _require(
         "sample_variance_loop_time_seconds" in doc
