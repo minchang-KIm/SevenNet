@@ -65,7 +65,8 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         """IsoDelta-Halo summary lines should parse all numeric key-value pairs."""
         log_text = (
             "0 IsoDelta-Halo summary: attempts=10 hits=8 "
-            "hit_rate_percent=80 miss_no-cache=1 miss_shape-changed=1"
+            "hit_rate_percent=80 miss_no-cache=1 miss_shape-changed=1 "
+            "miss_index-tensor-shape-changed=0"
         )
         parsed = isodelta_benchmark.parse_cache_summary(log_text)
         self.assertEqual(parsed["attempts"], 10.0)
@@ -74,6 +75,7 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         self.assertEqual(parsed["summary_rank_count"], 1.0)
         self.assertEqual(parsed["miss_no-cache"], 1.0)
         self.assertEqual(parsed["miss_shape-changed"], 1.0)
+        self.assertEqual(parsed["miss_index-tensor-shape-changed"], 0.0)
 
     def test_parse_cache_summary_counters_from_scientific_notation(self) -> None:
         """Summary counters should accept the same float syntax as thermo rows."""

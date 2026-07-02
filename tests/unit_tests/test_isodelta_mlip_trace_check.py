@@ -114,6 +114,10 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         self.assertEqual(evidence["status"], "passed")
         self.assertEqual(evidence["model"], "MACE")
         self.assertEqual(evidence["hits"], 3.0)
+        self.assertIn(
+            "miss_index-tensor-shape-changed",
+            evidence["miss_breakdown"],
+        )
         self.assertEqual(evidence["hit_rate_percent"], EXPECTED_STABLE_HIT_RATE_PERCENT)
         self.assertEqual(
             evidence["trace_count_residual"],

@@ -316,6 +316,7 @@ The runner writes `isodelta_benchmark_report.json`. Important fields are:
 - `results.*.cache_summary.miss_no-cache`
 - `results.*.cache_summary.miss_neighbor-list-rebuilt`
 - `results.*.cache_summary.miss_shape-changed`
+- `results.*.cache_summary.miss_index-tensor-shape-changed`
 - `results.*.cache_summary.miss_tag-count-changed`
 - `results.*.cache_summary.miss_tag-order-changed`
 - `results.*.cache_summary.miss_comm-topology-changed`
@@ -380,7 +381,7 @@ miss reason counter as whole nonnegative profiling counts, and each cache
 summary must record at least one attempt.
 On CUDA-aware MPI runs, the runtime also checks that cached index tensors still
 match their cached CPU index-vector lengths before reuse; a mismatch is treated
-as `miss_shape-changed` and the metadata cache is rebuilt.
+as `miss_index-tensor-shape-changed` and the metadata cache is rebuilt.
 
 For a publishable performance claim, report the mean and variance across
 multiple repeats, include cache hit rate, and show that final thermodynamic

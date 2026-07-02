@@ -65,6 +65,7 @@ MISS_DISABLED = "disabled"
 MISS_NO_CACHE = "no-cache"
 MISS_NEIGHBOR_REBUILT = "neighbor-list-rebuilt"
 MISS_SHAPE_CHANGED = "shape-changed"
+MISS_INDEX_TENSOR_SHAPE_CHANGED = "index-tensor-shape-changed"
 MISS_TAG_COUNT_CHANGED = "tag-count-changed"
 MISS_TAG_ORDER_CHANGED = "tag-order-changed"
 MISS_COMM_TOPOLOGY_CHANGED = "comm-topology-changed"
@@ -98,6 +99,7 @@ MISS_REASONS = (
     MISS_NO_CACHE,
     MISS_NEIGHBOR_REBUILT,
     MISS_SHAPE_CHANGED,
+    MISS_INDEX_TENSOR_SHAPE_CHANGED,
     MISS_TAG_COUNT_CHANGED,
     MISS_TAG_ORDER_CHANGED,
     MISS_COMM_TOPOLOGY_CHANGED,

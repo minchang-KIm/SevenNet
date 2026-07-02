@@ -46,6 +46,7 @@ REQUIRED_CACHE_MISS_KEYS = (
     "miss_no-cache",
     "miss_neighbor-list-rebuilt",
     "miss_shape-changed",
+    "miss_index-tensor-shape-changed",
     "miss_tag-count-changed",
     "miss_tag-order-changed",
     "miss_comm-topology-changed",

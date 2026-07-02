@@ -40,12 +40,13 @@ private:
     kNoCache,
     kNeighborListRebuilt,
     kShapeChanged,
+    kIndexTensorShapeChanged,
     kTagCountChanged,
     kTagOrderChanged,
     kCommTopologyChanged,
     kCommListTagOrderChanged,
   };
-  static constexpr int kCommCacheMissReasonCount = 8;
+  static constexpr int kCommCacheMissReasonCount = 9;
   static_assert(
       static_cast<int>(CommCacheMissReason::kCommListTagOrderChanged) + 1 ==
           kCommCacheMissReasonCount,

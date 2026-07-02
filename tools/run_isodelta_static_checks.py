@@ -67,8 +67,8 @@ def main() -> None:
     )
     _require("kCommPhaseCount = 6" in header, "named comm phase count missing")
     _require(
-        "kCommCacheMissReasonCount = 8" in header,
-        "cache miss reason count must include comm list tag changes",
+        "kCommCacheMissReasonCount = 9" in header,
+        "cache miss reason count must include index tensor shape changes",
     )
     _require("[6]" not in cpp, "raw six-phase array/magic count remains in cpp")
     _require("[6]" not in header, "raw six-phase array/magic count remains in header")
@@ -97,7 +97,9 @@ def main() -> None:
         and "index_tensor_matches_vector" in cpp
         and "cached_comm_tensors_match_vectors" in combined
         and "if (!cached_comm_tensors_match_vectors())" in cpp
-        and "record_comm_cache_miss(CommCacheMissReason::kShapeChanged);" in cpp
+        and "kIndexTensorShapeChanged" in header
+        and "index-tensor-shape-changed" in cpp
+        and "record_comm_cache_miss(CommCacheMissReason::kIndexTensorShapeChanged);" in cpp
         and "if (index_map.empty())" in cpp
         and "torch::empty({kEmptyIndexTensorLength}, INTEGER_TYPE)" in cpp
         and "torch::from_blob(idx_map_forward.data()" not in cpp
@@ -327,6 +329,7 @@ def main() -> None:
         and "evidence[MODEL_KEY] = model_name" in mlip_trace_check
         and "MISS_COMM_TOPOLOGY_CHANGED" in mlip_trace_check
         and "MISS_COMM_LIST_TAG_ORDER_CHANGED" in mlip_trace_check
+        and "MISS_INDEX_TENSOR_SHAPE_CHANGED" in mlip_trace_check
         and "TraceThresholds" in mlip_trace_check
         and "validate_thresholds" in mlip_trace_check
         and "MAX_PERCENT_VALUE" in mlip_trace_check
@@ -628,6 +631,7 @@ def main() -> None:
     _require(
         "REQUIRED_CACHE_MISS_KEYS" in report_check
         and "miss_comm-list-tag-order-changed" in report_check
+        and "miss_index-tensor-shape-changed" in report_check
         and "verified_cache_miss_key_count" in report_check,
         "benchmark report checker must require miss breakdown coverage",
     )
@@ -701,7 +705,7 @@ def main() -> None:
     _require(
         "CUDA-aware MPI runs" in doc
         and "cached index tensors" in doc
-        and "`miss_shape-changed`" in doc,
+        and "`miss_index-tensor-shape-changed`" in doc,
         "IsoDelta-Halo guide must document CUDA index tensor reuse guard",
     )
     _require(
@@ -767,6 +771,7 @@ def main() -> None:
         "miss_no-cache",
         "miss_neighbor-list-rebuilt",
         "miss_shape-changed",
+        "miss_index-tensor-shape-changed",
         "miss_tag-count-changed",
         "miss_tag-order-changed",
         "miss_comm-topology-changed",

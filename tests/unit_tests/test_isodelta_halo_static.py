@@ -76,7 +76,7 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
     def test_cache_is_conservatively_gated(self) -> None:
         """Reuse should only happen after neighbor-list rebuild checks pass."""
         self.assertIn("try_reuse_comm_preprocess_cache", self.combined)
-        self.assertIn("kCommCacheMissReasonCount = 8", self.header)
+        self.assertIn("kCommCacheMissReasonCount = 9", self.header)
         self.assertIn("neighbor->ago <= kNeighborListJustBuiltAgo", self.cpp)
         self.assertIn("comm_cache_graph_tags", self.combined)
         self.assertIn("tag[atom_idx] != comm_cache_graph_tags[graph_idx]", self.cpp)
@@ -86,6 +86,7 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("comm_list_tags_match_cache", self.combined)
         self.assertIn("store_comm_list_tag_signature", self.combined)
         self.assertIn("comm-list-tag-order-changed", self.cpp)
+        self.assertIn("index-tensor-shape-changed", self.cpp)
 
     def test_cache_miss_rebuilds_and_stores_metadata(self) -> None:
         """A miss must rebuild first and store only when the cache is enabled."""
@@ -172,7 +173,7 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
             self.cpp,
         )
         self.assertIn(
-            "record_comm_cache_miss(CommCacheMissReason::kShapeChanged);",
+            "record_comm_cache_miss(CommCacheMissReason::kIndexTensorShapeChanged);",
             self.cpp,
         )
 

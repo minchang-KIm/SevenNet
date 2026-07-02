@@ -773,6 +773,8 @@ const char *PairE3GNNParallel::comm_cache_miss_reason_name(
     return "neighbor-list-rebuilt";
   case CommCacheMissReason::kShapeChanged:
     return "shape-changed";
+  case CommCacheMissReason::kIndexTensorShapeChanged:
+    return "index-tensor-shape-changed";
   case CommCacheMissReason::kTagCountChanged:
     return "tag-count-changed";
   case CommCacheMissReason::kTagOrderChanged:
@@ -848,7 +850,7 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
     return false;
   }
   if (!cached_comm_tensors_match_vectors()) {
-    record_comm_cache_miss(CommCacheMissReason::kShapeChanged);
+    record_comm_cache_miss(CommCacheMissReason::kIndexTensorShapeChanged);
     invalidate_comm_preprocess_cache();
     return false;
   }

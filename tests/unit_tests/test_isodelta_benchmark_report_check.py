@@ -82,6 +82,7 @@ def _cache_summary(
         "miss_no-cache": miss_no_cache,
         "miss_neighbor-list-rebuilt": miss_neighbor_list_rebuilt,
         "miss_shape-changed": 0.0,
+        "miss_index-tensor-shape-changed": 0.0,
         "miss_tag-count-changed": 0.0,
         "miss_tag-order-changed": 0.0,
         "miss_comm-topology-changed": 0.0,
@@ -236,7 +237,10 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
             evidence["min_cache_summary_rank_count"],
             DEFAULT_SUMMARY_RANK_COUNT,
         )
-        self.assertEqual(evidence["verified_cache_miss_key_count"], 8.0)
+        self.assertEqual(
+            evidence["verified_cache_miss_key_count"],
+            float(len(isodelta_report_check.REQUIRED_CACHE_MISS_KEYS)),
+        )
         self.assertEqual(evidence["result_count"], EXPECTED_RESULT_COUNT)
         self.assertEqual(evidence["run_timeout_seconds"], RUN_TIMEOUT_SECONDS)
         self.assertEqual(evidence["paired_repeat_count"], 2)
