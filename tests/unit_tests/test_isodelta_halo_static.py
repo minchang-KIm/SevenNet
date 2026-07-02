@@ -130,6 +130,13 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         """Inactive phases should not read uninitialized CommBrick proc ids."""
         self.assertIn("notify_proc_ids(", self.cpp)
         self.assertIn("int active_phase_count", self.cpp)
+        self.assertIn("kNoActiveCommPhases = 0", self.header)
+        self.assertIn("bounded_active_phase_count", self.cpp)
+        self.assertIn(
+            "std::min(std::max(active_phase_count, kNoActiveCommPhases)",
+            self.cpp,
+        )
+        self.assertIn("iswap < bounded_active_phase_count", self.cpp)
         self.assertIn(
             "active_phase ? sendproc[iswap] : kInactiveCommPhaseValue",
             self.cpp,

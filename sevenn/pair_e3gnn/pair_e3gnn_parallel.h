@@ -33,6 +33,7 @@ private:
   // and reverse sweeps. Keeping this named avoids hidden phase-count coupling.
   static constexpr int kCommPhaseCount = 6;
   static constexpr int kNeighborListJustBuiltAgo = 0;
+  static constexpr int kNoActiveCommPhases = 0;
 
   enum class CommCacheMissReason {
     kDisabled = 0,

@@ -20,6 +20,7 @@
 #include <ATen/ops/from_blob.h>
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -714,8 +715,11 @@ double PairE3GNNParallel::init_one(int i, int j) { return cutoff; }
 
 void PairE3GNNParallel::notify_proc_ids(
     const int *sendproc, const int *recvproc, int active_phase_count) {
+  const int bounded_active_phase_count =
+      std::min(std::max(active_phase_count, kNoActiveCommPhases),
+               kCommPhaseCount);
   for (int iswap = 0; iswap < kCommPhaseCount; iswap++) {
-    const bool active_phase = iswap < active_phase_count;
+    const bool active_phase = iswap < bounded_active_phase_count;
     this->sendproc[iswap] =
         active_phase ? sendproc[iswap] : kInactiveCommPhaseValue;
     this->recvproc[iswap] =

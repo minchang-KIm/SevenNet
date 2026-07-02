@@ -58,7 +58,14 @@ def main() -> None:
     )
     _require("[6]" not in cpp, "raw six-phase array/magic count remains in cpp")
     _require("[6]" not in header, "raw six-phase array/magic count remains in header")
-    for include_name in ("<cstring>", "<iostream>", "<list>", "<map>", "<set>"):
+    for include_name in (
+        "<algorithm>",
+        "<cstring>",
+        "<iostream>",
+        "<list>",
+        "<map>",
+        "<set>",
+    ):
         _require(
             f"#include {include_name}" in cpp,
             f"pair_e3gnn_parallel.cpp must explicitly include {include_name}",
@@ -70,6 +77,10 @@ def main() -> None:
     _require(
         "notify_proc_ids(" in cpp
         and "int active_phase_count" in cpp
+        and "kNoActiveCommPhases = 0" in header
+        and "bounded_active_phase_count" in cpp
+        and "std::min(std::max(active_phase_count, kNoActiveCommPhases)" in cpp
+        and "iswap < bounded_active_phase_count" in cpp
         and "active_phase ? sendproc[iswap] : kInactiveCommPhaseValue" in cpp
         and "active_phase ? recvproc[iswap] : kInactiveCommPhaseValue" in cpp,
         "proc id notification must initialize inactive comm phases",
