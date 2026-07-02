@@ -68,6 +68,8 @@ namespace {
 constexpr const char *kIsoDeltaHaloDisableEnv = "SEVENN_ISODELTA_HALO_DISABLE";
 constexpr const char *kIsoDeltaHaloProfileEnv = "SEVENN_ISODELTA_HALO_PROFILE";
 constexpr double kIsoDeltaHaloPercentScale = 100.0;
+constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
+constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
 } // namespace
 
 DeviceBuffManager &DeviceBuffManager::getInstance() {
@@ -478,9 +480,9 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   if (print_info) {
     size_t free, tot;
     cudaMemGetInfo(&free, &tot);
-    std::cout << world_rank << " MEM use after backward(MB)" << std::endl;
-    double Mfree = static_cast<double>(free) / (1024 * 1024);
-    double Mtot = static_cast<double>(tot) / (1024 * 1024);
+    std::cout << world_rank << " MEM use after backward(MiB)" << std::endl;
+    double Mfree = static_cast<double>(free) / kBytesPerMebibyte;
+    double Mtot = static_cast<double>(tot) / kBytesPerMebibyte;
     std::cout << world_rank << " Total: " << Mtot << std::endl;
     std::cout << world_rank << " Free: " << Mfree << std::endl;
     std::cout << world_rank << " Used: " << Mtot - Mfree << std::endl;
@@ -1164,8 +1166,9 @@ int PairE3GNNParallel::pack_forward_comm_gnn(float *buf, int comm_phase) {
     std::cout << world_rank << " pack_forward n: " << n << std::endl;
     std::cout << world_rank << " pack_forward x_dim*n: " << x_dim * n
               << std::endl;
-    double Msend = static_cast<double>(x_dim * n * 4) / (1024 * 1024);
-    std::cout << world_rank << " send size(MB): " << Msend << "\n" << std::endl;
+    double Msend = static_cast<double>(x_dim) * static_cast<double>(n) *
+                   kFloatElementBytes / kBytesPerMebibyte;
+    std::cout << world_rank << " send size(MiB): " << Msend << "\n" << std::endl;
   }
   return x_dim * n;
 }
@@ -1218,7 +1221,8 @@ int PairE3GNNParallel::pack_reverse_comm_gnn(float *buf, int comm_phase) {
     std::cout << world_rank << " pack_reverse n: " << n << std::endl;
     std::cout << world_rank << " pack_reverse x_dim*n: " << x_dim * n
               << std::endl;
-    double Msend = static_cast<double>(x_dim * n * 4) / (1024 * 1024);
+    double Msend = static_cast<double>(x_dim) * static_cast<double>(n) *
+                   kFloatElementBytes / kBytesPerMebibyte;
   }
   return x_dim * n;
 }

@@ -172,6 +172,19 @@ def main() -> None:
         "cache hit-rate scale must be a named cpp-local constant",
     )
     _require(
+        "kBytesPerMebibyte" in cpp
+        and "kFloatElementBytes" in cpp
+        and "(1024 * 1024)" not in cpp
+        and "x_dim * n * 4" not in cpp,
+        "profiling byte-size calculations must use named constants",
+    )
+    _require(
+        "MEM use after backward(MiB)" in cpp
+        and "send size(MiB)" in cpp
+        and "send size(MB)" not in cpp,
+        "profiling memory labels must match MiB calculations",
+    )
+    _require(
         "comm_cache_attempts++" in cpp and "comm_cache_hits++" in cpp,
         "cache hit/attempt counters are missing",
     )
