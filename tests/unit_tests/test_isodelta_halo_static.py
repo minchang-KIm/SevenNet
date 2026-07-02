@@ -128,9 +128,21 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         """Cached tensor views should not borrow vectors cleared on later steps."""
         self.assertIn("make_owned_index_tensor", self.cpp)
         self.assertIn(".clone()\n      .to(target_device)", self.cpp)
+        self.assertIn("kEmptyIndexTensorLength", self.cpp)
+        self.assertIn("if (index_map.empty())", self.cpp)
+        self.assertIn("torch::empty({kEmptyIndexTensorLength}, INTEGER_TYPE)", self.cpp)
         self.assertNotIn("torch::from_blob(idx_map_forward.data()", self.cpp)
         self.assertNotIn("torch::from_blob(upmap.data()", self.cpp)
         self.assertNotIn("torch::from_blob(idx_map_reverse.data()", self.cpp)
+
+    def test_comm_preprocess_requires_comm_brick(self) -> None:
+        """The parallel pair style should fail clearly without CommBrick."""
+        self.assertIn("kIsoDeltaHaloCommBrickRequiredError", self.cpp)
+        self.assertIn("if (comm_brick == nullptr)", self.cpp)
+        self.assertIn(
+            "error->all(FLERR, kIsoDeltaHaloCommBrickRequiredError)",
+            self.cpp,
+        )
 
     def test_comm_brick_exposes_read_only_topology_accessors(self) -> None:
         """The pair cache should compare current CommBrick topology before reuse."""

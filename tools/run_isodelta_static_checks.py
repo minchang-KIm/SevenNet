@@ -87,10 +87,19 @@ def main() -> None:
     _require(
         "make_owned_index_tensor" in cpp
         and ".clone()\n      .to(target_device)" in cpp
+        and "kEmptyIndexTensorLength" in cpp
+        and "if (index_map.empty())" in cpp
+        and "torch::empty({kEmptyIndexTensorLength}, INTEGER_TYPE)" in cpp
         and "torch::from_blob(idx_map_forward.data()" not in cpp
         and "torch::from_blob(upmap.data()" not in cpp
         and "torch::from_blob(idx_map_reverse.data()" not in cpp,
         "cached index tensors must own memory instead of borrowing step vectors",
+    )
+    _require(
+        "kIsoDeltaHaloCommBrickRequiredError" in cpp
+        and "if (comm_brick == nullptr)" in cpp
+        and "error->all(FLERR, kIsoDeltaHaloCommBrickRequiredError)" in cpp,
+        "comm_preprocess must fail clearly when CommBrick is unavailable",
     )
     _require(
         "notify_proc_ids(" in cpp

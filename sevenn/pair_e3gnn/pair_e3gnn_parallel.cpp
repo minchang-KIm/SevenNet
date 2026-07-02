@@ -67,14 +67,21 @@ namespace {
 // data-member definitions while still naming every experiment-facing literal.
 constexpr const char *kIsoDeltaHaloDisableEnv = "SEVENN_ISODELTA_HALO_DISABLE";
 constexpr const char *kIsoDeltaHaloProfileEnv = "SEVENN_ISODELTA_HALO_PROFILE";
+constexpr const char *kIsoDeltaHaloCommBrickRequiredError =
+    "IsoDelta-Halo e3gnn/parallel requires LAMMPS CommBrick communication";
 constexpr double kIsoDeltaHaloPercentScale = 100.0;
 constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
 constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
+constexpr long long kEmptyIndexTensorLength = 0;
 
 torch::Tensor make_owned_index_tensor(std::vector<long> &index_map,
                                       const torch::Device &target_device) {
   // from_blob borrows vector memory on CPU, so clone before moving to the
   // target device. The cache must outlive per-step vector cleanup.
+  if (index_map.empty()) {
+    return torch::empty({kEmptyIndexTensorLength}, INTEGER_TYPE)
+        .to(target_device);
+  }
   return torch::from_blob(
              index_map.data(),
              {static_cast<long long>(index_map.size())},
@@ -1052,6 +1059,9 @@ void PairE3GNNParallel::store_comm_list_tag_signature() {
 void PairE3GNNParallel::comm_preprocess() {
   assert(!comm_preprocess_done);
   CommBrick *comm_brick = dynamic_cast<CommBrick *>(comm);
+  if (comm_brick == nullptr) {
+    error->all(FLERR, kIsoDeltaHaloCommBrickRequiredError);
+  }
 
   // fake lammps communication call to preprocess index
   // gives complete comm_index_pack, unpack_forward, and extra_graph_idx_map
