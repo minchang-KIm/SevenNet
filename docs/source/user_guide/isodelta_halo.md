@@ -91,6 +91,11 @@ python tools/check_isodelta_build_prereqs.py \
 The checker prints JSON so failed checks can be archived with build logs. It
 does not modify the LAMMPS tree.
 
+The patch script copies `pair_e3gnn_oeq_autograd.cpp` together with the serial
+and parallel pair styles. Keep that bridge present even for non-oEq builds,
+because the pair styles reference its registration symbol and the no-op path
+keeps the link step reproducible.
+
 ## Binary Smoke Check
 
 After building LAMMPS, verify that the patched pair style is registered before

@@ -8,6 +8,7 @@ oeq_so="${5:-NONE}"
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 enable_flashTP=0
 enable_oeq=0
+REQUIRED_LAMMPS_VERSION="2 Aug 2023"
 
 ###########################################
 # Check if the given arguments are valid  #
@@ -56,7 +57,7 @@ if [ -f "$oeq_so" ]; then
 elif [ "$oeq_so" = "NONE" ]; then
     echo "[OEQ] Skipped: not provided"
 else
-    echo "[OEQ] Skipped: nvalid or missing oeq_so given"
+    echo "[OEQ] Skipped: invalid or missing oeq_so given"
     oeq_so="NONE"
 fi
 
@@ -92,11 +93,10 @@ lammps_version=$(grep "#define LAMMPS_VERSION" $lammps_root/src/version.h | awk 
 
 # Combine version and update
 detected_version="$lammps_version"
-required_version="2 Aug 2023"  # Example required version
 
 # Check if the detected version is compatible
-if [[ "$detected_version" != "$required_version" ]]; then
-    echo "Warning: Detected LAMMPS version ($detected_version) may not be compatible. Required version: $required_version"
+if [[ "$detected_version" != "$REQUIRED_LAMMPS_VERSION" ]]; then
+    echo "Warning: Detected LAMMPS version ($detected_version) may not be compatible. Required version: $REQUIRED_LAMMPS_VERSION"
 fi
 
 ###########################################
@@ -121,8 +121,9 @@ cp $lammps_root/cmake/CMakeLists.txt $backup_dir/CMakeLists.txt
 # 1. Copy pair_e3gnn files to LAMMPS source
 cp $SCRIPT_DIR/{pair_e3gnn,pair_e3gnn_parallel,comm_brick}.cpp $lammps_root/src/
 cp $SCRIPT_DIR/{pair_e3gnn,pair_e3gnn_parallel,comm_brick}.h $lammps_root/src/
-# Always copy the oEq autograd bridge (pair_e3gnn.cpp has an extern reference to it)
-cp $SCRIPT_DIR/pair_e3gnn_oeq_autograd.cpp $lammps_root/src/  # TODO: set this as oeq-specific
+# Always copy the oEq autograd bridge because pair_e3gnn.cpp has an extern
+# reference and the no-op registration path keeps non-oEq builds linkable.
+cp $SCRIPT_DIR/pair_e3gnn_oeq_autograd.cpp $lammps_root/src/
 
 # 2. Patch cmake/CMakeLists.txt
 sed -i "s/set(CMAKE_CXX_STANDARD 11)/set(CMAKE_CXX_STANDARD $cxx_standard)/" $lammps_root/cmake/CMakeLists.txt

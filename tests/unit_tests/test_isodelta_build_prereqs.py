@@ -16,6 +16,7 @@ import unittest
 # Load the tool by path because tools/ is not an import package in SevenNet.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PREREQ_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
+PATCH_SCRIPT = REPO_ROOT / "sevenn" / "pair_e3gnn" / "patch_lammps.sh"
 SPEC = importlib.util.spec_from_file_location("isodelta_prereqs", PREREQ_SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 isodelta_prereqs = importlib.util.module_from_spec(SPEC)
@@ -42,6 +43,15 @@ class IsoDeltaBuildPrereqTest(unittest.TestCase):
         checked_names = {result.name for result in results}
         self.assertIn("pair-source:pair_e3gnn_parallel.cpp", checked_names)
         self.assertIn("pair-source:comm_brick.cpp", checked_names)
+        self.assertIn("pair-source:pair_e3gnn_oeq_autograd.cpp", checked_names)
+
+    def test_patch_script_documents_required_build_inputs(self) -> None:
+        """The patch script should copy every source required for linking."""
+        patch_text = PATCH_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('REQUIRED_LAMMPS_VERSION="2 Aug 2023"', patch_text)
+        self.assertIn("pair_e3gnn_oeq_autograd.cpp", patch_text)
+        self.assertNotIn("TODO", patch_text)
+        self.assertNotIn("Example required version", patch_text)
 
     def test_lammps_root_version_mismatch_is_reported(self) -> None:
         """A wrong LAMMPS version should be a visible failed check."""

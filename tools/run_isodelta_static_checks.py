@@ -21,6 +21,7 @@ EXPERIMENT_PATH = REPO_ROOT / "tools" / "run_isodelta_experiment.py"
 REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
+PATCH_SCRIPT_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "patch_lammps.sh"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
 DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
 
@@ -47,6 +48,7 @@ def main() -> None:
     report_check = _read(REPORT_CHECK_PATH)
     prereq = _read(PREREQ_PATH)
     binary_check = _read(BINARY_CHECK_PATH)
+    patch_script = _read(PATCH_SCRIPT_PATH)
     doc = _read(DOC_PATH)
     doc_index = _read(DOC_INDEX_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
@@ -212,6 +214,16 @@ def main() -> None:
         and "check_lammps_root" in prereq
         and "check_torch_import" in prereq,
         "build prerequisite checker must cover LAMMPS and torch checks",
+    )
+    _require(
+        'REQUIRED_LAMMPS_VERSION="2 Aug 2023"' in patch_script
+        and "REQUIRED_LAMMPS_VERSION" in patch_script
+        and "pair_e3gnn_oeq_autograd.cpp" in patch_script,
+        "LAMMPS patch script must name the version and copy the oEq bridge",
+    )
+    _require(
+        "TODO" not in patch_script and "Example required version" not in patch_script,
+        "LAMMPS patch script must not contain temporary implementation notes",
     )
     _require(
         "check_isodelta_build_prereqs.py" in doc,
