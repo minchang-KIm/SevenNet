@@ -467,6 +467,8 @@ def main() -> None:
         and "REPEAT_INDEX_KEY" in report_check
         and "_check_paired_runs" in report_check
         and "paired_repeat_count" in report_check
+        and "MAX_ABS_DELTA_KEY} must be nonnegative" in report_check
+        and "PAIRED_COUNT_KEY} must be a positive integer" in report_check
         and "MIN_REQUIRED_PAIRED_THERMO_COUNT" in report_check
         and "MAX_PERCENT_VALUE" in report_check
         and "math.isfinite" in report_check

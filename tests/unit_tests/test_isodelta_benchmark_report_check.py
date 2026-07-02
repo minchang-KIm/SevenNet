@@ -224,6 +224,46 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                 ),
             )
 
+    def test_validate_report_rejects_negative_thermo_delta(self) -> None:
+        """Thermo delta magnitudes should never be negative."""
+        report = _valid_report()
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        deltas = summary["final_thermo_delta_vs_disabled_cache"]
+        assert isinstance(deltas, dict)
+        poteng = deltas["PotEng"]
+        assert isinstance(poteng, dict)
+        poteng["max_abs_delta"] = -1.0e-9
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "max_abs_delta",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_fractional_thermo_pair_count(self) -> None:
+        """Paired thermo counts should represent whole baseline/enabled pairs."""
+        report = _valid_report()
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+        deltas = summary["final_thermo_delta_vs_disabled_cache"]
+        assert isinstance(deltas, dict)
+        poteng = deltas["PotEng"]
+        assert isinstance(poteng, dict)
+        poteng["paired_count"] = 1.5
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "paired_count",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
     def test_validate_report_rejects_weak_speedup(self) -> None:
         """Optional effect gates should reject slow enabled-cache runs."""
         with self.assertRaisesRegex(

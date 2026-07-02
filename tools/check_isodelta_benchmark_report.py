@@ -270,6 +270,15 @@ def _check_thermo_deltas(
             f"{observable}.{PAIRED_COUNT_KEY}",
         )
         _require(
+            max_abs_delta >= MIN_NONNEGATIVE_VALUE,
+            f"{observable} {MAX_ABS_DELTA_KEY} must be nonnegative",
+        )
+        _require(
+            paired_count >= MIN_REQUIRED_PAIRED_THERMO_COUNT
+            and paired_count.is_integer(),
+            f"{observable} {PAIRED_COUNT_KEY} must be a positive integer",
+        )
+        _require(
             paired_count >= thresholds.min_paired_thermo_count,
             (
                 f"{observable} paired_count {paired_count:g} is below "

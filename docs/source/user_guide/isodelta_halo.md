@@ -326,6 +326,8 @@ so accepted benchmark evidence proves that each LAMMPS invocation was bounded.
 It also validates that every `repeat_index` has exactly one `baseline-disabled`
 run and one `isodelta-enabled` run, then reports `paired_repeat_count` in the
 evidence summary.
+For thermo deltas, `max_abs_delta` must be nonnegative and `paired_count` must
+be a whole positive count that does not exceed `paired_repeat_count`.
 When multiple MPI ranks print profiling summaries, the benchmark parser sums
 rank-local attempts, hits, and miss counters, then recomputes
 `hit_rate_percent` from the aggregated hits and attempts. The report checker
