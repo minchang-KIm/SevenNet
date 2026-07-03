@@ -75,6 +75,7 @@ REQUIRED_FILE_SNIPPETS = {
         "test_pipeline_runs_all_paper_stages_and_verifies_bundle",
         "test_pipeline_stops_when_readiness_fails",
         "test_pipeline_stops_when_preflight_fails",
+        "test_pipeline_reports_bundle_verification_failure",
         "test_readiness_check_accepts_strict_three_model_paired_manifest",
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (

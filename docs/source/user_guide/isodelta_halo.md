@@ -393,6 +393,9 @@ verification.
 If the preflight gate fails after artifact preparation, the pipeline keeps
 `preflight_report.json` and `artifact_preparation_report.json`, marks the
 pipeline failed, and stops before plan, timing runs, or summary generation.
+If output bundle verification fails after the suite writes tables and figures,
+the pipeline records the fingerprint mismatch in `pipeline_report.json` and
+does not report the run as passed.
 
 On a SLURM cluster, generate a commented submission script from the same
 manifest:

@@ -860,6 +860,7 @@ def main() -> None:
         and "test_preflight_only_reports_failed_case_check" in cluster_suite_test
         and "test_pipeline_stops_when_readiness_fails" in cluster_suite_test
         and "test_pipeline_stops_when_preflight_fails" in cluster_suite_test
+        and "test_pipeline_reports_bundle_verification_failure" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
         and "try_reuse_case_outputs" in cluster_suite
@@ -999,6 +1000,8 @@ def main() -> None:
         and "preflight gate fails" in doc
         and "stops before plan, timing runs, or summary generation" in doc
         and "commands, timing runs, or summary generation" in doc
+        and "output bundle verification fails" in doc
+        and "fingerprint mismatch" in doc
         and "verifies the output bundle fingerprints" in doc
         and "Use `--reuse-passed`" in doc
         and "`--pipeline` after an interrupted run" in doc,

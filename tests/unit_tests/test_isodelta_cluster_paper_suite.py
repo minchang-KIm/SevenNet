@@ -38,6 +38,10 @@ EXPECTED_RESULT_COUNT = 4
 ENABLED_ATTEMPTS = 10.0
 ENABLED_HITS = 8.0
 DISABLED_ATTEMPTS = 10.0
+PIPELINE_PREFLIGHT_FAILURE_RETURN_CODE = 7
+PIPELINE_MIN_SPEEDUP = 1.05
+PIPELINE_MIN_SPEEDUP_LOWER_BOUND = 1.0
+PAPER_REPEAT_COUNT = isodelta_cluster_suite.FINAL_PAPER_MIN_REPEAT_COUNT
 TRACE_ATTEMPTS = 4.0
 TRACE_HITS = 3.0
 TRACE_HIT_RATE_PERCENT = PERCENT_SCALE * TRACE_HITS / TRACE_ATTEMPTS
@@ -1120,7 +1124,11 @@ trace_evidence = ["missing_nequip_trace.json"]
                 case_name = f"{model_name.lower()}-preflight-fails"
                 trace_path = root / f"{model_name.lower()}_trace.json"
                 trace_path.write_text(json.dumps(_trace_evidence(model_name)), encoding="utf-8")
-                preflight_exit_code = 7 if model_name == "MACE" else 0
+                preflight_exit_code = (
+                    PIPELINE_PREFLIGHT_FAILURE_RETURN_CODE
+                    if model_name == "MACE"
+                    else isodelta_cluster_suite.SUCCESS_RETURN_CODE
+                )
                 case_blocks.append(
                     f"""
 [[cases]]
@@ -1130,7 +1138,7 @@ kind = "external_pair"
 preflight_command = '"{python_bin}" -c "import sys; sys.exit({preflight_exit_code})"'
 disabled_command = "unused-disabled"
 enabled_command = "unused-enabled"
-repeat_count = 3
+repeat_count = {PAPER_REPEAT_COUNT}
 trace_evidence = ["{trace_path.as_posix()}"]
 required_trace_models = ["{model_name}"]
 artifacts = ["dataset"]
@@ -1144,11 +1152,11 @@ output_dir = "{output_dir.as_posix()}"
 expected_gpus = 8
 required_models = ["SevenNet", "MACE", "NequIP"]
 require_artifact_sha256 = true
-repeat_count = 3
-min_trace_count = 3
-min_distinct_trace_models = 3
-min_speedup = 1.05
-min_speedup_95ci_lower_bound = 1.0
+repeat_count = {PAPER_REPEAT_COUNT}
+min_trace_count = {PAPER_REPEAT_COUNT}
+min_distinct_trace_models = {len(isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS)}
+min_speedup = {PIPELINE_MIN_SPEEDUP}
+min_speedup_95ci_lower_bound = {PIPELINE_MIN_SPEEDUP_LOWER_BOUND}
 
 [[artifacts]]
 name = "dataset"
@@ -1191,10 +1199,148 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertEqual(stage_names, ["readiness", "prepare_artifacts", "preflight"])
         self.assertEqual(preflight_report["status"], isodelta_cluster_suite.PREFLIGHT_STATUS_FAILED)
         self.assertEqual(preflight_report["failures"][0]["stage"], "case_preflight")
-        self.assertEqual(preflight_report["case_preflights"][1]["returncode"], 7)
+        self.assertEqual(
+            preflight_report["case_preflights"][1]["returncode"],
+            PIPELINE_PREFLIGHT_FAILURE_RETURN_CODE,
+        )
         self.assertTrue(artifact_report_exists)
         self.assertTrue(stopped_before_plan)
         self.assertTrue(stopped_before_summary)
+
+    def test_pipeline_reports_bundle_verification_failure(self) -> None:
+        """A final fingerprint mismatch should fail the pipeline after run output."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            python_bin = Path(sys.executable).as_posix()
+            source_path = root / "source-data.bin"
+            source_path.write_bytes(b"pipeline verification failure input")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            output_dir = root / "paper_outputs"
+            manifest_path = root / "suite.toml"
+            pipeline_report_path = root / "pipeline_report.json"
+            case_blocks = []
+            for model_name in ("SevenNet", "MACE", "NequIP"):
+                case_name = f"{model_name.lower()}-verification-fails"
+                trace_path = root / f"{model_name.lower()}_trace.json"
+                trace_path.write_text(json.dumps(_trace_evidence(model_name)), encoding="utf-8")
+                case_blocks.append(
+                    f"""
+[[cases]]
+name = "{case_name}"
+model = "{model_name}"
+kind = "external_pair"
+preflight_command = '"{python_bin}" -c "import sys; sys.exit(0)"'
+disabled_command = "unused-disabled"
+enabled_command = "unused-enabled"
+repeat_count = {PAPER_REPEAT_COUNT}
+trace_evidence = ["{trace_path.as_posix()}"]
+required_trace_models = ["{model_name}"]
+artifacts = ["dataset"]
+"""
+                )
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "pipeline-verification-fails"
+output_dir = "{output_dir.as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet", "MACE", "NequIP"]
+require_artifact_sha256 = true
+repeat_count = {PAPER_REPEAT_COUNT}
+min_trace_count = {PAPER_REPEAT_COUNT}
+min_distinct_trace_models = {len(isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS)}
+min_speedup = {PIPELINE_MIN_SPEEDUP}
+min_speedup_95ci_lower_bound = {PIPELINE_MIN_SPEEDUP_LOWER_BOUND}
+
+[[artifacts]]
+name = "dataset"
+path = "{(root / "downloaded.bin").as_posix()}"
+url = "{source_path.as_uri()}"
+sha256 = "{digest}"
+required_by = ["SevenNet", "MACE", "NequIP"]
+
+{''.join(case_blocks)}
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            for case in config.cases:
+                timing_path = isodelta_cluster_suite._external_timing_report_path(
+                    config,
+                    case,
+                )
+                timing_path.parent.mkdir(parents=True, exist_ok=True)
+                timing_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": isodelta_cluster_suite.EXTERNAL_TIMING_SCHEMA_VERSION,
+                            "case_name": case.name,
+                            "model": case.model,
+                            "repeat_count": PAPER_REPEAT_COUNT,
+                            "disabled_success_count": PAPER_REPEAT_COUNT,
+                            "enabled_success_count": PAPER_REPEAT_COUNT,
+                            "baseline_times_seconds": [BASELINE_LOOP_TIME_SECONDS]
+                            * PAPER_REPEAT_COUNT,
+                            "enabled_times_seconds": [ISODELTA_LOOP_TIME_SECONDS]
+                            * PAPER_REPEAT_COUNT,
+                            "baseline_mean_seconds": BASELINE_LOOP_TIME_SECONDS,
+                            "enabled_mean_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                            "baseline_sample_variance_seconds": 0.0,
+                            "enabled_sample_variance_seconds": 0.0,
+                            "baseline_sample_stddev_seconds": 0.0,
+                            "enabled_sample_stddev_seconds": 0.0,
+                            "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
+                            "commands": [],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            original_verify_output_bundle = isodelta_cluster_suite.verify_output_bundle
+
+            def corrupt_case_summary_before_verify(bundle_or_summary_path: Path) -> dict[str, object]:
+                """Mutate a generated table so the real bundle verifier must reject it."""
+                case_summary_path = output_dir / "tables" / "case_summary.csv"
+                case_summary_path.write_text(
+                    case_summary_path.read_text(encoding="utf-8") + "\ncorrupted-row\n",
+                    encoding="utf-8",
+                )
+                return original_verify_output_bundle(bundle_or_summary_path)
+
+            isodelta_cluster_suite.verify_output_bundle = corrupt_case_summary_before_verify
+            try:
+                exit_code = isodelta_cluster_suite.main(
+                    [
+                        "--manifest",
+                        str(manifest_path),
+                        "--pipeline",
+                        "--pipeline-report",
+                        str(pipeline_report_path),
+                        "--skip-gpu-check",
+                        "--reuse-passed",
+                    ]
+                )
+            finally:
+                isodelta_cluster_suite.verify_output_bundle = original_verify_output_bundle
+            pipeline_report = json.loads(pipeline_report_path.read_text(encoding="utf-8"))
+            stage_names = [stage["name"] for stage in pipeline_report["stages"]]
+            verification_stage = pipeline_report["stages"][-1]
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(pipeline_report["status"], isodelta_cluster_suite.PIPELINE_STATUS_FAILED)
+        self.assertEqual(
+            stage_names,
+            [
+                "readiness",
+                "prepare_artifacts",
+                "preflight",
+                "plan",
+                "run_suite",
+                "verify_output_bundle",
+            ],
+        )
+        self.assertEqual(verification_stage["status"], isodelta_cluster_suite.PIPELINE_STATUS_FAILED)
+        self.assertIn("SHA-256 mismatch", verification_stage["detail"])
 
     def test_readiness_check_accepts_strict_three_model_paired_manifest(self) -> None:
         """A final paper manifest should prove strict input and model coverage."""
