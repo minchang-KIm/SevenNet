@@ -46,6 +46,7 @@ REQUIRED_FILE_SNIPPETS = {
         "--readiness-check",
         "--verify-output-bundle",
         "case_mode_controls",
+        "MODE_CONTROLS_KEY",
         "MACE",
         "NequIP",
     ),
@@ -78,6 +79,7 @@ REQUIRED_FILE_SNIPPETS = {
         "test_pipeline_stops_when_preflight_fails",
         "test_pipeline_reports_bundle_verification_failure",
         "test_manifest_validation_rejects_enabled_external_pair_disable_env",
+        "test_external_timing_report_rejects_mismatched_mode_controls",
         "test_readiness_check_accepts_strict_three_model_paired_manifest",
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (

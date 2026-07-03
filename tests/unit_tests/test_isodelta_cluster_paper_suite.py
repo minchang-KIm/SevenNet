@@ -213,15 +213,29 @@ def _trace_evidence(model_name: str) -> dict[str, object]:
     }
 
 
-def _external_timing_report(model_name: str) -> dict[str, object]:
+def _external_timing_report(
+    model_name: str,
+    *,
+    disabled_command: str = "run baseline",
+    enabled_command: str = "run enabled",
+) -> dict[str, object]:
     """Create an external-pair timing report for a non-SevenNet runtime."""
+    case_name = f"{model_name.lower()}-existing"
+    case = isodelta_cluster_suite.CaseConfig(
+        name=case_name,
+        model=model_name,
+        kind="external_pair",
+        disabled_command=disabled_command,
+        enabled_command=enabled_command,
+        repeat_count=2,
+    )
     baseline_times = [BASELINE_LOOP_TIME_SECONDS - 1.0, BASELINE_LOOP_TIME_SECONDS + 1.0]
     enabled_times = [ISODELTA_LOOP_TIME_SECONDS - 1.0, ISODELTA_LOOP_TIME_SECONDS + 1.0]
     sample_variance = 2.0
     sample_stddev = sample_variance ** 0.5
     return {
         "schema_version": "isodelta-external-pair-timing-v1",
-        "case_name": f"{model_name.lower()}-existing",
+        "case_name": case_name,
         "model": model_name,
         "repeat_count": 2,
         "disabled_success_count": 2,
@@ -235,6 +249,7 @@ def _external_timing_report(model_name: str) -> dict[str, object]:
         "baseline_sample_stddev_seconds": sample_stddev,
         "enabled_sample_stddev_seconds": sample_stddev,
         "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
+        "mode_controls": isodelta_cluster_suite.case_mode_control_record(case),
         "commands": [],
     }
 
@@ -398,7 +413,13 @@ trace_evidence = ["{trace_path.as_posix()}"]
             )
             timing_report_path.parent.mkdir(parents=True, exist_ok=True)
             timing_report_path.write_text(
-                json.dumps(_external_timing_report("SevenNet")),
+                json.dumps(
+                    _external_timing_report(
+                        "SevenNet",
+                        disabled_command="should-not-run-disabled",
+                        enabled_command="should-not-run-enabled",
+                    )
+                ),
                 encoding="utf-8",
             )
 
@@ -1026,6 +1047,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                             "baseline_sample_stddev_seconds": 0.0,
                             "enabled_sample_stddev_seconds": 0.0,
                             "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
+                            "mode_controls": isodelta_cluster_suite.case_mode_control_record(case),
                             "commands": [],
                         }
                     ),
@@ -1321,6 +1343,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                             "baseline_sample_stddev_seconds": 0.0,
                             "enabled_sample_stddev_seconds": 0.0,
                             "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
+                            "mode_controls": isodelta_cluster_suite.case_mode_control_record(case),
                             "commands": [],
                         }
                     ),
@@ -1500,6 +1523,29 @@ artifacts = ["dataset"]
         ):
             isodelta_cluster_suite.validate_external_timing_report(report, case)
 
+    def test_external_timing_report_rejects_mismatched_mode_controls(self) -> None:
+        """External timing evidence must prove the same on/off controls as the manifest."""
+        report = _external_timing_report("NequIP")
+        report["mode_controls"]["enabled_env"][
+            isodelta_cluster_suite.SEVENNET_DISABLE_ENV
+        ] = ENV_FLAG_ENABLED
+        report["mode_controls"]["enabled_cache_disabled"] = True
+        case = isodelta_cluster_suite.CaseConfig(
+            name="nequip-existing",
+            model="NequIP",
+            kind="external_pair",
+            disabled_command="run baseline",
+            enabled_command="run enabled",
+            repeat_count=2,
+            min_speedup=1.1,
+        )
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "mode_controls must match manifest disabled/enabled controls",
+        ):
+            isodelta_cluster_suite.validate_external_timing_report(report, case)
+
     def test_speedup_lower_bound_gate_rejects_uncertain_case(self) -> None:
         """A mean speedup should fail when its conservative CI bound is weak."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1510,7 +1556,16 @@ artifacts = ["dataset"]
             output_dir = root / "paper_outputs"
             sevennet_trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
             nequip_trace_path.write_text(json.dumps(_trace_evidence("NequIP")), encoding="utf-8")
-            nequip_timing_path.write_text(json.dumps(_external_timing_report("NequIP")), encoding="utf-8")
+            nequip_timing_path.write_text(
+                json.dumps(
+                    _external_timing_report(
+                        "NequIP",
+                        disabled_command="baseline",
+                        enabled_command="enabled",
+                    )
+                ),
+                encoding="utf-8",
+            )
             manifest_path = root / "suite.toml"
             manifest_path.write_text(
                 f"""
@@ -1573,7 +1628,16 @@ min_speedup_95ci_lower_bound = 1.1
             sevennet_trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
             mace_trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
             nequip_trace_path.write_text(json.dumps(_trace_evidence("NequIP")), encoding="utf-8")
-            nequip_timing_path.write_text(json.dumps(_external_timing_report("NequIP")), encoding="utf-8")
+            nequip_timing_path.write_text(
+                json.dumps(
+                    _external_timing_report(
+                        "NequIP",
+                        disabled_command="python -c print('baseline')",
+                        enabled_command="python -c print('enabled')",
+                    )
+                ),
+                encoding="utf-8",
+            )
             output_dir.mkdir(parents=True)
             preflight_report_path = output_dir / isodelta_cluster_suite.PREFLIGHT_REPORT_NAME
             plan_path = output_dir / isodelta_cluster_suite.PLAN_REPORT_NAME

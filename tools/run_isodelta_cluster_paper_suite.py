@@ -133,6 +133,7 @@ ENABLED_SAMPLE_VARIANCE_SECONDS_KEY = "enabled_sample_variance_seconds"
 BASELINE_SAMPLE_STDDEV_SECONDS_KEY = "baseline_sample_stddev_seconds"
 ENABLED_SAMPLE_STDDEV_SECONDS_KEY = "enabled_sample_stddev_seconds"
 SPEEDUP_VS_DISABLED_CACHE_KEY = "speedup_vs_disabled_cache"
+MODE_CONTROLS_KEY = "mode_controls"
 COMMANDS_KEY = "commands"
 LOGS_DIR_NAME = "logs"
 CASES_DIR_NAME = "cases"
@@ -2934,9 +2935,26 @@ def _build_external_timing_report(
         BASELINE_SAMPLE_STDDEV_SECONDS_KEY: _sample_stddev(disabled_times),
         ENABLED_SAMPLE_STDDEV_SECONDS_KEY: _sample_stddev(enabled_times),
         SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
-        "mode_controls": case_mode_control_record(case),
+        MODE_CONTROLS_KEY: case_mode_control_record(case),
         COMMANDS_KEY: [asdict(record) for record in command_records],
     }
+
+
+def _validate_external_timing_mode_controls(
+    report: dict[str, Any],
+    case: CaseConfig,
+) -> dict[str, Any]:
+    """Require timing-report mode controls to match the manifest case."""
+    observed_controls = _as_json_object(
+        report.get(MODE_CONTROLS_KEY),
+        MODE_CONTROLS_KEY,
+    )
+    expected_controls = case_mode_control_record(case)
+    _require(
+        observed_controls == expected_controls,
+        f"{MODE_CONTROLS_KEY} must match manifest disabled/enabled controls",
+    )
+    return observed_controls
 
 
 def _timing_values_close(observed: float, expected: float) -> bool:
@@ -3078,6 +3096,7 @@ def validate_external_timing_report(
             speedup >= case.min_speedup,
             f"{case.name}: external timing speedup {speedup:g} is below {case.min_speedup:g}",
         )
+    mode_controls = _validate_external_timing_mode_controls(report, case)
     _require(
         isinstance(report.get(COMMANDS_KEY), list),
         f"{COMMANDS_KEY} must be a JSON array",
@@ -3099,6 +3118,7 @@ def validate_external_timing_report(
         BASELINE_SAMPLE_STDDEV_SECONDS_KEY: baseline_stddev,
         ENABLED_SAMPLE_STDDEV_SECONDS_KEY: enabled_stddev,
         SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
+        MODE_CONTROLS_KEY: mode_controls,
     }
 
 
