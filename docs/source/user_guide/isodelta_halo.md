@@ -418,10 +418,12 @@ python tools/run_isodelta_cluster_paper_suite.py \
 The generated `sbatch` file requests `expected_gpus`, writes scheduler logs
 under `slurm_logs/`, runs `--preflight-only`, creates the preflight plan with
 the exact same `COMMON_ARGS` used by the final run, and then executes the full
-suite. The
+`--pipeline` path with `--pipeline-report`. The
 script defines `PYTHON_BIN` and `SUITE_RUNNER` as overridable shell variables so
 cluster module systems can select the intended environment without editing the
-recorded experiment command.
+recorded experiment command. `--collect-only` is not accepted when generating
+this SLURM launcher because the launcher is reserved for the full 8-GPU
+pipeline; use the direct `--collect-only` command after jobs finish.
 
 Before submitting a long job, write a preflight plan:
 

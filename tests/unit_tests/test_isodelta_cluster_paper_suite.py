@@ -371,12 +371,49 @@ trace_evidence = ["trace.json"]
         self.assertIn("#SBATCH --cpus-per-task=12", script)
         self.assertIn("COMMON_ARGS=(--manifest \"$MANIFEST_PATH\")", script)
         self.assertIn("PREFLIGHT_OUTPUT=", script)
+        self.assertIn("PIPELINE_OUTPUT=", script)
         self.assertIn("--preflight-only --preflight-output \"$PREFLIGHT_OUTPUT\"", script)
         self.assertIn("--plan-only --plan-output \"$PLAN_OUTPUT\"", script)
+        self.assertIn("--pipeline --pipeline-report \"$PIPELINE_OUTPUT\"", script)
         self.assertIn("COMMON_ARGS+=(--skip-downloads)", script)
         self.assertIn("COMMON_ARGS+=(--keep-going)", script)
         self.assertIn("COMMON_ARGS+=(--reuse-passed)", script)
-        self.assertIn("# Run SevenNet, MACE, NequIP, and any extra manifest cases.", script)
+        self.assertIn("# Run the full paper pipeline", script)
+
+    def test_write_slurm_script_rejects_collect_only_pipeline_launcher(self) -> None:
+        """The generated cluster launcher should not combine collect-only with pipeline."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            slurm_path = root / "run_isodelta.sbatch"
+            manifest_path.write_text(
+                """
+[suite]
+name = "slurm-collect-only"
+required_models = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-trace"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["trace.json"]
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-script",
+                    str(slurm_path),
+                    "--collect-only",
+                ]
+            )
+            script_exists = slurm_path.exists()
+
+        self.assertEqual(exit_code, 1)
+        self.assertFalse(script_exists)
 
     def test_reuse_passed_skips_existing_valid_case_outputs(self) -> None:
         """Validated outputs should be reusable after an interrupted cluster run."""

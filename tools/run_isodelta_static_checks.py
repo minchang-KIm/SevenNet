@@ -850,6 +850,9 @@ def main() -> None:
         and "--write-slurm-script" in cluster_suite
         and "#SBATCH --gres=gpu:" in cluster_suite
         and "COMMON_ARGS" in cluster_suite
+        and "PIPELINE_OUTPUT" in cluster_suite
+        and "--pipeline-report" in cluster_suite
+        and "--write-slurm-script cannot be combined with --collect-only" in cluster_suite
         and "DEFAULT_PREFLIGHT_TIMEOUT_SECONDS" in cluster_suite
         and "preflight_command" in cluster_suite
         and "preflight_env" in cluster_suite
@@ -869,6 +872,7 @@ def main() -> None:
         and "test_pipeline_reports_bundle_verification_failure" in cluster_suite_test
         and "test_manifest_validation_rejects_enabled_external_pair_disable_env" in cluster_suite_test
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
+        and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
         and "try_reuse_case_outputs" in cluster_suite
@@ -957,6 +961,9 @@ def main() -> None:
         and "`sbatch` file requests `expected_gpus`" in doc
         and "runs `--preflight-only`" in doc
         and "COMMON_ARGS" in doc
+        and "`--pipeline` path" in doc
+        and "`--pipeline-report`" in doc
+        and "`--collect-only` is not accepted" in doc
         and "PYTHON_BIN" in doc
         and "SUITE_RUNNER" in doc,
         "IsoDelta-Halo guide must document SLURM cluster launch generation",

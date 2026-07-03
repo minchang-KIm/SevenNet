@@ -4299,10 +4299,14 @@ def write_slurm_script(
     time_limit: str = DEFAULT_SLURM_TIME_LIMIT,
     cpus_per_task: int = DEFAULT_SLURM_CPUS_PER_TASK,
 ) -> None:
-    """Write a commented SLURM wrapper that runs the plan and full suite."""
+    """Write a commented SLURM wrapper that runs the full paper pipeline."""
     validate_suite_config(config)
     _require(config.expected_gpus >= MIN_REQUIRED_CASE_COUNT, "SLURM GPU count must be positive")
     _require(cpus_per_task >= MIN_REQUIRED_CASE_COUNT, "SLURM cpus-per-task must be positive")
+    _require(
+        not collect_only,
+        "--write-slurm-script cannot be combined with --collect-only because the launcher runs --pipeline",
+    )
 
     plan_path = config.output_dir / PLAN_REPORT_NAME
     slurm_job_name = _safe_name(job_name)
@@ -4310,7 +4314,7 @@ def write_slurm_script(
         "#!/usr/bin/env bash",
         "# IsoDelta-Halo cluster paper suite launcher.",
         "# Submit with: sbatch <this-file>",
-        "# The script writes a preflight plan first, then runs the full suite.",
+        "# The script writes pre-run evidence first, then runs the full pipeline.",
         f"#SBATCH --job-name={slurm_job_name}",
         f"#SBATCH --gres=gpu:{config.expected_gpus}",
         "#SBATCH --ntasks=1",
@@ -4327,6 +4331,7 @@ def write_slurm_script(
         f"MANIFEST_PATH={_bash_quote(config.manifest_path)}",
         f"PLAN_OUTPUT={_bash_quote(plan_path)}",
         f"PREFLIGHT_OUTPUT={_bash_quote(config.output_dir / PREFLIGHT_REPORT_NAME)}",
+        f"PIPELINE_OUTPUT={_bash_quote(config.output_dir / PIPELINE_REPORT_NAME)}",
         "",
         "# Keep scheduler stdout/stderr directories explicit and reproducible.",
         f"mkdir -p {_bash_quote(SLURM_LOG_DIR_NAME)}",
@@ -4360,8 +4365,8 @@ def write_slurm_script(
             "# Generate the auditable plan JSON before launching model runs.",
             '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}" --plan-only --plan-output "$PLAN_OUTPUT"',
             "",
-            "# Run SevenNet, MACE, NequIP, and any extra manifest cases.",
-            '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}"',
+            "# Run the full paper pipeline: readiness, prepare, preflight, plan, suite, and bundle verify.",
+            '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}" --pipeline --pipeline-report "$PIPELINE_OUTPUT"',
             "",
         ]
     )
