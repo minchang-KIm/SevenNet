@@ -159,6 +159,24 @@ the schema version, Git branch/commit/status metadata, every validation command,
 return code, elapsed time, and bounded stdout/stderr tails. Keep that report
 with the sync attempt when validating a commit before pushing.
 
+To make the validation-and-push sequence itself auditable, run the sync gate
+after committing:
+
+```bash
+python tools/run_isodelta_sync_gate.py \
+  --remote fork \
+  --branch isodelta-halo-runtime \
+  --report-path isodelta_sync_report.json \
+  --validation-report-path isodelta_validation_report.json
+```
+
+The sync gate runs `run_isodelta_validation.py` first and only attempts
+non-interactive `git push -u` when validation passes. It writes
+`isodelta_sync_report.json` with the validation command record, push command
+record, Git status, target remote/branch, and the push stderr tail. This makes
+credential or network failures explicit instead of losing the evidence after a
+failed sync.
+
 This does not replace a full LAMMPS/LibTorch build. It is a fast local guard so
 the implementation does not drift while runtime environments are being prepared.
 The same dependency-free gate runs as the `IsoDelta-Halo lightweight validation`

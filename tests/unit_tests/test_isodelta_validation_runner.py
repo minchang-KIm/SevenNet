@@ -8,6 +8,8 @@ then verify the generated JSON report shape.
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
 import json
 from pathlib import Path
 import sys
@@ -43,7 +45,8 @@ class IsoDeltaValidationRunnerTest(unittest.TestCase):
                 (sys.executable, "-c", "print('validation-ok')"),
             )
             try:
-                exit_code = validation_runner.run_validation(report_path)
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    exit_code = validation_runner.run_validation(report_path)
             finally:
                 validation_runner.VALIDATION_COMMANDS = original_commands
                 validation_runner.REPO_ROOT = original_root
@@ -70,7 +73,8 @@ class IsoDeltaValidationRunnerTest(unittest.TestCase):
                 (sys.executable, "-c", "print('should-not-run')"),
             )
             try:
-                exit_code = validation_runner.run_validation(report_path)
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    exit_code = validation_runner.run_validation(report_path)
             finally:
                 validation_runner.VALIDATION_COMMANDS = original_commands
                 validation_runner.REPO_ROOT = original_root

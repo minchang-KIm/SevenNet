@@ -33,6 +33,7 @@ VALIDATION_COMMANDS = (
     (sys.executable, "tests/unit_tests/test_isodelta_mlip_trace_check.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_mlip_trace_demo.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_validation_runner.py"),
+    (sys.executable, "tests/unit_tests/test_isodelta_sync_gate.py"),
     (
         sys.executable,
         "-m",
@@ -47,6 +48,7 @@ VALIDATION_COMMANDS = (
         "tools/run_isodelta_lammps_benchmark.py",
         "tools/run_isodelta_mlip_trace_demo.py",
         "tools/run_isodelta_static_checks.py",
+        "tools/run_isodelta_sync_gate.py",
         "tools/run_isodelta_validation.py",
         "tests/unit_tests/test_isodelta_evidence_bundle_check.py",
         "tests/unit_tests/test_isodelta_benchmark_report_check.py",
@@ -58,6 +60,7 @@ VALIDATION_COMMANDS = (
         "tests/unit_tests/test_isodelta_mlip_trace_check.py",
         "tests/unit_tests/test_isodelta_mlip_trace_demo.py",
         "tests/unit_tests/test_isodelta_validation_runner.py",
+        "tests/unit_tests/test_isodelta_sync_gate.py",
         "tests/unit_tests/test_isodelta_halo_static.py",
     ),
     ("git", "diff", "--check"),

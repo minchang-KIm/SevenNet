@@ -26,6 +26,7 @@ BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 MLIP_TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
 MLIP_TRACE_DEMO_PATH = REPO_ROOT / "tools" / "run_isodelta_mlip_trace_demo.py"
 VALIDATION_RUNNER_PATH = REPO_ROOT / "tools" / "run_isodelta_validation.py"
+SYNC_GATE_PATH = REPO_ROOT / "tools" / "run_isodelta_sync_gate.py"
 PATCH_SCRIPT_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "patch_lammps.sh"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "isodelta-halo.yml"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
@@ -59,6 +60,7 @@ def main() -> None:
     mlip_trace_check = _read(MLIP_TRACE_CHECK_PATH)
     mlip_trace_demo = _read(MLIP_TRACE_DEMO_PATH)
     validation_runner = _read(VALIDATION_RUNNER_PATH)
+    sync_gate = _read(SYNC_GATE_PATH)
     patch_script = _read(PATCH_SCRIPT_PATH)
     workflow = _read(WORKFLOW_PATH)
     doc = _read(DOC_PATH)
@@ -313,6 +315,15 @@ def main() -> None:
         and "git_status_short" in validation_runner
         and "test_isodelta_validation_runner.py" in validation_runner,
         "validation runner must emit auditable sync reports",
+    )
+    _require(
+        "SYNC_REPORT_SCHEMA_VERSION" in sync_gate
+        and "PUSH_AUTH_ENVIRONMENT" in sync_gate
+        and "GIT_TERMINAL_PROMPT" in sync_gate
+        and "run_sync" in sync_gate
+        and "STATUS_PUSH_FAILED" in sync_gate
+        and "test_isodelta_sync_gate.py" in validation_runner,
+        "sync gate must validate before recording git push attempts",
     )
     _require(
         "check_isodelta_build_prereqs.py" in doc,
@@ -998,6 +1009,9 @@ def main() -> None:
         "IsoDelta-Halo lightweight validation" in doc
         and ".github/workflows/isodelta-halo.yml" in doc
         and "`isodelta_validation_report.json`" in doc
+        and "run_isodelta_sync_gate.py" in doc
+        and "`isodelta_sync_report.json`" in doc
+        and "non-interactive `git push -u`" in doc
         and "uploads the same JSON validation report" in doc,
         "IsoDelta-Halo guide must document the CI validation workflow",
     )
