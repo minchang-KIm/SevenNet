@@ -526,7 +526,10 @@ duplicated MACE evidence mislabeled in the manifest.
 The summary also stores `command_log_fingerprints` for every launched command,
 including each stdout/stderr log path, existence flag, SHA-256 digest, and byte
 size. This lets reviewers confirm that the archived logs match the command
-records used to build the paper tables.
+records used to build the paper tables. Each command record also stores the
+working directory and a focused `tracked_env` snapshot for cache mode, CUDA,
+SLURM, and CPU thread variables. That makes a disabled/enabled MACE, NequIP, or
+SevenNet timing row auditable without dumping unrelated environment variables.
 After archiving or moving a result directory, verify the bundle fingerprints:
 
 ```bash

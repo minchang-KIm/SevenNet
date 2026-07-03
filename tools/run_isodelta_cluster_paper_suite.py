@@ -179,6 +179,18 @@ MODE_CONTROL_ENV_KEYS = (
     SEVENNET_PROFILE_ENV,
     SEVENNET_PRINT_INFO_ENV,
 )
+COMMAND_RUNTIME_ENVIRONMENT_VARIABLE_NAMES = (
+    "SLURM_NTASKS",
+    "SLURM_PROCID",
+    "SLURM_LOCALID",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+)
+COMMAND_ENV_SNAPSHOT_KEYS = (
+    MODE_CONTROL_ENV_KEYS
+    + ENVIRONMENT_VARIABLE_NAMES
+    + COMMAND_RUNTIME_ENVIRONMENT_VARIABLE_NAMES
+)
 BASELINE_CASE_NAME = "baseline-disabled"
 ISODELTA_CASE_NAME = "isodelta-enabled"
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
@@ -276,6 +288,8 @@ class CommandRecord:
     elapsed_seconds: float
     stdout_path: str
     stderr_path: str
+    cwd: str
+    tracked_env: dict[str, str | None]
 
 
 @dataclass(frozen=True)
@@ -1968,6 +1982,30 @@ def _write_command_streams(
     stderr_path.write_text(stderr_text, encoding="utf-8")
 
 
+def _command_record(
+    *,
+    name: str,
+    command: str | list[str],
+    returncode: int,
+    elapsed_seconds: float,
+    stdout_path: Path,
+    stderr_path: Path,
+    cwd: Path,
+    env: dict[str, str] | None,
+) -> CommandRecord:
+    """Build the normalized command provenance record used by all runners."""
+    return CommandRecord(
+        name=name,
+        command=command,
+        returncode=returncode,
+        elapsed_seconds=elapsed_seconds,
+        stdout_path=str(stdout_path),
+        stderr_path=str(stderr_path),
+        cwd=str(cwd),
+        tracked_env=command_environment_snapshot(env),
+    )
+
+
 def run_argv_command(
     *,
     name: str,
@@ -1982,7 +2020,16 @@ def run_argv_command(
     """Run an argv command, capture logs, and return timing metadata."""
     if dry_run:
         _write_command_streams(stdout_path, stderr_path, "DRY RUN\n", "")
-        return CommandRecord(name, argv, SUCCESS_RETURN_CODE, 0.0, str(stdout_path), str(stderr_path))
+        return _command_record(
+            name=name,
+            command=argv,
+            returncode=SUCCESS_RETURN_CODE,
+            elapsed_seconds=0.0,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            cwd=cwd,
+            env=env,
+        )
     start_time = time.perf_counter()
     try:
         completed = subprocess.run(
@@ -2001,13 +2048,15 @@ def run_argv_command(
             completed.stdout,
             completed.stderr,
         )
-        return CommandRecord(
+        return _command_record(
             name=name,
             command=argv,
             returncode=int(completed.returncode),
             elapsed_seconds=elapsed_seconds,
-            stdout_path=str(stdout_path),
-            stderr_path=str(stderr_path),
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            cwd=cwd,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         elapsed_seconds = time.perf_counter() - start_time
@@ -2017,13 +2066,15 @@ def run_argv_command(
             exc.stdout or "",
             f"Command timed out after {timeout_seconds:g} seconds\n{exc.stderr or ''}",
         )
-        return CommandRecord(
+        return _command_record(
             name=name,
             command=argv,
             returncode=COMMAND_TIMEOUT_RETURN_CODE,
             elapsed_seconds=elapsed_seconds,
-            stdout_path=str(stdout_path),
-            stderr_path=str(stderr_path),
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            cwd=cwd,
+            env=env,
         )
 
 
@@ -2041,7 +2092,16 @@ def run_shell_command(
     """Run a manifest shell command and capture its logs."""
     if dry_run:
         _write_command_streams(stdout_path, stderr_path, "DRY RUN\n", "")
-        return CommandRecord(name, command, SUCCESS_RETURN_CODE, 0.0, str(stdout_path), str(stderr_path))
+        return _command_record(
+            name=name,
+            command=command,
+            returncode=SUCCESS_RETURN_CODE,
+            elapsed_seconds=0.0,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            cwd=cwd,
+            env=env,
+        )
     start_time = time.perf_counter()
     try:
         completed = subprocess.run(
@@ -2061,13 +2121,15 @@ def run_shell_command(
             completed.stdout,
             completed.stderr,
         )
-        return CommandRecord(
+        return _command_record(
             name=name,
             command=command,
             returncode=int(completed.returncode),
             elapsed_seconds=elapsed_seconds,
-            stdout_path=str(stdout_path),
-            stderr_path=str(stderr_path),
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            cwd=cwd,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         elapsed_seconds = time.perf_counter() - start_time
@@ -2077,13 +2139,15 @@ def run_shell_command(
             exc.stdout or "",
             f"Command timed out after {timeout_seconds:g} seconds\n{exc.stderr or ''}",
         )
-        return CommandRecord(
+        return _command_record(
             name=name,
             command=command,
             returncode=COMMAND_TIMEOUT_RETURN_CODE,
             elapsed_seconds=elapsed_seconds,
-            stdout_path=str(stdout_path),
-            stderr_path=str(stderr_path),
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            cwd=cwd,
+            env=env,
         )
 
 
@@ -2592,6 +2656,15 @@ def _default_case_env(case_env: dict[str, str], disabled: bool) -> dict[str, str
 def _mode_control_env_values(env: dict[str, str]) -> dict[str, str | None]:
     """Return only the cache mode environment values that matter for auditing."""
     return {key: env.get(key) for key in MODE_CONTROL_ENV_KEYS}
+
+
+def command_environment_snapshot(env: dict[str, str] | None) -> dict[str, str | None]:
+    """Return a small, non-secret environment snapshot for one command."""
+    source_env = os.environ if env is None else env
+    return {
+        key: source_env.get(key)
+        for key in dict.fromkeys(COMMAND_ENV_SNAPSHOT_KEYS)
+    }
 
 
 def _external_pair_mode_control_record(case: CaseConfig) -> dict[str, Any]:

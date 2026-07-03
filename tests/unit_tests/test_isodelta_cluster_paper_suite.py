@@ -916,6 +916,7 @@ name = "sevennet-preflight"
 model = "SevenNet"
 kind = "trace_only"
 preflight_command = '"{python_bin}" -c "print(12345)"'
+preflight_env = {{ OMP_NUM_THREADS = "2", SEVENN_ISODELTA_HALO_PROFILE = "1" }}
 trace_input = "trace.json"
 artifacts = ["dataset"]
 """,
@@ -935,6 +936,7 @@ artifacts = ["dataset"]
             report = json.loads(preflight_path.read_text(encoding="utf-8"))
             stdout_path = Path(report["case_preflights"][0]["stdout_path"])
             stdout_text = stdout_path.read_text(encoding="utf-8")
+            command_record = report["commands"][0]
             target_exists = target_path.exists()
 
         self.assertEqual(exit_code, 0)
@@ -960,6 +962,42 @@ artifacts = ["dataset"]
             len(report["environment_snapshot_fingerprint"]["sha256"]),
             isodelta_cluster_suite.SHA256_HEX_LENGTH,
         )
+        self.assertEqual(command_record["cwd"], str(REPO_ROOT))
+        self.assertEqual(
+            command_record["tracked_env"]["OMP_NUM_THREADS"],
+            "2",
+        )
+        self.assertEqual(
+            command_record["tracked_env"][PROFILE_CACHE_ENV],
+            ENV_FLAG_ENABLED,
+        )
+        self.assertIn("SLURM_JOB_ID", command_record["tracked_env"])
+
+    def test_command_records_include_cwd_and_tracked_environment(self) -> None:
+        """Command records should explain where and under which mode they ran."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            record = isodelta_cluster_suite.run_shell_command(
+                name="dry-run-command",
+                command="unused",
+                cwd=root,
+                env={
+                    DISABLE_CACHE_ENV: ENV_FLAG_ENABLED,
+                    PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
+                    "CUDA_VISIBLE_DEVICES": "0,1",
+                    "OMP_NUM_THREADS": "4",
+                },
+                timeout_seconds=1.0,
+                stdout_path=root / "stdout.log",
+                stderr_path=root / "stderr.log",
+                dry_run=True,
+            )
+
+        self.assertEqual(record.cwd, str(root))
+        self.assertEqual(record.tracked_env[DISABLE_CACHE_ENV], ENV_FLAG_ENABLED)
+        self.assertEqual(record.tracked_env["CUDA_VISIBLE_DEVICES"], "0,1")
+        self.assertEqual(record.tracked_env["OMP_NUM_THREADS"], "4")
+        self.assertIn("SLURM_JOB_ID", record.tracked_env)
 
     def test_preflight_only_reports_failed_case_check(self) -> None:
         """A nonzero case preflight should fail before expensive model runs."""

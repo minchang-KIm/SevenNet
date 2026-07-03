@@ -858,6 +858,10 @@ def main() -> None:
         and "preflight_env" in cluster_suite
         and "preflight_timeout_seconds" in cluster_suite
         and "MODE_CONTROL_ENV_KEYS" in cluster_suite
+        and "COMMAND_ENV_SNAPSHOT_KEYS" in cluster_suite
+        and "command_environment_snapshot" in cluster_suite
+        and "tracked_env" in cluster_suite
+        and "cwd=str(cwd)" in cluster_suite
         and "MODE_CONTROLS_KEY" in cluster_suite
         and "case_mode_control_record" in cluster_suite
         and "_validate_external_timing_mode_controls" in cluster_suite
@@ -872,6 +876,7 @@ def main() -> None:
         and "test_pipeline_reports_bundle_verification_failure" in cluster_suite_test
         and "test_manifest_validation_rejects_enabled_external_pair_disable_env" in cluster_suite_test
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
+        and "test_command_records_include_cwd_and_tracked_environment" in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
@@ -1041,6 +1046,10 @@ def main() -> None:
         and "stdout/stderr log path" in doc
         and "existence flag" in doc
         and "SHA-256 digest" in doc
+        and "working directory" in doc
+        and "`tracked_env`" in doc
+        and "CUDA" in doc
+        and "SLURM" in doc
         and "command" in doc
         and "records" in doc,
         "IsoDelta-Halo guide must document command log fingerprints",
