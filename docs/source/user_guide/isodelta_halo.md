@@ -532,6 +532,10 @@ auxiliary pre-run artifacts are fingerprinted too; when they are absent, the
 summary records that absence explicitly so the bundle verifier can still
 distinguish a direct run from a missing archived file. This lets reviewers
 verify that the submitted paper artifacts match the archived run.
+The sibling `artifacts` index must carry the same artifact names and paths as
+`artifact_fingerprints`; `--verify-output-bundle` rejects the bundle if the
+human-facing path index points to a different file than the protected hash
+record.
 The summary also stores `evidence_fingerprints` for each case's benchmark
 report, bundle evidence, external timing report, and trace evidence files. The
 bundle verifier checks those source-evidence SHA-256 digests too, so a paper

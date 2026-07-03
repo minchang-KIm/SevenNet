@@ -894,6 +894,8 @@ def main() -> None:
         and "test_verify_output_bundle_rejects_mutated_external_command_log" in cluster_suite_test
         and "test_verify_output_bundle_rejects_semantically_invalid_svg_artifact"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_mismatched_artifact_index_path"
+        in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
@@ -936,6 +938,8 @@ def main() -> None:
         and "_require_external_timing_reports_from_summary" in cluster_suite
         and "verified_external_command_log_count" in cluster_suite
         and "REQUIRED_PAPER_ARTIFACT_NAMES" in cluster_suite
+        and "_require_artifact_index_alignment" in cluster_suite
+        and "verified_artifact_index_count" in cluster_suite
         and "_require_paper_artifact_semantics" in cluster_suite
         and "verified_paper_artifact_semantic_count" in cluster_suite
         and "_require_svg_document" in cluster_suite
@@ -1055,6 +1059,8 @@ def main() -> None:
         "`artifact_fingerprints`" in doc
         and "SHA-256 digest and byte size" in doc
         and "generated" in doc
+        and "The sibling `artifacts` index must carry the same artifact names and paths" in doc
+        and "human-facing path index points to a different file" in doc
         and "environment snapshot" in doc
         and "SVG figure" in doc
         and "manifest snapshot" in doc,

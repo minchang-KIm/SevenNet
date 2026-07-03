@@ -2986,6 +2986,44 @@ def _require_paper_artifact_semantics(
     return len(REQUIRED_PAPER_ARTIFACT_NAMES)
 
 
+def _require_artifact_index_alignment(
+    summary_payload: dict[str, Any],
+    artifact_fingerprints: dict[str, Any],
+) -> int:
+    """Verify that the human-facing artifact index matches fingerprint records."""
+    artifact_index = _as_json_object(summary_payload.get("artifacts"), "artifacts")
+    fingerprint_names = set(artifact_fingerprints)
+    index_names = set(artifact_index)
+    missing_index_names = sorted(fingerprint_names - index_names)
+    unexpected_index_names = sorted(index_names - fingerprint_names)
+    _require(
+        not missing_index_names,
+        f"artifacts: missing entries for fingerprints {missing_index_names}",
+    )
+    _require(
+        not unexpected_index_names,
+        f"artifacts: unexpected entries without fingerprints {unexpected_index_names}",
+    )
+    for artifact_name in sorted(fingerprint_names):
+        indexed_path = _as_json_string(
+            artifact_index.get(artifact_name),
+            f"artifacts.{artifact_name}",
+        )
+        fingerprint_record = _as_json_object(
+            artifact_fingerprints.get(artifact_name),
+            f"artifact_fingerprints.{artifact_name}",
+        )
+        fingerprint_path = _as_json_string(
+            fingerprint_record.get("path"),
+            f"artifact_fingerprints.{artifact_name}.path",
+        )
+        _require(
+            indexed_path == fingerprint_path,
+            f"artifacts.{artifact_name} must match artifact_fingerprints.{artifact_name}.path",
+        )
+    return len(fingerprint_names)
+
+
 def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     """Verify summary-recorded artifact and command-log fingerprints."""
     summary_path = _resolve_summary_path(bundle_or_summary_path)
@@ -2998,6 +3036,10 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     artifact_fingerprints = _as_json_object(
         summary_payload.get("artifact_fingerprints"),
         "artifact_fingerprints",
+    )
+    verified_artifact_index_count = _require_artifact_index_alignment(
+        summary_payload,
+        artifact_fingerprints,
     )
     command_fingerprints = summary_payload.get("command_log_fingerprints", [])
     _require(
@@ -3072,6 +3114,7 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         "status": "passed",
         "summary_json": str(summary_path),
         "verified_artifact_count": verified_artifact_count,
+        "verified_artifact_index_count": verified_artifact_index_count,
         "verified_paper_artifact_semantic_count": verified_paper_artifact_semantic_count,
         "verified_evidence_file_count": verified_evidence_file_count,
         "verified_command_record_count": verified_command_record_count,
@@ -3152,6 +3195,7 @@ def _require_pipeline_bundle_verification(
     verification = verify_output_bundle(bundle_root)
     for count_key in (
         "verified_artifact_count",
+        "verified_artifact_index_count",
         "verified_paper_artifact_semantic_count",
         "verified_evidence_file_count",
         "verified_command_record_count",

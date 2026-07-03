@@ -420,6 +420,16 @@ def _write_required_paper_artifacts(
     }
 
 
+def _artifact_index(
+    artifact_fingerprints: dict[str, dict[str, object]],
+) -> dict[str, str]:
+    """Return the summary artifact index that should mirror fingerprints."""
+    return {
+        name: str(record["path"])
+        for name, record in artifact_fingerprints.items()
+    }
+
+
 class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
     """Check manifest validation and paper artifact generation."""
 
@@ -460,6 +470,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                                 "trace_evidence": [],
                             }
                         },
+                        "artifacts": _artifact_index(artifact_fingerprints),
                         "artifact_fingerprints": artifact_fingerprints,
                         "command_log_fingerprints": [
                             {
@@ -487,6 +498,10 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
         self.assertEqual(verification["status"], "passed")
         self.assertEqual(
             verification["verified_artifact_count"],
+            len(isodelta_cluster_suite.REQUIRED_PAPER_ARTIFACT_NAMES),
+        )
+        self.assertEqual(
+            verification["verified_artifact_index_count"],
             len(isodelta_cluster_suite.REQUIRED_PAPER_ARTIFACT_NAMES),
         )
         self.assertEqual(
@@ -534,6 +549,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                                 "trace_evidence": [],
                             }
                         },
+                        "artifacts": _artifact_index(artifact_fingerprints),
                         "artifact_fingerprints": artifact_fingerprints,
                         "command_log_fingerprints": [
                             {
@@ -575,6 +591,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                         "cases": [{"case_name": "case"}],
                         "commands": [],
                         "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
                         "artifact_fingerprints": artifact_fingerprints,
                         "evidence_fingerprints": {
                             "case": {
@@ -633,6 +650,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                         },
                         "commands": [],
                         "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
                         "artifact_fingerprints": artifact_fingerprints,
                         "evidence_fingerprints": {
                             "nequip-existing": {
@@ -681,6 +699,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                         "cases": [{"case_name": "case"}],
                         "commands": [],
                         "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
                         "artifact_fingerprints": artifact_fingerprints,
                         "evidence_fingerprints": {
                             "case": {
@@ -699,6 +718,43 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 "speedup_svg: invalid SVG XML",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_mismatched_artifact_index_path(self) -> None:
+        """The summary artifact index should not drift from fingerprint paths."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            artifact_index = _artifact_index(artifact_fingerprints)
+            artifact_index["case_summary_csv"] = str(output_dir / "tables" / "wrong.csv")
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [{"case_name": "case"}],
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": artifact_index,
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "artifacts.case_summary_csv must match artifact_fingerprints.case_summary_csv.path",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -1577,6 +1633,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         )
         self.assertEqual(pipeline_verification["status"], "passed")
         self.assertEqual(
+            pipeline_verification["verified_artifact_index_count"],
+            verification["verified_artifact_index_count"],
+        )
+        self.assertEqual(
             pipeline_verification["verified_evidence_file_count"],
             verification["verified_evidence_file_count"],
         )
@@ -2324,6 +2384,10 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertEqual(exit_code, 0)
         self.assertEqual(verification["status"], "passed")
         self.assertGreaterEqual(verification["verified_artifact_count"], 1)
+        self.assertEqual(
+            verification["verified_artifact_index_count"],
+            verification["verified_artifact_count"],
+        )
         self.assertEqual(
             verification["verified_paper_artifact_semantic_count"],
             len(isodelta_cluster_suite.REQUIRED_PAPER_ARTIFACT_NAMES),
