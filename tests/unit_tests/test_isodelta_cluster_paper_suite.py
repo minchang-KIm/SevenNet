@@ -276,6 +276,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 json.dumps(
                     {
                         "suite": {"output_dir": str(original_output_dir)},
+                        "cases": [{"case_name": "case"}],
                         "commands": [
                             {
                                 "name": "case",
@@ -288,6 +289,14 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                                 "tracked_env": isodelta_cluster_suite.command_environment_snapshot({}),
                             }
                         ],
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
                         "artifact_fingerprints": {
                             "case_summary_csv": isodelta_cluster_suite.generated_artifact_record(
                                 table_path
@@ -341,6 +350,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 json.dumps(
                     {
                         "suite": {"output_dir": str(output_dir)},
+                        "cases": [{"case_name": "case"}],
                         "commands": [
                             {
                                 "name": "case",
@@ -353,6 +363,14 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                                 "tracked_env": isodelta_cluster_suite.command_environment_snapshot({}),
                             }
                         ],
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
                         "artifact_fingerprints": {
                             "case_summary_csv": isodelta_cluster_suite.generated_artifact_record(
                                 table_path
@@ -381,6 +399,56 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 "must align by name",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_mutated_source_evidence(self) -> None:
+        """Bundle verification should bind paper rows to source evidence files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            tables_dir = output_dir / "tables"
+            tables_dir.mkdir(parents=True)
+            table_path = tables_dir / "case_summary.csv"
+            trace_path = root / "trace_evidence.json"
+            table_path.write_text("case,speedup\nsevennet,1.2\n", encoding="utf-8")
+            trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [{"case_name": "case"}],
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifact_fingerprints": {
+                            "case_summary_csv": isodelta_cluster_suite.generated_artifact_record(
+                                table_path
+                            )
+                        },
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [
+                                    isodelta_cluster_suite.optional_file_fingerprint(trace_path)
+                                ],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            verification = isodelta_cluster_suite.verify_output_bundle(output_dir)
+            trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "SHA-256 mismatch",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(summary_path)
+
+        self.assertEqual(verification["verified_evidence_file_count"], 1)
 
     def test_write_template_creates_commented_three_model_manifest(self) -> None:
         """The template should be editable and include the required models."""
@@ -1870,6 +1938,9 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             manifest_snapshot_digest = hashlib.sha256(manifest_snapshot.read_bytes()).hexdigest()
             preflight_digest = hashlib.sha256(preflight_report_path.read_bytes()).hexdigest()
             plan_digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+            benchmark_digest = hashlib.sha256(benchmark_path.read_bytes()).hexdigest()
+            sevennet_trace_digest = hashlib.sha256(sevennet_trace_path.read_bytes()).hexdigest()
+            nequip_timing_digest = hashlib.sha256(nequip_timing_path.read_bytes()).hexdigest()
             environment_size = environment_snapshot.stat().st_size
             case_summary_size = case_summary_csv.stat().st_size
             manifest_snapshot_size = manifest_snapshot.stat().st_size
@@ -1890,6 +1961,7 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertEqual(exit_code, 0)
         self.assertEqual(verification["status"], "passed")
         self.assertGreaterEqual(verification["verified_artifact_count"], 1)
+        self.assertEqual(verification["verified_evidence_file_count"], 5)
         self.assertTrue(environment_snapshot_exists)
         self.assertTrue(case_summary_exists)
         self.assertTrue(correlation_exists)
@@ -1992,6 +2064,18 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertEqual(
             summary["artifact_fingerprints"]["run_plan"]["size_bytes"],
             plan_size,
+        )
+        self.assertEqual(
+            summary["evidence_fingerprints"]["sevennet-existing"]["benchmark_report"]["sha256"],
+            benchmark_digest,
+        )
+        self.assertEqual(
+            summary["evidence_fingerprints"]["sevennet-existing"]["trace_evidence"][0]["sha256"],
+            sevennet_trace_digest,
+        )
+        self.assertEqual(
+            summary["evidence_fingerprints"]["nequip-existing"]["external_timing_report"]["sha256"],
+            nequip_timing_digest,
         )
 
     def test_collect_only_rejects_insufficient_distinct_trace_models(self) -> None:

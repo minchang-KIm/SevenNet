@@ -878,6 +878,7 @@ def main() -> None:
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
         and "test_command_records_include_cwd_and_tracked_environment" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mismatched_command_fingerprints" in cluster_suite_test
+        and "test_verify_output_bundle_rejects_mutated_source_evidence" in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
@@ -889,6 +890,10 @@ def main() -> None:
         and "collect_environment_snapshot" in cluster_suite
         and "write_environment_snapshot" in cluster_suite
         and "environment_snapshot.json" in cluster_suite
+        and "EVIDENCE_FINGERPRINTS_KEY" in cluster_suite
+        and "evidence_fingerprints" in cluster_suite
+        and "_require_evidence_fingerprint_matches" in cluster_suite
+        and "verified_evidence_file_count" in cluster_suite
         and "command_log_fingerprints" in cluster_suite
         and "optional_file_fingerprint" in cluster_suite
         and "verify_output_bundle" in cluster_suite
@@ -1030,6 +1035,15 @@ def main() -> None:
         and "auxiliary pre-run artifacts are fingerprinted too" in doc
         and "records that absence explicitly" in doc,
         "IsoDelta-Halo guide must document optional pre-run artifact fingerprints",
+    )
+    _require(
+        "`evidence_fingerprints`" in doc
+        and "benchmark" in doc
+        and "external timing report" in doc
+        and "trace evidence files" in doc
+        and "source-evidence SHA-256 digests" in doc
+        and "input evidence was edited or lost" in doc,
+        "IsoDelta-Halo guide must document source evidence fingerprints",
     )
     _require(
         "full pipeline" in doc

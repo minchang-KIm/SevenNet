@@ -514,6 +514,10 @@ auxiliary pre-run artifacts are fingerprinted too; when they are absent, the
 summary records that absence explicitly so the bundle verifier can still
 distinguish a direct run from a missing archived file. This lets reviewers
 verify that the submitted paper artifacts match the archived run.
+The summary also stores `evidence_fingerprints` for each case's benchmark
+report, bundle evidence, external timing report, and trace evidence files. The
+bundle verifier checks those source-evidence SHA-256 digests too, so a paper
+table cannot be verified after its input evidence was edited or lost.
 `environment_snapshot.json` records Git/Python provenance, GPU check results,
 selected CUDA/SLURM environment variables, package versions for SevenNet, torch,
 e3nn, ASE, MACE, and NequIP when installed, and lightweight `nvidia-smi` GPU

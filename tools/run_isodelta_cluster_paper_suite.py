@@ -135,6 +135,13 @@ ENABLED_SAMPLE_STDDEV_SECONDS_KEY = "enabled_sample_stddev_seconds"
 SPEEDUP_VS_DISABLED_CACHE_KEY = "speedup_vs_disabled_cache"
 MODE_CONTROLS_KEY = "mode_controls"
 COMMANDS_KEY = "commands"
+EVIDENCE_FINGERPRINTS_KEY = "evidence_fingerprints"
+TRACE_EVIDENCE_KEY = "trace_evidence"
+CASE_EVIDENCE_FINGERPRINT_FIELDS = (
+    "benchmark_report",
+    "bundle_evidence",
+    "external_timing_report",
+)
 LOGS_DIR_NAME = "logs"
 CASES_DIR_NAME = "cases"
 TABLES_DIR_NAME = "tables"
@@ -2310,6 +2317,29 @@ def command_log_fingerprints(command_records: list[CommandRecord]) -> list[dict[
     ]
 
 
+def _optional_path_fingerprint(path_text: str | None) -> dict[str, Any] | None:
+    """Return a fingerprint for an optional evidence path."""
+    return None if path_text is None else generated_artifact_record(Path(path_text))
+
+
+def evidence_fingerprints(case_summaries: list[CaseSummary]) -> dict[str, Any]:
+    """Fingerprint every source evidence file behind the generated paper tables."""
+    return {
+        summary.case_name: {
+            "benchmark_report": _optional_path_fingerprint(summary.benchmark_report),
+            "bundle_evidence": _optional_path_fingerprint(summary.bundle_evidence),
+            "external_timing_report": _optional_path_fingerprint(
+                summary.external_timing_report
+            ),
+            TRACE_EVIDENCE_KEY: [
+                generated_artifact_record(Path(path_text))
+                for path_text in summary.trace_evidence
+            ],
+        }
+        for summary in case_summaries
+    }
+
+
 def _resolve_summary_path(bundle_or_summary_path: Path) -> Path:
     """Resolve either an output directory or a direct summary JSON path."""
     candidate_path = bundle_or_summary_path.resolve()
@@ -2480,6 +2510,94 @@ def _require_command_record_alignment(
     return len(command_records)
 
 
+def _require_present_fingerprint_match(
+    record: dict[str, Any],
+    label: str,
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> None:
+    """Validate a fingerprint for a source evidence file that must exist."""
+    _require(record.get("exists", True) is not False, f"{label}: source evidence must exist")
+    _require_fingerprint_match(
+        record,
+        label,
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
+
+
+def _summary_case_names(summary_payload: dict[str, Any]) -> list[str]:
+    """Return case names recorded in the summary payload."""
+    raw_cases = summary_payload.get("cases")
+    _require(isinstance(raw_cases, list), "cases must be a JSON array")
+    case_names: list[str] = []
+    for index, raw_case in enumerate(raw_cases):
+        case_record = _as_json_object(raw_case, f"cases[{index}]")
+        case_names.append(_as_json_string(case_record.get("case_name"), f"cases[{index}].case_name"))
+    return case_names
+
+
+def _require_evidence_fingerprint_matches(
+    summary_payload: dict[str, Any],
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> int:
+    """Verify source evidence fingerprints that feed the paper tables."""
+    case_names = _summary_case_names(summary_payload)
+    raw_evidence_records = summary_payload.get(EVIDENCE_FINGERPRINTS_KEY)
+    _require(
+        isinstance(raw_evidence_records, dict),
+        f"{EVIDENCE_FINGERPRINTS_KEY} must be a JSON object",
+    )
+    recorded_case_names = set(raw_evidence_records)
+    expected_case_names = set(case_names)
+    _require(
+        recorded_case_names == expected_case_names,
+        f"{EVIDENCE_FINGERPRINTS_KEY} case names must match summary cases",
+    )
+    verified_count = 0
+    for case_name in case_names:
+        case_record = _as_json_object(
+            raw_evidence_records.get(case_name),
+            f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}",
+        )
+        for field_name in CASE_EVIDENCE_FINGERPRINT_FIELDS:
+            raw_record = case_record.get(field_name)
+            if raw_record is None:
+                continue
+            record = _as_json_object(
+                raw_record,
+                f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{field_name}",
+            )
+            _require_present_fingerprint_match(
+                record,
+                f"{case_name}.{field_name}",
+                bundle_root=bundle_root,
+                original_output_dir=original_output_dir,
+            )
+            verified_count += 1
+        trace_records = case_record.get(TRACE_EVIDENCE_KEY)
+        _require(
+            isinstance(trace_records, list),
+            f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{TRACE_EVIDENCE_KEY} must be a JSON array",
+        )
+        for trace_index, raw_record in enumerate(trace_records):
+            record = _as_json_object(
+                raw_record,
+                f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
+            )
+            _require_present_fingerprint_match(
+                record,
+                f"{case_name}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
+                bundle_root=bundle_root,
+                original_output_dir=original_output_dir,
+            )
+            verified_count += 1
+    return verified_count
+
+
 def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     """Verify summary-recorded artifact and command-log fingerprints."""
     summary_path = _resolve_summary_path(bundle_or_summary_path)
@@ -2503,6 +2621,11 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         command_fingerprints,
     )
     original_output_dir = _original_output_dir(summary_payload)
+    verified_evidence_file_count = _require_evidence_fingerprint_matches(
+        summary_payload,
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
 
     verified_artifact_count = 0
     for artifact_name, raw_record in artifact_fingerprints.items():
@@ -2542,6 +2665,7 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         "status": "passed",
         "summary_json": str(summary_path),
         "verified_artifact_count": verified_artifact_count,
+        "verified_evidence_file_count": verified_evidence_file_count,
         "verified_command_record_count": verified_command_record_count,
         "verified_command_log_count": verified_log_count,
     }
@@ -4162,6 +4286,7 @@ def write_paper_outputs(
         "correlations": correlation_rows,
         "commands": [asdict(record) for record in command_records],
         "command_log_fingerprints": command_log_fingerprints(command_records),
+        EVIDENCE_FINGERPRINTS_KEY: evidence_fingerprints(case_summaries),
         "artifacts": {
             name: str(path) for name, path in artifact_paths.items()
         }
