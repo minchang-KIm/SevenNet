@@ -280,6 +280,18 @@ gate requires cases for `SevenNet`, `MACE`, and `NequIP`, so a portability
 experiment cannot accidentally omit one model family. Artifact `required_by`
 entries are also checked against the manifest's case model names, which catches
 misspelled model labels before a cluster job starts.
+Each case may also define a `preflight_command` for short import or module
+checks:
+
+```toml
+preflight_command = 'python -c "import mace"'
+```
+
+The suite runs that command before trace generation or paired timing loops,
+captures `preflight.stdout.log` and `preflight.stderr.log`, and stops the case
+early if the environment is not ready. Use `preflight_env` and
+`preflight_timeout_seconds` when a model family needs module, container, or
+license-server variables that differ from the timed disabled/enabled commands.
 Required artifacts must already exist or be downloadable; if `--skip-downloads`
 is active and a required artifact is missing, the suite fails before launching
 any case. Optional artifacts with `required = false` may be absent, but the

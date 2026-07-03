@@ -783,6 +783,12 @@ def main() -> None:
         and "--write-slurm-script" in cluster_suite
         and "#SBATCH --gres=gpu:" in cluster_suite
         and "COMMON_ARGS" in cluster_suite
+        and "DEFAULT_PREFLIGHT_TIMEOUT_SECONDS" in cluster_suite
+        and "preflight_command" in cluster_suite
+        and "preflight_env" in cluster_suite
+        and "preflight_timeout_seconds" in cluster_suite
+        and "run_case_preflight" in cluster_suite
+        and "preflight.stdout.log" in cluster_suite
         and "manifest_record" in cluster_suite
         and "generated_artifact_record" in cluster_suite
         and "artifact_fingerprints" in cluster_suite
@@ -832,6 +838,14 @@ def main() -> None:
         and "PYTHON_BIN" in doc
         and "SUITE_RUNNER" in doc,
         "IsoDelta-Halo guide must document SLURM cluster launch generation",
+    )
+    _require(
+        "`preflight_command`" in doc
+        and "preflight.stdout.log" in doc
+        and "preflight.stderr.log" in doc
+        and "`preflight_env`" in doc
+        and "`preflight_timeout_seconds`" in doc,
+        "IsoDelta-Halo guide must document cluster case preflight checks",
     )
     _require(
         "manifest SHA-256 digest" in doc

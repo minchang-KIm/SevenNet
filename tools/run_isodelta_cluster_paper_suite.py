@@ -57,6 +57,7 @@ DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 600.0
 DEFAULT_SLURM_JOB_NAME = "isodelta-halo-paper-suite"
 DEFAULT_SLURM_TIME_LIMIT = "24:00:00"
 DEFAULT_SLURM_CPUS_PER_TASK = 8
+DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
 SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_only"))
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
 BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
@@ -159,6 +160,7 @@ class CaseConfig:
     disabled_command: str | None = None
     enabled_command: str | None = None
     trace_command: str | None = None
+    preflight_command: str | None = None
     trace_input: Path | None = None
     benchmark_report: Path | None = None
     bundle_evidence: Path | None = None
@@ -180,6 +182,8 @@ class CaseConfig:
     min_trace_metadata_fraction_percent: float = (
         DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT
     )
+    preflight_timeout_seconds: float = DEFAULT_PREFLIGHT_TIMEOUT_SECONDS
+    preflight_env: dict[str, str] = field(default_factory=dict)
     disabled_env: dict[str, str] = field(default_factory=dict)
     enabled_env: dict[str, str] = field(default_factory=dict)
     artifacts: tuple[str, ...] = ()
@@ -423,6 +427,10 @@ def _validate_percent(value: float, field_name: str) -> None:
 def _validate_case_thresholds(case: CaseConfig) -> None:
     """Reject case gates that cannot support a paper claim."""
     _require(case.repeat_count >= MIN_REQUIRED_CASE_COUNT, f"{case.name}: repeat_count must be at least one")
+    _require(
+        case.preflight_timeout_seconds > MIN_POSITIVE_VALUE,
+        f"{case.name}: preflight_timeout_seconds must be positive",
+    )
     _require(case.command_timeout_seconds > MIN_POSITIVE_VALUE, f"{case.name}: command_timeout_seconds must be positive")
     _require(case.binary_timeout_seconds > MIN_POSITIVE_VALUE, f"{case.name}: binary_timeout_seconds must be positive")
     _require(case.benchmark_timeout_seconds > MIN_POSITIVE_VALUE, f"{case.name}: benchmark_timeout_seconds must be positive")
@@ -604,6 +612,10 @@ def load_manifest(manifest_path: Path) -> SuiteConfig:
                     case.get("trace_command"),
                     f"cases[{index}].trace_command",
                 ),
+                preflight_command=_as_optional_string(
+                    case.get("preflight_command"),
+                    f"cases[{index}].preflight_command",
+                ),
                 trace_input=trace_input,
                 benchmark_report=benchmark_report,
                 bundle_evidence=bundle_evidence,
@@ -677,6 +689,15 @@ def load_manifest(manifest_path: Path) -> SuiteConfig:
                     case.get("min_trace_metadata_fraction_percent"),
                     f"cases[{index}].min_trace_metadata_fraction_percent",
                     default_min_trace_metadata_fraction_percent,
+                ),
+                preflight_timeout_seconds=_as_float(
+                    case.get("preflight_timeout_seconds"),
+                    f"cases[{index}].preflight_timeout_seconds",
+                    DEFAULT_PREFLIGHT_TIMEOUT_SECONDS,
+                ),
+                preflight_env=_as_env_mapping(
+                    case.get("preflight_env"),
+                    f"cases[{index}].preflight_env",
                 ),
                 disabled_env=_as_env_mapping(
                     case.get("disabled_env"),
@@ -1268,6 +1289,7 @@ def build_run_plan(
                 "output_dir": str(_case_output_dir(config, case)),
                 "artifacts": list(case.artifacts),
                 "commands": {
+                    "preflight_command": case.preflight_command,
                     "lammps_command": case.lammps_command,
                     "disabled_command": case.disabled_command,
                     "enabled_command": case.enabled_command,
@@ -1300,6 +1322,7 @@ def build_run_plan(
                 },
                 "thresholds": {
                     "repeat_count": case.repeat_count,
+                    "preflight_timeout_seconds": case.preflight_timeout_seconds,
                     "min_speedup": case.min_speedup,
                     "min_hit_rate_percent": case.min_hit_rate_percent,
                     "min_enabled_cache_attempts": case.min_enabled_cache_attempts,
@@ -1384,6 +1407,32 @@ def _default_case_env(case_env: dict[str, str], disabled: bool) -> dict[str, str
 def _progress(prefix: str, current: int, total: int, message: str) -> None:
     """Print one human-readable progress line for cluster terminals."""
     print(f"[{prefix}] [{current}/{total}] {message}", flush=True)
+
+
+def run_case_preflight(
+    config: SuiteConfig,
+    case: CaseConfig,
+    *,
+    dry_run: bool,
+) -> list[CommandRecord]:
+    """Run a cheap environment check before spending GPU time on one case."""
+    if not case.preflight_command:
+        return []
+    case_dir = _case_output_dir(config, case)
+    log_dir = case_dir / LOGS_DIR_NAME
+    env = os.environ.copy()
+    env.update(case.preflight_env)
+    record = run_shell_command(
+        name=f"{case.name}:preflight",
+        command=case.preflight_command,
+        cwd=REPO_ROOT,
+        env=env,
+        timeout_seconds=case.preflight_timeout_seconds,
+        stdout_path=log_dir / "preflight.stdout.log",
+        stderr_path=log_dir / "preflight.stderr.log",
+        dry_run=dry_run,
+    )
+    return [record]
 
 
 def run_trace_generation(
@@ -2606,13 +2655,20 @@ def run_suite(
         if collect_only:
             external_timing_report = case.external_timing_report
         try:
+            case_command_records: list[CommandRecord] = []
             if not collect_only:
+                preflight_records = run_case_preflight(config, case, dry_run=dry_run)
+                case_command_records.extend(preflight_records)
+                command_records.extend(preflight_records)
+                if any(record.returncode != SUCCESS_RETURN_CODE for record in preflight_records):
+                    raise ClusterSuiteError(f"{case.name}: preflight command failed")
                 if case.kind == "sevennet_lammps":
                     benchmark_report, bundle_evidence, trace_evidence_paths, records = run_sevennet_case(
                         config,
                         case,
                         dry_run=dry_run,
                     )
+                    case_command_records.extend(records)
                     command_records.extend(records)
                 elif case.kind == "external_pair":
                     (
@@ -2622,6 +2678,7 @@ def run_suite(
                         external_timing_report,
                         records,
                     ) = run_external_pair_case(config, case, dry_run=dry_run)
+                    case_command_records.extend(records)
                     command_records.extend(records)
                 elif case.kind == "trace_only":
                     trace_evidence_paths, records = run_trace_only_case(
@@ -2629,6 +2686,7 @@ def run_suite(
                         case,
                         dry_run=dry_run,
                     )
+                    case_command_records.extend(records)
                     command_records.extend(records)
             validate_case_outputs(
                 case,
@@ -2638,7 +2696,7 @@ def run_suite(
                 external_timing_report,
                 dry_run=dry_run,
             )
-            if any(record.returncode != SUCCESS_RETURN_CODE for record in command_records if record.name.startswith(case.name)):
+            if any(record.returncode != SUCCESS_RETURN_CODE for record in case_command_records):
                 raise ClusterSuiteError(f"{case.name}: one or more commands failed")
         except (ClusterSuiteError, benchmark_check.ReportCheckError, trace_check.TraceCheckError) as exc:
             case_status = f"failed: {exc}"
@@ -2712,6 +2770,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
 name = "sevennet-lammps"
 model = "SevenNet"
 kind = "sevennet_lammps"
+preflight_command = 'python -c "import sevenn"'
 lammps_command = "mpiexec -n 8 lmp"
 input = "inputs/in.sevennet"
 work_dir = "inputs"
@@ -2729,6 +2788,7 @@ artifacts = ["shared-dataset"]
 name = "mace-external"
 model = "MACE"
 kind = "external_pair"
+preflight_command = 'python -c "import mace"'
 disabled_command = "python scripts/run_mace_case.py --mode baseline --dataset data/shared_dataset.ext"
 enabled_command = "python scripts/run_mace_case.py --mode isodelta --dataset data/shared_dataset.ext"
 repeat_count = 5
@@ -2741,6 +2801,7 @@ artifacts = ["shared-dataset"]
 name = "nequip-external"
 model = "NequIP"
 kind = "external_pair"
+preflight_command = 'python -c "import nequip"'
 disabled_command = "python scripts/run_nequip_case.py --mode baseline --dataset data/shared_dataset.ext"
 enabled_command = "python scripts/run_nequip_case.py --mode isodelta --dataset data/shared_dataset.ext"
 repeat_count = 5

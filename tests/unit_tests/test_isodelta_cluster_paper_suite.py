@@ -248,6 +248,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
         self.assertIn('required_models = ["SevenNet", "MACE", "NequIP"]', template)
         self.assertIn('kind = "sevennet_lammps"', template)
         self.assertIn('kind = "external_pair"', template)
+        self.assertIn('preflight_command = \'python -c "import mace"\'', template)
 
     def test_write_slurm_script_creates_commented_plan_first_launcher(self) -> None:
         """The SLURM wrapper should submit a reproducible plan before execution."""
@@ -299,6 +300,72 @@ trace_evidence = ["trace.json"]
         self.assertIn("COMMON_ARGS+=(--skip-downloads)", script)
         self.assertIn("COMMON_ARGS+=(--keep-going)", script)
         self.assertIn("# Run SevenNet, MACE, NequIP, and any extra manifest cases.", script)
+
+    def test_preflight_failure_skips_expensive_case_commands(self) -> None:
+        """A failed case preflight should stop the paired timing loop early."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            trace_path = root / "sevennet_trace.json"
+            output_dir = root / "paper_outputs"
+            manifest_path = root / "suite.toml"
+            trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
+            python_bin = Path(sys.executable).as_posix()
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "preflight-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+min_trace_count = 1
+min_distinct_trace_models = 1
+
+[[cases]]
+name = "sevennet-pass"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["{trace_path.as_posix()}"]
+
+[[cases]]
+name = "mace-preflight"
+model = "MACE"
+kind = "external_pair"
+preflight_command = '"{python_bin}" -c "import sys; sys.exit(3)"'
+disabled_command = "should-not-run-disabled"
+enabled_command = "should-not-run-enabled"
+repeat_count = 1
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            exit_code = isodelta_cluster_suite.run_suite(
+                config,
+                skip_downloads=True,
+                skip_gpu_check=True,
+                keep_going=True,
+            )
+            summary = json.loads(
+                (output_dir / "isodelta_cluster_paper_summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            command_names = [record["name"] for record in summary["commands"]]
+            preflight_log = (
+                output_dir
+                / "cases"
+                / "mace-preflight"
+                / "logs"
+                / "preflight.stderr.log"
+            )
+            preflight_log_exists = preflight_log.exists()
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("mace-preflight:preflight", command_names)
+        self.assertFalse(any(":disabled:" in name for name in command_names))
+        self.assertFalse(any(":enabled:" in name for name in command_names))
+        self.assertTrue(preflight_log_exists)
+        self.assertTrue(
+            any(case["status"].startswith("failed:") for case in summary["cases"])
+        )
 
     def test_manifest_validation_requires_all_default_foundation_models(self) -> None:
         """A paper manifest should not silently omit MACE or NequIP."""
