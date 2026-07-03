@@ -19,7 +19,8 @@ from typing import Any
 
 
 # Constants keep the sync contract explicit for reviewers and test fixtures.
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT_PARENT_DEPTH = 1
+REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 VALIDATION_RUNNER_PATH = REPO_ROOT / "tools" / "run_isodelta_validation.py"
 SYNC_REPORT_SCHEMA_VERSION = "isodelta-sync-gate-report-v1"
 DEFAULT_SYNC_REPORT_PATH = Path("isodelta_sync_report.json")

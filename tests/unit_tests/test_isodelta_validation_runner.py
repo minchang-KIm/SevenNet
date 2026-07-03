@@ -18,7 +18,12 @@ import unittest
 
 
 # Load the tool by path because tools/ is intentionally not a Python package.
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT_PARENT_DEPTH = 2
+FIRST_COMMAND_INDEX = 0
+COMMAND_COUNT_AFTER_VALIDATION_FAILURE = 1
+INTENTIONAL_VALIDATION_FAILURE_CODE = 7
+VALIDATION_FAILURE_RETURN_CODE = 1
+REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 VALIDATION_SCRIPT = REPO_ROOT / "tools" / "run_isodelta_validation.py"
 SPEC = importlib.util.spec_from_file_location(
     "isodelta_validation_runner",
@@ -58,7 +63,7 @@ class IsoDeltaValidationRunnerTest(unittest.TestCase):
             report["validation_report_schema_version"],
             validation_runner.VALIDATION_REPORT_SCHEMA_VERSION,
         )
-        self.assertIn("validation-ok", report["commands"][0]["stdout_tail"])
+        self.assertIn("validation-ok", report["commands"][FIRST_COMMAND_INDEX]["stdout_tail"])
 
     def test_run_validation_writes_failure_report_and_stops(self) -> None:
         """A failing command should be recorded and stop later commands."""
@@ -69,7 +74,14 @@ class IsoDeltaValidationRunnerTest(unittest.TestCase):
             report_path = root / "validation_report.json"
             validation_runner.REPO_ROOT = root
             validation_runner.VALIDATION_COMMANDS = (
-                (sys.executable, "-c", "import sys; print('bad', file=sys.stderr); sys.exit(7)"),
+                (
+                    sys.executable,
+                    "-c",
+                    (
+                        "import sys; print('bad', file=sys.stderr); "
+                        f"sys.exit({INTENTIONAL_VALIDATION_FAILURE_CODE})"
+                    ),
+                ),
                 (sys.executable, "-c", "print('should-not-run')"),
             )
             try:
@@ -80,11 +92,14 @@ class IsoDeltaValidationRunnerTest(unittest.TestCase):
                 validation_runner.REPO_ROOT = original_root
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(exit_code, 1)
+        self.assertEqual(exit_code, VALIDATION_FAILURE_RETURN_CODE)
         self.assertEqual(report["status"], "failed")
-        self.assertEqual(len(report["commands"]), 1)
-        self.assertEqual(report["commands"][0]["returncode"], 7)
-        self.assertIn("bad", report["commands"][0]["stderr_tail"])
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
+        self.assertEqual(
+            report["commands"][FIRST_COMMAND_INDEX]["returncode"],
+            INTENTIONAL_VALIDATION_FAILURE_CODE,
+        )
+        self.assertIn("bad", report["commands"][FIRST_COMMAND_INDEX]["stderr_tail"])
 
 
 if __name__ == "__main__":

@@ -16,7 +16,8 @@ import time
 
 # Each command is kept as an argument list so Windows, Linux, and CI shells do
 # not reinterpret paths or quoting differently.
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT_PARENT_DEPTH = 1
+REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 VALIDATION_REPORT_SCHEMA_VERSION = "isodelta-lightweight-validation-report-v1"
 DEFAULT_OUTPUT_TAIL_CHARS = 4000
 SUCCESS_RETURN_CODE = 0

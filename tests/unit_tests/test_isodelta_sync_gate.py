@@ -17,7 +17,12 @@ import unittest
 
 
 # Load the tool by path because tools/ is intentionally not a Python package.
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT_PARENT_DEPTH = 2
+VALIDATION_COMMAND_INDEX = 0
+PUSH_COMMAND_INDEX = 1
+COMMAND_COUNT_AFTER_VALIDATION_FAILURE = 1
+INTENTIONAL_VALIDATION_FAILURE_CODE = 3
+REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 SYNC_GATE_SCRIPT = REPO_ROOT / "tools" / "run_isodelta_sync_gate.py"
 SPEC = importlib.util.spec_from_file_location("isodelta_sync_gate", SYNC_GATE_SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
@@ -54,7 +59,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertEqual(exit_code, sync_gate.SUCCESS_RETURN_CODE)
         self.assertEqual(report["status"], sync_gate.STATUS_SYNCED)
         self.assertEqual([record["name"] for record in report["commands"]], ["validation", "push"])
-        self.assertIn("pushed", report["commands"][1]["stdout_tail"])
+        self.assertIn("pushed", report["commands"][PUSH_COMMAND_INDEX]["stdout_tail"])
 
     def test_run_sync_skips_push_after_validation_failure(self) -> None:
         """A failing validation command should prevent the push command."""
@@ -74,7 +79,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                         validation_command=(
                             sys.executable,
                             "-c",
-                            "import sys; print('invalid', file=sys.stderr); sys.exit(3)",
+                            (
+                                "import sys; print('invalid', file=sys.stderr); "
+                                f"sys.exit({INTENTIONAL_VALIDATION_FAILURE_CODE})"
+                            ),
                         ),
                         push_command=(sys.executable, "-c", "print('should-not-push')"),
                     )
@@ -84,9 +92,12 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
 
         self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
         self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_FAILED)
-        self.assertEqual(len(report["commands"]), 1)
-        self.assertEqual(report["commands"][0]["returncode"], 3)
-        self.assertIn("invalid", report["commands"][0]["stderr_tail"])
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
+        self.assertEqual(
+            report["commands"][VALIDATION_COMMAND_INDEX]["returncode"],
+            INTENTIONAL_VALIDATION_FAILURE_CODE,
+        )
+        self.assertIn("invalid", report["commands"][VALIDATION_COMMAND_INDEX]["stderr_tail"])
 
 
 if __name__ == "__main__":
