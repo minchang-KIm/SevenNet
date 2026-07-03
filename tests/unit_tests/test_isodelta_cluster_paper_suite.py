@@ -770,10 +770,12 @@ trace_evidence = ["trace.json"]
         self.assertIn("--preflight-only --preflight-output \"$PREFLIGHT_OUTPUT\"", script)
         self.assertIn("--plan-only --plan-output \"$PLAN_OUTPUT\"", script)
         self.assertIn("--pipeline --pipeline-report \"$PIPELINE_OUTPUT\"", script)
+        self.assertIn("--verify-pipeline-report \"$PIPELINE_OUTPUT\"", script)
         self.assertIn("COMMON_ARGS+=(--skip-downloads)", script)
         self.assertIn("COMMON_ARGS+=(--keep-going)", script)
         self.assertIn("COMMON_ARGS+=(--reuse-passed)", script)
         self.assertIn("# Run the full paper pipeline", script)
+        self.assertIn("# Re-open the finished pipeline report", script)
 
     def test_write_slurm_script_rejects_collect_only_pipeline_launcher(self) -> None:
         """The generated cluster launcher should not combine collect-only with pipeline."""

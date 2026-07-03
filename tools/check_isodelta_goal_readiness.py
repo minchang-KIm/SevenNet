@@ -58,6 +58,7 @@ REQUIRED_FILE_SNIPPETS = {
         "EXTERNAL_DISABLED_COMMAND_LABEL",
         "EXTERNAL_ENABLED_COMMAND_LABEL",
         "PIPELINE_OUTPUT",
+        '--verify-pipeline-report "$PIPELINE_OUTPUT"',
         "STAGE_REPORT_FINGERPRINTS_KEY",
         "OUTPUT_BUNDLE_VERIFICATION_KEY",
         "case_mode_controls",
@@ -92,6 +93,7 @@ REQUIRED_FILE_SNIPPETS = {
         "`command_log_fingerprints` array",
         "MACE/NequIP stdout/stderr logs cannot drift silently",
         "semantic paper-artifact checks",
+        '`--verify-pipeline-report "$PIPELINE_OUTPUT"`',
         "run_isodelta_sync_gate.py",
     ),
     "tests/unit_tests/test_isodelta_cluster_paper_suite.py": (

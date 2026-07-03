@@ -857,6 +857,8 @@ def main() -> None:
         and "COMMON_ARGS" in cluster_suite
         and "PIPELINE_OUTPUT" in cluster_suite
         and "--pipeline-report" in cluster_suite
+        and ' --verify-pipeline-report "$PIPELINE_OUTPUT"' in cluster_suite
+        and "Re-open the finished pipeline report" in cluster_suite
         and "--write-slurm-script cannot be combined with --collect-only" in cluster_suite
         and "DEFAULT_PREFLIGHT_TIMEOUT_SECONDS" in cluster_suite
         and "preflight_command" in cluster_suite
@@ -880,6 +882,7 @@ def main() -> None:
         and "test_pipeline_stops_when_preflight_fails" in cluster_suite_test
         and "test_pipeline_reports_bundle_verification_failure" in cluster_suite_test
         and "--verify-pipeline-report" in cluster_suite_test
+        and "Re-open the finished pipeline report" in cluster_suite_test
         and "test_manifest_validation_rejects_enabled_external_pair_disable_env" in cluster_suite_test
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
         and "test_external_timing_report_requires_repeat_command_records" in cluster_suite_test
@@ -1004,6 +1007,8 @@ def main() -> None:
         and "COMMON_ARGS" in doc
         and "`--pipeline` path" in doc
         and "`--pipeline-report`" in doc
+        and "`--verify-pipeline-report \"$PIPELINE_OUTPUT\"`" in doc
+        and "stage fingerprints and final bundle verification" in doc
         and "`--collect-only` is not accepted" in doc
         and "PYTHON_BIN" in doc
         and "SUITE_RUNNER" in doc,

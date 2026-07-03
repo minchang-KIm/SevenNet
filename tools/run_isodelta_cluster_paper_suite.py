@@ -5355,6 +5355,9 @@ def write_slurm_script(
             "# Run the full paper pipeline: readiness, prepare, preflight, plan, suite, and bundle verify.",
             '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}" --pipeline --pipeline-report "$PIPELINE_OUTPUT"',
             "",
+            "# Re-open the finished pipeline report before allowing the SLURM job to succeed.",
+            '"$PYTHON_BIN" "$SUITE_RUNNER" --verify-pipeline-report "$PIPELINE_OUTPUT"',
+            "",
         ]
     )
     path.parent.mkdir(parents=True, exist_ok=True)
