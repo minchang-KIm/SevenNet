@@ -353,6 +353,24 @@ python tools/run_isodelta_cluster_paper_suite.py \
 
 The `--prepare-artifacts` mode downloads missing datasets, checkpoints, input decks, and runtime bundles, verifies every declared SHA-256 digest, and writes `artifact_preparation_report.json` under the suite output directory. It does not probe GPUs or launch SevenNet/MACE/NequIP cases, so failed URLs or checksum mismatches are caught before the 8-GPU allocation starts.
 
+Before occupying a long allocation, run the cluster preflight gate:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --manifest isodelta_cluster_suite.toml \
+  --preflight-only \
+  --preflight-output preflight_report.json
+```
+
+The `--preflight-only` mode verifies the manifest schema, probes the requested
+GPU count unless `--skip-gpu-check` is set, downloads or verifies declared
+artifacts, runs each case's `preflight_command`, writes command stdout/stderr
+logs, fingerprints those logs, and stores package/GPU environment details in
+`environment_snapshot.json`. It exits before any LAMMPS, MACE, or NequIP timing
+loop starts, so import failures, missing modules, broken URLs, wrong SHA-256
+digests, and unavailable GPUs are visible in `preflight_report.json` while the
+cluster job is still cheap to rerun.
+
 On a SLURM cluster, generate a commented submission script from the same
 manifest:
 
@@ -363,8 +381,9 @@ python tools/run_isodelta_cluster_paper_suite.py \
 ```
 
 The generated `sbatch` file requests `expected_gpus`, writes scheduler logs
-under `slurm_logs/`, creates the preflight plan with the exact same
-`COMMON_ARGS` used by the final run, and then executes the full suite. The
+under `slurm_logs/`, runs `--preflight-only`, creates the preflight plan with
+the exact same `COMMON_ARGS` used by the final run, and then executes the full
+suite. The
 script defines `PYTHON_BIN` and `SUITE_RUNNER` as overridable shell variables so
 cluster module systems can select the intended environment without editing the
 recorded experiment command.

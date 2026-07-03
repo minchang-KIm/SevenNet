@@ -302,8 +302,8 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
         self.assertIn('kind = "external_pair"', template)
         self.assertIn('preflight_command = \'python -c "import mace"\'', template)
 
-    def test_write_slurm_script_creates_commented_plan_first_launcher(self) -> None:
-        """The SLURM wrapper should submit a reproducible plan before execution."""
+    def test_write_slurm_script_creates_commented_preflight_first_launcher(self) -> None:
+        """The SLURM wrapper should submit reproducible preflight evidence first."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             manifest_path = root / "suite.toml"
@@ -349,6 +349,8 @@ trace_evidence = ["trace.json"]
         self.assertIn("#SBATCH --gres=gpu:8", script)
         self.assertIn("#SBATCH --cpus-per-task=12", script)
         self.assertIn("COMMON_ARGS=(--manifest \"$MANIFEST_PATH\")", script)
+        self.assertIn("PREFLIGHT_OUTPUT=", script)
+        self.assertIn("--preflight-only --preflight-output \"$PREFLIGHT_OUTPUT\"", script)
         self.assertIn("--plan-only --plan-output \"$PLAN_OUTPUT\"", script)
         self.assertIn("COMMON_ARGS+=(--skip-downloads)", script)
         self.assertIn("COMMON_ARGS+=(--keep-going)", script)
@@ -788,6 +790,121 @@ artifacts = ["dataset"]
         self.assertIn("trace_evidence", plan["cases"][0]["expected_outputs"])
         self.assertIn("environment_snapshot.json", plan["paper_outputs"]["environment_snapshot"])
         self.assertIn("speedup_by_case.svg", plan["paper_outputs"]["speedup_svg"])
+
+    def test_preflight_only_downloads_artifacts_and_runs_case_checks(self) -> None:
+        """Preflight-only mode should verify inputs and model launch commands."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            python_bin = Path(sys.executable).as_posix()
+            source_path = root / "source-data.bin"
+            target_path = root / "downloaded-data.bin"
+            source_path.write_bytes(b"cluster preflight input")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            manifest_path = root / "suite.toml"
+            output_dir = root / "paper_outputs"
+            preflight_path = root / "preflight_report.json"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "preflight-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+require_artifact_sha256 = true
+
+[[artifacts]]
+name = "dataset"
+path = "{target_path.as_posix()}"
+url = "{source_path.as_uri()}"
+sha256 = "{digest}"
+required_by = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-preflight"
+model = "SevenNet"
+kind = "trace_only"
+preflight_command = '"{python_bin}" -c "print(12345)"'
+trace_input = "trace.json"
+artifacts = ["dataset"]
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--preflight-only",
+                    "--preflight-output",
+                    str(preflight_path),
+                    "--skip-gpu-check",
+                ]
+            )
+            report = json.loads(preflight_path.read_text(encoding="utf-8"))
+            stdout_path = Path(report["case_preflights"][0]["stdout_path"])
+            stdout_text = stdout_path.read_text(encoding="utf-8")
+            target_exists = target_path.exists()
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(target_exists)
+        self.assertEqual(report["status"], isodelta_cluster_suite.PREFLIGHT_STATUS_PASSED)
+        self.assertEqual(
+            report["preflight_report_schema_version"],
+            isodelta_cluster_suite.PREFLIGHT_REPORT_SCHEMA_VERSION,
+        )
+        self.assertTrue(report["downloads"][0]["downloaded"])
+        self.assertEqual(
+            report["case_preflights"][0]["status"],
+            isodelta_cluster_suite.PREFLIGHT_STATUS_PASSED,
+        )
+        self.assertIn("12345", stdout_text)
+        self.assertEqual(len(report["command_log_fingerprints"]), 1)
+        self.assertGreater(report["environment_snapshot_fingerprint"]["size_bytes"], 0)
+        self.assertEqual(
+            len(report["environment_snapshot_fingerprint"]["sha256"]),
+            isodelta_cluster_suite.SHA256_HEX_LENGTH,
+        )
+
+    def test_preflight_only_reports_failed_case_check(self) -> None:
+        """A nonzero case preflight should fail before expensive model runs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            python_bin = Path(sys.executable).as_posix()
+            manifest_path = root / "suite.toml"
+            output_dir = root / "paper_outputs"
+            preflight_path = root / "preflight_report.json"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "preflight-failure-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-preflight-fail"
+model = "SevenNet"
+kind = "trace_only"
+preflight_command = '"{python_bin}" -c "import sys; sys.exit(7)"'
+trace_input = "trace.json"
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--preflight-only",
+                    "--preflight-output",
+                    str(preflight_path),
+                    "--skip-gpu-check",
+                ]
+            )
+            report = json.loads(preflight_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(report["status"], isodelta_cluster_suite.PREFLIGHT_STATUS_FAILED)
+        self.assertEqual(report["case_preflights"][0]["returncode"], 7)
+        self.assertEqual(report["failures"][0]["stage"], "case_preflight")
 
     def test_readiness_check_accepts_strict_three_model_paired_manifest(self) -> None:
         """A final paper manifest should prove strict input and model coverage."""

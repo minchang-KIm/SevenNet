@@ -41,6 +41,7 @@ REQUIRED_FILE_SNIPPETS = {
     ),
     "tools/run_isodelta_cluster_paper_suite.py": (
         "--prepare-artifacts",
+        "--preflight-only",
         "--readiness-check",
         "--verify-output-bundle",
         "MACE",
@@ -61,12 +62,14 @@ REQUIRED_FILE_SNIPPETS = {
     ),
     "docs/source/user_guide/isodelta_halo.md": (
         "--prepare-artifacts",
+        "--preflight-only",
         "--readiness-check",
         "--verify-output-bundle",
         "run_isodelta_sync_gate.py",
     ),
     "tests/unit_tests/test_isodelta_cluster_paper_suite.py": (
         "test_prepare_artifacts_downloads_and_writes_audit_report",
+        "test_preflight_only_downloads_artifacts_and_runs_case_checks",
         "test_readiness_check_accepts_strict_three_model_paired_manifest",
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (

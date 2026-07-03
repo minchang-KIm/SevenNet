@@ -32,6 +32,7 @@ PATCH_SCRIPT_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "patch_lammps.sh"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "isodelta-halo.yml"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
 DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
+CLUSTER_SUITE_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_cluster_paper_suite.py"
 
 
 def _read(path: Path) -> str:
@@ -67,6 +68,7 @@ def main() -> None:
     workflow = _read(WORKFLOW_PATH)
     doc = _read(DOC_PATH)
     doc_index = _read(DOC_INDEX_PATH)
+    cluster_suite_test = _read(CLUSTER_SUITE_TEST_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
 
     _require(
@@ -809,7 +811,9 @@ def main() -> None:
         and "UNRESOLVED_TEMPLATE_MARKERS" in cluster_suite
         and "READINESS_SCHEMA_VERSION" in cluster_suite
         and "ARTIFACT_PREPARATION_SCHEMA_VERSION" in cluster_suite
+        and "PREFLIGHT_REPORT_SCHEMA_VERSION" in cluster_suite
         and "ARTIFACT_PREPARATION_REPORT_NAME" in cluster_suite
+        and "PREFLIGHT_REPORT_NAME" in cluster_suite
         and "SHA256_HEX_LENGTH" in cluster_suite
         and "SHA256_HEX_PATTERN" in cluster_suite
         and "require_artifact_sha256" in cluster_suite
@@ -817,6 +821,10 @@ def main() -> None:
         and "--readiness-check" in cluster_suite
         and "prepare_artifacts" in cluster_suite
         and "--prepare-artifacts" in cluster_suite
+        and "run_preflight_only" in cluster_suite
+        and "--preflight-only" in cluster_suite
+        and "--preflight-output" in cluster_suite
+        and "PREFLIGHT_OUTPUT" in cluster_suite
         and "validate_gpu_count" in cluster_suite
         and "download_artifact" in cluster_suite
         and "validate_required_artifacts_available" in cluster_suite
@@ -842,6 +850,8 @@ def main() -> None:
         and "preflight_timeout_seconds" in cluster_suite
         and "run_case_preflight" in cluster_suite
         and "preflight.stdout.log" in cluster_suite
+        and "test_preflight_only_downloads_artifacts_and_runs_case_checks" in cluster_suite_test
+        and "test_preflight_only_reports_failed_case_check" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
         and "try_reuse_case_outputs" in cluster_suite
@@ -897,6 +907,8 @@ def main() -> None:
         and "64-character SHA-256 digest" in doc
         and "`--readiness-check`" in doc
         and "`--prepare-artifacts`" in doc
+        and "`--preflight-only`" in doc
+        and "`preflight_report.json`" in doc
         and "`artifact_preparation_report.json`" in doc
         and "does not probe GPUs" in doc
         and "uses `trace_only` instead of paired" in doc
@@ -919,6 +931,7 @@ def main() -> None:
         "--write-slurm-script" in doc
         and "SLURM cluster" in doc
         and "`sbatch` file requests `expected_gpus`" in doc
+        and "runs `--preflight-only`" in doc
         and "COMMON_ARGS" in doc
         and "PYTHON_BIN" in doc
         and "SUITE_RUNNER" in doc,

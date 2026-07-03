@@ -38,6 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SUITE_SCHEMA_VERSION = "isodelta-cluster-paper-suite-v1"
 READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
 ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
+PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
 EXTERNAL_TIMING_SCHEMA_VERSION = "isodelta-external-pair-timing-v1"
 DEFAULT_OUTPUT_DIR = Path("isodelta_cluster_paper_runs")
 DEFAULT_EXPECTED_GPU_COUNT = 8
@@ -70,6 +71,12 @@ DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
 CASE_STATUS_PASSED = "passed"
 CASE_STATUS_REUSED = "reused"
 PASSING_CASE_STATUSES = frozenset((CASE_STATUS_PASSED, CASE_STATUS_REUSED))
+PREFLIGHT_STATUS_PASSED = "passed"
+PREFLIGHT_STATUS_FAILED = "failed"
+PREFLIGHT_STATUS_PLANNED = "planned"
+PREFLIGHT_STATUS_SKIPPED = "skipped"
+PREFLIGHT_SKIP_DOWNLOADS_REASON = "skip_downloads"
+PREFLIGHT_NO_COMMAND_REASON = "no preflight_command"
 SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_only"))
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
 BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
@@ -79,6 +86,7 @@ TRACE_EVIDENCE_SUFFIX = "_trace_evidence.json"
 PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
 SUMMARY_REPORT_NAME = "isodelta_cluster_paper_summary.json"
 ARTIFACT_PREPARATION_REPORT_NAME = "artifact_preparation_report.json"
+PREFLIGHT_REPORT_NAME = "preflight_report.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
 ENVIRONMENT_SNAPSHOT_NAME = "environment_snapshot.json"
@@ -1370,6 +1378,245 @@ def prepare_artifacts(config: SuiteConfig, *, dry_run: bool = False) -> dict[str
         dry_run or not missing_required,
         "required artifacts were not prepared: " + MODEL_NAME_JOINER.join(missing_required),
     )
+    return payload
+
+
+def _base_preflight_artifact_record(artifact: ArtifactConfig) -> dict[str, Any]:
+    """Return the shared artifact fields used by preflight records."""
+    return {
+        "name": artifact.name,
+        "path": str(artifact.path),
+        "url": artifact.url,
+        "required": artifact.required,
+        "downloaded": False,
+        "skipped_optional_missing": False,
+        "sha256": None,
+    }
+
+
+def _preflight_download_failure_record(
+    artifact: ArtifactConfig,
+    exc: BaseException,
+) -> dict[str, Any]:
+    """Return a failed artifact-preflight record with post-check evidence."""
+    record = _base_preflight_artifact_record(artifact)
+    record["error"] = str(exc)
+    record["status"] = PREFLIGHT_STATUS_FAILED
+    return _augment_artifact_record(artifact, record)
+
+
+def _preflight_skip_download_record(
+    artifact: ArtifactConfig,
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    """Return an artifact record when preflight intentionally skips downloads."""
+    record = _base_preflight_artifact_record(artifact)
+    record["status"] = PREFLIGHT_STATUS_SKIPPED
+    record["skip_reason"] = reason
+    return _augment_artifact_record(artifact, record)
+
+
+def _preflight_status_from_failures(
+    *,
+    dry_run: bool,
+    failures: list[dict[str, Any]],
+) -> str:
+    """Return the suite-level preflight status from collected failures."""
+    if failures:
+        return PREFLIGHT_STATUS_FAILED
+    return PREFLIGHT_STATUS_PLANNED if dry_run else PREFLIGHT_STATUS_PASSED
+
+
+def _preflight_case_skip_record(case: CaseConfig) -> dict[str, Any]:
+    """Return a case-preflight record when no command was configured."""
+    return {
+        "name": case.name,
+        "model": case.model,
+        "kind": case.kind,
+        "status": PREFLIGHT_STATUS_SKIPPED,
+        "reason": PREFLIGHT_NO_COMMAND_REASON,
+        "command": None,
+        "returncode": None,
+        "stdout_path": None,
+        "stderr_path": None,
+    }
+
+
+def _preflight_case_command_record(
+    case: CaseConfig,
+    record: CommandRecord,
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    """Return a JSON row for one executed or planned case preflight command."""
+    if dry_run:
+        status = PREFLIGHT_STATUS_PLANNED
+    elif record.returncode == SUCCESS_RETURN_CODE:
+        status = PREFLIGHT_STATUS_PASSED
+    else:
+        status = PREFLIGHT_STATUS_FAILED
+    return {
+        "name": case.name,
+        "model": case.model,
+        "kind": case.kind,
+        "status": status,
+        "reason": None,
+        "command": record.command,
+        "returncode": record.returncode,
+        "elapsed_seconds": record.elapsed_seconds,
+        "stdout_path": record.stdout_path,
+        "stderr_path": record.stderr_path,
+    }
+
+
+def run_preflight_only(
+    config: SuiteConfig,
+    *,
+    dry_run: bool = False,
+    skip_downloads: bool = False,
+    skip_gpu_check: bool = False,
+    allow_gpu_mismatch: bool = False,
+    report_path: Path | None = None,
+) -> dict[str, Any]:
+    """Run artifact, GPU, and per-model preflight checks without benchmark jobs."""
+    validate_suite_config(config)
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+    final_report_path = report_path or config.output_dir / PREFLIGHT_REPORT_NAME
+    download_stage_count = MIN_REQUIRED_CASE_COUNT if skip_downloads or not config.artifacts else len(config.artifacts)
+    total_stages = MIN_REQUIRED_CASE_COUNT + download_stage_count + len(config.cases) + MIN_REQUIRED_CASE_COUNT
+    stage_index = MIN_REQUIRED_CASE_COUNT
+    failures: list[dict[str, Any]] = []
+    command_records: list[CommandRecord] = []
+
+    gpu_record: dict[str, Any] | None = None
+    if skip_gpu_check:
+        _progress(config.name, stage_index, total_stages, "GPU check skipped")
+        gpu_record = {
+            "expected_gpus": config.expected_gpus,
+            "detected_gpus": None,
+            "detector": None,
+            "allow_mismatch": allow_gpu_mismatch,
+            "skipped": True,
+        }
+    else:
+        _progress(config.name, stage_index, total_stages, f"checking for {config.expected_gpus} GPUs")
+        try:
+            gpu_record = validate_gpu_count(config.expected_gpus, allow_gpu_mismatch)
+            gpu_record["skipped"] = False
+        except ClusterSuiteError as exc:
+            gpu_record = {
+                "expected_gpus": config.expected_gpus,
+                "detected_gpus": None,
+                "detector": None,
+                "allow_mismatch": allow_gpu_mismatch,
+                "skipped": False,
+                "error": str(exc),
+            }
+            failures.append({"stage": "gpu", "message": str(exc)})
+    stage_index += MIN_REQUIRED_CASE_COUNT
+
+    download_records: list[dict[str, Any]] = []
+    if skip_downloads:
+        _progress(config.name, stage_index, total_stages, "artifact downloads skipped")
+        for artifact in config.artifacts:
+            record = _preflight_skip_download_record(
+                artifact,
+                reason=PREFLIGHT_SKIP_DOWNLOADS_REASON,
+            )
+            download_records.append(record)
+            if artifact.required and not artifact.path.exists():
+                failures.append(
+                    {
+                        "stage": "artifact",
+                        "name": artifact.name,
+                        "message": f"required artifact is missing: {artifact.path}",
+                    }
+                )
+            if (
+                artifact.sha256 is not None
+                and record["actual_sha256"] is not None
+                and record["actual_sha256"].lower() != artifact.sha256.lower()
+            ):
+                failures.append(
+                    {
+                        "stage": "artifact",
+                        "name": artifact.name,
+                        "message": f"SHA-256 mismatch for existing artifact {artifact.path}",
+                    }
+                )
+        stage_index += MIN_REQUIRED_CASE_COUNT
+    elif not config.artifacts:
+        _progress(config.name, stage_index, total_stages, "no artifacts declared")
+        stage_index += MIN_REQUIRED_CASE_COUNT
+    else:
+        for artifact in config.artifacts:
+            _progress(config.name, stage_index, total_stages, f"preflighting artifact {artifact.name}")
+            try:
+                record = download_artifact(artifact, dry_run=dry_run)
+                download_records.append(_augment_artifact_record(artifact, record))
+            except (ClusterSuiteError, OSError) as exc:
+                download_records.append(_preflight_download_failure_record(artifact, exc))
+                failures.append(
+                    {
+                        "stage": "artifact",
+                        "name": artifact.name,
+                        "message": str(exc),
+                    }
+                )
+            stage_index += MIN_REQUIRED_CASE_COUNT
+
+    case_preflights: list[dict[str, Any]] = []
+    for case in config.cases:
+        _progress(config.name, stage_index, total_stages, f"preflighting case {case.name} ({case.model})")
+        if not case.preflight_command:
+            case_preflights.append(_preflight_case_skip_record(case))
+        else:
+            records = run_case_preflight(config, case, dry_run=dry_run)
+            command_records.extend(records)
+            for record in records:
+                case_record = _preflight_case_command_record(case, record, dry_run=dry_run)
+                case_preflights.append(case_record)
+                if record.returncode != SUCCESS_RETURN_CODE:
+                    failures.append(
+                        {
+                            "stage": "case_preflight",
+                            "name": case.name,
+                            "message": f"returncode={record.returncode}",
+                        }
+                    )
+        stage_index += MIN_REQUIRED_CASE_COUNT
+
+    _progress(config.name, stage_index, total_stages, "writing preflight report")
+    environment_snapshot_path = write_environment_snapshot(config, gpu_record)
+    payload = {
+        "preflight_report_schema_version": PREFLIGHT_REPORT_SCHEMA_VERSION,
+        "status": _preflight_status_from_failures(dry_run=dry_run, failures=failures),
+        "dry_run": dry_run,
+        "skip_downloads": skip_downloads,
+        "skip_gpu_check": skip_gpu_check,
+        "allow_gpu_mismatch": allow_gpu_mismatch,
+        "report_path": str(final_report_path),
+        "provenance": collect_run_provenance(),
+        "suite": {
+            "name": config.name,
+            "manifest_path": str(config.manifest_path),
+            "manifest": manifest_record(config),
+            "output_dir": str(config.output_dir),
+            "expected_gpus": config.expected_gpus,
+            "required_models": list(config.required_models),
+        },
+        "gpu_check": gpu_record,
+        "downloads": download_records,
+        "case_preflights": case_preflights,
+        "failures": failures,
+        "commands": [asdict(record) for record in command_records],
+        "command_log_fingerprints": command_log_fingerprints(command_records),
+        "environment_snapshot": str(environment_snapshot_path),
+        "environment_snapshot_fingerprint": generated_artifact_record(environment_snapshot_path),
+    }
+    final_report_path.parent.mkdir(parents=True, exist_ok=True)
+    final_report_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload
 
 
@@ -3674,6 +3921,7 @@ def write_slurm_script(
         'SUITE_RUNNER="${SUITE_RUNNER:-tools/run_isodelta_cluster_paper_suite.py}"',
         f"MANIFEST_PATH={_bash_quote(config.manifest_path)}",
         f"PLAN_OUTPUT={_bash_quote(plan_path)}",
+        f"PREFLIGHT_OUTPUT={_bash_quote(config.output_dir / PREFLIGHT_REPORT_NAME)}",
         "",
         "# Keep scheduler stdout/stderr directories explicit and reproducible.",
         f"mkdir -p {_bash_quote(SLURM_LOG_DIR_NAME)}",
@@ -3701,7 +3949,10 @@ def write_slurm_script(
     lines.extend(
         [
             "",
-            "# Generate the auditable preflight JSON before launching model runs.",
+            "# Run artifact, GPU, and model import checks before launching model runs.",
+            '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}" --preflight-only --preflight-output "$PREFLIGHT_OUTPUT"',
+            "",
+            "# Generate the auditable plan JSON before launching model runs.",
             '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}" --plan-only --plan-output "$PLAN_OUTPUT"',
             "",
             "# Run SevenNet, MACE, NequIP, and any extra manifest cases.",
@@ -3722,6 +3973,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--verify-output-bundle", type=Path, help="Verify summary artifact and log fingerprints")
     parser.add_argument("--readiness-check", action="store_true", help="Audit a manifest before final paper execution")
     parser.add_argument("--prepare-artifacts", action="store_true", help="Download and verify artifacts without using GPUs")
+    parser.add_argument("--preflight-only", action="store_true", help="Run artifact, GPU, and case preflight checks only")
+    parser.add_argument("--preflight-output", type=Path, help="Path for --preflight-only JSON output")
     parser.add_argument("--plan-only", action="store_true", help="Write a preflight JSON plan and exit")
     parser.add_argument("--plan-output", type=Path, help="Path for --plan-only JSON output")
     parser.add_argument("--output-dir", type=Path, help="Override suite.output_dir")
@@ -3779,21 +4032,41 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--manifest is required unless --write-template or --verify-output-bundle is used")
     try:
         config = _apply_cli_overrides(load_manifest(args.manifest), args)
+        _require(
+            args.preflight_output is None or args.preflight_only,
+            "--preflight-output requires --preflight-only",
+        )
         if args.readiness_check:
             _require(args.write_slurm_script is None, "--readiness-check cannot be combined with --write-slurm-script")
             _require(not args.plan_only, "--readiness-check cannot be combined with --plan-only")
             _require(not args.prepare_artifacts, "--readiness-check cannot be combined with --prepare-artifacts")
+            _require(not args.preflight_only, "--readiness-check cannot be combined with --preflight-only")
             report = build_readiness_report(config)
             print(json.dumps(report, indent=2))
             return SUCCESS_RETURN_CODE if report["status"] == "ready" else 1
         if args.prepare_artifacts:
             _require(args.write_slurm_script is None, "--prepare-artifacts cannot be combined with --write-slurm-script")
             _require(not args.plan_only, "--prepare-artifacts cannot be combined with --plan-only")
+            _require(not args.preflight_only, "--prepare-artifacts cannot be combined with --preflight-only")
             _require(not args.collect_only, "--prepare-artifacts cannot be combined with --collect-only")
             _require(not args.skip_downloads, "--prepare-artifacts cannot be combined with --skip-downloads")
             report = prepare_artifacts(config, dry_run=args.dry_run)
             print(json.dumps({"artifact_preparation_report": report["report_path"], "status": report["status"]}, indent=2))
             return SUCCESS_RETURN_CODE
+        if args.preflight_only:
+            _require(args.write_slurm_script is None, "--preflight-only cannot be combined with --write-slurm-script")
+            _require(not args.plan_only, "--preflight-only cannot be combined with --plan-only")
+            _require(not args.collect_only, "--preflight-only cannot be combined with --collect-only")
+            report = run_preflight_only(
+                config,
+                dry_run=args.dry_run,
+                skip_downloads=args.skip_downloads,
+                skip_gpu_check=args.skip_gpu_check,
+                allow_gpu_mismatch=args.allow_gpu_mismatch,
+                report_path=args.preflight_output,
+            )
+            print(json.dumps({"preflight_report": report["report_path"], "status": report["status"]}, indent=2))
+            return SUCCESS_RETURN_CODE if report["status"] != PREFLIGHT_STATUS_FAILED else 1
         if args.write_slurm_script is not None:
             _require(not args.plan_only, "--write-slurm-script cannot be combined with --plan-only")
             write_slurm_script(
