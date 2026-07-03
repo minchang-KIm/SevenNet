@@ -384,9 +384,12 @@ The `--pipeline` mode executes the final-paper readiness gate, prepares
 artifacts, runs the cluster preflight gate, writes the plan JSON, executes the
 full suite, and then verifies the output bundle fingerprints. Its
 `pipeline_report.json` records every stage, stage report path, selected modes,
-manifest fingerprint, and final status. Use `--reuse-passed` with `--pipeline`
-after an interrupted run to reuse already validated case outputs while still
-rerunning readiness, preflight, summary generation, and bundle verification.
+manifest fingerprint, and final status. If the readiness gate fails, the
+pipeline writes `readiness_report.json` and stops before downloads, preflight
+commands, timing runs, or summary generation. Use `--reuse-passed` with
+`--pipeline` after an interrupted run to reuse already validated case outputs
+while still rerunning readiness, preflight, summary generation, and bundle
+verification.
 
 On a SLURM cluster, generate a commented submission script from the same
 manifest:

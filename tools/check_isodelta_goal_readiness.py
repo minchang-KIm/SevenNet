@@ -73,6 +73,7 @@ REQUIRED_FILE_SNIPPETS = {
         "test_prepare_artifacts_downloads_and_writes_audit_report",
         "test_preflight_only_downloads_artifacts_and_runs_case_checks",
         "test_pipeline_runs_all_paper_stages_and_verifies_bundle",
+        "test_pipeline_stops_when_readiness_fails",
         "test_readiness_check_accepts_strict_three_model_paired_manifest",
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (

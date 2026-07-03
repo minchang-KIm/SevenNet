@@ -1033,6 +1033,77 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn("run_plan", summary["artifact_fingerprints"])
         self.assertNotIn("pipeline_report", summary["artifact_fingerprints"])
 
+    def test_pipeline_stops_when_readiness_fails(self) -> None:
+        """Pipeline mode should not prepare inputs or run cases after a failed gate."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            manifest_path = root / "suite.toml"
+            pipeline_report_path = root / "pipeline_report.json"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "pipeline-readiness-fails"
+output_dir = "{output_dir.as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet", "MACE", "NequIP"]
+
+[[cases]]
+name = "sevennet-trace"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["missing_sevennet_trace.json"]
+
+[[cases]]
+name = "mace-trace"
+model = "MACE"
+kind = "trace_only"
+trace_evidence = ["missing_mace_trace.json"]
+
+[[cases]]
+name = "nequip-trace"
+model = "NequIP"
+kind = "trace_only"
+trace_evidence = ["missing_nequip_trace.json"]
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--pipeline",
+                    "--pipeline-report",
+                    str(pipeline_report_path),
+                    "--skip-gpu-check",
+                ]
+            )
+            pipeline_report = json.loads(pipeline_report_path.read_text(encoding="utf-8"))
+            readiness_path = output_dir / isodelta_cluster_suite.READINESS_REPORT_NAME
+            stopped_before_prepare = not (
+                output_dir / isodelta_cluster_suite.ARTIFACT_PREPARATION_REPORT_NAME
+            ).exists()
+            stopped_before_preflight = not (
+                output_dir / isodelta_cluster_suite.PREFLIGHT_REPORT_NAME
+            ).exists()
+            stopped_before_plan = not (
+                output_dir / isodelta_cluster_suite.PLAN_REPORT_NAME
+            ).exists()
+            stopped_before_summary = not (
+                output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            ).exists()
+            readiness_exists = readiness_path.exists()
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(pipeline_report["status"], isodelta_cluster_suite.PIPELINE_STATUS_FAILED)
+        self.assertEqual([stage["name"] for stage in pipeline_report["stages"]], ["readiness"])
+        self.assertTrue(readiness_exists)
+        self.assertTrue(stopped_before_prepare)
+        self.assertTrue(stopped_before_preflight)
+        self.assertTrue(stopped_before_plan)
+        self.assertTrue(stopped_before_summary)
+
     def test_readiness_check_accepts_strict_three_model_paired_manifest(self) -> None:
         """A final paper manifest should prove strict input and model coverage."""
         with tempfile.TemporaryDirectory() as tmpdir:
