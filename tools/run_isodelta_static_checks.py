@@ -889,6 +889,8 @@ def main() -> None:
         and "test_verify_output_bundle_rejects_mismatched_command_fingerprints" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_source_evidence" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_external_command_log" in cluster_suite_test
+        and "test_verify_output_bundle_rejects_semantically_invalid_svg_artifact"
+        in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
@@ -930,6 +932,11 @@ def main() -> None:
         and "COMMAND_LOG_FINGERPRINTS_KEY" in cluster_suite
         and "_require_external_timing_reports_from_summary" in cluster_suite
         and "verified_external_command_log_count" in cluster_suite
+        and "REQUIRED_PAPER_ARTIFACT_NAMES" in cluster_suite
+        and "_require_paper_artifact_semantics" in cluster_suite
+        and "verified_paper_artifact_semantic_count" in cluster_suite
+        and "_require_svg_document" in cluster_suite
+        and "CORRELATION_METRIC_PAIRS" in cluster_suite
         and "EXTERNAL_DISABLED_COMMAND_LABEL" in cluster_suite
         and "EXTERNAL_ENABLED_COMMAND_LABEL" in cluster_suite
         and "BASELINE_TIMES_SECONDS_KEY" in cluster_suite
@@ -1099,6 +1106,15 @@ def main() -> None:
         and "fails if any recorded artifact or" in doc
         and "command log fingerprint" in doc,
         "IsoDelta-Halo guide must document output bundle verification",
+    )
+    _require(
+        "semantic paper-artifact checks" in doc
+        and "`case_summary.csv` and `case_summary.md` must contain exactly one row per" in doc
+        and "`correlation.csv` must contain the configured metric-pair rows" in doc
+        and "each SVG figure must parse as an SVG document" in doc
+        and "`environment_snapshot.json` must carry the expected snapshot schema" in doc
+        and "matching hash" in doc,
+        "IsoDelta-Halo guide must document semantic paper artifact verification",
     )
     _require(
         "`--verify-output-bundle` also reopens the archived" in doc

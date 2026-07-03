@@ -340,6 +340,86 @@ def _external_timing_report_for_case(
     }
 
 
+def _minimal_svg(title: str) -> str:
+    """Return a tiny SVG figure that still exercises XML-based validation."""
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" '
+        'viewBox="0 0 960 540">'
+        f'<text x="20" y="40">{title}</text>'
+        "</svg>\n"
+    )
+
+
+def _write_required_paper_artifacts(
+    output_dir: Path,
+    *,
+    case_names: tuple[str, ...] = ("case",),
+) -> dict[str, dict[str, object]]:
+    """Create the required paper artifacts that bundle verification expects."""
+    tables_dir = output_dir / isodelta_cluster_suite.TABLES_DIR_NAME
+    figures_dir = output_dir / isodelta_cluster_suite.FIGURES_DIR_NAME
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    environment_snapshot = output_dir / isodelta_cluster_suite.ENVIRONMENT_SNAPSHOT_NAME
+    manifest_snapshot = output_dir / isodelta_cluster_suite.MANIFEST_SNAPSHOT_NAME
+    case_summary_csv = tables_dir / "case_summary.csv"
+    case_summary_markdown = tables_dir / "case_summary.md"
+    correlation_csv = tables_dir / "correlation.csv"
+    speedup_svg = figures_dir / "speedup_by_case.svg"
+    hit_rate_svg = figures_dir / "hit_rate_vs_speedup.svg"
+    trace_svg = figures_dir / "trace_metadata_fraction_vs_speedup.svg"
+    environment_snapshot.write_text(
+        json.dumps(
+            {
+                "snapshot_schema_version": (
+                    isodelta_cluster_suite.ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION
+                )
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest_snapshot.write_text('[suite]\nname = "test-suite"\n', encoding="utf-8")
+    case_rows = [
+        {
+            "case": case_name,
+            "model": "SevenNet",
+            "kind": "trace_only",
+            "status": isodelta_cluster_suite.CASE_STATUS_PASSED,
+        }
+        for case_name in case_names
+    ]
+    correlation_rows = [
+        {
+            "x_metric": x_metric,
+            "y_metric": y_metric,
+            "n": len(case_names),
+            "pearson": "",
+            "spearman": "",
+        }
+        for x_metric, y_metric in isodelta_cluster_suite.CORRELATION_METRIC_PAIRS
+    ]
+    isodelta_cluster_suite.write_csv(case_summary_csv, case_rows)
+    isodelta_cluster_suite.write_markdown_table(case_summary_markdown, case_rows)
+    isodelta_cluster_suite.write_csv(correlation_csv, correlation_rows)
+    speedup_svg.write_text(_minimal_svg("speedup"), encoding="utf-8")
+    hit_rate_svg.write_text(_minimal_svg("hit rate"), encoding="utf-8")
+    trace_svg.write_text(_minimal_svg("trace"), encoding="utf-8")
+    artifact_paths = {
+        "environment_snapshot": environment_snapshot,
+        "case_summary_csv": case_summary_csv,
+        "case_summary_markdown": case_summary_markdown,
+        "correlation_csv": correlation_csv,
+        "speedup_svg": speedup_svg,
+        "hit_rate_svg": hit_rate_svg,
+        "trace_svg": trace_svg,
+        "manifest_snapshot": manifest_snapshot,
+    }
+    return {
+        name: isodelta_cluster_suite.generated_artifact_record(path)
+        for name, path in artifact_paths.items()
+    }
+
+
 class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
     """Check manifest validation and paper artifact generation."""
 
@@ -349,14 +429,11 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             root = Path(tmpdir)
             original_output_dir = root / "paper_outputs"
             logs_dir = original_output_dir / "logs"
-            tables_dir = original_output_dir / "tables"
             logs_dir.mkdir(parents=True)
-            tables_dir.mkdir(parents=True)
-            table_path = tables_dir / "case_summary.csv"
             stdout_path = logs_dir / "case.stdout"
             missing_stderr_path = logs_dir / "case.stderr"
-            table_path.write_text("case,speedup\nsevennet,1.2\n", encoding="utf-8")
             stdout_path.write_text("completed\n", encoding="utf-8")
+            artifact_fingerprints = _write_required_paper_artifacts(original_output_dir)
             summary_path = original_output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary_path.write_text(
                 json.dumps(
@@ -383,11 +460,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                                 "trace_evidence": [],
                             }
                         },
-                        "artifact_fingerprints": {
-                            "case_summary_csv": isodelta_cluster_suite.generated_artifact_record(
-                                table_path
-                            )
-                        },
+                        "artifact_fingerprints": artifact_fingerprints,
                         "command_log_fingerprints": [
                             {
                                 "name": "case",
@@ -412,7 +485,14 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             verification = isodelta_cluster_suite.verify_output_bundle(relocated_output_dir)
 
         self.assertEqual(verification["status"], "passed")
-        self.assertEqual(verification["verified_artifact_count"], 1)
+        self.assertEqual(
+            verification["verified_artifact_count"],
+            len(isodelta_cluster_suite.REQUIRED_PAPER_ARTIFACT_NAMES),
+        )
+        self.assertEqual(
+            verification["verified_paper_artifact_semantic_count"],
+            len(isodelta_cluster_suite.REQUIRED_PAPER_ARTIFACT_NAMES),
+        )
         self.assertEqual(verification["verified_command_record_count"], 1)
         self.assertEqual(verification["verified_command_log_count"], 2)
 
@@ -422,15 +502,12 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             root = Path(tmpdir)
             output_dir = root / "paper_outputs"
             logs_dir = output_dir / "logs"
-            tables_dir = output_dir / "tables"
             logs_dir.mkdir(parents=True)
-            tables_dir.mkdir(parents=True)
-            table_path = tables_dir / "case_summary.csv"
             stdout_path = logs_dir / "case.stdout"
             stderr_path = logs_dir / "case.stderr"
-            table_path.write_text("case,speedup\nsevennet,1.2\n", encoding="utf-8")
             stdout_path.write_text("completed\n", encoding="utf-8")
             stderr_path.write_text("", encoding="utf-8")
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
             summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary_path.write_text(
                 json.dumps(
@@ -457,11 +534,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                                 "trace_evidence": [],
                             }
                         },
-                        "artifact_fingerprints": {
-                            "case_summary_csv": isodelta_cluster_suite.generated_artifact_record(
-                                table_path
-                            )
-                        },
+                        "artifact_fingerprints": artifact_fingerprints,
                         "command_log_fingerprints": [
                             {
                                 "name": "different-case",
@@ -491,12 +564,9 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             output_dir = root / "paper_outputs"
-            tables_dir = output_dir / "tables"
-            tables_dir.mkdir(parents=True)
-            table_path = tables_dir / "case_summary.csv"
             trace_path = root / "trace_evidence.json"
-            table_path.write_text("case,speedup\nsevennet,1.2\n", encoding="utf-8")
             trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
             summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary_path.write_text(
                 json.dumps(
@@ -505,11 +575,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                         "cases": [{"case_name": "case"}],
                         "commands": [],
                         "command_log_fingerprints": [],
-                        "artifact_fingerprints": {
-                            "case_summary_csv": isodelta_cluster_suite.generated_artifact_record(
-                                table_path
-                            )
-                        },
+                        "artifact_fingerprints": artifact_fingerprints,
                         "evidence_fingerprints": {
                             "case": {
                                 "benchmark_report": None,
@@ -546,6 +612,10 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             timing_report_path.parent.mkdir(parents=True)
             timing_report = _external_timing_report("NequIP", log_dir=timing_report_path.parent / "logs")
             timing_report_path.write_text(json.dumps(timing_report), encoding="utf-8")
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_names=("nequip-existing",),
+            )
             summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary_path.write_text(
                 json.dumps(
@@ -563,7 +633,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                         },
                         "commands": [],
                         "command_log_fingerprints": [],
-                        "artifact_fingerprints": {},
+                        "artifact_fingerprints": artifact_fingerprints,
                         "evidence_fingerprints": {
                             "nequip-existing": {
                                 "benchmark_report": None,
@@ -592,6 +662,45 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 isodelta_cluster_suite.verify_output_bundle(summary_path)
 
         self.assertEqual(verification["verified_external_command_log_count"], 4)
+
+    def test_verify_output_bundle_rejects_semantically_invalid_svg_artifact(self) -> None:
+        """Bundle verification should reject a hashed file that is not an SVG figure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
+            speedup_svg.write_text("this is not an svg document\n", encoding="utf-8")
+            artifact_fingerprints["speedup_svg"] = (
+                isodelta_cluster_suite.generated_artifact_record(speedup_svg)
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [{"case_name": "case"}],
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "speedup_svg: invalid SVG XML",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
 
     def test_write_template_creates_commented_three_model_manifest(self) -> None:
         """The template should be editable and include the required models."""
@@ -1469,6 +1578,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             pipeline_verification["verified_evidence_file_count"],
             verification["verified_evidence_file_count"],
         )
+        self.assertEqual(
+            pipeline_verification["verified_paper_artifact_semantic_count"],
+            verification["verified_paper_artifact_semantic_count"],
+        )
         self.assertGreaterEqual(
             pipeline_verification["verified_artifact_count"],
             1,
@@ -2209,6 +2322,10 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertEqual(exit_code, 0)
         self.assertEqual(verification["status"], "passed")
         self.assertGreaterEqual(verification["verified_artifact_count"], 1)
+        self.assertEqual(
+            verification["verified_paper_artifact_semantic_count"],
+            len(isodelta_cluster_suite.REQUIRED_PAPER_ARTIFACT_NAMES),
+        )
         self.assertEqual(verification["verified_evidence_file_count"], 5)
         self.assertTrue(environment_snapshot_exists)
         self.assertTrue(case_summary_exists)

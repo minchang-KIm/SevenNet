@@ -562,6 +562,13 @@ python tools/run_isodelta_cluster_paper_suite.py \
 The verifier accepts either the output directory or the
 `isodelta_cluster_paper_summary.json` path and fails if any recorded artifact or
 command log fingerprint no longer matches the filesystem.
+It also performs semantic paper-artifact checks after the SHA-256 pass:
+`case_summary.csv` and `case_summary.md` must contain exactly one row per
+summary case, `correlation.csv` must contain the configured metric-pair rows,
+each SVG figure must parse as an SVG document with width, height, and viewBox,
+`environment_snapshot.json` must carry the expected snapshot schema, and the
+manifest snapshot must contain the `[suite]` table. This catches a corrupted
+table or graph even when the summary JSON was regenerated with a matching hash.
 For `external_pair` cases, `--verify-output-bundle` also reopens the archived
 external timing report and rechecks its nested `command_log_fingerprints`, so
 MACE/NequIP stdout/stderr logs cannot drift silently after collection.

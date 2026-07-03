@@ -30,6 +30,7 @@ import tomllib
 from typing import Any
 from urllib.parse import urlparse
 from urllib.request import urlopen
+import xml.etree.ElementTree as ElementTree
 
 
 # Constants are named because this script becomes part of the experimental
@@ -149,6 +150,19 @@ LOGS_DIR_NAME = "logs"
 CASES_DIR_NAME = "cases"
 TABLES_DIR_NAME = "tables"
 FIGURES_DIR_NAME = "figures"
+REQUIRED_PAPER_ARTIFACT_NAMES = (
+    "environment_snapshot",
+    "case_summary_csv",
+    "case_summary_markdown",
+    "correlation_csv",
+    "speedup_svg",
+    "hit_rate_svg",
+    "trace_svg",
+    "manifest_snapshot",
+)
+PAPER_CASE_SUMMARY_COLUMNS = ("case", "model", "kind", "status")
+PAPER_CORRELATION_COLUMNS = ("x_metric", "y_metric", "n", "pearson", "spearman")
+PAPER_SVG_ARTIFACT_NAMES = ("speedup_svg", "hit_rate_svg", "trace_svg")
 DOWNLOAD_CHUNK_BYTES = 1024 * 1024
 HASH_CHUNK_BYTES = DOWNLOAD_CHUNK_BYTES
 PERCENT_SCALE = 100.0
@@ -179,6 +193,12 @@ SVG_MARGIN_BOTTOM = 88
 BAR_GAP_RATIO = 0.28
 SCATTER_POINT_RADIUS = 5
 MODEL_NAME_JOINER = ", "
+CORRELATION_METRIC_PAIRS = (
+    ("cache_hit_rate_percent", "speedup_vs_disabled_cache"),
+    ("trace_hit_rate_percent", "trace_estimated_average_speedup"),
+    ("trace_metadata_fraction_percent", "trace_estimated_average_speedup"),
+    ("trace_estimated_average_speedup", "speedup_vs_disabled_cache"),
+)
 NVIDIA_SMI_TIMEOUT_SECONDS = 20.0
 TORCH_GPU_TIMEOUT_SECONDS = 30.0
 GIT_METADATA_TIMEOUT_SECONDS = 10.0
@@ -2787,6 +2807,185 @@ def _require_external_timing_reports_from_summary(
     return verified_log_count
 
 
+def _read_csv_rows(path: Path, label: str) -> tuple[tuple[str, ...], list[dict[str, str]]]:
+    """Read a generated CSV artifact with schema-oriented validation errors."""
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = tuple(reader.fieldnames or ())
+        _require(fieldnames, f"{label}: missing CSV header")
+        rows = list(reader)
+    for index, row in enumerate(rows):
+        _require(None not in row, f"{label}: row {index} has more cells than headers")
+    return fieldnames, rows
+
+
+def _require_columns(
+    fieldnames: tuple[str, ...],
+    required_columns: tuple[str, ...],
+    label: str,
+) -> None:
+    """Require generated table columns that downstream paper scripts depend on."""
+    missing_columns = [column for column in required_columns if column not in fieldnames]
+    _require(not missing_columns, f"{label}: missing columns {missing_columns}")
+
+
+def _as_csv_nonnegative_int(value: str | None, field_name: str) -> int:
+    """Return a whole nonnegative count from a generated CSV cell."""
+    _require(value is not None, f"{field_name} must be present")
+    text = value.strip()
+    _require(text.isdecimal(), f"{field_name} must be a nonnegative integer")
+    return int(text)
+
+
+def _markdown_cells(line: str) -> list[str]:
+    """Split one GitHub-flavored markdown table row into trimmed cells."""
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _require_case_summary_csv(path: Path, cases_by_name: dict[str, dict[str, Any]]) -> None:
+    """Verify that the main CSV table has one row per summary case."""
+    fieldnames, rows = _read_csv_rows(path, "case_summary.csv")
+    _require_columns(fieldnames, PAPER_CASE_SUMMARY_COLUMNS, "case_summary.csv")
+    expected_case_names = set(cases_by_name)
+    row_case_names = {
+        _as_json_string(row.get("case"), f"case_summary.csv[{index}].case")
+        for index, row in enumerate(rows)
+    }
+    _require(
+        len(rows) == len(expected_case_names),
+        "case_summary.csv: row count must match summary cases",
+    )
+    _require(
+        row_case_names == expected_case_names,
+        "case_summary.csv: case names must match summary cases",
+    )
+
+
+def _require_case_summary_markdown(
+    path: Path,
+    cases_by_name: dict[str, dict[str, Any]],
+) -> None:
+    """Verify that the markdown table is readable and aligned with summary cases."""
+    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    expected_case_names = set(cases_by_name)
+    _require(
+        len(lines) == len(expected_case_names) + 2,
+        "case_summary.md: row count must match summary cases plus header",
+    )
+    header = _markdown_cells(lines[0])
+    separator = _markdown_cells(lines[1])
+    _require_columns(tuple(header), PAPER_CASE_SUMMARY_COLUMNS, "case_summary.md")
+    _require(
+        len(separator) == len(header),
+        "case_summary.md: separator width must match header",
+    )
+    _require(
+        all(cell == "---" for cell in separator),
+        "case_summary.md: separator row must contain markdown column markers",
+    )
+    case_index = header.index("case")
+    row_case_names: set[str] = set()
+    for index, line in enumerate(lines[2:]):
+        cells = _markdown_cells(line)
+        _require(
+            len(cells) == len(header),
+            f"case_summary.md[{index}]: row width must match header",
+        )
+        row_case_names.add(
+            _as_json_string(cells[case_index], f"case_summary.md[{index}].case")
+        )
+    _require(
+        row_case_names == expected_case_names,
+        "case_summary.md: case names must match summary cases",
+    )
+
+
+def _require_correlation_csv(path: Path) -> None:
+    """Verify that the correlation table contains the fixed paper metric pairs."""
+    fieldnames, rows = _read_csv_rows(path, "correlation.csv")
+    _require_columns(fieldnames, PAPER_CORRELATION_COLUMNS, "correlation.csv")
+    _require(
+        len(rows) == len(CORRELATION_METRIC_PAIRS),
+        "correlation.csv: row count must match configured metric pairs",
+    )
+    expected_pairs = set(CORRELATION_METRIC_PAIRS)
+    observed_pairs: set[tuple[str, str]] = set()
+    for index, row in enumerate(rows):
+        observed_pairs.add(
+            (
+                _as_json_string(row.get("x_metric"), f"correlation.csv[{index}].x_metric"),
+                _as_json_string(row.get("y_metric"), f"correlation.csv[{index}].y_metric"),
+            )
+        )
+        _as_csv_nonnegative_int(row.get("n"), f"correlation.csv[{index}].n")
+    _require(
+        observed_pairs == expected_pairs,
+        "correlation.csv: metric pairs must match configured paper correlations",
+    )
+
+
+def _require_svg_document(path: Path, label: str) -> None:
+    """Verify that a generated figure is parseable SVG with stable dimensions."""
+    try:
+        root = ElementTree.parse(path).getroot()
+    except ElementTree.ParseError as exc:
+        raise ClusterSuiteError(f"{label}: invalid SVG XML: {exc}") from exc
+    root_name = root.tag.rsplit("}", maxsplit=1)[-1]
+    _require(root_name == "svg", f"{label}: root element must be svg")
+    _require(root.attrib.get("width") is not None, f"{label}: missing width")
+    _require(root.attrib.get("height") is not None, f"{label}: missing height")
+    _require(root.attrib.get("viewBox") is not None, f"{label}: missing viewBox")
+
+
+def _require_environment_snapshot(path: Path) -> None:
+    """Verify that the environment snapshot has the expected schema marker."""
+    payload = _as_json_object(
+        json.loads(path.read_text(encoding="utf-8")),
+        "environment_snapshot",
+    )
+    schema_version = _as_json_string(
+        payload.get("snapshot_schema_version"),
+        "environment_snapshot.snapshot_schema_version",
+    )
+    _require(
+        schema_version == ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION,
+        f"environment_snapshot.snapshot_schema_version must be {ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION!r}",
+    )
+
+
+def _require_manifest_snapshot(path: Path) -> None:
+    """Verify that the archived manifest snapshot is not an empty placeholder."""
+    manifest_text = path.read_text(encoding="utf-8")
+    _require(bool(manifest_text.strip()), "manifest_snapshot: file must not be empty")
+    _require("[suite]" in manifest_text, "manifest_snapshot: missing [suite] table")
+
+
+def _require_paper_artifact_semantics(
+    summary_payload: dict[str, Any],
+    resolved_artifact_paths: dict[str, Path],
+) -> int:
+    """Verify that required paper artifacts are not only hashed but readable."""
+    cases_by_name = _summary_cases_by_name(summary_payload)
+    missing_artifacts = [
+        name for name in REQUIRED_PAPER_ARTIFACT_NAMES if name not in resolved_artifact_paths
+    ]
+    _require(
+        not missing_artifacts,
+        f"artifact_fingerprints: missing required paper artifacts {missing_artifacts}",
+    )
+    _require_environment_snapshot(resolved_artifact_paths["environment_snapshot"])
+    _require_case_summary_csv(resolved_artifact_paths["case_summary_csv"], cases_by_name)
+    _require_case_summary_markdown(
+        resolved_artifact_paths["case_summary_markdown"],
+        cases_by_name,
+    )
+    _require_correlation_csv(resolved_artifact_paths["correlation_csv"])
+    for artifact_name in PAPER_SVG_ARTIFACT_NAMES:
+        _require_svg_document(resolved_artifact_paths[artifact_name], artifact_name)
+    _require_manifest_snapshot(resolved_artifact_paths["manifest_snapshot"])
+    return len(REQUIRED_PAPER_ARTIFACT_NAMES)
+
+
 def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     """Verify summary-recorded artifact and command-log fingerprints."""
     summary_path = _resolve_summary_path(bundle_or_summary_path)
@@ -2822,15 +3021,29 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     )
 
     verified_artifact_count = 0
+    resolved_artifact_paths: dict[str, Path] = {}
     for artifact_name, raw_record in artifact_fingerprints.items():
         record = _as_json_object(raw_record, f"artifact_fingerprints.{artifact_name}")
-        _require_fingerprint_match(
-            record,
-            f"artifact_fingerprints.{artifact_name}",
-            bundle_root=bundle_root,
-            original_output_dir=original_output_dir,
-        )
+        artifact_label = f"artifact_fingerprints.{artifact_name}"
+        if record.get("exists", True) is False:
+            _require_fingerprint_match(
+                record,
+                artifact_label,
+                bundle_root=bundle_root,
+                original_output_dir=original_output_dir,
+            )
+        else:
+            resolved_artifact_paths[artifact_name] = _resolve_present_fingerprint_path(
+                record,
+                artifact_label,
+                bundle_root=bundle_root,
+                original_output_dir=original_output_dir,
+            )
         verified_artifact_count += 1
+    verified_paper_artifact_semantic_count = _require_paper_artifact_semantics(
+        summary_payload,
+        resolved_artifact_paths,
+    )
 
     verified_log_count = 0
     for index, raw_command_record in enumerate(command_fingerprints):
@@ -2859,6 +3072,7 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         "status": "passed",
         "summary_json": str(summary_path),
         "verified_artifact_count": verified_artifact_count,
+        "verified_paper_artifact_semantic_count": verified_paper_artifact_semantic_count,
         "verified_evidence_file_count": verified_evidence_file_count,
         "verified_command_record_count": verified_command_record_count,
         "verified_command_log_count": verified_log_count,
@@ -2938,6 +3152,7 @@ def _require_pipeline_bundle_verification(
     verification = verify_output_bundle(bundle_root)
     for count_key in (
         "verified_artifact_count",
+        "verified_paper_artifact_semantic_count",
         "verified_evidence_file_count",
         "verified_command_record_count",
         "verified_command_log_count",
@@ -4532,14 +4747,8 @@ def _metric_pairs(
 
 def build_correlation_rows(case_summaries: list[CaseSummary]) -> list[dict[str, Any]]:
     """Build correlation rows for the paper appendix."""
-    metric_pairs = (
-        ("cache_hit_rate_percent", "speedup_vs_disabled_cache"),
-        ("trace_hit_rate_percent", "trace_estimated_average_speedup"),
-        ("trace_metadata_fraction_percent", "trace_estimated_average_speedup"),
-        ("trace_estimated_average_speedup", "speedup_vs_disabled_cache"),
-    )
     rows: list[dict[str, Any]] = []
-    for x_name, y_name in metric_pairs:
+    for x_name, y_name in CORRELATION_METRIC_PAIRS:
         xs, ys = _metric_pairs(case_summaries, x_name, y_name)
         rows.append(
             {
