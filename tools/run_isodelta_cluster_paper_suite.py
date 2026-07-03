@@ -167,6 +167,8 @@ TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
 TIMING_RELATIVE_TOLERANCE = 1.0e-9
 SHA256_HEX_LENGTH = 64
 SHA256_HEX_PATTERN = re.compile(rf"^[0-9a-fA-F]{{{SHA256_HEX_LENGTH}}}$")
+EXTERNAL_DISABLED_COMMAND_LABEL = "disabled"
+EXTERNAL_ENABLED_COMMAND_LABEL = "enabled"
 SVG_WIDTH = 960
 SVG_HEIGHT = 540
 SVG_MARGIN_LEFT = 88
@@ -402,13 +404,18 @@ def _as_json_positive_number(value: Any, field_name: str) -> float:
     return numeric_value
 
 
+def _as_json_nonnegative_number(value: Any, field_name: str) -> float:
+    """Return a nonnegative finite JSON number."""
+    numeric_value = _as_json_number(value, field_name)
+    _require(numeric_value >= MIN_NONNEGATIVE_VALUE, f"{field_name} must be nonnegative")
+    return numeric_value
+
+
 def _as_json_optional_nonnegative_number(value: Any, field_name: str) -> float | None:
     """Return an optional nonnegative finite JSON number."""
     if value is None:
         return None
-    numeric_value = _as_json_number(value, field_name)
-    _require(numeric_value >= MIN_NONNEGATIVE_VALUE, f"{field_name} must be nonnegative")
-    return numeric_value
+    return _as_json_nonnegative_number(value, field_name)
 
 
 def _as_json_positive_number_list(value: Any, field_name: str) -> list[float]:
@@ -3265,13 +3272,13 @@ def run_external_pair_case(
 
     for repeat_index in range(case.repeat_count):
         disabled_record = run_shell_command(
-            name=f"{case.name}:disabled:{repeat_index}",
+            name=f"{case.name}:{EXTERNAL_DISABLED_COMMAND_LABEL}:{repeat_index}",
             command=str(case.disabled_command),
             cwd=REPO_ROOT,
             env=_default_case_env(case.disabled_env, disabled=True),
             timeout_seconds=case.command_timeout_seconds,
-            stdout_path=log_dir / f"disabled_{repeat_index}.stdout.log",
-            stderr_path=log_dir / f"disabled_{repeat_index}.stderr.log",
+            stdout_path=log_dir / f"{EXTERNAL_DISABLED_COMMAND_LABEL}_{repeat_index}.stdout.log",
+            stderr_path=log_dir / f"{EXTERNAL_DISABLED_COMMAND_LABEL}_{repeat_index}.stderr.log",
             dry_run=dry_run,
         )
         command_records.append(disabled_record)
@@ -3279,13 +3286,13 @@ def run_external_pair_case(
             disabled_times.append(disabled_record.elapsed_seconds)
 
         enabled_record = run_shell_command(
-            name=f"{case.name}:enabled:{repeat_index}",
+            name=f"{case.name}:{EXTERNAL_ENABLED_COMMAND_LABEL}:{repeat_index}",
             command=str(case.enabled_command),
             cwd=REPO_ROOT,
             env=_default_case_env(case.enabled_env, disabled=False),
             timeout_seconds=case.command_timeout_seconds,
-            stdout_path=log_dir / f"enabled_{repeat_index}.stdout.log",
-            stderr_path=log_dir / f"enabled_{repeat_index}.stderr.log",
+            stdout_path=log_dir / f"{EXTERNAL_ENABLED_COMMAND_LABEL}_{repeat_index}.stdout.log",
+            stderr_path=log_dir / f"{EXTERNAL_ENABLED_COMMAND_LABEL}_{repeat_index}.stderr.log",
             dry_run=dry_run,
         )
         command_records.append(enabled_record)
@@ -3434,6 +3441,112 @@ def _validate_timing_statistic(
     return observed_value
 
 
+def _as_json_command_payload(value: Any, field_name: str) -> str | list[str]:
+    """Validate a command payload recorded in external timing provenance."""
+    if isinstance(value, str):
+        _require(bool(value.strip()), f"{field_name} must not be empty")
+        return value
+    _require(isinstance(value, list), f"{field_name} must be a string or array")
+    _require(bool(value), f"{field_name} must not be empty")
+    for index, item in enumerate(value):
+        _as_json_string(item, f"{field_name}[{index}]")
+    return value
+
+
+def _validate_external_timing_command_records(
+    report: dict[str, Any],
+    case: CaseConfig,
+    repeat_count: int,
+    mode_controls: dict[str, Any],
+) -> int:
+    """Require external timing reports to include one successful command per repeat."""
+    raw_commands = report.get(COMMANDS_KEY)
+    _require(isinstance(raw_commands, list), f"{COMMANDS_KEY} must be a JSON array")
+    required_env_keys = tuple(dict.fromkeys(COMMAND_ENV_SNAPSHOT_KEYS))
+    records_by_name: dict[str, list[dict[str, Any]]] = {}
+    for index, raw_record in enumerate(raw_commands):
+        command_record = _as_json_object(raw_record, f"{COMMANDS_KEY}[{index}]")
+        command_name = _as_json_string(command_record.get("name"), f"{COMMANDS_KEY}[{index}].name")
+        command_payload = _as_json_command_payload(
+            command_record.get("command"),
+            f"{COMMANDS_KEY}[{index}].command",
+        )
+        returncode = _as_json_nonnegative_int(
+            command_record.get("returncode"),
+            f"{COMMANDS_KEY}[{index}].returncode",
+        )
+        _as_json_nonnegative_number(
+            command_record.get("elapsed_seconds"),
+            f"{COMMANDS_KEY}[{index}].elapsed_seconds",
+        )
+        _as_json_string(command_record.get("stdout_path"), f"{COMMANDS_KEY}[{index}].stdout_path")
+        _as_json_string(command_record.get("stderr_path"), f"{COMMANDS_KEY}[{index}].stderr_path")
+        _as_json_string(command_record.get("cwd"), f"{COMMANDS_KEY}[{index}].cwd")
+        tracked_env = _as_json_object(
+            command_record.get("tracked_env"),
+            f"{COMMANDS_KEY}[{index}].tracked_env",
+        )
+        for env_key in required_env_keys:
+            _require(
+                env_key in tracked_env,
+                f"{COMMANDS_KEY}[{index}].tracked_env missing {env_key}",
+            )
+            env_value = tracked_env[env_key]
+            _require(
+                env_value is None or isinstance(env_value, str),
+                f"{COMMANDS_KEY}[{index}].tracked_env.{env_key} must be a string or null",
+            )
+        records_by_name.setdefault(command_name, []).append(
+            {
+                "command": command_payload,
+                "returncode": returncode,
+                "tracked_env": tracked_env,
+            }
+        )
+
+    verified_count = 0
+    expected_modes = (
+        (
+            EXTERNAL_DISABLED_COMMAND_LABEL,
+            str(case.disabled_command),
+            _as_json_object(mode_controls.get("disabled_env"), "mode_controls.disabled_env"),
+        ),
+        (
+            EXTERNAL_ENABLED_COMMAND_LABEL,
+            str(case.enabled_command),
+            _as_json_object(mode_controls.get("enabled_env"), "mode_controls.enabled_env"),
+        ),
+    )
+    for mode_label, expected_command, expected_env in expected_modes:
+        for repeat_index in range(repeat_count):
+            expected_name = f"{case.name}:{mode_label}:{repeat_index}"
+            matching_records = records_by_name.get(expected_name, [])
+            _require(
+                len(matching_records) == 1,
+                f"{COMMANDS_KEY} must contain exactly one {expected_name} command record",
+            )
+            record = matching_records[0]
+            _require(
+                record["command"] == expected_command,
+                f"{COMMANDS_KEY}.{expected_name}.command must match manifest {mode_label}_command",
+            )
+            _require(
+                record["returncode"] == SUCCESS_RETURN_CODE,
+                f"{COMMANDS_KEY}.{expected_name}.returncode must be {SUCCESS_RETURN_CODE}",
+            )
+            tracked_env = _as_json_object(
+                record["tracked_env"],
+                f"{COMMANDS_KEY}.{expected_name}.tracked_env",
+            )
+            for env_key in MODE_CONTROL_ENV_KEYS:
+                _require(
+                    tracked_env.get(env_key) == expected_env.get(env_key),
+                    f"{COMMANDS_KEY}.{expected_name}.tracked_env.{env_key} must match {mode_label} mode control",
+                )
+            verified_count += 1
+    return verified_count
+
+
 def validate_external_timing_report(
     report: dict[str, Any],
     case: CaseConfig,
@@ -3547,9 +3660,11 @@ def validate_external_timing_report(
             f"{case.name}: external timing speedup {speedup:g} is below {case.min_speedup:g}",
         )
     mode_controls = _validate_external_timing_mode_controls(report, case)
-    _require(
-        isinstance(report.get(COMMANDS_KEY), list),
-        f"{COMMANDS_KEY} must be a JSON array",
+    verified_command_record_count = _validate_external_timing_command_records(
+        report,
+        case,
+        repeat_count,
+        mode_controls,
     )
     return {
         "status": "passed",
@@ -3569,6 +3684,7 @@ def validate_external_timing_report(
         ENABLED_SAMPLE_STDDEV_SECONDS_KEY: enabled_stddev,
         SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
         MODE_CONTROLS_KEY: mode_controls,
+        "verified_command_record_count": verified_command_record_count,
     }
 
 

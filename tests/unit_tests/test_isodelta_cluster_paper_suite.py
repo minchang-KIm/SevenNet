@@ -220,37 +220,89 @@ def _external_timing_report(
     enabled_command: str = "run enabled",
 ) -> dict[str, object]:
     """Create an external-pair timing report for a non-SevenNet runtime."""
-    case_name = f"{model_name.lower()}-existing"
     case = isodelta_cluster_suite.CaseConfig(
-        name=case_name,
+        name=f"{model_name.lower()}-existing",
         model=model_name,
         kind="external_pair",
         disabled_command=disabled_command,
         enabled_command=enabled_command,
         repeat_count=2,
     )
-    baseline_times = [BASELINE_LOOP_TIME_SECONDS - 1.0, BASELINE_LOOP_TIME_SECONDS + 1.0]
-    enabled_times = [ISODELTA_LOOP_TIME_SECONDS - 1.0, ISODELTA_LOOP_TIME_SECONDS + 1.0]
-    sample_variance = 2.0
-    sample_stddev = sample_variance ** 0.5
+    return _external_timing_report_for_case(case)
+
+
+def _external_timing_report_for_case(
+    case: "isodelta_cluster_suite.CaseConfig",
+    *,
+    baseline_times: list[float] | None = None,
+    enabled_times: list[float] | None = None,
+) -> dict[str, object]:
+    """Create external-pair timing evidence for a concrete manifest case."""
+    if baseline_times is None:
+        baseline_times = [
+            BASELINE_LOOP_TIME_SECONDS - 1.0,
+            BASELINE_LOOP_TIME_SECONDS + 1.0,
+        ]
+    if enabled_times is None:
+        enabled_times = [
+            ISODELTA_LOOP_TIME_SECONDS - 1.0,
+            ISODELTA_LOOP_TIME_SECONDS + 1.0,
+        ]
+    baseline_mean = sum(baseline_times) / len(baseline_times)
+    enabled_mean = sum(enabled_times) / len(enabled_times)
+    baseline_variance = isodelta_cluster_suite._sample_variance(baseline_times)
+    enabled_variance = isodelta_cluster_suite._sample_variance(enabled_times)
+    baseline_stddev = isodelta_cluster_suite._sample_stddev(baseline_times)
+    enabled_stddev = isodelta_cluster_suite._sample_stddev(enabled_times)
+    command_records = []
+    for repeat_index, elapsed_seconds in enumerate(baseline_times):
+        command_records.append(
+            {
+                "name": f"{case.name}:{isodelta_cluster_suite.EXTERNAL_DISABLED_COMMAND_LABEL}:{repeat_index}",
+                "command": str(case.disabled_command),
+                "returncode": isodelta_cluster_suite.SUCCESS_RETURN_CODE,
+                "elapsed_seconds": elapsed_seconds,
+                "stdout_path": f"{case.name}/disabled_{repeat_index}.stdout.log",
+                "stderr_path": f"{case.name}/disabled_{repeat_index}.stderr.log",
+                "cwd": str(REPO_ROOT),
+                "tracked_env": isodelta_cluster_suite.command_environment_snapshot(
+                    isodelta_cluster_suite._default_case_env(case.disabled_env, disabled=True)
+                ),
+            }
+        )
+    for repeat_index, elapsed_seconds in enumerate(enabled_times):
+        command_records.append(
+            {
+                "name": f"{case.name}:{isodelta_cluster_suite.EXTERNAL_ENABLED_COMMAND_LABEL}:{repeat_index}",
+                "command": str(case.enabled_command),
+                "returncode": isodelta_cluster_suite.SUCCESS_RETURN_CODE,
+                "elapsed_seconds": elapsed_seconds,
+                "stdout_path": f"{case.name}/enabled_{repeat_index}.stdout.log",
+                "stderr_path": f"{case.name}/enabled_{repeat_index}.stderr.log",
+                "cwd": str(REPO_ROOT),
+                "tracked_env": isodelta_cluster_suite.command_environment_snapshot(
+                    isodelta_cluster_suite._default_case_env(case.enabled_env, disabled=False)
+                ),
+            }
+        )
     return {
         "schema_version": "isodelta-external-pair-timing-v1",
-        "case_name": case_name,
-        "model": model_name,
-        "repeat_count": 2,
-        "disabled_success_count": 2,
-        "enabled_success_count": 2,
+        "case_name": case.name,
+        "model": case.model,
+        "repeat_count": case.repeat_count,
+        "disabled_success_count": len(baseline_times),
+        "enabled_success_count": len(enabled_times),
         "baseline_times_seconds": baseline_times,
         "enabled_times_seconds": enabled_times,
-        "baseline_mean_seconds": BASELINE_LOOP_TIME_SECONDS,
-        "enabled_mean_seconds": ISODELTA_LOOP_TIME_SECONDS,
-        "baseline_sample_variance_seconds": sample_variance,
-        "enabled_sample_variance_seconds": sample_variance,
-        "baseline_sample_stddev_seconds": sample_stddev,
-        "enabled_sample_stddev_seconds": sample_stddev,
-        "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
+        "baseline_mean_seconds": baseline_mean,
+        "enabled_mean_seconds": enabled_mean,
+        "baseline_sample_variance_seconds": baseline_variance,
+        "enabled_sample_variance_seconds": enabled_variance,
+        "baseline_sample_stddev_seconds": baseline_stddev,
+        "enabled_sample_stddev_seconds": enabled_stddev,
+        "speedup_vs_disabled_cache": baseline_mean / enabled_mean,
         "mode_controls": isodelta_cluster_suite.case_mode_control_record(case),
-        "commands": [],
+        "commands": command_records,
     }
 
 
@@ -1249,25 +1301,11 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 timing_path.parent.mkdir(parents=True, exist_ok=True)
                 timing_path.write_text(
                     json.dumps(
-                        {
-                            "schema_version": isodelta_cluster_suite.EXTERNAL_TIMING_SCHEMA_VERSION,
-                            "case_name": case.name,
-                            "model": case.model,
-                            "repeat_count": 3,
-                            "disabled_success_count": 3,
-                            "enabled_success_count": 3,
-                            "baseline_times_seconds": [BASELINE_LOOP_TIME_SECONDS] * 3,
-                            "enabled_times_seconds": [ISODELTA_LOOP_TIME_SECONDS] * 3,
-                            "baseline_mean_seconds": BASELINE_LOOP_TIME_SECONDS,
-                            "enabled_mean_seconds": ISODELTA_LOOP_TIME_SECONDS,
-                            "baseline_sample_variance_seconds": 0.0,
-                            "enabled_sample_variance_seconds": 0.0,
-                            "baseline_sample_stddev_seconds": 0.0,
-                            "enabled_sample_stddev_seconds": 0.0,
-                            "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
-                            "mode_controls": isodelta_cluster_suite.case_mode_control_record(case),
-                            "commands": [],
-                        }
+                        _external_timing_report_for_case(
+                            case,
+                            baseline_times=[BASELINE_LOOP_TIME_SECONDS] * case.repeat_count,
+                            enabled_times=[ISODELTA_LOOP_TIME_SECONDS] * case.repeat_count,
+                        )
                     ),
                     encoding="utf-8",
                 )
@@ -1583,27 +1621,11 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 timing_path.parent.mkdir(parents=True, exist_ok=True)
                 timing_path.write_text(
                     json.dumps(
-                        {
-                            "schema_version": isodelta_cluster_suite.EXTERNAL_TIMING_SCHEMA_VERSION,
-                            "case_name": case.name,
-                            "model": case.model,
-                            "repeat_count": PAPER_REPEAT_COUNT,
-                            "disabled_success_count": PAPER_REPEAT_COUNT,
-                            "enabled_success_count": PAPER_REPEAT_COUNT,
-                            "baseline_times_seconds": [BASELINE_LOOP_TIME_SECONDS]
-                            * PAPER_REPEAT_COUNT,
-                            "enabled_times_seconds": [ISODELTA_LOOP_TIME_SECONDS]
-                            * PAPER_REPEAT_COUNT,
-                            "baseline_mean_seconds": BASELINE_LOOP_TIME_SECONDS,
-                            "enabled_mean_seconds": ISODELTA_LOOP_TIME_SECONDS,
-                            "baseline_sample_variance_seconds": 0.0,
-                            "enabled_sample_variance_seconds": 0.0,
-                            "baseline_sample_stddev_seconds": 0.0,
-                            "enabled_sample_stddev_seconds": 0.0,
-                            "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
-                            "mode_controls": isodelta_cluster_suite.case_mode_control_record(case),
-                            "commands": [],
-                        }
+                        _external_timing_report_for_case(
+                            case,
+                            baseline_times=[BASELINE_LOOP_TIME_SECONDS] * case.repeat_count,
+                            enabled_times=[ISODELTA_LOOP_TIME_SECONDS] * case.repeat_count,
+                        )
                     ),
                     encoding="utf-8",
                 )
@@ -1810,6 +1832,52 @@ artifacts = ["dataset"]
         with self.assertRaisesRegex(
             isodelta_cluster_suite.ClusterSuiteError,
             "mode_controls must match manifest disabled/enabled controls",
+        ):
+            isodelta_cluster_suite.validate_external_timing_report(report, case)
+
+    def test_external_timing_report_requires_repeat_command_records(self) -> None:
+        """Every external disabled/enabled repeat should have command provenance."""
+        report = _external_timing_report("NequIP")
+        missing_name = "nequip-existing:enabled:1"
+        report["commands"] = [
+            command for command in report["commands"] if command["name"] != missing_name
+        ]
+        case = isodelta_cluster_suite.CaseConfig(
+            name="nequip-existing",
+            model="NequIP",
+            kind="external_pair",
+            disabled_command="run baseline",
+            enabled_command="run enabled",
+            repeat_count=2,
+            min_speedup=1.1,
+        )
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            f"exactly one {missing_name} command record",
+        ):
+            isodelta_cluster_suite.validate_external_timing_report(report, case)
+
+    def test_external_timing_report_rejects_failed_command_record(self) -> None:
+        """External timing rows should not hide failed disabled/enabled commands."""
+        report = _external_timing_report("NequIP")
+        failed_name = "nequip-existing:disabled:0"
+        for command in report["commands"]:
+            if command["name"] == failed_name:
+                command["returncode"] = 2
+        case = isodelta_cluster_suite.CaseConfig(
+            name="nequip-existing",
+            model="NequIP",
+            kind="external_pair",
+            disabled_command="run baseline",
+            enabled_command="run enabled",
+            repeat_count=2,
+            min_speedup=1.1,
+        )
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            f"{failed_name}.returncode must be 0",
         ):
             isodelta_cluster_suite.validate_external_timing_report(report, case)
 

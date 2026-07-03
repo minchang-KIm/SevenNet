@@ -483,7 +483,9 @@ report also keeps raw `baseline_times_seconds` and `enabled_times_seconds`, and
 the suite recomputes sample variance/stddev before writing the summary table.
 The external timing report also carries `mode_controls`; those controls must
 match the manifest disabled/enabled commands and cache-off/cache-on environment
-before collect-only tables are accepted.
+before collect-only tables are accepted. Its `commands` array must also contain
+one successful `case:disabled:N` and `case:enabled:N` command record for every
+repeat, with command text and tracked environment matching the manifest mode controls.
 In short, external timing report `mode_controls` must match the manifest.
 The generated table also reports baseline/enabled timing sample counts and
 normal-approximation 95% CI half-widths for the mean timings, so paper tables
