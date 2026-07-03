@@ -2466,6 +2466,36 @@ def _require_fingerprint_match(
     )
 
 
+def _resolve_present_fingerprint_path(
+    record: dict[str, Any],
+    label: str,
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> Path:
+    """Validate one present fingerprint record and return its local path."""
+    _require(
+        record.get("exists", True) is not False,
+        f"{label}: expected a present fingerprint record",
+    )
+    _require_fingerprint_match(
+        record,
+        label,
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
+    recorded_path = Path(_as_json_string(record.get("path"), f"{label}.path"))
+    for candidate in _candidate_fingerprint_paths(
+        recorded_path,
+        bundle_root,
+        original_output_dir,
+    ):
+        if candidate.exists():
+            return candidate
+    _require(False, f"{label}: validated fingerprint path disappeared")
+    raise AssertionError("unreachable after _require failure")
+
+
 def _require_command_record_alignment(
     summary_payload: dict[str, Any],
     command_fingerprints: list[Any],
@@ -2640,6 +2670,123 @@ def _require_evidence_fingerprint_matches(
     return verified_count
 
 
+def _summary_cases_by_name(summary_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Return summary case records keyed by case name."""
+    raw_cases = summary_payload.get("cases")
+    _require(isinstance(raw_cases, list), "cases must be a JSON array")
+    cases_by_name: dict[str, dict[str, Any]] = {}
+    for index, raw_case in enumerate(raw_cases):
+        case_record = _as_json_object(raw_case, f"cases[{index}]")
+        case_name = _as_json_string(case_record.get("case_name"), f"cases[{index}].case_name")
+        _require(case_name not in cases_by_name, f"duplicate summary case {case_name}")
+        cases_by_name[case_name] = case_record
+    return cases_by_name
+
+
+def _case_config_from_external_summary(
+    *,
+    case_name: str,
+    case_record: dict[str, Any],
+    mode_controls: dict[str, Any],
+    timing_payload: dict[str, Any],
+) -> CaseConfig:
+    """Reconstruct the manifest fields needed to audit external timing evidence."""
+    kind = _as_json_string(case_record.get("kind"), f"cases.{case_name}.kind")
+    _require(kind == "external_pair", f"{case_name}: kind must be external_pair")
+    disabled_env = _as_json_object(
+        mode_controls.get("disabled_env"),
+        f"case_mode_controls.{case_name}.disabled_env",
+    )
+    enabled_env = _as_json_object(
+        mode_controls.get("enabled_env"),
+        f"case_mode_controls.{case_name}.enabled_env",
+    )
+    return CaseConfig(
+        name=case_name,
+        model=_as_json_string(case_record.get("model"), f"cases.{case_name}.model"),
+        kind=kind,
+        disabled_command=_as_json_string(
+            mode_controls.get("disabled_command"),
+            f"case_mode_controls.{case_name}.disabled_command",
+        ),
+        enabled_command=_as_json_string(
+            mode_controls.get("enabled_command"),
+            f"case_mode_controls.{case_name}.enabled_command",
+        ),
+        disabled_env=disabled_env,
+        enabled_env=enabled_env,
+        repeat_count=_as_json_nonnegative_int(
+            timing_payload.get(REPEAT_COUNT_KEY),
+            f"{case_name}.{REPEAT_COUNT_KEY}",
+        ),
+    )
+
+
+def _require_external_timing_reports_from_summary(
+    summary_payload: dict[str, Any],
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> int:
+    """Verify nested external timing reports and their command-log fingerprints."""
+    cases_by_name = _summary_cases_by_name(summary_payload)
+    raw_mode_controls = _as_json_object(
+        summary_payload.get("case_mode_controls", {}),
+        "case_mode_controls",
+    )
+    raw_evidence_records = _as_json_object(
+        summary_payload.get(EVIDENCE_FINGERPRINTS_KEY),
+        EVIDENCE_FINGERPRINTS_KEY,
+    )
+    verified_log_count = 0
+    for case_name, case_record in cases_by_name.items():
+        if case_record.get("kind") != "external_pair":
+            continue
+        case_evidence = _as_json_object(
+            raw_evidence_records.get(case_name),
+            f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}",
+        )
+        raw_timing_record = case_evidence.get("external_timing_report")
+        if raw_timing_record is None:
+            continue
+        timing_record = _as_json_object(
+            raw_timing_record,
+            f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.external_timing_report",
+        )
+        timing_report_path = _resolve_present_fingerprint_path(
+            timing_record,
+            f"{case_name}.external_timing_report",
+            bundle_root=bundle_root,
+            original_output_dir=original_output_dir,
+        )
+        timing_payload = _as_json_object(
+            json.loads(timing_report_path.read_text(encoding="utf-8")),
+            f"{case_name}.external_timing_report",
+        )
+        mode_controls = _as_json_object(
+            raw_mode_controls.get(case_name),
+            f"case_mode_controls.{case_name}",
+        )
+        case_config = _case_config_from_external_summary(
+            case_name=case_name,
+            case_record=case_record,
+            mode_controls=mode_controls,
+            timing_payload=timing_payload,
+        )
+        verification = validate_external_timing_report(
+            timing_payload,
+            case_config,
+            report_path=timing_report_path,
+            bundle_root=bundle_root,
+            original_output_dir=original_output_dir,
+        )
+        verified_log_count += _as_json_nonnegative_int(
+            verification.get("verified_command_log_count"),
+            f"{case_name}.verified_command_log_count",
+        )
+    return verified_log_count
+
+
 def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     """Verify summary-recorded artifact and command-log fingerprints."""
     summary_path = _resolve_summary_path(bundle_or_summary_path)
@@ -2664,6 +2811,11 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     )
     original_output_dir = _original_output_dir(summary_payload)
     verified_evidence_file_count = _require_evidence_fingerprint_matches(
+        summary_payload,
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
+    verified_external_command_log_count = _require_external_timing_reports_from_summary(
         summary_payload,
         bundle_root=bundle_root,
         original_output_dir=original_output_dir,
@@ -2710,6 +2862,7 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         "verified_evidence_file_count": verified_evidence_file_count,
         "verified_command_record_count": verified_command_record_count,
         "verified_command_log_count": verified_log_count,
+        "verified_external_command_log_count": verified_external_command_log_count,
     }
 
 
@@ -2788,6 +2941,7 @@ def _require_pipeline_bundle_verification(
         "verified_evidence_file_count",
         "verified_command_record_count",
         "verified_command_log_count",
+        "verified_external_command_log_count",
     ):
         recorded_count = _as_json_nonnegative_int(
             recorded_verification.get(count_key),
@@ -3553,6 +3707,8 @@ def _require_external_command_log_fingerprints(
     report: dict[str, Any],
     *,
     report_path: Path | None,
+    bundle_root: Path | None = None,
+    original_output_dir: Path | None = None,
 ) -> int:
     """Verify external timing command log fingerprints and optionally their files."""
     command_fingerprints = report.get(COMMAND_LOG_FINGERPRINTS_KEY)
@@ -3563,7 +3719,7 @@ def _require_external_command_log_fingerprints(
     verified_count = _require_command_record_alignment(report, command_fingerprints)
     if report_path is None:
         return verified_count
-    bundle_root = report_path.parent
+    fingerprint_root = bundle_root if bundle_root is not None else report_path.parent
     for index, raw_fingerprint in enumerate(command_fingerprints):
         fingerprint_record = _as_json_object(
             raw_fingerprint,
@@ -3581,8 +3737,8 @@ def _require_external_command_log_fingerprints(
             _require_fingerprint_match(
                 stream_record,
                 f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}].{stream_name}",
-                bundle_root=bundle_root,
-                original_output_dir=None,
+                bundle_root=fingerprint_root,
+                original_output_dir=original_output_dir,
             )
     return verified_count
 
@@ -3592,6 +3748,8 @@ def validate_external_timing_report(
     case: CaseConfig,
     *,
     report_path: Path | None = None,
+    bundle_root: Path | None = None,
+    original_output_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Validate external-pair timing evidence before it reaches paper tables."""
     report = _as_json_object(report, "external_timing_report")
@@ -3711,6 +3869,8 @@ def validate_external_timing_report(
     verified_command_log_count = _require_external_command_log_fingerprints(
         report,
         report_path=report_path,
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
     )
     return {
         "status": "passed",

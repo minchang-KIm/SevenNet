@@ -536,6 +536,63 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
 
         self.assertEqual(verification["verified_evidence_file_count"], 1)
 
+    def test_verify_output_bundle_rejects_mutated_external_command_log(self) -> None:
+        """Bundle verification should recurse into external timing log hashes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            output_dir.mkdir(parents=True)
+            timing_report_path = output_dir / "cases" / "nequip-existing" / "external_pair_timing_report.json"
+            timing_report_path.parent.mkdir(parents=True)
+            timing_report = _external_timing_report("NequIP", log_dir=timing_report_path.parent / "logs")
+            timing_report_path.write_text(json.dumps(timing_report), encoding="utf-8")
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [
+                            {
+                                "case_name": "nequip-existing",
+                                "model": "NequIP",
+                                "kind": "external_pair",
+                            }
+                        ],
+                        "case_mode_controls": {
+                            "nequip-existing": timing_report["mode_controls"]
+                        },
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifact_fingerprints": {},
+                        "evidence_fingerprints": {
+                            "nequip-existing": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": (
+                                    isodelta_cluster_suite.generated_artifact_record(
+                                        timing_report_path
+                                    )
+                                ),
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            verification = isodelta_cluster_suite.verify_output_bundle(output_dir)
+            mutated_log = Path(str(timing_report["commands"][0]["stdout_path"]))
+            mutated_log.write_text("mutated external command log\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "SHA-256 mismatch",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(summary_path)
+
+        self.assertEqual(verification["verified_external_command_log_count"], 4)
+
     def test_write_template_creates_commented_three_model_manifest(self) -> None:
         """The template should be editable and include the required models."""
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -888,6 +888,7 @@ def main() -> None:
         and "test_command_records_include_cwd_and_tracked_environment" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mismatched_command_fingerprints" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_source_evidence" in cluster_suite_test
+        and "test_verify_output_bundle_rejects_mutated_external_command_log" in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
@@ -927,6 +928,8 @@ def main() -> None:
         and "_validate_external_timing_command_records" in cluster_suite
         and "_require_external_command_log_fingerprints" in cluster_suite
         and "COMMAND_LOG_FINGERPRINTS_KEY" in cluster_suite
+        and "_require_external_timing_reports_from_summary" in cluster_suite
+        and "verified_external_command_log_count" in cluster_suite
         and "EXTERNAL_DISABLED_COMMAND_LABEL" in cluster_suite
         and "EXTERNAL_ENABLED_COMMAND_LABEL" in cluster_suite
         and "BASELINE_TIMES_SECONDS_KEY" in cluster_suite
@@ -1096,6 +1099,12 @@ def main() -> None:
         and "fails if any recorded artifact or" in doc
         and "command log fingerprint" in doc,
         "IsoDelta-Halo guide must document output bundle verification",
+    )
+    _require(
+        "`--verify-output-bundle` also reopens the archived" in doc
+        and "nested `command_log_fingerprints`" in doc
+        and "MACE/NequIP stdout/stderr logs cannot drift silently" in doc,
+        "IsoDelta-Halo guide must document nested external timing log verification",
     )
     _require(
         "`environment_snapshot.json`" in doc

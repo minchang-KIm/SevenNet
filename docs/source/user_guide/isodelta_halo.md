@@ -562,6 +562,9 @@ python tools/run_isodelta_cluster_paper_suite.py \
 The verifier accepts either the output directory or the
 `isodelta_cluster_paper_summary.json` path and fails if any recorded artifact or
 command log fingerprint no longer matches the filesystem.
+For `external_pair` cases, `--verify-output-bundle` also reopens the archived
+external timing report and rechecks its nested `command_log_fingerprints`, so
+MACE/NequIP stdout/stderr logs cannot drift silently after collection.
 
 For an interrupted cluster job, rerun with `--reuse-passed` instead of starting
 from zero:
