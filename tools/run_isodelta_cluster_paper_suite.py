@@ -97,6 +97,8 @@ PIPELINE_REPORT_NAME = "pipeline_report.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
 ENVIRONMENT_SNAPSHOT_NAME = "environment_snapshot.json"
+STAGE_REPORT_FINGERPRINTS_KEY = "stage_report_fingerprints"
+OUTPUT_BUNDLE_VERIFICATION_KEY = "output_bundle_verification"
 ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION = "isodelta-cluster-environment-snapshot-v1"
 ENVIRONMENT_PACKAGE_NAMES = (
     "sevenn",
@@ -1710,6 +1712,28 @@ def _pipeline_status(*, dry_run: bool, failed: bool) -> str:
     return PIPELINE_STATUS_PLANNED if dry_run else PIPELINE_STATUS_PASSED
 
 
+def _pipeline_stage_report_fingerprints(stages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fingerprint every stage report already written before the pipeline report."""
+    records: list[dict[str, Any]] = []
+    for stage in stages:
+        report_path = stage.get("report_path")
+        if report_path is None:
+            records.append(
+                {
+                    "name": stage.get("name"),
+                    "report": None,
+                }
+            )
+            continue
+        records.append(
+            {
+                "name": stage.get("name"),
+                "report": optional_file_fingerprint(Path(str(report_path))),
+            }
+        )
+    return records
+
+
 def _write_pipeline_report(
     *,
     config: SuiteConfig,
@@ -1722,6 +1746,7 @@ def _write_pipeline_report(
     reuse_passed: bool,
     stages: list[dict[str, Any]],
     failed: bool,
+    output_bundle_verification: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Write the top-level paper pipeline report."""
     payload = {
@@ -1746,6 +1771,8 @@ def _write_pipeline_report(
             "required_models": list(config.required_models),
         },
         "stages": stages,
+        STAGE_REPORT_FINGERPRINTS_KEY: _pipeline_stage_report_fingerprints(stages),
+        OUTPUT_BUNDLE_VERIFICATION_KEY: output_bundle_verification,
     }
     _write_json_report(report_path, payload)
     return payload
@@ -1920,6 +1947,11 @@ def run_pipeline(
             )
         )
     except ClusterSuiteError as exc:
+        verification = {
+            "status": PIPELINE_STATUS_FAILED,
+            "summary_json": str(config.output_dir / SUMMARY_REPORT_NAME),
+            "detail": str(exc),
+        }
         stages.append(
             _pipeline_stage_record(
                 name="verify_output_bundle",
@@ -1939,6 +1971,7 @@ def run_pipeline(
             reuse_passed=reuse_passed,
             stages=stages,
             failed=True,
+            output_bundle_verification=verification,
         )
 
     return _write_pipeline_report(
@@ -1952,6 +1985,7 @@ def run_pipeline(
         reuse_passed=reuse_passed,
         stages=stages,
         failed=False,
+        output_bundle_verification=verification,
     )
 
 

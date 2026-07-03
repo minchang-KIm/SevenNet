@@ -46,6 +46,8 @@ REQUIRED_FILE_SNIPPETS = {
         "--readiness-check",
         "--verify-output-bundle",
         "PIPELINE_OUTPUT",
+        "STAGE_REPORT_FINGERPRINTS_KEY",
+        "OUTPUT_BUNDLE_VERIFICATION_KEY",
         "case_mode_controls",
         "MODE_CONTROLS_KEY",
         "COMMAND_ENV_SNAPSHOT_KEYS",

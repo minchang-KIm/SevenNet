@@ -817,6 +817,9 @@ def main() -> None:
         and "PREFLIGHT_REPORT_NAME" in cluster_suite
         and "PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME" in cluster_suite
         and "PIPELINE_REPORT_NAME" in cluster_suite
+        and "STAGE_REPORT_FINGERPRINTS_KEY" in cluster_suite
+        and "OUTPUT_BUNDLE_VERIFICATION_KEY" in cluster_suite
+        and "_pipeline_stage_report_fingerprints" in cluster_suite
         and "SHA256_HEX_LENGTH" in cluster_suite
         and "SHA256_HEX_PATTERN" in cluster_suite
         and "require_artifact_sha256" in cluster_suite
@@ -951,6 +954,8 @@ def main() -> None:
         and "`preflight_report.json`" in doc
         and "`--pipeline`" in doc
         and "`pipeline_report.json`" in doc
+        and "stage report fingerprints" in doc
+        and "final bundle verification counts" in doc
         and "`artifact_preparation_report.json`" in doc
         and "does not probe GPUs" in doc
         and "uses `trace_only` instead of paired" in doc

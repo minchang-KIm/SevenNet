@@ -1288,6 +1288,12 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             verification = isodelta_cluster_suite.verify_output_bundle(output_dir)
             stage_names = [stage["name"] for stage in pipeline_report["stages"]]
+            stage_fingerprints = pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ]
+            pipeline_verification = pipeline_report[
+                isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY
+            ]
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(pipeline_report["status"], isodelta_cluster_suite.PIPELINE_STATUS_PASSED)
@@ -1303,6 +1309,16 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ],
         )
         self.assertEqual(verification["status"], "passed")
+        self.assertEqual(len(stage_fingerprints), len(stage_names))
+        self.assertEqual(pipeline_verification["status"], "passed")
+        self.assertEqual(
+            pipeline_verification["verified_evidence_file_count"],
+            verification["verified_evidence_file_count"],
+        )
+        self.assertGreaterEqual(
+            pipeline_verification["verified_artifact_count"],
+            1,
+        )
         self.assertIn("preflight_report", summary["artifact_fingerprints"])
         self.assertIn("preflight_environment_snapshot", summary["artifact_fingerprints"])
         self.assertIn("run_plan", summary["artifact_fingerprints"])
@@ -1597,6 +1613,12 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             pipeline_report = json.loads(pipeline_report_path.read_text(encoding="utf-8"))
             stage_names = [stage["name"] for stage in pipeline_report["stages"]]
             verification_stage = pipeline_report["stages"][-1]
+            pipeline_verification = pipeline_report[
+                isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY
+            ]
+            stage_fingerprints = pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ]
 
         self.assertEqual(exit_code, 1)
         self.assertEqual(pipeline_report["status"], isodelta_cluster_suite.PIPELINE_STATUS_FAILED)
@@ -1613,6 +1635,9 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         )
         self.assertEqual(verification_stage["status"], isodelta_cluster_suite.PIPELINE_STATUS_FAILED)
         self.assertIn("SHA-256 mismatch", verification_stage["detail"])
+        self.assertEqual(pipeline_verification["status"], isodelta_cluster_suite.PIPELINE_STATUS_FAILED)
+        self.assertIn("SHA-256 mismatch", pipeline_verification["detail"])
+        self.assertEqual(len(stage_fingerprints), len(stage_names))
 
     def test_readiness_check_accepts_strict_three_model_paired_manifest(self) -> None:
         """A final paper manifest should prove strict input and model coverage."""
