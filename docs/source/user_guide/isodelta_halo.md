@@ -312,7 +312,9 @@ model has applicability evidence but no paired runtime benchmark yet.
 For `external_pair` results, the suite validates the external timing report
 schema, manifest case/model labels, repeat success counts, positive
 `baseline_mean_seconds` and `enabled_mean_seconds`, and requires
-`speedup_vs_disabled_cache` to match baseline divided by enabled seconds.
+`speedup_vs_disabled_cache` to match baseline divided by enabled seconds. The
+report also keeps raw `baseline_times_seconds` and `enabled_times_seconds`, and
+the suite recomputes sample variance/stddev before writing the summary table.
 
 After successful collection, the suite writes:
 

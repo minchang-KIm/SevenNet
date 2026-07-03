@@ -776,7 +776,13 @@ def main() -> None:
         and "PLAN_REPORT_NAME" in cluster_suite
         and "EXTERNAL_TIMING_SCHEMA_VERSION" in cluster_suite
         and "validate_external_timing_report" in cluster_suite
+        and "BASELINE_TIMES_SECONDS_KEY" in cluster_suite
+        and "ENABLED_TIMES_SECONDS_KEY" in cluster_suite
+        and "BASELINE_SAMPLE_VARIANCE_SECONDS_KEY" in cluster_suite
+        and "_sample_variance" in cluster_suite
+        and "_sample_stddev" in cluster_suite
         and "must match baseline / enabled seconds" in cluster_suite
+        and "must match raw timing samples" in cluster_suite
         and "--plan-only" in cluster_suite
         and "--plan-output" in cluster_suite
         and "case_summary.csv" in cluster_suite
@@ -811,6 +817,12 @@ def main() -> None:
         and "`baseline_mean_seconds` and `enabled_mean_seconds`" in doc
         and "`speedup_vs_disabled_cache` to match baseline divided by enabled seconds" in doc,
         "IsoDelta-Halo guide must document external timing report validation",
+    )
+    _require(
+        "`baseline_times_seconds` and `enabled_times_seconds`" in doc
+        and "sample variance/stddev" in doc
+        and "summary table" in doc,
+        "IsoDelta-Halo guide must document external timing repeat statistics",
     )
     _require(
         "min_distinct_trace_models" in doc

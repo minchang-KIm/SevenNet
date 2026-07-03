@@ -210,6 +210,10 @@ def _trace_evidence(model_name: str) -> dict[str, object]:
 
 def _external_timing_report(model_name: str) -> dict[str, object]:
     """Create an external-pair timing report for a non-SevenNet runtime."""
+    baseline_times = [BASELINE_LOOP_TIME_SECONDS - 1.0, BASELINE_LOOP_TIME_SECONDS + 1.0]
+    enabled_times = [ISODELTA_LOOP_TIME_SECONDS - 1.0, ISODELTA_LOOP_TIME_SECONDS + 1.0]
+    sample_variance = 2.0
+    sample_stddev = sample_variance ** 0.5
     return {
         "schema_version": "isodelta-external-pair-timing-v1",
         "case_name": f"{model_name.lower()}-existing",
@@ -217,8 +221,14 @@ def _external_timing_report(model_name: str) -> dict[str, object]:
         "repeat_count": 2,
         "disabled_success_count": 2,
         "enabled_success_count": 2,
+        "baseline_times_seconds": baseline_times,
+        "enabled_times_seconds": enabled_times,
         "baseline_mean_seconds": BASELINE_LOOP_TIME_SECONDS,
         "enabled_mean_seconds": ISODELTA_LOOP_TIME_SECONDS,
+        "baseline_sample_variance_seconds": sample_variance,
+        "enabled_sample_variance_seconds": sample_variance,
+        "baseline_sample_stddev_seconds": sample_stddev,
+        "enabled_sample_stddev_seconds": sample_stddev,
         "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
         "commands": [],
     }
@@ -385,6 +395,26 @@ artifacts = ["dataset"]
         ):
             isodelta_cluster_suite.validate_external_timing_report(report, case)
 
+    def test_external_timing_report_rejects_inconsistent_raw_mean(self) -> None:
+        """External timing reports should keep raw samples and means aligned."""
+        report = _external_timing_report("NequIP")
+        report["baseline_mean_seconds"] = BASELINE_LOOP_TIME_SECONDS + 0.25
+        case = isodelta_cluster_suite.CaseConfig(
+            name="nequip-existing",
+            model="NequIP",
+            kind="external_pair",
+            disabled_command="run baseline",
+            enabled_command="run enabled",
+            repeat_count=2,
+            min_speedup=1.1,
+        )
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "baseline_mean_seconds must match raw timing samples",
+        ):
+            isodelta_cluster_suite.validate_external_timing_report(report, case)
+
     def test_collect_only_writes_tables_correlations_and_svg_figures(self) -> None:
         """Existing evidence should become paper tables, correlations, and graphs."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -468,6 +498,8 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertEqual(len(summary["cases"]), 3)
         self.assertEqual(summary["suite_evidence"]["distinct_trace_model_count"], 3)
         self.assertIn("speedup_vs_disabled_cache", case_summary_text)
+        self.assertIn("baseline_sample_variance_seconds", case_summary_text)
+        self.assertIn("enabled_sample_stddev_seconds", case_summary_text)
         self.assertIn("<svg", speedup_svg_text)
 
     def test_collect_only_rejects_insufficient_distinct_trace_models(self) -> None:

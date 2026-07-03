@@ -68,6 +68,12 @@ DISABLED_SUCCESS_COUNT_KEY = "disabled_success_count"
 ENABLED_SUCCESS_COUNT_KEY = "enabled_success_count"
 BASELINE_MEAN_SECONDS_KEY = "baseline_mean_seconds"
 ENABLED_MEAN_SECONDS_KEY = "enabled_mean_seconds"
+BASELINE_TIMES_SECONDS_KEY = "baseline_times_seconds"
+ENABLED_TIMES_SECONDS_KEY = "enabled_times_seconds"
+BASELINE_SAMPLE_VARIANCE_SECONDS_KEY = "baseline_sample_variance_seconds"
+ENABLED_SAMPLE_VARIANCE_SECONDS_KEY = "enabled_sample_variance_seconds"
+BASELINE_SAMPLE_STDDEV_SECONDS_KEY = "baseline_sample_stddev_seconds"
+ENABLED_SAMPLE_STDDEV_SECONDS_KEY = "enabled_sample_stddev_seconds"
 SPEEDUP_VS_DISABLED_CACHE_KEY = "speedup_vs_disabled_cache"
 COMMANDS_KEY = "commands"
 LOGS_DIR_NAME = "logs"
@@ -86,6 +92,8 @@ MIN_NONNEGATIVE_VALUE = 0.0
 MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = 100.0
 MIN_CORRELATION_SAMPLE_COUNT = 2
+MIN_SAMPLE_VARIANCE_COUNT = 2
+SAMPLE_VARIANCE_DEGREES_OF_FREEDOM = 1
 TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
 TIMING_RELATIVE_TOLERANCE = 1.0e-9
 SVG_WIDTH = 960
@@ -212,6 +220,10 @@ class CaseSummary:
     external_timing_report: str | None
     baseline_mean_seconds: float | None
     enabled_mean_seconds: float | None
+    baseline_sample_variance_seconds: float | None
+    enabled_sample_variance_seconds: float | None
+    baseline_sample_stddev_seconds: float | None
+    enabled_sample_stddev_seconds: float | None
     speedup_vs_disabled_cache: float | None
     cache_attempts: float | None
     cache_hits: float | None
@@ -287,6 +299,24 @@ def _as_json_positive_number(value: Any, field_name: str) -> float:
     numeric_value = _as_json_number(value, field_name)
     _require(numeric_value > MIN_POSITIVE_VALUE, f"{field_name} must be positive")
     return numeric_value
+
+
+def _as_json_optional_nonnegative_number(value: Any, field_name: str) -> float | None:
+    """Return an optional nonnegative finite JSON number."""
+    if value is None:
+        return None
+    numeric_value = _as_json_number(value, field_name)
+    _require(numeric_value >= MIN_NONNEGATIVE_VALUE, f"{field_name} must be nonnegative")
+    return numeric_value
+
+
+def _as_json_positive_number_list(value: Any, field_name: str) -> list[float]:
+    """Return a JSON array of positive finite timing values."""
+    _require(isinstance(value, list), f"{field_name} must be a JSON array")
+    return [
+        _as_json_positive_number(item, f"{field_name}[{index}]")
+        for index, item in enumerate(value)
+    ]
 
 
 def _as_json_nonnegative_int(value: Any, field_name: str) -> int:
@@ -1475,6 +1505,22 @@ def _mean(values: list[float]) -> float | None:
     return None if not values else sum(values) / len(values)
 
 
+def _sample_variance(values: list[float]) -> float | None:
+    """Return sample variance for repeat timings when enough samples exist."""
+    if len(values) < MIN_SAMPLE_VARIANCE_COUNT:
+        return None
+    mean_value = sum(values) / len(values)
+    return sum((value - mean_value) ** 2 for value in values) / (
+        len(values) - SAMPLE_VARIANCE_DEGREES_OF_FREEDOM
+    )
+
+
+def _sample_stddev(values: list[float]) -> float | None:
+    """Return sample standard deviation for repeat timings."""
+    variance = _sample_variance(values)
+    return None if variance is None else variance ** 0.5
+
+
 def _build_external_timing_report(
     *,
     case: CaseConfig,
@@ -1495,8 +1541,14 @@ def _build_external_timing_report(
         REPEAT_COUNT_KEY: case.repeat_count,
         DISABLED_SUCCESS_COUNT_KEY: len(disabled_times),
         ENABLED_SUCCESS_COUNT_KEY: len(enabled_times),
+        BASELINE_TIMES_SECONDS_KEY: disabled_times,
+        ENABLED_TIMES_SECONDS_KEY: enabled_times,
         BASELINE_MEAN_SECONDS_KEY: disabled_mean,
         ENABLED_MEAN_SECONDS_KEY: enabled_mean,
+        BASELINE_SAMPLE_VARIANCE_SECONDS_KEY: _sample_variance(disabled_times),
+        ENABLED_SAMPLE_VARIANCE_SECONDS_KEY: _sample_variance(enabled_times),
+        BASELINE_SAMPLE_STDDEV_SECONDS_KEY: _sample_stddev(disabled_times),
+        ENABLED_SAMPLE_STDDEV_SECONDS_KEY: _sample_stddev(enabled_times),
         SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
         COMMANDS_KEY: [asdict(record) for record in command_records],
     }
@@ -1509,6 +1561,24 @@ def _timing_values_close(observed: float, expected: float) -> bool:
         TIMING_RELATIVE_TOLERANCE * max(abs(observed), abs(expected)),
     )
     return abs(observed - expected) <= tolerance
+
+
+def _validate_timing_statistic(
+    report: dict[str, Any],
+    key: str,
+    expected_value: float | None,
+) -> float | None:
+    """Validate an optional timing statistic against a recomputed value."""
+    observed_value = _as_json_optional_nonnegative_number(report.get(key), key)
+    if expected_value is None:
+        _require(observed_value is None, f"{key} must be null")
+        return None
+    _require(observed_value is not None, f"{key} must be numeric")
+    _require(
+        _timing_values_close(observed_value, expected_value),
+        f"{key} must match raw timing samples",
+    )
+    return observed_value
 
 
 def validate_external_timing_report(
@@ -1553,6 +1623,22 @@ def validate_external_timing_report(
         enabled_success_count == repeat_count,
         f"{ENABLED_SUCCESS_COUNT_KEY} must equal {REPEAT_COUNT_KEY}",
     )
+    baseline_times = _as_json_positive_number_list(
+        report.get(BASELINE_TIMES_SECONDS_KEY),
+        BASELINE_TIMES_SECONDS_KEY,
+    )
+    enabled_times = _as_json_positive_number_list(
+        report.get(ENABLED_TIMES_SECONDS_KEY),
+        ENABLED_TIMES_SECONDS_KEY,
+    )
+    _require(
+        len(baseline_times) == disabled_success_count,
+        f"{BASELINE_TIMES_SECONDS_KEY} length must equal {DISABLED_SUCCESS_COUNT_KEY}",
+    )
+    _require(
+        len(enabled_times) == enabled_success_count,
+        f"{ENABLED_TIMES_SECONDS_KEY} length must equal {ENABLED_SUCCESS_COUNT_KEY}",
+    )
     baseline_mean_seconds = _as_json_positive_number(
         report.get(BASELINE_MEAN_SECONDS_KEY),
         BASELINE_MEAN_SECONDS_KEY,
@@ -1560,6 +1646,38 @@ def validate_external_timing_report(
     enabled_mean_seconds = _as_json_positive_number(
         report.get(ENABLED_MEAN_SECONDS_KEY),
         ENABLED_MEAN_SECONDS_KEY,
+    )
+    expected_baseline_mean = _mean(baseline_times)
+    expected_enabled_mean = _mean(enabled_times)
+    _require(
+        expected_baseline_mean is not None
+        and _timing_values_close(baseline_mean_seconds, expected_baseline_mean),
+        f"{BASELINE_MEAN_SECONDS_KEY} must match raw timing samples",
+    )
+    _require(
+        expected_enabled_mean is not None
+        and _timing_values_close(enabled_mean_seconds, expected_enabled_mean),
+        f"{ENABLED_MEAN_SECONDS_KEY} must match raw timing samples",
+    )
+    baseline_variance = _validate_timing_statistic(
+        report,
+        BASELINE_SAMPLE_VARIANCE_SECONDS_KEY,
+        _sample_variance(baseline_times),
+    )
+    enabled_variance = _validate_timing_statistic(
+        report,
+        ENABLED_SAMPLE_VARIANCE_SECONDS_KEY,
+        _sample_variance(enabled_times),
+    )
+    baseline_stddev = _validate_timing_statistic(
+        report,
+        BASELINE_SAMPLE_STDDEV_SECONDS_KEY,
+        _sample_stddev(baseline_times),
+    )
+    enabled_stddev = _validate_timing_statistic(
+        report,
+        ENABLED_SAMPLE_STDDEV_SECONDS_KEY,
+        _sample_stddev(enabled_times),
     )
     speedup = _as_json_positive_number(
         report.get(SPEEDUP_VS_DISABLED_CACHE_KEY),
@@ -1587,8 +1705,14 @@ def validate_external_timing_report(
         REPEAT_COUNT_KEY: repeat_count,
         DISABLED_SUCCESS_COUNT_KEY: disabled_success_count,
         ENABLED_SUCCESS_COUNT_KEY: enabled_success_count,
+        BASELINE_TIMES_SECONDS_KEY: baseline_times,
+        ENABLED_TIMES_SECONDS_KEY: enabled_times,
         BASELINE_MEAN_SECONDS_KEY: baseline_mean_seconds,
         ENABLED_MEAN_SECONDS_KEY: enabled_mean_seconds,
+        BASELINE_SAMPLE_VARIANCE_SECONDS_KEY: baseline_variance,
+        ENABLED_SAMPLE_VARIANCE_SECONDS_KEY: enabled_variance,
+        BASELINE_SAMPLE_STDDEV_SECONDS_KEY: baseline_stddev,
+        ENABLED_SAMPLE_STDDEV_SECONDS_KEY: enabled_stddev,
         SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
     }
 
@@ -1768,6 +1892,10 @@ def _extract_benchmark_metrics(report: dict[str, Any] | None) -> dict[str, float
         return {
             "baseline_mean_seconds": None,
             "enabled_mean_seconds": None,
+            "baseline_sample_variance_seconds": None,
+            "enabled_sample_variance_seconds": None,
+            "baseline_sample_stddev_seconds": None,
+            "enabled_sample_stddev_seconds": None,
             "speedup": None,
             "attempts": None,
             "hits": None,
@@ -1804,6 +1932,18 @@ def _extract_benchmark_metrics(report: dict[str, Any] | None) -> dict[str, float
     return {
         "baseline_mean_seconds": _coerce_optional_float(baseline.get("mean_loop_time_seconds")),
         "enabled_mean_seconds": _coerce_optional_float(enabled.get("mean_loop_time_seconds")),
+        "baseline_sample_variance_seconds": _coerce_optional_float(
+            baseline.get("sample_variance_loop_time_seconds")
+        ),
+        "enabled_sample_variance_seconds": _coerce_optional_float(
+            enabled.get("sample_variance_loop_time_seconds")
+        ),
+        "baseline_sample_stddev_seconds": _coerce_optional_float(
+            baseline.get("sample_stddev_loop_time_seconds")
+        ),
+        "enabled_sample_stddev_seconds": _coerce_optional_float(
+            enabled.get("sample_stddev_loop_time_seconds")
+        ),
         "speedup": _coerce_optional_float(summary.get("speedup_vs_disabled_cache")),
         "attempts": attempts if enabled_results else None,
         "hits": hits if enabled_results else None,
@@ -1828,11 +1968,27 @@ def _extract_external_metrics(report: dict[str, Any] | None) -> dict[str, float 
         return {
             "baseline_mean_seconds": None,
             "enabled_mean_seconds": None,
+            "baseline_sample_variance_seconds": None,
+            "enabled_sample_variance_seconds": None,
+            "baseline_sample_stddev_seconds": None,
+            "enabled_sample_stddev_seconds": None,
             "speedup": None,
         }
     return {
         "baseline_mean_seconds": _coerce_optional_float(report.get(BASELINE_MEAN_SECONDS_KEY)),
         "enabled_mean_seconds": _coerce_optional_float(report.get(ENABLED_MEAN_SECONDS_KEY)),
+        "baseline_sample_variance_seconds": _coerce_optional_float(
+            report.get(BASELINE_SAMPLE_VARIANCE_SECONDS_KEY)
+        ),
+        "enabled_sample_variance_seconds": _coerce_optional_float(
+            report.get(ENABLED_SAMPLE_VARIANCE_SECONDS_KEY)
+        ),
+        "baseline_sample_stddev_seconds": _coerce_optional_float(
+            report.get(BASELINE_SAMPLE_STDDEV_SECONDS_KEY)
+        ),
+        "enabled_sample_stddev_seconds": _coerce_optional_float(
+            report.get(ENABLED_SAMPLE_STDDEV_SECONDS_KEY)
+        ),
         "speedup": _coerce_optional_float(report.get(SPEEDUP_VS_DISABLED_CACHE_KEY)),
     }
 
@@ -1907,6 +2063,26 @@ def build_case_summary(
         if benchmark_metrics["speedup"] is not None
         else external_metrics["speedup"]
     )
+    baseline_variance = (
+        benchmark_metrics["baseline_sample_variance_seconds"]
+        if benchmark_metrics["baseline_sample_variance_seconds"] is not None
+        else external_metrics["baseline_sample_variance_seconds"]
+    )
+    enabled_variance = (
+        benchmark_metrics["enabled_sample_variance_seconds"]
+        if benchmark_metrics["enabled_sample_variance_seconds"] is not None
+        else external_metrics["enabled_sample_variance_seconds"]
+    )
+    baseline_stddev = (
+        benchmark_metrics["baseline_sample_stddev_seconds"]
+        if benchmark_metrics["baseline_sample_stddev_seconds"] is not None
+        else external_metrics["baseline_sample_stddev_seconds"]
+    )
+    enabled_stddev = (
+        benchmark_metrics["enabled_sample_stddev_seconds"]
+        if benchmark_metrics["enabled_sample_stddev_seconds"] is not None
+        else external_metrics["enabled_sample_stddev_seconds"]
+    )
     return CaseSummary(
         case_name=case.name,
         model=case.model,
@@ -1918,6 +2094,10 @@ def build_case_summary(
         external_timing_report=str(external_timing_report) if external_timing_report is not None else None,
         baseline_mean_seconds=baseline_seconds,
         enabled_mean_seconds=enabled_seconds,
+        baseline_sample_variance_seconds=baseline_variance,
+        enabled_sample_variance_seconds=enabled_variance,
+        baseline_sample_stddev_seconds=baseline_stddev,
+        enabled_sample_stddev_seconds=enabled_stddev,
         speedup_vs_disabled_cache=speedup,
         cache_attempts=benchmark_metrics["attempts"],
         cache_hits=benchmark_metrics["hits"],
@@ -1953,6 +2133,10 @@ def _summary_rows(case_summaries: list[CaseSummary]) -> list[dict[str, Any]]:
                 "status": summary.status,
                 "baseline_mean_seconds": summary.baseline_mean_seconds,
                 "enabled_mean_seconds": summary.enabled_mean_seconds,
+                "baseline_sample_variance_seconds": summary.baseline_sample_variance_seconds,
+                "enabled_sample_variance_seconds": summary.enabled_sample_variance_seconds,
+                "baseline_sample_stddev_seconds": summary.baseline_sample_stddev_seconds,
+                "enabled_sample_stddev_seconds": summary.enabled_sample_stddev_seconds,
                 "speedup_vs_disabled_cache": summary.speedup_vs_disabled_cache,
                 "cache_hit_rate_percent": summary.cache_hit_rate_percent,
                 "cache_attempts": summary.cache_attempts,
