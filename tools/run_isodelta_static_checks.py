@@ -779,6 +779,8 @@ def main() -> None:
         and "PLAN_REPORT_NAME" in cluster_suite
         and "MANIFEST_SNAPSHOT_NAME" in cluster_suite
         and "manifest_record" in cluster_suite
+        and "generated_artifact_record" in cluster_suite
+        and "artifact_fingerprints" in cluster_suite
         and "write_manifest_snapshot" in cluster_suite
         and "EXTERNAL_TIMING_SCHEMA_VERSION" in cluster_suite
         and "validate_external_timing_report" in cluster_suite
@@ -822,6 +824,14 @@ def main() -> None:
         and "isodelta_cluster_suite_manifest.toml" in doc
         and "snapshot path" in doc,
         "IsoDelta-Halo guide must document cluster manifest fingerprints",
+    )
+    _require(
+        "`artifact_fingerprints`" in doc
+        and "SHA-256 digest and byte size" in doc
+        and "generated" in doc
+        and "SVG figure" in doc
+        and "manifest snapshot" in doc,
+        "IsoDelta-Halo guide must document generated paper artifact fingerprints",
     )
     _require(
         "external timing report" in doc

@@ -1182,6 +1182,15 @@ def manifest_record(config: SuiteConfig) -> dict[str, Any]:
     }
 
 
+def generated_artifact_record(path: Path) -> dict[str, Any]:
+    """Return a reproducible fingerprint for one generated paper artifact."""
+    return {
+        "path": str(path),
+        "sha256": sha256_file(path),
+        "size_bytes": path.stat().st_size,
+    }
+
+
 def write_manifest_snapshot(config: SuiteConfig) -> Path:
     """Copy the manifest into the output bundle for archival review."""
     snapshot_path = config.output_dir / MANIFEST_SNAPSHOT_NAME
@@ -2487,6 +2496,18 @@ def write_paper_outputs(
     )
     summary_path = config.output_dir / "isodelta_cluster_paper_summary.json"
     manifest_snapshot_path = write_manifest_snapshot(config)
+    artifact_paths = {
+        "case_summary_csv": case_summary_csv,
+        "case_summary_markdown": case_summary_md,
+        "correlation_csv": correlation_csv,
+        "speedup_svg": speedup_svg,
+        "hit_rate_svg": hit_rate_svg,
+        "trace_svg": trace_svg,
+        "manifest_snapshot": manifest_snapshot_path,
+    }
+    artifact_fingerprints = {
+        name: generated_artifact_record(path) for name, path in artifact_paths.items()
+    }
     payload = {
         "provenance": collect_run_provenance(),
         "suite": {
@@ -2504,14 +2525,9 @@ def write_paper_outputs(
         "correlations": correlation_rows,
         "commands": [asdict(record) for record in command_records],
         "artifacts": {
-            "case_summary_csv": str(case_summary_csv),
-            "case_summary_markdown": str(case_summary_md),
-            "correlation_csv": str(correlation_csv),
-            "speedup_svg": str(speedup_svg),
-            "hit_rate_svg": str(hit_rate_svg),
-            "trace_svg": str(trace_svg),
-            "manifest_snapshot": str(manifest_snapshot_path),
+            name: str(path) for name, path in artifact_paths.items()
         },
+        "artifact_fingerprints": artifact_fingerprints,
     }
     config.output_dir.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

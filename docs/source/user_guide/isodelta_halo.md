@@ -339,8 +339,11 @@ existing benchmark reports, external timing reports, and trace evidence without
 rerunning the cluster jobs. Use `--skip-gpu-check` only for local dry runs or
 CI tests; for paper runs, keep the GPU check enabled and archive the summary
 JSON with the raw logs. The summary JSON stores the manifest SHA-256 digest and
-the copied `isodelta_cluster_suite_manifest.toml` snapshot path. The suite-level
-evidence gate recounts all passed cases before writing the summary:
+the copied `isodelta_cluster_suite_manifest.toml` snapshot path. It also stores
+`artifact_fingerprints` with the SHA-256 digest and byte size of each generated
+table, SVG figure, and manifest snapshot, so reviewers can verify that the
+submitted paper artifacts match the archived run. The suite-level evidence gate
+recounts all passed cases before writing the summary:
 `min_trace_count` must be satisfied by distinct trace evidence files, and
 `min_distinct_trace_models` must be satisfied by the `model` labels inside
 those trace files. This prevents a three-model claim from passing with

@@ -550,6 +550,10 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             case_summary_text = case_summary_csv.read_text(encoding="utf-8")
             speedup_svg_text = speedup_svg.read_text(encoding="utf-8")
             manifest_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            case_summary_digest = hashlib.sha256(case_summary_csv.read_bytes()).hexdigest()
+            manifest_snapshot_digest = hashlib.sha256(manifest_snapshot.read_bytes()).hexdigest()
+            case_summary_size = case_summary_csv.stat().st_size
+            manifest_snapshot_size = manifest_snapshot.stat().st_size
 
         self.assertEqual(exit_code, 0)
         self.assertTrue(case_summary_exists)
@@ -566,6 +570,22 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertIn("baseline_sample_variance_seconds", case_summary_text)
         self.assertIn("enabled_sample_stddev_seconds", case_summary_text)
         self.assertIn("<svg", speedup_svg_text)
+        self.assertEqual(
+            summary["artifact_fingerprints"]["case_summary_csv"]["sha256"],
+            case_summary_digest,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["case_summary_csv"]["size_bytes"],
+            case_summary_size,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["manifest_snapshot"]["sha256"],
+            manifest_snapshot_digest,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["manifest_snapshot"]["size_bytes"],
+            manifest_snapshot_size,
+        )
 
     def test_collect_only_rejects_insufficient_distinct_trace_models(self) -> None:
         """Suite-level gates should count model labels inside trace evidence."""
