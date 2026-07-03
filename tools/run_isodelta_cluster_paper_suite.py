@@ -55,6 +55,7 @@ DEFAULT_MIN_DISTINCT_TRACE_MODELS = 1
 DEFAULT_MIN_TRACE_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT = 0.0
 DEFAULT_REQUIRED_MODELS = ("SevenNet", "MACE", "NequIP")
+DEFAULT_REQUIRE_ARTIFACT_SHA256 = False
 DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 600.0
 DEFAULT_SLURM_JOB_NAME = "isodelta-halo-paper-suite"
 DEFAULT_SLURM_TIME_LIMIT = "24:00:00"
@@ -132,6 +133,8 @@ SAMPLE_VARIANCE_DEGREES_OF_FREEDOM = 1
 NORMAL_APPROX_95_CI_MULTIPLIER = 1.96
 TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
 TIMING_RELATIVE_TOLERANCE = 1.0e-9
+SHA256_HEX_LENGTH = 64
+SHA256_HEX_PATTERN = re.compile(rf"^[0-9a-fA-F]{{{SHA256_HEX_LENGTH}}}$")
 SVG_WIDTH = 960
 SVG_HEIGHT = 540
 SVG_MARGIN_LEFT = 88
@@ -230,6 +233,7 @@ class SuiteConfig:
     required_models: tuple[str, ...] = DEFAULT_REQUIRED_MODELS
     min_trace_count: int = DEFAULT_MIN_TRACE_COUNT
     min_distinct_trace_models: int = DEFAULT_MIN_DISTINCT_TRACE_MODELS
+    require_artifact_sha256: bool = DEFAULT_REQUIRE_ARTIFACT_SHA256
     artifacts: tuple[ArtifactConfig, ...] = ()
     cases: tuple[CaseConfig, ...] = ()
 
@@ -495,6 +499,16 @@ def _validate_case_thresholds(case: CaseConfig) -> None:
     _validate_percent(
         case.min_trace_metadata_fraction_percent,
         f"{case.name}: min_trace_metadata_fraction_percent",
+    )
+
+
+def _validate_optional_sha256(value: str | None, field_name: str) -> None:
+    """Reject missing or malformed SHA-256 digests when a field is present."""
+    if value is None:
+        return
+    _require(
+        bool(SHA256_HEX_PATTERN.fullmatch(value)),
+        f"{field_name} must be a {SHA256_HEX_LENGTH}-character hexadecimal SHA-256 digest",
     )
 
 
@@ -786,6 +800,11 @@ def load_manifest(manifest_path: Path) -> SuiteConfig:
             "suite.min_distinct_trace_models",
             DEFAULT_MIN_DISTINCT_TRACE_MODELS,
         ),
+        require_artifact_sha256=_as_bool(
+            suite_payload.get("require_artifact_sha256"),
+            "suite.require_artifact_sha256",
+            DEFAULT_REQUIRE_ARTIFACT_SHA256,
+        ),
         artifacts=tuple(artifact_configs),
         cases=tuple(case_configs),
     )
@@ -815,6 +834,11 @@ def validate_suite_config(config: SuiteConfig) -> None:
     )
     artifact_name_set = set(artifact_names)
     for artifact in config.artifacts:
+        _validate_optional_sha256(artifact.sha256, f"{artifact.name}: sha256")
+        _require(
+            not (config.require_artifact_sha256 and artifact.required and artifact.sha256 is None),
+            f"{artifact.name}: required artifact needs sha256 because suite.require_artifact_sha256 is true",
+        )
         unknown_required_by = [
             model_name
             for model_name in artifact.required_by
@@ -1596,7 +1620,9 @@ def build_run_plan(
                 "required": artifact.required,
                 "required_by": list(artifact.required_by),
                 "exists": artifact_exists,
-                "sha256_required": artifact.sha256 is not None,
+                "sha256": artifact.sha256,
+                "has_sha256": artifact.sha256 is not None,
+                "sha256_required": config.require_artifact_sha256 and artifact.required,
                 "missing_required": artifact.required and not artifact_exists,
                 "missing_optional": not artifact.required and not artifact_exists,
                 "will_download": (
@@ -1700,6 +1726,7 @@ def build_run_plan(
             "required_models": list(config.required_models),
             "min_trace_count": config.min_trace_count,
             "min_distinct_trace_models": config.min_distinct_trace_models,
+            "require_artifact_sha256": config.require_artifact_sha256,
         },
         "modes": {
             "collect_only": collect_only,
@@ -3075,6 +3102,7 @@ def write_paper_outputs(
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
+            "require_artifact_sha256": config.require_artifact_sha256,
         },
         "gpu_check": gpu_record,
         "suite_evidence": suite_evidence,
@@ -3280,6 +3308,7 @@ name = "icpp-isodelta-8gpu"
 output_dir = "isodelta_cluster_paper_runs"
 expected_gpus = {DEFAULT_EXPECTED_GPU_COUNT}
 required_models = ["SevenNet", "MACE", "NequIP"]
+require_artifact_sha256 = true
 repeat_count = 5
 command_timeout_seconds = 7200
 benchmark_timeout_seconds = 3600

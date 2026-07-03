@@ -297,6 +297,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
 
         self.assertTrue(template.lstrip().startswith("#"))
         self.assertIn('required_models = ["SevenNet", "MACE", "NequIP"]', template)
+        self.assertIn("require_artifact_sha256 = true", template)
         self.assertIn('kind = "sevennet_lammps"', template)
         self.assertIn('kind = "external_pair"', template)
         self.assertIn('preflight_command = \'python -c "import mace"\'', template)
@@ -540,6 +541,73 @@ trace_evidence = ["sevennet_trace.json"]
         ):
             isodelta_cluster_suite.validate_suite_config(config)
 
+    def test_manifest_validation_requires_sha256_for_required_artifacts_when_enabled(self) -> None:
+        """Final paper manifests can require immutable digests for all inputs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "strict-artifacts"
+required_models = ["SevenNet"]
+require_artifact_sha256 = true
+
+[[artifacts]]
+name = "dataset"
+path = "data.ext"
+required = true
+required_by = ["SevenNet"]
+
+[[cases]]
+name = "sevennet"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["sevennet_trace.json"]
+artifacts = ["dataset"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "required artifact needs sha256",
+        ):
+            isodelta_cluster_suite.validate_suite_config(config)
+
+    def test_manifest_validation_rejects_malformed_artifact_sha256(self) -> None:
+        """Digest fields should be full SHA-256 hex strings, not placeholders."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "bad-sha"
+required_models = ["SevenNet"]
+
+[[artifacts]]
+name = "dataset"
+path = "data.ext"
+sha256 = "replace-with-real-sha256"
+required_by = ["SevenNet"]
+
+[[cases]]
+name = "sevennet"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["sevennet_trace.json"]
+artifacts = ["dataset"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "64-character hexadecimal SHA-256",
+        ):
+            isodelta_cluster_suite.validate_suite_config(config)
+
     def test_download_artifact_copies_file_url_and_checks_sha256(self) -> None:
         """Artifact downloads should verify immutable paper inputs."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -662,6 +730,8 @@ artifacts = ["dataset"]
         self.assertTrue(plan["cases"][0]["reuse"]["enabled"])
         self.assertTrue(plan["artifacts"][0]["will_download"])
         self.assertTrue(plan["artifacts"][0]["missing_required"])
+        self.assertFalse(plan["suite"]["require_artifact_sha256"])
+        self.assertFalse(plan["artifacts"][0]["has_sha256"])
         self.assertEqual(
             plan["suite"]["manifest"]["sha256"],
             manifest_digest,

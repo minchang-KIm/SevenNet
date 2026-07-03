@@ -280,6 +280,11 @@ gate requires cases for `SevenNet`, `MACE`, and `NequIP`, so a portability
 experiment cannot accidentally omit one model family. Artifact `required_by`
 entries are also checked against the manifest's case model names, which catches
 misspelled model labels before a cluster job starts.
+For final paper runs, keep `require_artifact_sha256 = true` in the generated
+template. With that gate enabled, every required dataset, checkpoint, input
+deck, or runtime bundle must carry a full 64-character SHA-256 digest before the
+suite will launch, which prevents a result table from being built from mutable
+or placeholder inputs.
 Each case may also define a `preflight_command` for short import or module
 checks:
 

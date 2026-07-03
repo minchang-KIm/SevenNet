@@ -764,6 +764,10 @@ def main() -> None:
         and "DEFAULT_EXPECTED_GPU_COUNT = 8" in cluster_suite
         and "DEFAULT_REQUIRED_MODELS = (\"SevenNet\", \"MACE\", \"NequIP\")"
         in cluster_suite
+        and "DEFAULT_REQUIRE_ARTIFACT_SHA256" in cluster_suite
+        and "SHA256_HEX_LENGTH" in cluster_suite
+        and "SHA256_HEX_PATTERN" in cluster_suite
+        and "require_artifact_sha256" in cluster_suite
         and "validate_gpu_count" in cluster_suite
         and "download_artifact" in cluster_suite
         and "validate_required_artifacts_available" in cluster_suite
@@ -840,6 +844,8 @@ def main() -> None:
         and "8-GPU cluster" in doc
         and "TOML manifest" in doc
         and "SevenNet, MACE, and NequIP" in doc
+        and "`require_artifact_sha256 = true`" in doc
+        and "64-character SHA-256 digest" in doc
         and "case_summary.csv" in doc
         and "correlation.csv" in doc
         and "speedup_by_case.svg" in doc
