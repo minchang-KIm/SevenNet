@@ -913,6 +913,7 @@ def download_artifact(artifact: ArtifactConfig, dry_run: bool = False) -> dict[s
         "url": artifact.url,
         "required": artifact.required,
         "downloaded": False,
+        "skipped_optional_missing": False,
         "sha256": None,
     }
     if path.exists():
@@ -925,7 +926,13 @@ def download_artifact(artifact: ArtifactConfig, dry_run: bool = False) -> dict[s
             record["sha256"] = digest
         return record
 
-    _require(artifact.url is not None, f"{artifact.name}: missing artifact and no url: {path}")
+    if artifact.url is None:
+        _require(
+            not artifact.required,
+            f"{artifact.name}: missing required artifact and no url: {path}",
+        )
+        record["skipped_optional_missing"] = True
+        return record
     if dry_run:
         record["downloaded"] = "planned"
         return record
@@ -952,6 +959,28 @@ def download_artifact(artifact: ArtifactConfig, dry_run: bool = False) -> dict[s
     temporary_path.replace(path)
     record["downloaded"] = True
     return record
+
+
+def validate_required_artifacts_available(
+    config: SuiteConfig,
+    *,
+    skip_downloads: bool,
+    collect_only: bool,
+    dry_run: bool,
+) -> None:
+    """Fail before execution when required artifacts cannot be materialized."""
+    if not skip_downloads or collect_only or dry_run:
+        return
+    missing_required_artifacts = [
+        artifact
+        for artifact in config.artifacts
+        if artifact.required and not artifact.path.exists()
+    ]
+    _require(
+        not missing_required_artifacts,
+        "required artifacts are missing while --skip-downloads is active: "
+        + MODEL_NAME_JOINER.join(artifact.name for artifact in missing_required_artifacts),
+    )
 
 
 def _write_command_streams(
@@ -1164,6 +1193,8 @@ def build_run_plan(
                 "required_by": list(artifact.required_by),
                 "exists": artifact_exists,
                 "sha256_required": artifact.sha256 is not None,
+                "missing_required": artifact.required and not artifact_exists,
+                "missing_optional": not artifact.required and not artifact_exists,
                 "will_download": (
                     not skip_downloads
                     and not collect_only
@@ -1175,6 +1206,12 @@ def build_run_plan(
                     and not collect_only
                     and not artifact_exists
                     and artifact.url is None
+                ),
+                "skip_downloads_would_fail": (
+                    skip_downloads
+                    and not collect_only
+                    and artifact.required
+                    and not artifact_exists
                 ),
             }
         )
@@ -2479,6 +2516,12 @@ def run_suite(
 ) -> int:
     """Run the full cluster suite and write all paper-ready artifacts."""
     validate_suite_config(config)
+    validate_required_artifacts_available(
+        config,
+        skip_downloads=skip_downloads,
+        collect_only=collect_only,
+        dry_run=dry_run,
+    )
     config.output_dir.mkdir(parents=True, exist_ok=True)
     download_stage_count = 1 if skip_downloads or not config.artifacts else len(config.artifacts)
     total_stages = 1 + download_stage_count + len(config.cases) + 1

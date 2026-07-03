@@ -766,6 +766,9 @@ def main() -> None:
         in cluster_suite
         and "validate_gpu_count" in cluster_suite
         and "download_artifact" in cluster_suite
+        and "validate_required_artifacts_available" in cluster_suite
+        and "skipped_optional_missing" in cluster_suite
+        and "skip_downloads_would_fail" in cluster_suite
         and "sha256_file" in cluster_suite
         and "write_speedup_svg" in cluster_suite
         and "build_correlation_rows" in cluster_suite
@@ -830,6 +833,14 @@ def main() -> None:
         and "duplicated MACE evidence" in doc
         and "Artifact `required_by`" in doc,
         "IsoDelta-Halo guide must document suite-level cluster evidence gates",
+    )
+    _require(
+        "Required artifacts must already exist or be downloadable" in doc
+        and "`--skip-downloads`" in doc
+        and "required artifact is missing" in doc
+        and "`required = false`" in doc
+        and "skipped rather than silently" in doc,
+        "IsoDelta-Halo guide must document cluster artifact availability gates",
     )
     _require(
         "SEVENN_ISODELTA_HALO_DISABLE" in doc

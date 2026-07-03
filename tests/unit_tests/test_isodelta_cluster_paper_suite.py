@@ -324,6 +324,57 @@ trace_evidence = ["sevennet_trace.json"]
         self.assertTrue(record["downloaded"])
         self.assertEqual(record["sha256"], digest)
 
+    def test_download_artifact_skips_optional_missing_without_url(self) -> None:
+        """Optional artifacts may be absent but should be recorded explicitly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            artifact = isodelta_cluster_suite.ArtifactConfig(
+                name="optional-note",
+                path=Path(tmpdir) / "optional.txt",
+                required=False,
+            )
+
+            record = isodelta_cluster_suite.download_artifact(artifact)
+
+        self.assertFalse(record["downloaded"])
+        self.assertTrue(record["skipped_optional_missing"])
+
+    def test_skip_downloads_rejects_missing_required_artifact(self) -> None:
+        """A cluster run should not start when required inputs are absent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "missing-required-artifact"
+required_models = ["SevenNet"]
+
+[[artifacts]]
+name = "required-dataset"
+path = "{(root / "missing_dataset.bin").as_posix()}"
+required = true
+
+[[cases]]
+name = "sevennet"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["trace.json"]
+artifacts = ["required-dataset"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "required artifacts are missing",
+            ):
+                isodelta_cluster_suite.run_suite(
+                    config,
+                    skip_downloads=True,
+                    skip_gpu_check=True,
+                )
+
     def test_plan_only_writes_preflight_manifest_audit(self) -> None:
         """Researchers should inspect planned commands before using GPU time."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -371,6 +422,7 @@ artifacts = ["dataset"]
         self.assertEqual(exit_code, 0)
         self.assertFalse(plan["gpu_check_planned"])
         self.assertTrue(plan["artifacts"][0]["will_download"])
+        self.assertTrue(plan["artifacts"][0]["missing_required"])
         self.assertEqual(plan["cases"][0]["model"], "SevenNet")
         self.assertIn("trace_evidence", plan["cases"][0]["expected_outputs"])
         self.assertIn("speedup_by_case.svg", plan["paper_outputs"]["speedup_svg"])

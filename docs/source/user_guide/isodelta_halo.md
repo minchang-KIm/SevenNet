@@ -280,6 +280,11 @@ gate requires cases for `SevenNet`, `MACE`, and `NequIP`, so a portability
 experiment cannot accidentally omit one model family. Artifact `required_by`
 entries are also checked against the manifest's case model names, which catches
 misspelled model labels before a cluster job starts.
+Required artifacts must already exist or be downloadable; if `--skip-downloads`
+is active and a required artifact is missing, the suite fails before launching
+any case. Optional artifacts with `required = false` may be absent, but the
+download record marks them as skipped rather than silently treating them as
+present.
 
 Before submitting a long job, write a preflight plan:
 
