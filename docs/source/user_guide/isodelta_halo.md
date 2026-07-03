@@ -277,7 +277,9 @@ Fill in the real dataset and checkpoint artifacts, command lines, and trace
 paths. Artifact entries may use `https://` or `file://` URLs, and the runner
 checks SHA-256 digests when a `sha256` value is present. The default manifest
 gate requires cases for `SevenNet`, `MACE`, and `NequIP`, so a portability
-experiment cannot accidentally omit one model family.
+experiment cannot accidentally omit one model family. Artifact `required_by`
+entries are also checked against the manifest's case model names, which catches
+misspelled model labels before a cluster job starts.
 
 Run the complete suite on the cluster:
 
@@ -309,7 +311,11 @@ Use `--collect-only` to regenerate tables, correlations, and figures from
 existing benchmark reports, external timing reports, and trace evidence without
 rerunning the cluster jobs. Use `--skip-gpu-check` only for local dry runs or
 CI tests; for paper runs, keep the GPU check enabled and archive the summary
-JSON with the raw logs.
+JSON with the raw logs. The suite-level evidence gate recounts all passed cases
+before writing the summary: `min_trace_count` must be satisfied by distinct
+trace evidence files, and `min_distinct_trace_models` must be satisfied by the
+`model` labels inside those trace files. This prevents a three-model claim from
+passing with duplicated MACE evidence mislabeled in the manifest.
 
 ## Paired Benchmark
 

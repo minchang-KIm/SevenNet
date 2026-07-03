@@ -264,6 +264,37 @@ trace_evidence = ["sevennet_trace.json"]
         ):
             isodelta_cluster_suite.validate_suite_config(config)
 
+    def test_manifest_validation_rejects_unknown_artifact_required_by(self) -> None:
+        """Artifact model references should not hide spelling mistakes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "bad-artifact-reference"
+required_models = ["SevenNet"]
+
+[[artifacts]]
+name = "dataset"
+path = "data.ext"
+required_by = ["TypoModel"]
+
+[[cases]]
+name = "sevennet"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["sevennet_trace.json"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "required_by names unknown case models",
+        ):
+            isodelta_cluster_suite.validate_suite_config(config)
+
     def test_download_artifact_copies_file_url_and_checks_sha256(self) -> None:
         """Artifact downloads should verify immutable paper inputs."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -363,8 +394,63 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertTrue(correlation_exists)
         self.assertTrue(speedup_svg_exists)
         self.assertEqual(len(summary["cases"]), 3)
+        self.assertEqual(summary["suite_evidence"]["distinct_trace_model_count"], 3)
         self.assertIn("speedup_vs_disabled_cache", case_summary_text)
         self.assertIn("<svg", speedup_svg_text)
+
+    def test_collect_only_rejects_insufficient_distinct_trace_models(self) -> None:
+        """Suite-level gates should count model labels inside trace evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            sevennet_trace_path = root / "sevennet_trace.json"
+            mace_trace_path = root / "mace_trace.json"
+            mislabeled_nequip_trace_path = root / "nequip_trace.json"
+            sevennet_trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
+            mace_trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+            mislabeled_nequip_trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "weak-distinct-traces"
+output_dir = "{(root / "paper_outputs").as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet", "MACE", "NequIP"]
+min_trace_count = 3
+min_distinct_trace_models = 3
+
+[[cases]]
+name = "sevennet-existing"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["{sevennet_trace_path.as_posix()}"]
+
+[[cases]]
+name = "mace-existing"
+model = "MACE"
+kind = "trace_only"
+trace_evidence = ["{mace_trace_path.as_posix()}"]
+
+[[cases]]
+name = "nequip-existing"
+model = "NequIP"
+kind = "trace_only"
+trace_evidence = ["{mislabeled_nequip_trace_path.as_posix()}"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "distinct trace model count",
+            ):
+                isodelta_cluster_suite.run_suite(
+                    config,
+                    collect_only=True,
+                    skip_downloads=True,
+                    skip_gpu_check=True,
+                )
 
 
 if __name__ == "__main__":

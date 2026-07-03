@@ -650,6 +650,17 @@ def validate_suite_config(config: SuiteConfig) -> None:
         "manifest is missing required model cases: " + MODEL_NAME_JOINER.join(missing_models),
     )
     artifact_name_set = set(artifact_names)
+    for artifact in config.artifacts:
+        unknown_required_by = [
+            model_name
+            for model_name in artifact.required_by
+            if model_name not in present_models
+        ]
+        _require(
+            not unknown_required_by,
+            f"{artifact.name}: required_by names unknown case models: "
+            + MODEL_NAME_JOINER.join(unknown_required_by),
+        )
     for case in config.cases:
         _require(case.kind in SUPPORTED_CASE_KINDS, f"{case.name}: unsupported kind {case.kind}")
         _validate_case_thresholds(case)
@@ -1341,6 +1352,76 @@ def _load_json_if_exists(path: Path | None) -> dict[str, Any] | None:
     return payload
 
 
+def validate_suite_evidence(
+    config: SuiteConfig,
+    case_summaries: list[CaseSummary],
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    """Gate the complete paper matrix after all per-case checks pass."""
+    passed_summaries = [
+        summary for summary in case_summaries if summary.status == "passed"
+    ]
+    passed_models = {summary.model for summary in passed_summaries}
+    missing_passed_models = [
+        model_name
+        for model_name in config.required_models
+        if model_name not in passed_models
+    ]
+    _require(
+        not missing_passed_models,
+        "suite is missing passed evidence for required models: "
+        + MODEL_NAME_JOINER.join(missing_passed_models),
+    )
+
+    trace_paths = sorted(
+        {
+            trace_path
+            for summary in passed_summaries
+            for trace_path in summary.trace_evidence
+        }
+    )
+    _require(
+        len(trace_paths) >= config.min_trace_count,
+        f"suite trace evidence count {len(trace_paths)} is below {config.min_trace_count}",
+    )
+
+    if dry_run:
+        trace_models = sorted(
+            {
+                summary.model
+                for summary in passed_summaries
+                if summary.trace_evidence
+            }
+        )
+    else:
+        trace_models = sorted(
+            {
+                _as_string(
+                    _load_json_if_exists(Path(trace_path)).get("model"),
+                    f"{trace_path}.model",
+                )
+                for trace_path in trace_paths
+            }
+        )
+    _require(
+        len(trace_models) >= config.min_distinct_trace_models,
+        (
+            f"suite distinct trace model count {len(trace_models)} is below "
+            f"{config.min_distinct_trace_models}"
+        ),
+    )
+    return {
+        "required_models": list(config.required_models),
+        "passed_models": sorted(passed_models),
+        "trace_evidence_count": len(trace_paths),
+        "distinct_trace_model_count": len(trace_models),
+        "trace_models": trace_models,
+        "min_trace_count": config.min_trace_count,
+        "min_distinct_trace_models": config.min_distinct_trace_models,
+    }
+
+
 def _extract_benchmark_metrics(report: dict[str, Any] | None) -> dict[str, float | None]:
     """Extract timing, cache, and correctness metrics from a benchmark report."""
     if report is None:
@@ -1789,6 +1870,7 @@ def write_paper_outputs(
     command_records: list[CommandRecord],
     download_records: list[dict[str, Any]],
     gpu_record: dict[str, Any] | None,
+    suite_evidence: dict[str, Any],
 ) -> dict[str, str]:
     """Write tables, correlations, figures, and a suite-level JSON summary."""
     tables_dir = config.output_dir / TABLES_DIR_NAME
@@ -1834,6 +1916,7 @@ def write_paper_outputs(
             "required_models": list(config.required_models),
         },
         "gpu_check": gpu_record,
+        "suite_evidence": suite_evidence,
         "downloads": download_records,
         "cases": [asdict(summary) for summary in case_summaries],
         "correlations": correlation_rows,
@@ -1964,12 +2047,18 @@ def run_suite(
         )
 
     _progress(config.name, stage_index, total_stages, "writing tables, correlations, and figures")
+    suite_evidence = validate_suite_evidence(
+        config,
+        case_summaries,
+        dry_run=dry_run,
+    )
     artifacts = write_paper_outputs(
         config,
         case_summaries,
         command_records,
         download_records,
         gpu_record,
+        suite_evidence,
     )
     print(json.dumps(artifacts, indent=2), flush=True)
     return 1 if failed else SUCCESS_RETURN_CODE

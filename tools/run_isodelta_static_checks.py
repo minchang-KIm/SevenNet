@@ -769,6 +769,8 @@ def main() -> None:
         and "sha256_file" in cluster_suite
         and "write_speedup_svg" in cluster_suite
         and "build_correlation_rows" in cluster_suite
+        and "validate_suite_evidence" in cluster_suite
+        and "suite_evidence" in cluster_suite
         and "case_summary.csv" in cluster_suite
         and "correlation.csv" in cluster_suite
         and "speedup_by_case.svg" in cluster_suite
@@ -787,6 +789,13 @@ def main() -> None:
         and "SHA-256" in doc
         and "`--collect-only`" in doc,
         "IsoDelta-Halo guide must document the cluster paper suite",
+    )
+    _require(
+        "min_distinct_trace_models" in doc
+        and "model` labels inside those trace files" in doc
+        and "duplicated MACE evidence" in doc
+        and "Artifact `required_by`" in doc,
+        "IsoDelta-Halo guide must document suite-level cluster evidence gates",
     )
     _require(
         "SEVENN_ISODELTA_HALO_DISABLE" in doc
