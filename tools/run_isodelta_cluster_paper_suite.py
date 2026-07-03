@@ -173,6 +173,11 @@ SEVENNET_DISABLE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 SEVENNET_PROFILE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
 SEVENNET_PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 ENV_FLAG_ENABLED = "1"
+MODE_CONTROL_ENV_KEYS = (
+    SEVENNET_DISABLE_ENV,
+    SEVENNET_PROFILE_ENV,
+    SEVENNET_PRINT_INFO_ENV,
+)
 BASELINE_CASE_NAME = "baseline-disabled"
 ISODELTA_CASE_NAME = "isodelta-enabled"
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
@@ -885,6 +890,12 @@ def validate_suite_config(config: SuiteConfig) -> None:
         elif case.kind == "external_pair":
             _require(bool(case.disabled_command), f"{case.name}: disabled_command is required")
             _require(bool(case.enabled_command), f"{case.name}: enabled_command is required")
+            mode_control_errors = _external_pair_mode_control_errors(case)
+            _require(
+                not mode_control_errors,
+                f"{case.name}: invalid disabled/enabled mode controls: "
+                + MODEL_NAME_JOINER.join(mode_control_errors),
+            )
         elif case.kind == "trace_only":
             _require(
                 bool(case.trace_command) or case.trace_input is not None or bool(case.trace_evidence_paths),
@@ -1059,6 +1070,20 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
             + MODEL_NAME_JOINER.join(missing_uncertainty_gate_cases)
             if missing_uncertainty_gate_cases
             else "paired cases require conservative speedup bounds",
+        )
+    )
+    external_mode_control_errors = [
+        f"{case.name}: " + MODEL_NAME_JOINER.join(_external_pair_mode_control_errors(case))
+        for case in paired_cases
+        if case.kind == "external_pair" and _external_pair_mode_control_errors(case)
+    ]
+    checks.append(
+        _readiness_record(
+            "external_pair_mode_controls",
+            not external_mode_control_errors,
+            "invalid mode controls: " + MODEL_NAME_JOINER.join(external_mode_control_errors)
+            if external_mode_control_errors
+            else "external pairs record disabled cache-off and enabled cache-on controls",
         )
     )
 
@@ -2443,6 +2468,7 @@ def build_run_plan(
                     "enabled_command": case.enabled_command,
                     "trace_command": case.trace_command,
                 },
+                "mode_controls": case_mode_control_record(case),
                 "inputs": {
                     "input": _path_text(case.input_path),
                     "work_dir": _path_text(case.work_dir),
@@ -2560,6 +2586,57 @@ def _default_case_env(case_env: dict[str, str], disabled: bool) -> dict[str, str
         env.pop(SEVENNET_DISABLE_ENV, None)
     env.update(case_env)
     return env
+
+
+def _mode_control_env_values(env: dict[str, str]) -> dict[str, str | None]:
+    """Return only the cache mode environment values that matter for auditing."""
+    return {key: env.get(key) for key in MODE_CONTROL_ENV_KEYS}
+
+
+def _external_pair_mode_control_record(case: CaseConfig) -> dict[str, Any]:
+    """Record the effective disabled/enabled controls for an external pair."""
+    disabled_controls = _mode_control_env_values(
+        _default_case_env(case.disabled_env, disabled=True)
+    )
+    enabled_controls = _mode_control_env_values(
+        _default_case_env(case.enabled_env, disabled=False)
+    )
+    return {
+        "kind": case.kind,
+        "disabled_command": case.disabled_command,
+        "enabled_command": case.enabled_command,
+        "disabled_env": disabled_controls,
+        "enabled_env": enabled_controls,
+        "disabled_cache_disabled": disabled_controls[SEVENNET_DISABLE_ENV] is not None,
+        "enabled_cache_disabled": enabled_controls[SEVENNET_DISABLE_ENV] is not None,
+    }
+
+
+def _external_pair_mode_control_errors(case: CaseConfig) -> list[str]:
+    """Return configuration errors that would make paired modes ambiguous."""
+    mode_control = _external_pair_mode_control_record(case)
+    errors: list[str] = []
+    if not mode_control["disabled_cache_disabled"]:
+        errors.append(f"disabled mode must set {SEVENNET_DISABLE_ENV}")
+    if mode_control["enabled_cache_disabled"]:
+        errors.append(f"enabled mode must leave {SEVENNET_DISABLE_ENV} unset")
+    return errors
+
+
+def case_mode_control_record(case: CaseConfig) -> dict[str, Any]:
+    """Return a compact mode-control record for plan and summary artifacts."""
+    if case.kind == "external_pair":
+        return _external_pair_mode_control_record(case)
+    if case.kind == "sevennet_lammps":
+        return {
+            "kind": case.kind,
+            "paired_mode_source": str(EXPERIMENT_DRIVER_PATH),
+            "disabled_case": BASELINE_CASE_NAME,
+            "enabled_case": ISODELTA_CASE_NAME,
+            "disabled_env": {SEVENNET_DISABLE_ENV: ENV_FLAG_ENABLED},
+            "enabled_env": {SEVENNET_DISABLE_ENV: None},
+        }
+    return {"kind": case.kind, "paired_mode_source": None}
 
 
 def _progress(prefix: str, current: int, total: int, message: str) -> None:
@@ -2857,6 +2934,7 @@ def _build_external_timing_report(
         BASELINE_SAMPLE_STDDEV_SECONDS_KEY: _sample_stddev(disabled_times),
         ENABLED_SAMPLE_STDDEV_SECONDS_KEY: _sample_stddev(enabled_times),
         SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
+        "mode_controls": case_mode_control_record(case),
         COMMANDS_KEY: [asdict(record) for record in command_records],
     }
 
@@ -3894,6 +3972,9 @@ def write_paper_outputs(
         "suite_evidence": suite_evidence,
         "downloads": download_records,
         "cases": [asdict(summary) for summary in case_summaries],
+        "case_mode_controls": {
+            case.name: case_mode_control_record(case) for case in config.cases
+        },
         "correlations": correlation_rows,
         "commands": [asdict(record) for record in command_records],
         "command_log_fingerprints": command_log_fingerprints(command_records),
@@ -4145,6 +4226,8 @@ kind = "external_pair"
 preflight_command = 'python -c "import mace"'
 disabled_command = "python scripts/run_mace_case.py --mode baseline --dataset data/shared_dataset.ext"
 enabled_command = "python scripts/run_mace_case.py --mode isodelta --dataset data/shared_dataset.ext"
+disabled_env = {{ SEVENN_ISODELTA_HALO_DISABLE = "1" }}
+enabled_env = {{}}
 repeat_count = 5
 min_speedup = 1.05
 trace_input = "traces/mace_trace.json"
@@ -4158,6 +4241,8 @@ kind = "external_pair"
 preflight_command = 'python -c "import nequip"'
 disabled_command = "python scripts/run_nequip_case.py --mode baseline --dataset data/shared_dataset.ext"
 enabled_command = "python scripts/run_nequip_case.py --mode isodelta --dataset data/shared_dataset.ext"
+disabled_env = {{ SEVENN_ISODELTA_HALO_DISABLE = "1" }}
+enabled_env = {{}}
 repeat_count = 5
 min_speedup = 1.05
 trace_input = "traces/nequip_trace.json"

@@ -337,6 +337,15 @@ captures `preflight.stdout.log` and `preflight.stderr.log`, and stops the case
 early if the environment is not ready. Use `preflight_env` and
 `preflight_timeout_seconds` when a model family needs module, container, or
 license-server variables that differ from the timed disabled/enabled commands.
+For `external_pair` MACE/NequIP-style cases, keep the disabled and enabled
+modes auditable with `disabled_env` and `enabled_env`. The runner always starts
+the disabled command with `SEVENN_ISODELTA_HALO_DISABLE` set and the enabled
+command with that variable unset, then records those external_pair mode
+controls in the run plan, generated timing report, and summary
+`case_mode_controls`. If `enabled_env` sets `SEVENN_ISODELTA_HALO_DISABLE`, the
+manifest is rejected because the "applied" run would actually be cache-off too.
+These external_pair mode controls are part of the paper audit trail, not only a
+runtime convenience.
 Required artifacts must already exist or be downloadable; if `--skip-downloads`
 is active and a required artifact is missing, the suite fails before launching
 any case. Optional artifacts with `required = false` may be absent, but the
@@ -489,6 +498,8 @@ rerunning the cluster jobs. Use `--skip-gpu-check` only for local dry runs or
 CI tests; for paper runs, keep the GPU check enabled and archive the summary
 JSON with the raw logs. The summary JSON stores the manifest SHA-256 digest and
 the copied `isodelta_cluster_suite_manifest.toml` snapshot path. It also stores
+`case_mode_controls`, so each disabled/enabled pair can be audited for the
+cache-off/cache-on environment used to produce the timing rows. It also stores
 `artifact_fingerprints` with the SHA-256 digest and byte size of each generated
 environment snapshot, table, SVG figure, and manifest snapshot. When
 `preflight_report.json`, `preflight_environment_snapshot.json`, or

@@ -854,6 +854,10 @@ def main() -> None:
         and "preflight_command" in cluster_suite
         and "preflight_env" in cluster_suite
         and "preflight_timeout_seconds" in cluster_suite
+        and "MODE_CONTROL_ENV_KEYS" in cluster_suite
+        and "case_mode_control_record" in cluster_suite
+        and "external_pair_mode_controls" in cluster_suite
+        and '"case_mode_controls"' in cluster_suite
         and "run_case_preflight" in cluster_suite
         and "preflight.stdout.log" in cluster_suite
         and "test_preflight_only_downloads_artifacts_and_runs_case_checks" in cluster_suite_test
@@ -861,6 +865,7 @@ def main() -> None:
         and "test_pipeline_stops_when_readiness_fails" in cluster_suite_test
         and "test_pipeline_stops_when_preflight_fails" in cluster_suite_test
         and "test_pipeline_reports_bundle_verification_failure" in cluster_suite_test
+        and "test_manifest_validation_rejects_enabled_external_pair_disable_env" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
         and "try_reuse_case_outputs" in cluster_suite
@@ -969,6 +974,14 @@ def main() -> None:
         and "`preflight_env`" in doc
         and "`preflight_timeout_seconds`" in doc,
         "IsoDelta-Halo guide must document cluster case preflight checks",
+    )
+    _require(
+        "`disabled_env`" in doc
+        and "`enabled_env`" in doc
+        and "`SEVENN_ISODELTA_HALO_DISABLE`" in doc
+        and "`case_mode_controls`" in doc
+        and "external_pair mode controls" in doc,
+        "IsoDelta-Halo guide must document external-pair mode controls",
     )
     _require(
         "manifest SHA-256 digest" in doc

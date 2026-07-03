@@ -305,6 +305,8 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
         self.assertIn('kind = "sevennet_lammps"', template)
         self.assertIn('kind = "external_pair"', template)
         self.assertIn('preflight_command = \'python -c "import mace"\'', template)
+        self.assertIn('disabled_env = { SEVENN_ISODELTA_HALO_DISABLE = "1" }', template)
+        self.assertIn("enabled_env = {}", template)
 
     def test_write_slurm_script_creates_commented_preflight_first_launcher(self) -> None:
         """The SLURM wrapper should submit reproducible preflight evidence first."""
@@ -614,6 +616,34 @@ artifacts = ["dataset"]
         ):
             isodelta_cluster_suite.validate_suite_config(config)
 
+    def test_manifest_validation_rejects_enabled_external_pair_disable_env(self) -> None:
+        """External enabled runs must not inherit the cache-disable switch."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "bad-mode-controls"
+required_models = ["MACE"]
+
+[[cases]]
+name = "mace-pair"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "python run_mace.py --mode baseline"
+enabled_command = "python run_mace.py --mode isodelta"
+enabled_env = { SEVENN_ISODELTA_HALO_DISABLE = "1" }
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "enabled mode must leave SEVENN_ISODELTA_HALO_DISABLE unset",
+        ):
+            isodelta_cluster_suite.validate_suite_config(config)
+
     def test_download_artifact_copies_file_url_and_checks_sha256(self) -> None:
         """Artifact downloads should verify immutable paper inputs."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -791,6 +821,7 @@ artifacts = ["dataset"]
             manifest_digest,
         )
         self.assertEqual(plan["cases"][0]["model"], "SevenNet")
+        self.assertEqual(plan["cases"][0]["mode_controls"]["kind"], "trace_only")
         self.assertIn("trace_evidence", plan["cases"][0]["expected_outputs"])
         self.assertIn("environment_snapshot.json", plan["paper_outputs"]["environment_snapshot"])
         self.assertIn("speedup_by_case.svg", plan["paper_outputs"]["speedup_svg"])
@@ -1633,6 +1664,7 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             nequip_case = next(
                 case for case in summary["cases"] if case["model"] == "NequIP"
             )
+            nequip_mode_controls = summary["case_mode_controls"]["nequip-existing"]
             verification = isodelta_cluster_suite.verify_output_bundle(output_dir)
             case_summary_csv.write_text(case_summary_text + "\n", encoding="utf-8")
             with self.assertRaisesRegex(
@@ -1655,6 +1687,15 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         )
         self.assertEqual(len(summary["cases"]), 3)
         self.assertEqual(summary["suite_evidence"]["distinct_trace_model_count"], 3)
+        self.assertTrue(nequip_mode_controls["disabled_cache_disabled"])
+        self.assertFalse(nequip_mode_controls["enabled_cache_disabled"])
+        self.assertEqual(
+            nequip_mode_controls["disabled_env"][isodelta_cluster_suite.SEVENNET_DISABLE_ENV],
+            ENV_FLAG_ENABLED,
+        )
+        self.assertIsNone(
+            nequip_mode_controls["enabled_env"][isodelta_cluster_suite.SEVENNET_DISABLE_ENV]
+        )
         self.assertIn("speedup_vs_disabled_cache", case_summary_text)
         self.assertIn("baseline_sample_variance_seconds", case_summary_text)
         self.assertIn("enabled_sample_stddev_seconds", case_summary_text)
