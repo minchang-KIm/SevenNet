@@ -84,6 +84,7 @@ REQUIRED_FILE_SNIPPETS = {
         "test_manifest_validation_rejects_enabled_external_pair_disable_env",
         "test_external_timing_report_rejects_mismatched_mode_controls",
         "test_command_records_include_cwd_and_tracked_environment",
+        "test_verify_output_bundle_rejects_mismatched_command_fingerprints",
         "test_write_slurm_script_rejects_collect_only_pipeline_launcher",
         "test_readiness_check_accepts_strict_three_model_paired_manifest",
     ),

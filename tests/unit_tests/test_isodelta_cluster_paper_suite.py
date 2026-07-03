@@ -276,6 +276,18 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 json.dumps(
                     {
                         "suite": {"output_dir": str(original_output_dir)},
+                        "commands": [
+                            {
+                                "name": "case",
+                                "command": "run-case",
+                                "returncode": 0,
+                                "elapsed_seconds": 1.0,
+                                "stdout_path": str(stdout_path),
+                                "stderr_path": str(missing_stderr_path),
+                                "cwd": str(original_output_dir),
+                                "tracked_env": isodelta_cluster_suite.command_environment_snapshot({}),
+                            }
+                        ],
                         "artifact_fingerprints": {
                             "case_summary_csv": isodelta_cluster_suite.generated_artifact_record(
                                 table_path
@@ -284,6 +296,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                         "command_log_fingerprints": [
                             {
                                 "name": "case",
+                                "returncode": 0,
                                 "stdout": isodelta_cluster_suite.optional_file_fingerprint(
                                     stdout_path
                                 ),
@@ -305,7 +318,69 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
 
         self.assertEqual(verification["status"], "passed")
         self.assertEqual(verification["verified_artifact_count"], 1)
+        self.assertEqual(verification["verified_command_record_count"], 1)
         self.assertEqual(verification["verified_command_log_count"], 2)
+
+    def test_verify_output_bundle_rejects_mismatched_command_fingerprints(self) -> None:
+        """Bundle verification should bind command records to their log hashes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            logs_dir = output_dir / "logs"
+            tables_dir = output_dir / "tables"
+            logs_dir.mkdir(parents=True)
+            tables_dir.mkdir(parents=True)
+            table_path = tables_dir / "case_summary.csv"
+            stdout_path = logs_dir / "case.stdout"
+            stderr_path = logs_dir / "case.stderr"
+            table_path.write_text("case,speedup\nsevennet,1.2\n", encoding="utf-8")
+            stdout_path.write_text("completed\n", encoding="utf-8")
+            stderr_path.write_text("", encoding="utf-8")
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "commands": [
+                            {
+                                "name": "case",
+                                "command": "run-case",
+                                "returncode": 0,
+                                "elapsed_seconds": 1.0,
+                                "stdout_path": str(stdout_path),
+                                "stderr_path": str(stderr_path),
+                                "cwd": str(output_dir),
+                                "tracked_env": isodelta_cluster_suite.command_environment_snapshot({}),
+                            }
+                        ],
+                        "artifact_fingerprints": {
+                            "case_summary_csv": isodelta_cluster_suite.generated_artifact_record(
+                                table_path
+                            )
+                        },
+                        "command_log_fingerprints": [
+                            {
+                                "name": "different-case",
+                                "returncode": 0,
+                                "stdout": isodelta_cluster_suite.optional_file_fingerprint(
+                                    stdout_path
+                                ),
+                                "stderr": isodelta_cluster_suite.optional_file_fingerprint(
+                                    stderr_path
+                                ),
+                            }
+                        ],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "must align by name",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
 
     def test_write_template_creates_commented_three_model_manifest(self) -> None:
         """The template should be editable and include the required models."""

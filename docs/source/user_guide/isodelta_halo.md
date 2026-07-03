@@ -530,6 +530,9 @@ records used to build the paper tables. Each command record also stores the
 working directory and a focused `tracked_env` snapshot for cache mode, CUDA,
 SLURM, and CPU thread variables. That makes a disabled/enabled MACE, NequIP, or
 SevenNet timing row auditable without dumping unrelated environment variables.
+The bundle verifier also checks that command records and log fingerprints carry
+the same command names, return codes, and stdout/stderr paths before it accepts
+the archived log hashes.
 After archiving or moving a result directory, verify the bundle fingerprints:
 
 ```bash

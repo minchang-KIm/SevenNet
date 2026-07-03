@@ -877,6 +877,7 @@ def main() -> None:
         and "test_manifest_validation_rejects_enabled_external_pair_disable_env" in cluster_suite_test
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
         and "test_command_records_include_cwd_and_tracked_environment" in cluster_suite_test
+        and "test_verify_output_bundle_rejects_mismatched_command_fingerprints" in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
@@ -893,6 +894,9 @@ def main() -> None:
         and "verify_output_bundle" in cluster_suite
         and "--verify-output-bundle" in cluster_suite
         and "SUMMARY_REPORT_NAME" in cluster_suite
+        and "_require_command_record_alignment" in cluster_suite
+        and "verified_command_record_count" in cluster_suite
+        and "must align by name" in cluster_suite
         and '"stdout": optional_file_fingerprint' in cluster_suite
         and '"stderr": optional_file_fingerprint' in cluster_suite
         and "manifest_record" in cluster_suite
@@ -1050,6 +1054,7 @@ def main() -> None:
         and "`tracked_env`" in doc
         and "CUDA" in doc
         and "SLURM" in doc
+        and "same command names, return codes, and stdout/stderr paths" in doc
         and "command" in doc
         and "records" in doc,
         "IsoDelta-Halo guide must document command log fingerprints",

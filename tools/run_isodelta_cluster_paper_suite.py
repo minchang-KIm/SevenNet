@@ -2394,6 +2394,92 @@ def _require_fingerprint_match(
     )
 
 
+def _require_command_record_alignment(
+    summary_payload: dict[str, Any],
+    command_fingerprints: list[Any],
+) -> int:
+    """Verify command provenance records match their log fingerprints."""
+    command_records = summary_payload.get(COMMANDS_KEY)
+    _require(isinstance(command_records, list), f"{COMMANDS_KEY} must be a JSON array")
+    _require(
+        len(command_records) == len(command_fingerprints),
+        f"{COMMANDS_KEY} and command_log_fingerprints must have the same length",
+    )
+    required_env_keys = tuple(dict.fromkeys(COMMAND_ENV_SNAPSHOT_KEYS))
+    for index, raw_command_record in enumerate(command_records):
+        command_record = _as_json_object(
+            raw_command_record,
+            f"{COMMANDS_KEY}[{index}]",
+        )
+        fingerprint_record = _as_json_object(
+            command_fingerprints[index],
+            f"command_log_fingerprints[{index}]",
+        )
+        command_name = _as_json_string(
+            command_record.get("name"),
+            f"{COMMANDS_KEY}[{index}].name",
+        )
+        fingerprint_name = _as_json_string(
+            fingerprint_record.get("name"),
+            f"command_log_fingerprints[{index}].name",
+        )
+        _require(
+            command_name == fingerprint_name,
+            f"{COMMANDS_KEY}[{index}] and command_log_fingerprints[{index}] must align by name",
+        )
+        command_returncode = _as_json_nonnegative_int(
+            command_record.get("returncode"),
+            f"{COMMANDS_KEY}[{index}].returncode",
+        )
+        fingerprint_returncode = _as_json_nonnegative_int(
+            fingerprint_record.get("returncode"),
+            f"command_log_fingerprints[{index}].returncode",
+        )
+        _require(
+            command_returncode == fingerprint_returncode,
+            f"{COMMANDS_KEY}[{index}] and command_log_fingerprints[{index}] must align by returncode",
+        )
+        _as_json_string(command_record.get("cwd"), f"{COMMANDS_KEY}[{index}].cwd")
+        tracked_env = _as_json_object(
+            command_record.get("tracked_env"),
+            f"{COMMANDS_KEY}[{index}].tracked_env",
+        )
+        for env_key in required_env_keys:
+            _require(
+                env_key in tracked_env,
+                f"{COMMANDS_KEY}[{index}].tracked_env missing {env_key}",
+            )
+            env_value = tracked_env[env_key]
+            _require(
+                env_value is None or isinstance(env_value, str),
+                f"{COMMANDS_KEY}[{index}].tracked_env.{env_key} must be a string or null",
+            )
+        for stream_name, command_path_key in (
+            ("stdout", "stdout_path"),
+            ("stderr", "stderr_path"),
+        ):
+            command_path = _as_json_string(
+                command_record.get(command_path_key),
+                f"{COMMANDS_KEY}[{index}].{command_path_key}",
+            )
+            stream_record = _as_json_object(
+                fingerprint_record.get(stream_name),
+                f"command_log_fingerprints[{index}].{stream_name}",
+            )
+            fingerprint_path = _as_json_string(
+                stream_record.get("path"),
+                f"command_log_fingerprints[{index}].{stream_name}.path",
+            )
+            _require(
+                command_path == fingerprint_path,
+                (
+                    f"{COMMANDS_KEY}[{index}].{command_path_key} must match "
+                    f"command_log_fingerprints[{index}].{stream_name}.path"
+                ),
+            )
+    return len(command_records)
+
+
 def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     """Verify summary-recorded artifact and command-log fingerprints."""
     summary_path = _resolve_summary_path(bundle_or_summary_path)
@@ -2411,6 +2497,10 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     _require(
         isinstance(command_fingerprints, list),
         "command_log_fingerprints must be a JSON array",
+    )
+    verified_command_record_count = _require_command_record_alignment(
+        summary_payload,
+        command_fingerprints,
     )
     original_output_dir = _original_output_dir(summary_payload)
 
@@ -2452,6 +2542,7 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         "status": "passed",
         "summary_json": str(summary_path),
         "verified_artifact_count": verified_artifact_count,
+        "verified_command_record_count": verified_command_record_count,
         "verified_command_log_count": verified_log_count,
     }
 
