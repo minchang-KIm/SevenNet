@@ -774,6 +774,9 @@ def main() -> None:
         and "build_run_plan" in cluster_suite
         and "write_run_plan" in cluster_suite
         and "PLAN_REPORT_NAME" in cluster_suite
+        and "EXTERNAL_TIMING_SCHEMA_VERSION" in cluster_suite
+        and "validate_external_timing_report" in cluster_suite
+        and "must match baseline / enabled seconds" in cluster_suite
         and "--plan-only" in cluster_suite
         and "--plan-output" in cluster_suite
         and "case_summary.csv" in cluster_suite
@@ -801,6 +804,13 @@ def main() -> None:
         and "The plan JSON records artifact existence and download intent" in doc
         and "expected benchmark/trace/timing outputs" in doc,
         "IsoDelta-Halo guide must document cluster preflight planning",
+    )
+    _require(
+        "external timing report" in doc
+        and "repeat success counts" in doc
+        and "`baseline_mean_seconds` and `enabled_mean_seconds`" in doc
+        and "`speedup_vs_disabled_cache` to match baseline divided by enabled seconds" in doc,
+        "IsoDelta-Halo guide must document external timing report validation",
     )
     _require(
         "min_distinct_trace_models" in doc

@@ -365,6 +365,26 @@ artifacts = ["dataset"]
         self.assertIn("trace_evidence", plan["cases"][0]["expected_outputs"])
         self.assertIn("speedup_by_case.svg", plan["paper_outputs"]["speedup_svg"])
 
+    def test_external_timing_report_rejects_inconsistent_speedup(self) -> None:
+        """External MACE/NequIP timing rows should be internally auditable."""
+        report = _external_timing_report("NequIP")
+        report["speedup_vs_disabled_cache"] = EXPECTED_SPEEDUP + 0.5
+        case = isodelta_cluster_suite.CaseConfig(
+            name="nequip-existing",
+            model="NequIP",
+            kind="external_pair",
+            disabled_command="run baseline",
+            enabled_command="run enabled",
+            repeat_count=2,
+            min_speedup=1.1,
+        )
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "must match baseline / enabled seconds",
+        ):
+            isodelta_cluster_suite.validate_external_timing_report(report, case)
+
     def test_collect_only_writes_tables_correlations_and_svg_figures(self) -> None:
         """Existing evidence should become paper tables, correlations, and graphs."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -415,6 +435,7 @@ model = "NequIP"
 kind = "external_pair"
 disabled_command = "python -c print('baseline')"
 enabled_command = "python -c print('enabled')"
+repeat_count = 2
 external_timing_report = "{nequip_timing_path.as_posix()}"
 trace_evidence = ["{nequip_trace_path.as_posix()}"]
 """,

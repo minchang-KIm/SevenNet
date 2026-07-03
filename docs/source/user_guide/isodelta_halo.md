@@ -309,6 +309,10 @@ benchmark plus report gates. An `external_pair` case is for MACE, NequIP, or
 another runtime whose disabled and enabled commands are supplied in the
 manifest. A `trace_only` case validates portable MLIP trace evidence when a
 model has applicability evidence but no paired runtime benchmark yet.
+For `external_pair` results, the suite validates the external timing report
+schema, manifest case/model labels, repeat success counts, positive
+`baseline_mean_seconds` and `enabled_mean_seconds`, and requires
+`speedup_vs_disabled_cache` to match baseline divided by enabled seconds.
 
 After successful collection, the suite writes:
 

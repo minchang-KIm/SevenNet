@@ -34,6 +34,7 @@ from urllib.request import urlopen
 # method: reviewers should see every gate and unit without hunting literals.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SUITE_SCHEMA_VERSION = "isodelta-cluster-paper-suite-v1"
+EXTERNAL_TIMING_SCHEMA_VERSION = "isodelta-external-pair-timing-v1"
 DEFAULT_OUTPUT_DIR = Path("isodelta_cluster_paper_runs")
 DEFAULT_EXPECTED_GPU_COUNT = 8
 DEFAULT_REPEAT_COUNT = 3
@@ -59,6 +60,16 @@ EXPERIMENT_REPORT_NAME = "isodelta_experiment_report.json"
 EXTERNAL_TIMING_REPORT_NAME = "external_pair_timing_report.json"
 TRACE_EVIDENCE_SUFFIX = "_trace_evidence.json"
 PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
+SCHEMA_VERSION_KEY = "schema_version"
+CASE_NAME_KEY = "case_name"
+MODEL_KEY = "model"
+REPEAT_COUNT_KEY = "repeat_count"
+DISABLED_SUCCESS_COUNT_KEY = "disabled_success_count"
+ENABLED_SUCCESS_COUNT_KEY = "enabled_success_count"
+BASELINE_MEAN_SECONDS_KEY = "baseline_mean_seconds"
+ENABLED_MEAN_SECONDS_KEY = "enabled_mean_seconds"
+SPEEDUP_VS_DISABLED_CACHE_KEY = "speedup_vs_disabled_cache"
+COMMANDS_KEY = "commands"
 LOGS_DIR_NAME = "logs"
 CASES_DIR_NAME = "cases"
 TABLES_DIR_NAME = "tables"
@@ -75,6 +86,8 @@ MIN_NONNEGATIVE_VALUE = 0.0
 MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = 100.0
 MIN_CORRELATION_SAMPLE_COUNT = 2
+TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
+TIMING_RELATIVE_TOLERANCE = 1.0e-9
 SVG_WIDTH = 960
 SVG_HEIGHT = 540
 SVG_MARGIN_LEFT = 88
@@ -238,11 +251,53 @@ def _as_mapping(value: Any, field_name: str) -> dict[str, Any]:
     return value
 
 
+def _as_json_object(value: Any, field_name: str) -> dict[str, Any]:
+    """Return a JSON object field with a schema-oriented error."""
+    _require(isinstance(value, dict), f"{field_name} must be a JSON object")
+    return value
+
+
 def _as_string(value: Any, field_name: str) -> str:
     """Return a non-empty manifest string."""
     _require(isinstance(value, str), f"{field_name} must be a string")
     _require(bool(value.strip()), f"{field_name} must not be empty")
     return value.strip()
+
+
+def _as_json_string(value: Any, field_name: str) -> str:
+    """Return a non-empty JSON string field."""
+    _require(isinstance(value, str), f"{field_name} must be a string")
+    _require(bool(value.strip()), f"{field_name} must not be empty")
+    return value.strip()
+
+
+def _as_json_number(value: Any, field_name: str) -> float:
+    """Return a finite JSON number without accepting boolean aliases."""
+    _require(
+        isinstance(value, (int, float)) and not isinstance(value, bool),
+        f"{field_name} must be numeric",
+    )
+    numeric_value = float(value)
+    _require(math.isfinite(numeric_value), f"{field_name} must be finite")
+    return numeric_value
+
+
+def _as_json_positive_number(value: Any, field_name: str) -> float:
+    """Return a strictly positive finite JSON number."""
+    numeric_value = _as_json_number(value, field_name)
+    _require(numeric_value > MIN_POSITIVE_VALUE, f"{field_name} must be positive")
+    return numeric_value
+
+
+def _as_json_nonnegative_int(value: Any, field_name: str) -> int:
+    """Return a whole nonnegative JSON count."""
+    numeric_value = _as_json_number(value, field_name)
+    int_value = int(numeric_value)
+    _require(
+        numeric_value == int_value and int_value >= 0,
+        f"{field_name} must be a nonnegative integer",
+    )
+    return int_value
 
 
 def _as_optional_string(value: Any, field_name: str) -> str | None:
@@ -1434,16 +1489,107 @@ def _build_external_timing_report(
     if disabled_mean is not None and enabled_mean is not None and enabled_mean > MIN_POSITIVE_VALUE:
         speedup = disabled_mean / enabled_mean
     return {
-        "schema_version": "isodelta-external-pair-timing-v1",
-        "case_name": case.name,
-        "model": case.model,
-        "repeat_count": case.repeat_count,
-        "disabled_success_count": len(disabled_times),
-        "enabled_success_count": len(enabled_times),
-        "baseline_mean_seconds": disabled_mean,
-        "enabled_mean_seconds": enabled_mean,
-        "speedup_vs_disabled_cache": speedup,
-        "commands": [asdict(record) for record in command_records],
+        SCHEMA_VERSION_KEY: EXTERNAL_TIMING_SCHEMA_VERSION,
+        CASE_NAME_KEY: case.name,
+        MODEL_KEY: case.model,
+        REPEAT_COUNT_KEY: case.repeat_count,
+        DISABLED_SUCCESS_COUNT_KEY: len(disabled_times),
+        ENABLED_SUCCESS_COUNT_KEY: len(enabled_times),
+        BASELINE_MEAN_SECONDS_KEY: disabled_mean,
+        ENABLED_MEAN_SECONDS_KEY: enabled_mean,
+        SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
+        COMMANDS_KEY: [asdict(record) for record in command_records],
+    }
+
+
+def _timing_values_close(observed: float, expected: float) -> bool:
+    """Return whether two timing-derived values agree within named tolerance."""
+    tolerance = max(
+        TIMING_ABSOLUTE_TOLERANCE_SECONDS,
+        TIMING_RELATIVE_TOLERANCE * max(abs(observed), abs(expected)),
+    )
+    return abs(observed - expected) <= tolerance
+
+
+def validate_external_timing_report(
+    report: dict[str, Any],
+    case: CaseConfig,
+) -> dict[str, Any]:
+    """Validate external-pair timing evidence before it reaches paper tables."""
+    report = _as_json_object(report, "external_timing_report")
+    schema_version = _as_json_string(
+        report.get(SCHEMA_VERSION_KEY),
+        SCHEMA_VERSION_KEY,
+    )
+    _require(
+        schema_version == EXTERNAL_TIMING_SCHEMA_VERSION,
+        (
+            f"{SCHEMA_VERSION_KEY} must be "
+            f"{EXTERNAL_TIMING_SCHEMA_VERSION!r}"
+        ),
+    )
+    case_name = _as_json_string(report.get(CASE_NAME_KEY), CASE_NAME_KEY)
+    model_name = _as_json_string(report.get(MODEL_KEY), MODEL_KEY)
+    _require(case_name == case.name, f"{CASE_NAME_KEY} must match manifest case name")
+    _require(model_name == case.model, f"{MODEL_KEY} must match manifest model")
+    repeat_count = _as_json_nonnegative_int(
+        report.get(REPEAT_COUNT_KEY),
+        REPEAT_COUNT_KEY,
+    )
+    disabled_success_count = _as_json_nonnegative_int(
+        report.get(DISABLED_SUCCESS_COUNT_KEY),
+        DISABLED_SUCCESS_COUNT_KEY,
+    )
+    enabled_success_count = _as_json_nonnegative_int(
+        report.get(ENABLED_SUCCESS_COUNT_KEY),
+        ENABLED_SUCCESS_COUNT_KEY,
+    )
+    _require(repeat_count == case.repeat_count, f"{REPEAT_COUNT_KEY} must match manifest repeat_count")
+    _require(
+        disabled_success_count == repeat_count,
+        f"{DISABLED_SUCCESS_COUNT_KEY} must equal {REPEAT_COUNT_KEY}",
+    )
+    _require(
+        enabled_success_count == repeat_count,
+        f"{ENABLED_SUCCESS_COUNT_KEY} must equal {REPEAT_COUNT_KEY}",
+    )
+    baseline_mean_seconds = _as_json_positive_number(
+        report.get(BASELINE_MEAN_SECONDS_KEY),
+        BASELINE_MEAN_SECONDS_KEY,
+    )
+    enabled_mean_seconds = _as_json_positive_number(
+        report.get(ENABLED_MEAN_SECONDS_KEY),
+        ENABLED_MEAN_SECONDS_KEY,
+    )
+    speedup = _as_json_positive_number(
+        report.get(SPEEDUP_VS_DISABLED_CACHE_KEY),
+        SPEEDUP_VS_DISABLED_CACHE_KEY,
+    )
+    expected_speedup = baseline_mean_seconds / enabled_mean_seconds
+    _require(
+        _timing_values_close(speedup, expected_speedup),
+        f"{SPEEDUP_VS_DISABLED_CACHE_KEY} must match baseline / enabled seconds",
+    )
+    if case.min_speedup is not None:
+        _require(
+            speedup >= case.min_speedup,
+            f"{case.name}: external timing speedup {speedup:g} is below {case.min_speedup:g}",
+        )
+    _require(
+        isinstance(report.get(COMMANDS_KEY), list),
+        f"{COMMANDS_KEY} must be a JSON array",
+    )
+    return {
+        "status": "passed",
+        SCHEMA_VERSION_KEY: schema_version,
+        CASE_NAME_KEY: case_name,
+        MODEL_KEY: model_name,
+        REPEAT_COUNT_KEY: repeat_count,
+        DISABLED_SUCCESS_COUNT_KEY: disabled_success_count,
+        ENABLED_SUCCESS_COUNT_KEY: enabled_success_count,
+        BASELINE_MEAN_SECONDS_KEY: baseline_mean_seconds,
+        ENABLED_MEAN_SECONDS_KEY: enabled_mean_seconds,
+        SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
     }
 
 
@@ -1534,12 +1680,7 @@ def validate_case_outputs(
             f"{case.name}: missing external timing report {external_timing_report}",
         )
         timing_payload = json.loads(external_timing_report.read_text(encoding="utf-8"))
-        speedup = timing_payload.get("speedup_vs_disabled_cache")
-        if case.min_speedup is not None:
-            _require(
-                isinstance(speedup, (int, float)) and float(speedup) >= case.min_speedup,
-                f"{case.name}: external timing speedup {speedup} is below {case.min_speedup}",
-            )
+        validate_external_timing_report(timing_payload, case)
 
 
 def _load_json_if_exists(path: Path | None) -> dict[str, Any] | None:
@@ -1690,9 +1831,9 @@ def _extract_external_metrics(report: dict[str, Any] | None) -> dict[str, float 
             "speedup": None,
         }
     return {
-        "baseline_mean_seconds": _coerce_optional_float(report.get("baseline_mean_seconds")),
-        "enabled_mean_seconds": _coerce_optional_float(report.get("enabled_mean_seconds")),
-        "speedup": _coerce_optional_float(report.get("speedup_vs_disabled_cache")),
+        "baseline_mean_seconds": _coerce_optional_float(report.get(BASELINE_MEAN_SECONDS_KEY)),
+        "enabled_mean_seconds": _coerce_optional_float(report.get(ENABLED_MEAN_SECONDS_KEY)),
+        "speedup": _coerce_optional_float(report.get(SPEEDUP_VS_DISABLED_CACHE_KEY)),
     }
 
 
