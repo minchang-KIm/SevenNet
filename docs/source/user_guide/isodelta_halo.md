@@ -256,6 +256,61 @@ that bundle stage. The driver rejects those settings before launching LAMMPS if
 no trace evidence files are supplied, if a trace evidence path is duplicated, or
 if a required trace model label is empty or duplicated.
 
+## 8-GPU Cluster Paper Suite
+
+Use `tools/run_isodelta_cluster_paper_suite.py` when the paper experiment needs
+one command to cover an 8-GPU cluster run, artifact downloads, multi-model
+evidence collection, tables, correlations, and figures. The suite reads a
+TOML manifest instead of hard-coding dataset URLs or MACE/NequIP launch syntax.
+That is intentional: SevenNet, MACE, and NequIP foundation-model runs often use
+different checkpoint formats, data loaders, and launchers, while the paper
+still needs one auditable result bundle.
+
+Start by writing a commented template:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --write-template isodelta_cluster_suite.toml
+```
+
+Fill in the real dataset and checkpoint artifacts, command lines, and trace
+paths. Artifact entries may use `https://` or `file://` URLs, and the runner
+checks SHA-256 digests when a `sha256` value is present. The default manifest
+gate requires cases for `SevenNet`, `MACE`, and `NequIP`, so a portability
+experiment cannot accidentally omit one model family.
+
+Run the complete suite on the cluster:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --manifest isodelta_cluster_suite.toml
+```
+
+The runner checks the visible GPU count against `expected_gpus = 8`, downloads
+missing artifacts, prints terminal progress as `[suite] [stage/total] ...`,
+then executes each case. A `sevennet_lammps` case calls
+`run_isodelta_experiment.py` and therefore runs the disabled/enabled LAMMPS
+benchmark plus report gates. An `external_pair` case is for MACE, NequIP, or
+another runtime whose disabled and enabled commands are supplied in the
+manifest. A `trace_only` case validates portable MLIP trace evidence when a
+model has applicability evidence but no paired runtime benchmark yet.
+
+After successful collection, the suite writes:
+
+- `isodelta_cluster_paper_summary.json`
+- `tables/case_summary.csv`
+- `tables/case_summary.md`
+- `tables/correlation.csv`
+- `figures/speedup_by_case.svg`
+- `figures/hit_rate_vs_speedup.svg`
+- `figures/trace_metadata_fraction_vs_speedup.svg`
+
+Use `--collect-only` to regenerate tables, correlations, and figures from
+existing benchmark reports, external timing reports, and trace evidence without
+rerunning the cluster jobs. Use `--skip-gpu-check` only for local dry runs or
+CI tests; for paper runs, keep the GPU check enabled and archive the summary
+JSON with the raw logs.
+
 ## Paired Benchmark
 
 Use the benchmark runner after building a LAMMPS binary that contains

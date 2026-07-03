@@ -1,0 +1,371 @@
+"""Unit tests for the IsoDelta-Halo cluster paper suite runner.
+
+The cluster runner must remain testable without a real 8-GPU node, so these
+tests use synthetic but fully validated benchmark and trace evidence.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+
+
+# Load the tool by path because tools/ is intentionally not a Python package.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CLUSTER_SUITE_SCRIPT = REPO_ROOT / "tools" / "run_isodelta_cluster_paper_suite.py"
+SPEC = importlib.util.spec_from_file_location(
+    "isodelta_cluster_paper_suite",
+    CLUSTER_SUITE_SCRIPT,
+)
+assert SPEC is not None and SPEC.loader is not None
+isodelta_cluster_suite = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = isodelta_cluster_suite
+SPEC.loader.exec_module(isodelta_cluster_suite)
+
+
+PERCENT_SCALE = 100.0
+RUN_TIMEOUT_SECONDS = 3600.0
+BASELINE_LOOP_TIME_SECONDS = 12.0
+ISODELTA_LOOP_TIME_SECONDS = 10.0
+EXPECTED_SPEEDUP = BASELINE_LOOP_TIME_SECONDS / ISODELTA_LOOP_TIME_SECONDS
+EXPECTED_RESULT_COUNT = 4
+ENABLED_ATTEMPTS = 10.0
+ENABLED_HITS = 8.0
+DISABLED_ATTEMPTS = 10.0
+TRACE_ATTEMPTS = 4.0
+TRACE_HITS = 3.0
+TRACE_HIT_RATE_PERCENT = PERCENT_SCALE * TRACE_HITS / TRACE_ATTEMPTS
+TRACE_BASELINE_SECONDS = 100.0
+TRACE_METADATA_SECONDS = 20.0
+TRACE_ENABLED_SECONDS = 80.0
+TRACE_SPEEDUP = TRACE_BASELINE_SECONDS / TRACE_ENABLED_SECONDS
+PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
+DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
+PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
+ENV_FLAG_ENABLED = "1"
+
+
+def _cache_summary(
+    *,
+    attempts: float = ENABLED_ATTEMPTS,
+    hits: float = ENABLED_HITS,
+    miss_disabled: float = 0.0,
+    miss_no_cache: float = ENABLED_ATTEMPTS - ENABLED_HITS,
+) -> dict[str, float]:
+    """Create a complete cache summary with all miss counters."""
+    return {
+        "attempts": attempts,
+        "hits": hits,
+        "hit_rate_percent": PERCENT_SCALE * hits / attempts,
+        "summary_rank_count": 1.0,
+        "miss_disabled": miss_disabled,
+        "miss_no-cache": miss_no_cache,
+        "miss_neighbor-list-rebuilt": 0.0,
+        "miss_shape-changed": 0.0,
+        "miss_index-tensor-shape-changed": 0.0,
+        "miss_tag-count-changed": 0.0,
+        "miss_tag-order-changed": 0.0,
+        "miss_comm-topology-changed": 0.0,
+        "miss_comm-list-tag-order-changed": 0.0,
+    }
+
+
+def _disabled_cache_summary() -> dict[str, float]:
+    """Create the disabled-cache baseline summary expected by the checker."""
+    return _cache_summary(
+        attempts=DISABLED_ATTEMPTS,
+        hits=0.0,
+        miss_disabled=DISABLED_ATTEMPTS,
+        miss_no_cache=0.0,
+    )
+
+
+def _benchmark_report() -> dict[str, object]:
+    """Create a small passing paired benchmark report."""
+    return {
+        "provenance": {
+            "report_schema_version": "isodelta-benchmark-report-v1",
+            "git_commit": "0123456789abcdef",
+            "git_branch": "isodelta-halo-runtime",
+            "git_dirty": False,
+            "python_executable": "python",
+            "python_version": "3.13.0",
+            "platform": "test-platform",
+            "case_environment_overrides": {
+                "baseline-disabled": {
+                    PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+                    DISABLE_CACHE_ENV: ENV_FLAG_ENABLED,
+                    PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
+                },
+                "isodelta-enabled": {
+                    PRINT_INFO_ENV: ENV_FLAG_ENABLED,
+                    PROFILE_CACHE_ENV: ENV_FLAG_ENABLED,
+                },
+            },
+        },
+        "run_timeout_seconds": RUN_TIMEOUT_SECONDS,
+        "summary": {
+            "runs": EXPECTED_RESULT_COUNT,
+            "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
+            "cases": {
+                "baseline-disabled": {
+                    "mean_loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
+                    "sample_variance_loop_time_seconds": 0.0,
+                    "sample_stddev_loop_time_seconds": 0.0,
+                    "min_loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
+                    "max_loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
+                    "valid_loop_time_count": 2,
+                },
+                "isodelta-enabled": {
+                    "mean_loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                    "sample_variance_loop_time_seconds": 0.0,
+                    "sample_stddev_loop_time_seconds": 0.0,
+                    "min_loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                    "max_loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                    "valid_loop_time_count": 2,
+                },
+            },
+            "final_thermo_delta_vs_disabled_cache": {
+                "PotEng": {"max_abs_delta": 1.0e-9, "paired_count": 2.0},
+            },
+        },
+        "results": [
+            {
+                "case": "baseline-disabled",
+                "repeat_index": 0,
+                "returncode": 0,
+                "loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
+                "cache_summary": _disabled_cache_summary(),
+            },
+            {
+                "case": "isodelta-enabled",
+                "repeat_index": 0,
+                "returncode": 0,
+                "loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                "cache_summary": _cache_summary(),
+            },
+            {
+                "case": "baseline-disabled",
+                "repeat_index": 1,
+                "returncode": 0,
+                "loop_time_seconds": BASELINE_LOOP_TIME_SECONDS,
+                "cache_summary": _disabled_cache_summary(),
+            },
+            {
+                "case": "isodelta-enabled",
+                "repeat_index": 1,
+                "returncode": 0,
+                "loop_time_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                "cache_summary": _cache_summary(),
+            },
+        ],
+    }
+
+
+def _trace_evidence(model_name: str) -> dict[str, object]:
+    """Create portable trace evidence accepted by the trace checker."""
+    return {
+        "status": "passed",
+        "model": model_name,
+        "attempts": TRACE_ATTEMPTS,
+        "hits": TRACE_HITS,
+        "hit_rate_percent": TRACE_HIT_RATE_PERCENT,
+        "miss_breakdown": {
+            "miss_disabled": 0.0,
+            "miss_no-cache": TRACE_ATTEMPTS - TRACE_HITS,
+            "miss_neighbor-list-rebuilt": 0.0,
+            "miss_shape-changed": 0.0,
+            "miss_index-tensor-shape-changed": 0.0,
+            "miss_tag-count-changed": 0.0,
+            "miss_tag-order-changed": 0.0,
+            "miss_comm-topology-changed": 0.0,
+            "miss_comm-list-tag-order-changed": 0.0,
+        },
+        "timing": {
+            "baseline_step_time_seconds": TRACE_BASELINE_SECONDS,
+            "metadata_build_time_seconds": TRACE_METADATA_SECONDS,
+            "metadata_fraction_percent": (
+                PERCENT_SCALE * TRACE_METADATA_SECONDS / TRACE_BASELINE_SECONDS
+            ),
+            "cache_lookup_overhead_seconds": 0.0,
+            "estimated_average_enabled_seconds": TRACE_ENABLED_SECONDS,
+            "estimated_worst_case_enabled_seconds": TRACE_ENABLED_SECONDS,
+            "estimated_average_speedup": TRACE_SPEEDUP,
+            "estimated_worst_case_speedup": TRACE_SPEEDUP,
+        },
+        "model_agnostic_requirements": {
+            "uses_ordered_graph_node_tags": True,
+            "uses_edge_count_shape_guard": True,
+            "uses_neighbor_rebuild_guard": True,
+            "uses_comm_topology_guard": True,
+            "uses_comm_list_tag_order_guard": True,
+        },
+    }
+
+
+def _external_timing_report(model_name: str) -> dict[str, object]:
+    """Create an external-pair timing report for a non-SevenNet runtime."""
+    return {
+        "schema_version": "isodelta-external-pair-timing-v1",
+        "case_name": f"{model_name.lower()}-existing",
+        "model": model_name,
+        "repeat_count": 2,
+        "disabled_success_count": 2,
+        "enabled_success_count": 2,
+        "baseline_mean_seconds": BASELINE_LOOP_TIME_SECONDS,
+        "enabled_mean_seconds": ISODELTA_LOOP_TIME_SECONDS,
+        "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
+        "commands": [],
+    }
+
+
+class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
+    """Check manifest validation and paper artifact generation."""
+
+    def test_write_template_creates_commented_three_model_manifest(self) -> None:
+        """The template should be editable and include the required models."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            template_path = Path(tmpdir) / "suite.toml"
+            isodelta_cluster_suite.write_template(template_path)
+            template = template_path.read_text(encoding="utf-8")
+
+        self.assertTrue(template.lstrip().startswith("#"))
+        self.assertIn('required_models = ["SevenNet", "MACE", "NequIP"]', template)
+        self.assertIn('kind = "sevennet_lammps"', template)
+        self.assertIn('kind = "external_pair"', template)
+
+    def test_manifest_validation_requires_all_default_foundation_models(self) -> None:
+        """A paper manifest should not silently omit MACE or NequIP."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "missing-models"
+
+[[cases]]
+name = "sevennet-only"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["sevennet_trace.json"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "missing required model cases",
+        ):
+            isodelta_cluster_suite.validate_suite_config(config)
+
+    def test_download_artifact_copies_file_url_and_checks_sha256(self) -> None:
+        """Artifact downloads should verify immutable paper inputs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = Path(tmpdir) / "source.bin"
+            destination_path = Path(tmpdir) / "downloaded.bin"
+            source_path.write_bytes(b"isodelta artifact")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            artifact = isodelta_cluster_suite.ArtifactConfig(
+                name="local-artifact",
+                path=destination_path,
+                url=source_path.as_uri(),
+                sha256=digest,
+            )
+
+            record = isodelta_cluster_suite.download_artifact(artifact)
+
+        self.assertTrue(record["downloaded"])
+        self.assertEqual(record["sha256"], digest)
+
+    def test_collect_only_writes_tables_correlations_and_svg_figures(self) -> None:
+        """Existing evidence should become paper tables, correlations, and graphs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            benchmark_path = root / "sevennet_benchmark.json"
+            sevennet_trace_path = root / "sevennet_trace.json"
+            mace_trace_path = root / "mace_trace.json"
+            nequip_trace_path = root / "nequip_trace.json"
+            nequip_timing_path = root / "nequip_timing.json"
+            output_dir = root / "paper_outputs"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            sevennet_trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
+            mace_trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+            nequip_trace_path.write_text(json.dumps(_trace_evidence("NequIP")), encoding="utf-8")
+            nequip_timing_path.write_text(json.dumps(_external_timing_report("NequIP")), encoding="utf-8")
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "collect-only-suite"
+output_dir = "{output_dir.as_posix()}"
+expected_gpus = 8
+min_speedup = 1.1
+min_hit_rate_percent = 75.0
+min_trace_hit_rate_percent = 50.0
+required_models = ["SevenNet", "MACE", "NequIP"]
+
+[[cases]]
+name = "sevennet-existing"
+model = "SevenNet"
+kind = "sevennet_lammps"
+lammps_command = "lmp"
+input = "in.sevennet"
+benchmark_report = "{benchmark_path.as_posix()}"
+trace_evidence = ["{sevennet_trace_path.as_posix()}"]
+min_enabled_cache_attempts = 10
+min_enabled_cache_hits = 8
+
+[[cases]]
+name = "mace-existing"
+model = "MACE"
+kind = "trace_only"
+trace_evidence = ["{mace_trace_path.as_posix()}"]
+
+[[cases]]
+name = "nequip-existing"
+model = "NequIP"
+kind = "external_pair"
+disabled_command = "python -c print('baseline')"
+enabled_command = "python -c print('enabled')"
+external_timing_report = "{nequip_timing_path.as_posix()}"
+trace_evidence = ["{nequip_trace_path.as_posix()}"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            exit_code = isodelta_cluster_suite.run_suite(
+                config,
+                collect_only=True,
+                skip_downloads=True,
+                skip_gpu_check=True,
+            )
+
+            summary_path = output_dir / "isodelta_cluster_paper_summary.json"
+            case_summary_csv = output_dir / "tables" / "case_summary.csv"
+            correlation_csv = output_dir / "tables" / "correlation.csv"
+            speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
+
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            case_summary_exists = case_summary_csv.exists()
+            correlation_exists = correlation_csv.exists()
+            speedup_svg_exists = speedup_svg.exists()
+            case_summary_text = case_summary_csv.read_text(encoding="utf-8")
+            speedup_svg_text = speedup_svg.read_text(encoding="utf-8")
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(case_summary_exists)
+        self.assertTrue(correlation_exists)
+        self.assertTrue(speedup_svg_exists)
+        self.assertEqual(len(summary["cases"]), 3)
+        self.assertIn("speedup_vs_disabled_cache", case_summary_text)
+        self.assertIn("<svg", speedup_svg_text)
+
+
+if __name__ == "__main__":
+    unittest.main()

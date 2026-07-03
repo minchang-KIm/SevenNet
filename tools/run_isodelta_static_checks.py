@@ -18,6 +18,7 @@ COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
 COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
 BENCHMARK_PATH = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
 EXPERIMENT_PATH = REPO_ROOT / "tools" / "run_isodelta_experiment.py"
+CLUSTER_SUITE_PATH = REPO_ROOT / "tools" / "run_isodelta_cluster_paper_suite.py"
 REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 EVIDENCE_BUNDLE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_evidence_bundle.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
@@ -49,6 +50,7 @@ def main() -> None:
     comm_brick_header = _read(COMM_BRICK_HEADER_PATH)
     benchmark = _read(BENCHMARK_PATH)
     experiment = _read(EXPERIMENT_PATH)
+    cluster_suite = _read(CLUSTER_SUITE_PATH)
     report_check = _read(REPORT_CHECK_PATH)
     evidence_bundle_check = _read(EVIDENCE_BUNDLE_CHECK_PATH)
     prereq = _read(PREREQ_PATH)
@@ -755,6 +757,36 @@ def main() -> None:
         and "trace evidence path is duplicated" in doc
         and "required trace model label is empty or duplicated" in doc,
         "IsoDelta-Halo guide must document experiment bundle fail-fast checks",
+    )
+    _require(
+        "SUPPORTED_CASE_KINDS = frozenset((\"sevennet_lammps\", \"external_pair\", \"trace_only\"))"
+        in cluster_suite
+        and "DEFAULT_EXPECTED_GPU_COUNT = 8" in cluster_suite
+        and "DEFAULT_REQUIRED_MODELS = (\"SevenNet\", \"MACE\", \"NequIP\")"
+        in cluster_suite
+        and "validate_gpu_count" in cluster_suite
+        and "download_artifact" in cluster_suite
+        and "sha256_file" in cluster_suite
+        and "write_speedup_svg" in cluster_suite
+        and "build_correlation_rows" in cluster_suite
+        and "case_summary.csv" in cluster_suite
+        and "correlation.csv" in cluster_suite
+        and "speedup_by_case.svg" in cluster_suite
+        and "write_template" in cluster_suite
+        and "required_models = [\"SevenNet\", \"MACE\", \"NequIP\"]" in cluster_suite,
+        "cluster paper suite must orchestrate 8-GPU multi-model paper artifacts",
+    )
+    _require(
+        "run_isodelta_cluster_paper_suite.py" in doc
+        and "8-GPU cluster" in doc
+        and "TOML manifest" in doc
+        and "SevenNet, MACE, and NequIP" in doc
+        and "case_summary.csv" in doc
+        and "correlation.csv" in doc
+        and "speedup_by_case.svg" in doc
+        and "SHA-256" in doc
+        and "`--collect-only`" in doc,
+        "IsoDelta-Halo guide must document the cluster paper suite",
     )
     _require(
         "SEVENN_ISODELTA_HALO_DISABLE" in doc
