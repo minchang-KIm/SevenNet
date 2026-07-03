@@ -127,6 +127,7 @@ MAX_PERCENT_VALUE = 100.0
 MIN_CORRELATION_SAMPLE_COUNT = 2
 MIN_SAMPLE_VARIANCE_COUNT = 2
 SAMPLE_VARIANCE_DEGREES_OF_FREEDOM = 1
+NORMAL_APPROX_95_CI_MULTIPLIER = 1.96
 TIMING_ABSOLUTE_TOLERANCE_SECONDS = 1.0e-12
 TIMING_RELATIVE_TOLERANCE = 1.0e-9
 SVG_WIDTH = 960
@@ -260,6 +261,10 @@ class CaseSummary:
     enabled_sample_variance_seconds: float | None
     baseline_sample_stddev_seconds: float | None
     enabled_sample_stddev_seconds: float | None
+    baseline_timing_count: int | None
+    enabled_timing_count: int | None
+    baseline_mean_95ci_half_width_seconds: float | None
+    enabled_mean_95ci_half_width_seconds: float | None
     speedup_vs_disabled_cache: float | None
     cache_attempts: float | None
     cache_hits: float | None
@@ -1794,6 +1799,13 @@ def _sample_stddev(values: list[float]) -> float | None:
     return None if variance is None else variance ** 0.5
 
 
+def _mean_ci_half_width(stddev: float | None, count: int | None) -> float | None:
+    """Return a 95% normal-approximation half-width for a mean timing."""
+    if stddev is None or count is None or count < MIN_SAMPLE_VARIANCE_COUNT:
+        return None
+    return NORMAL_APPROX_95_CI_MULTIPLIER * stddev / math.sqrt(count)
+
+
 def _build_external_timing_report(
     *,
     case: CaseConfig,
@@ -2197,7 +2209,7 @@ def validate_suite_evidence(
     }
 
 
-def _extract_benchmark_metrics(report: dict[str, Any] | None) -> dict[str, float | None]:
+def _extract_benchmark_metrics(report: dict[str, Any] | None) -> dict[str, float | int | None]:
     """Extract timing, cache, and correctness metrics from a benchmark report."""
     if report is None:
         return {
@@ -2207,6 +2219,8 @@ def _extract_benchmark_metrics(report: dict[str, Any] | None) -> dict[str, float
             "enabled_sample_variance_seconds": None,
             "baseline_sample_stddev_seconds": None,
             "enabled_sample_stddev_seconds": None,
+            "baseline_timing_count": None,
+            "enabled_timing_count": None,
             "speedup": None,
             "attempts": None,
             "hits": None,
@@ -2255,6 +2269,8 @@ def _extract_benchmark_metrics(report: dict[str, Any] | None) -> dict[str, float
         "enabled_sample_stddev_seconds": _coerce_optional_float(
             enabled.get("sample_stddev_loop_time_seconds")
         ),
+        "baseline_timing_count": _coerce_optional_int(baseline.get("valid_loop_time_count")),
+        "enabled_timing_count": _coerce_optional_int(enabled.get("valid_loop_time_count")),
         "speedup": _coerce_optional_float(summary.get("speedup_vs_disabled_cache")),
         "attempts": attempts if enabled_results else None,
         "hits": hits if enabled_results else None,
@@ -2273,7 +2289,19 @@ def _coerce_optional_float(value: Any) -> float | None:
     return None
 
 
-def _extract_external_metrics(report: dict[str, Any] | None) -> dict[str, float | None]:
+def _coerce_optional_int(value: Any) -> int | None:
+    """Return a nonnegative integer for optional count fields."""
+    if value is None:
+        return None
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value if value >= MIN_NONNEGATIVE_VALUE else None
+    if isinstance(value, float) and value.is_integer():
+        integer_value = int(value)
+        return integer_value if integer_value >= MIN_NONNEGATIVE_VALUE else None
+    return None
+
+
+def _extract_external_metrics(report: dict[str, Any] | None) -> dict[str, float | int | None]:
     """Extract timing metrics from the generated external-pair report."""
     if report is None:
         return {
@@ -2283,6 +2311,8 @@ def _extract_external_metrics(report: dict[str, Any] | None) -> dict[str, float 
             "enabled_sample_variance_seconds": None,
             "baseline_sample_stddev_seconds": None,
             "enabled_sample_stddev_seconds": None,
+            "baseline_timing_count": None,
+            "enabled_timing_count": None,
             "speedup": None,
         }
     return {
@@ -2300,6 +2330,8 @@ def _extract_external_metrics(report: dict[str, Any] | None) -> dict[str, float 
         "enabled_sample_stddev_seconds": _coerce_optional_float(
             report.get(ENABLED_SAMPLE_STDDEV_SECONDS_KEY)
         ),
+        "baseline_timing_count": _coerce_optional_int(report.get(DISABLED_SUCCESS_COUNT_KEY)),
+        "enabled_timing_count": _coerce_optional_int(report.get(ENABLED_SUCCESS_COUNT_KEY)),
         "speedup": _coerce_optional_float(report.get(SPEEDUP_VS_DISABLED_CACHE_KEY)),
     }
 
@@ -2394,6 +2426,16 @@ def build_case_summary(
         if benchmark_metrics["enabled_sample_stddev_seconds"] is not None
         else external_metrics["enabled_sample_stddev_seconds"]
     )
+    baseline_timing_count = (
+        benchmark_metrics["baseline_timing_count"]
+        if benchmark_metrics["baseline_timing_count"] is not None
+        else external_metrics["baseline_timing_count"]
+    )
+    enabled_timing_count = (
+        benchmark_metrics["enabled_timing_count"]
+        if benchmark_metrics["enabled_timing_count"] is not None
+        else external_metrics["enabled_timing_count"]
+    )
     return CaseSummary(
         case_name=case.name,
         model=case.model,
@@ -2409,6 +2451,16 @@ def build_case_summary(
         enabled_sample_variance_seconds=enabled_variance,
         baseline_sample_stddev_seconds=baseline_stddev,
         enabled_sample_stddev_seconds=enabled_stddev,
+        baseline_timing_count=baseline_timing_count,
+        enabled_timing_count=enabled_timing_count,
+        baseline_mean_95ci_half_width_seconds=_mean_ci_half_width(
+            baseline_stddev,
+            baseline_timing_count,
+        ),
+        enabled_mean_95ci_half_width_seconds=_mean_ci_half_width(
+            enabled_stddev,
+            enabled_timing_count,
+        ),
         speedup_vs_disabled_cache=speedup,
         cache_attempts=benchmark_metrics["attempts"],
         cache_hits=benchmark_metrics["hits"],
@@ -2448,6 +2500,14 @@ def _summary_rows(case_summaries: list[CaseSummary]) -> list[dict[str, Any]]:
                 "enabled_sample_variance_seconds": summary.enabled_sample_variance_seconds,
                 "baseline_sample_stddev_seconds": summary.baseline_sample_stddev_seconds,
                 "enabled_sample_stddev_seconds": summary.enabled_sample_stddev_seconds,
+                "baseline_timing_count": summary.baseline_timing_count,
+                "enabled_timing_count": summary.enabled_timing_count,
+                "baseline_mean_95ci_half_width_seconds": (
+                    summary.baseline_mean_95ci_half_width_seconds
+                ),
+                "enabled_mean_95ci_half_width_seconds": (
+                    summary.enabled_mean_95ci_half_width_seconds
+                ),
                 "speedup_vs_disabled_cache": summary.speedup_vs_disabled_cache,
                 "cache_hit_rate_percent": summary.cache_hit_rate_percent,
                 "cache_attempts": summary.cache_attempts,

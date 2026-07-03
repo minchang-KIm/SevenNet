@@ -739,6 +739,9 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             environment_size = environment_snapshot.stat().st_size
             case_summary_size = case_summary_csv.stat().st_size
             manifest_snapshot_size = manifest_snapshot.stat().st_size
+            nequip_case = next(
+                case for case in summary["cases"] if case["model"] == "NequIP"
+            )
 
         self.assertEqual(exit_code, 0)
         self.assertTrue(environment_snapshot_exists)
@@ -755,6 +758,16 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertIn("speedup_vs_disabled_cache", case_summary_text)
         self.assertIn("baseline_sample_variance_seconds", case_summary_text)
         self.assertIn("enabled_sample_stddev_seconds", case_summary_text)
+        self.assertIn("baseline_mean_95ci_half_width_seconds", case_summary_text)
+        self.assertEqual(nequip_case["baseline_timing_count"], 2)
+        self.assertAlmostEqual(
+            nequip_case["baseline_mean_95ci_half_width_seconds"],
+            isodelta_cluster_suite.NORMAL_APPROX_95_CI_MULTIPLIER,
+        )
+        self.assertAlmostEqual(
+            nequip_case["enabled_mean_95ci_half_width_seconds"],
+            isodelta_cluster_suite.NORMAL_APPROX_95_CI_MULTIPLIER,
+        )
         self.assertIn("<svg", speedup_svg_text)
         self.assertEqual(
             environment_payload["snapshot_schema_version"],

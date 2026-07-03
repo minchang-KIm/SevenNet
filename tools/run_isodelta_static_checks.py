@@ -810,6 +810,9 @@ def main() -> None:
         and "BASELINE_SAMPLE_VARIANCE_SECONDS_KEY" in cluster_suite
         and "_sample_variance" in cluster_suite
         and "_sample_stddev" in cluster_suite
+        and "NORMAL_APPROX_95_CI_MULTIPLIER" in cluster_suite
+        and "_mean_ci_half_width" in cluster_suite
+        and "baseline_mean_95ci_half_width_seconds" in cluster_suite
         and "must match baseline / enabled seconds" in cluster_suite
         and "must match raw timing samples" in cluster_suite
         and "--plan-only" in cluster_suite
@@ -899,6 +902,7 @@ def main() -> None:
     _require(
         "`baseline_times_seconds` and `enabled_times_seconds`" in doc
         and "sample variance/stddev" in doc
+        and "95% CI half-widths" in doc
         and "summary table" in doc,
         "IsoDelta-Halo guide must document external timing repeat statistics",
     )
