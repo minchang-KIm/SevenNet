@@ -23,6 +23,7 @@ DEFAULT_OUTPUT_TAIL_CHARS = 4000
 SUCCESS_RETURN_CODE = 0
 VALIDATION_COMMANDS = (
     (sys.executable, "tools/run_isodelta_static_checks.py"),
+    (sys.executable, "tools/check_isodelta_goal_readiness.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_halo_static.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_evidence_bundle_check.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_benchmark_report_check.py"),
@@ -35,6 +36,7 @@ VALIDATION_COMMANDS = (
     (sys.executable, "tests/unit_tests/test_isodelta_mlip_trace_demo.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_validation_runner.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_sync_gate.py"),
+    (sys.executable, "tests/unit_tests/test_isodelta_goal_readiness.py"),
     (
         sys.executable,
         "-m",
@@ -42,6 +44,7 @@ VALIDATION_COMMANDS = (
         "tools/check_isodelta_build_prereqs.py",
         "tools/check_isodelta_benchmark_report.py",
         "tools/check_isodelta_evidence_bundle.py",
+        "tools/check_isodelta_goal_readiness.py",
         "tools/check_isodelta_lammps_binary.py",
         "tools/check_isodelta_mlip_trace.py",
         "tools/run_isodelta_experiment.py",
@@ -62,6 +65,7 @@ VALIDATION_COMMANDS = (
         "tests/unit_tests/test_isodelta_mlip_trace_demo.py",
         "tests/unit_tests/test_isodelta_validation_runner.py",
         "tests/unit_tests/test_isodelta_sync_gate.py",
+        "tests/unit_tests/test_isodelta_goal_readiness.py",
         "tests/unit_tests/test_isodelta_halo_static.py",
     ),
     ("git", "diff", "--check"),

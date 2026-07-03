@@ -21,6 +21,7 @@ EXPERIMENT_PATH = REPO_ROOT / "tools" / "run_isodelta_experiment.py"
 CLUSTER_SUITE_PATH = REPO_ROOT / "tools" / "run_isodelta_cluster_paper_suite.py"
 REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 EVIDENCE_BUNDLE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_evidence_bundle.py"
+GOAL_READINESS_PATH = REPO_ROOT / "tools" / "check_isodelta_goal_readiness.py"
 PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 MLIP_TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
@@ -55,6 +56,7 @@ def main() -> None:
     cluster_suite = _read(CLUSTER_SUITE_PATH)
     report_check = _read(REPORT_CHECK_PATH)
     evidence_bundle_check = _read(EVIDENCE_BUNDLE_CHECK_PATH)
+    goal_readiness = _read(GOAL_READINESS_PATH)
     prereq = _read(PREREQ_PATH)
     binary_check = _read(BINARY_CHECK_PATH)
     mlip_trace_check = _read(MLIP_TRACE_CHECK_PATH)
@@ -324,6 +326,18 @@ def main() -> None:
         and "STATUS_PUSH_FAILED" in sync_gate
         and "test_isodelta_sync_gate.py" in validation_runner,
         "sync gate must validate before recording git push attempts",
+    )
+    _require(
+        "GOAL_READINESS_SCHEMA_VERSION" in goal_readiness
+        and "REQUIRED_FILE_SNIPPETS" in goal_readiness
+        and "COMMENT_PREFIX_REQUIREMENTS" in goal_readiness
+        and "build_goal_readiness_report" in goal_readiness
+        and "default=None" in goal_readiness
+        and '"goal_readiness_report": str(args.report_path) if args.report_path is not None else None'
+        in goal_readiness
+        and "test_isodelta_goal_readiness.py" in validation_runner
+        and "check_isodelta_goal_readiness.py" in validation_runner,
+        "goal readiness audit must be part of the lightweight validation gate",
     )
     _require(
         "check_isodelta_build_prereqs.py" in doc,
@@ -1009,6 +1023,9 @@ def main() -> None:
         "IsoDelta-Halo lightweight validation" in doc
         and ".github/workflows/isodelta-halo.yml" in doc
         and "`isodelta_validation_report.json`" in doc
+        and "check_isodelta_goal_readiness.py" in doc
+        and "`isodelta_goal_readiness_report.json`" in doc
+        and "completion-readiness audit" in doc
         and "run_isodelta_sync_gate.py" in doc
         and "`isodelta_sync_report.json`" in doc
         and "non-interactive `git push -u`" in doc

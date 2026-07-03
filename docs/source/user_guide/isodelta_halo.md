@@ -177,6 +177,21 @@ record, Git status, target remote/branch, and the push stderr tail. This makes
 credential or network failures explicit instead of losing the evidence after a
 failed sync.
 
+For a local completion-readiness audit, generate
+`isodelta_goal_readiness_report.json` as a source-tree report:
+
+```bash
+python tools/check_isodelta_goal_readiness.py \
+  --expected-branch isodelta-halo-runtime \
+  --report-path isodelta_goal_readiness_report.json
+```
+
+This audit checks that the runtime cache files, cluster paper-suite script,
+validation runner, sync gate, CI workflow, tests, and this guide all contain the
+required IsoDelta-Halo feature markers and explanatory file headers. It records
+the current Git branch, commit, and status but does not treat unrelated local
+workspace files as proof that the implementation itself is missing.
+
 This does not replace a full LAMMPS/LibTorch build. It is a fast local guard so
 the implementation does not drift while runtime environments are being prepared.
 The same dependency-free gate runs as the `IsoDelta-Halo lightweight validation`
