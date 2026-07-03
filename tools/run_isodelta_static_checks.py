@@ -872,6 +872,9 @@ def main() -> None:
         and "manifest_record" in cluster_suite
         and "generated_artifact_record" in cluster_suite
         and "artifact_fingerprints" in cluster_suite
+        and "optional_artifact_paths" in cluster_suite
+        and '"preflight_report": config.output_dir / PREFLIGHT_REPORT_NAME' in cluster_suite
+        and '"run_plan": config.output_dir / PLAN_REPORT_NAME' in cluster_suite
         and "write_manifest_snapshot" in cluster_suite
         and "EXTERNAL_TIMING_SCHEMA_VERSION" in cluster_suite
         and "validate_external_timing_report" in cluster_suite
@@ -968,6 +971,13 @@ def main() -> None:
         and "SVG figure" in doc
         and "manifest snapshot" in doc,
         "IsoDelta-Halo guide must document generated paper artifact fingerprints",
+    )
+    _require(
+        "`preflight_report.json`" in doc
+        and "`isodelta_cluster_paper_plan.json`" in doc
+        and "auxiliary pre-run artifacts are fingerprinted too" in doc
+        and "records that absence explicitly" in doc,
+        "IsoDelta-Halo guide must document optional pre-run artifact fingerprints",
     )
     _require(
         "`command_log_fingerprints`" in doc

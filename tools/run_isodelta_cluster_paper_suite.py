@@ -3577,9 +3577,19 @@ def write_paper_outputs(
         "trace_svg": trace_svg,
         "manifest_snapshot": manifest_snapshot_path,
     }
+    optional_artifact_paths = {
+        "preflight_report": config.output_dir / PREFLIGHT_REPORT_NAME,
+        "run_plan": config.output_dir / PLAN_REPORT_NAME,
+    }
     artifact_fingerprints = {
         name: generated_artifact_record(path) for name, path in artifact_paths.items()
     }
+    artifact_fingerprints.update(
+        {
+            name: optional_file_fingerprint(path)
+            for name, path in optional_artifact_paths.items()
+        }
+    )
     payload = {
         "provenance": collect_run_provenance(),
         "suite": {
@@ -3600,7 +3610,8 @@ def write_paper_outputs(
         "command_log_fingerprints": command_log_fingerprints(command_records),
         "artifacts": {
             name: str(path) for name, path in artifact_paths.items()
-        },
+        }
+        | {name: str(path) for name, path in optional_artifact_paths.items()},
         "artifact_fingerprints": artifact_fingerprints,
     }
     config.output_dir.mkdir(parents=True, exist_ok=True)

@@ -464,8 +464,13 @@ CI tests; for paper runs, keep the GPU check enabled and archive the summary
 JSON with the raw logs. The summary JSON stores the manifest SHA-256 digest and
 the copied `isodelta_cluster_suite_manifest.toml` snapshot path. It also stores
 `artifact_fingerprints` with the SHA-256 digest and byte size of each generated
-environment snapshot, table, SVG figure, and manifest snapshot, so reviewers can
-verify that the submitted paper artifacts match the archived run.
+environment snapshot, table, SVG figure, and manifest snapshot. When
+`preflight_report.json` or `isodelta_cluster_paper_plan.json` already exists in
+the output directory, those auxiliary pre-run artifacts are fingerprinted too;
+when they are absent, the summary records that absence explicitly so the bundle
+verifier can still distinguish a single-command run from a missing archived
+file. This lets reviewers verify that the submitted paper artifacts match the
+archived run.
 `environment_snapshot.json` records Git/Python provenance, GPU check results,
 selected CUDA/SLURM environment variables, package versions for SevenNet, torch,
 e3nn, ASE, MACE, and NequIP when installed, and lightweight `nvidia-smi` GPU

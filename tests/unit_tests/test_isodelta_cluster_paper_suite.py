@@ -1107,6 +1107,17 @@ min_speedup_95ci_lower_bound = 1.1
             mace_trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
             nequip_trace_path.write_text(json.dumps(_trace_evidence("NequIP")), encoding="utf-8")
             nequip_timing_path.write_text(json.dumps(_external_timing_report("NequIP")), encoding="utf-8")
+            output_dir.mkdir(parents=True)
+            preflight_report_path = output_dir / isodelta_cluster_suite.PREFLIGHT_REPORT_NAME
+            plan_path = output_dir / isodelta_cluster_suite.PLAN_REPORT_NAME
+            preflight_report_path.write_text(
+                json.dumps({"status": "passed", "kind": "preflight"}),
+                encoding="utf-8",
+            )
+            plan_path.write_text(
+                json.dumps({"status": "planned", "kind": "plan"}),
+                encoding="utf-8",
+            )
             manifest_path = root / "suite.toml"
             manifest_path.write_text(
                 f"""
@@ -1176,9 +1187,13 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             environment_digest = hashlib.sha256(environment_snapshot.read_bytes()).hexdigest()
             case_summary_digest = hashlib.sha256(case_summary_csv.read_bytes()).hexdigest()
             manifest_snapshot_digest = hashlib.sha256(manifest_snapshot.read_bytes()).hexdigest()
+            preflight_digest = hashlib.sha256(preflight_report_path.read_bytes()).hexdigest()
+            plan_digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
             environment_size = environment_snapshot.stat().st_size
             case_summary_size = case_summary_csv.stat().st_size
             manifest_snapshot_size = manifest_snapshot.stat().st_size
+            preflight_size = preflight_report_path.stat().st_size
+            plan_size = plan_path.stat().st_size
             nequip_case = next(
                 case for case in summary["cases"] if case["model"] == "NequIP"
             )
@@ -1270,6 +1285,22 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertEqual(
             summary["artifact_fingerprints"]["manifest_snapshot"]["size_bytes"],
             manifest_snapshot_size,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["preflight_report"]["sha256"],
+            preflight_digest,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["preflight_report"]["size_bytes"],
+            preflight_size,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["run_plan"]["sha256"],
+            plan_digest,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["run_plan"]["size_bytes"],
+            plan_size,
         )
 
     def test_collect_only_rejects_insufficient_distinct_trace_models(self) -> None:
