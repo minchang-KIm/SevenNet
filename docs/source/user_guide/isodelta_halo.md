@@ -281,6 +281,19 @@ experiment cannot accidentally omit one model family. Artifact `required_by`
 entries are also checked against the manifest's case model names, which catches
 misspelled model labels before a cluster job starts.
 
+Before submitting a long job, write a preflight plan:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --manifest isodelta_cluster_suite.toml \
+  --plan-only \
+  --plan-output isodelta_cluster_paper_plan.json
+```
+
+The plan JSON records artifact existence and download intent, per-case commands,
+resolved inputs, expected benchmark/trace/timing outputs, thresholds, and final
+paper artifact paths. Review this file before occupying the 8-GPU queue.
+
 Run the complete suite on the cluster:
 
 ```bash

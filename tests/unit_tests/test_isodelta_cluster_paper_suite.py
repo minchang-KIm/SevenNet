@@ -314,6 +314,57 @@ trace_evidence = ["sevennet_trace.json"]
         self.assertTrue(record["downloaded"])
         self.assertEqual(record["sha256"], digest)
 
+    def test_plan_only_writes_preflight_manifest_audit(self) -> None:
+        """Researchers should inspect planned commands before using GPU time."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_path = root / "source-data.bin"
+            source_path.write_bytes(b"cluster input")
+            manifest_path = root / "suite.toml"
+            output_dir = root / "paper_outputs"
+            plan_path = root / "planned_run.json"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "plan-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+
+[[artifacts]]
+name = "dataset"
+path = "{(root / "missing_dataset.bin").as_posix()}"
+url = "{source_path.as_uri()}"
+required_by = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-plan"
+model = "SevenNet"
+kind = "trace_only"
+trace_input = "trace.json"
+artifacts = ["dataset"]
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--plan-only",
+                    "--plan-output",
+                    str(plan_path),
+                    "--skip-gpu-check",
+                ]
+            )
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertFalse(plan["gpu_check_planned"])
+        self.assertTrue(plan["artifacts"][0]["will_download"])
+        self.assertEqual(plan["cases"][0]["model"], "SevenNet")
+        self.assertIn("trace_evidence", plan["cases"][0]["expected_outputs"])
+        self.assertIn("speedup_by_case.svg", plan["paper_outputs"]["speedup_svg"])
+
     def test_collect_only_writes_tables_correlations_and_svg_figures(self) -> None:
         """Existing evidence should become paper tables, correlations, and graphs."""
         with tempfile.TemporaryDirectory() as tmpdir:

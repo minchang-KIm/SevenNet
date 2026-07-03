@@ -58,6 +58,7 @@ BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
 EXPERIMENT_REPORT_NAME = "isodelta_experiment_report.json"
 EXTERNAL_TIMING_REPORT_NAME = "external_pair_timing_report.json"
 TRACE_EVIDENCE_SUFFIX = "_trace_evidence.json"
+PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
 LOGS_DIR_NAME = "logs"
 CASES_DIR_NAME = "cases"
 TABLES_DIR_NAME = "tables"
@@ -1012,6 +1013,204 @@ def _trace_output_path(config: SuiteConfig, case: CaseConfig) -> Path:
 def _external_timing_report_path(config: SuiteConfig, case: CaseConfig) -> Path:
     """Return the generated timing report path for external-pair cases."""
     return _case_output_dir(config, case) / EXTERNAL_TIMING_REPORT_NAME
+
+
+def _path_text(path: Path | None) -> str | None:
+    """Return a JSON-friendly path string while preserving absent fields."""
+    return str(path) if path is not None else None
+
+
+def _planned_benchmark_report(
+    config: SuiteConfig,
+    case: CaseConfig,
+    *,
+    collect_only: bool,
+) -> Path | None:
+    """Return the benchmark report path expected for one planned case."""
+    if collect_only or case.kind != "sevennet_lammps":
+        return case.benchmark_report
+    return _case_output_dir(config, case) / "experiment" / "benchmark" / BENCHMARK_REPORT_NAME
+
+
+def _planned_bundle_evidence(
+    config: SuiteConfig,
+    case: CaseConfig,
+    trace_paths: tuple[Path, ...],
+    *,
+    collect_only: bool,
+) -> Path | None:
+    """Return the bundle evidence path expected for one planned case."""
+    if collect_only or case.kind != "sevennet_lammps" or not trace_paths:
+        return case.bundle_evidence
+    return _case_output_dir(config, case) / "experiment" / BUNDLE_EVIDENCE_NAME
+
+
+def _planned_trace_paths(
+    config: SuiteConfig,
+    case: CaseConfig,
+    *,
+    collect_only: bool,
+) -> tuple[Path, ...]:
+    """Return trace evidence paths that should exist after a planned case."""
+    generated_paths: tuple[Path, ...] = ()
+    if not collect_only and case.trace_input is not None:
+        generated_paths = (_trace_output_path(config, case),)
+    return case.trace_evidence_paths + generated_paths
+
+
+def build_run_plan(
+    config: SuiteConfig,
+    *,
+    collect_only: bool,
+    skip_downloads: bool,
+    skip_gpu_check: bool,
+) -> dict[str, Any]:
+    """Build a machine-readable preflight plan before using cluster time."""
+    validate_suite_config(config)
+    artifact_plan = []
+    for artifact in config.artifacts:
+        artifact_exists = artifact.path.exists()
+        artifact_plan.append(
+            {
+                "name": artifact.name,
+                "path": str(artifact.path),
+                "url": artifact.url,
+                "required": artifact.required,
+                "required_by": list(artifact.required_by),
+                "exists": artifact_exists,
+                "sha256_required": artifact.sha256 is not None,
+                "will_download": (
+                    not skip_downloads
+                    and not collect_only
+                    and not artifact_exists
+                    and artifact.url is not None
+                ),
+                "missing_without_url": (
+                    not skip_downloads
+                    and not collect_only
+                    and not artifact_exists
+                    and artifact.url is None
+                ),
+            }
+        )
+
+    case_plan = []
+    for case in config.cases:
+        trace_paths = _planned_trace_paths(config, case, collect_only=collect_only)
+        external_timing_report = (
+            case.external_timing_report
+            if collect_only
+            else (
+                _external_timing_report_path(config, case)
+                if case.kind == "external_pair"
+                else None
+            )
+        )
+        case_plan.append(
+            {
+                "name": case.name,
+                "model": case.model,
+                "kind": case.kind,
+                "output_dir": str(_case_output_dir(config, case)),
+                "artifacts": list(case.artifacts),
+                "commands": {
+                    "lammps_command": case.lammps_command,
+                    "disabled_command": case.disabled_command,
+                    "enabled_command": case.enabled_command,
+                    "trace_command": case.trace_command,
+                },
+                "inputs": {
+                    "input": _path_text(case.input_path),
+                    "work_dir": _path_text(case.work_dir),
+                    "lammps_root": _path_text(case.lammps_root),
+                    "trace_input": _path_text(case.trace_input),
+                },
+                "expected_outputs": {
+                    "benchmark_report": _path_text(
+                        _planned_benchmark_report(
+                            config,
+                            case,
+                            collect_only=collect_only,
+                        )
+                    ),
+                    "bundle_evidence": _path_text(
+                        _planned_bundle_evidence(
+                            config,
+                            case,
+                            trace_paths,
+                            collect_only=collect_only,
+                        )
+                    ),
+                    "trace_evidence": [str(path) for path in trace_paths],
+                    "external_timing_report": _path_text(external_timing_report),
+                },
+                "thresholds": {
+                    "repeat_count": case.repeat_count,
+                    "min_speedup": case.min_speedup,
+                    "min_hit_rate_percent": case.min_hit_rate_percent,
+                    "min_enabled_cache_attempts": case.min_enabled_cache_attempts,
+                    "min_enabled_cache_hits": case.min_enabled_cache_hits,
+                    "min_trace_hit_rate_percent": case.min_trace_hit_rate_percent,
+                    "min_trace_estimated_speedup": case.min_trace_estimated_speedup,
+                    "min_trace_metadata_fraction_percent": (
+                        case.min_trace_metadata_fraction_percent
+                    ),
+                },
+            }
+        )
+
+    return {
+        "plan_schema_version": SUITE_SCHEMA_VERSION,
+        "provenance": collect_run_provenance(),
+        "suite": {
+            "name": config.name,
+            "manifest_path": str(config.manifest_path),
+            "output_dir": str(config.output_dir),
+            "expected_gpus": config.expected_gpus,
+            "required_models": list(config.required_models),
+            "min_trace_count": config.min_trace_count,
+            "min_distinct_trace_models": config.min_distinct_trace_models,
+        },
+        "modes": {
+            "collect_only": collect_only,
+            "skip_downloads": skip_downloads,
+            "skip_gpu_check": skip_gpu_check,
+        },
+        "gpu_check_planned": not skip_gpu_check,
+        "artifacts": artifact_plan,
+        "cases": case_plan,
+        "paper_outputs": {
+            "summary_json": str(config.output_dir / "isodelta_cluster_paper_summary.json"),
+            "case_summary_csv": str(config.output_dir / TABLES_DIR_NAME / "case_summary.csv"),
+            "case_summary_markdown": str(config.output_dir / TABLES_DIR_NAME / "case_summary.md"),
+            "correlation_csv": str(config.output_dir / TABLES_DIR_NAME / "correlation.csv"),
+            "speedup_svg": str(config.output_dir / FIGURES_DIR_NAME / "speedup_by_case.svg"),
+            "hit_rate_svg": str(config.output_dir / FIGURES_DIR_NAME / "hit_rate_vs_speedup.svg"),
+            "trace_svg": str(
+                config.output_dir / FIGURES_DIR_NAME / "trace_metadata_fraction_vs_speedup.svg"
+            ),
+        },
+    }
+
+
+def write_run_plan(
+    config: SuiteConfig,
+    plan_path: Path,
+    *,
+    collect_only: bool,
+    skip_downloads: bool,
+    skip_gpu_check: bool,
+) -> Path:
+    """Write the cluster preflight plan to a JSON file."""
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan = build_run_plan(
+        config,
+        collect_only=collect_only,
+        skip_downloads=skip_downloads,
+        skip_gpu_check=skip_gpu_check,
+    )
+    plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    return plan_path
 
 
 def _default_case_env(case_env: dict[str, str], disabled: bool) -> dict[str, str]:
@@ -2147,6 +2346,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, help="TOML suite manifest")
     parser.add_argument("--write-template", type=Path, help="Write a commented TOML template and exit")
+    parser.add_argument("--plan-only", action="store_true", help="Write a preflight JSON plan and exit")
+    parser.add_argument("--plan-output", type=Path, help="Path for --plan-only JSON output")
     parser.add_argument("--output-dir", type=Path, help="Override suite.output_dir")
     parser.add_argument("--expected-gpus", type=int, help="Override suite.expected_gpus")
     parser.add_argument("--dry-run", action="store_true", help="Validate and print planned outputs without executing commands")
@@ -2184,6 +2385,21 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--manifest is required unless --write-template is used")
     try:
         config = _apply_cli_overrides(load_manifest(args.manifest), args)
+        if args.plan_only:
+            plan_path = (
+                args.plan_output
+                if args.plan_output is not None
+                else config.output_dir / PLAN_REPORT_NAME
+            )
+            written_plan = write_run_plan(
+                config,
+                plan_path,
+                collect_only=args.collect_only,
+                skip_downloads=args.skip_downloads,
+                skip_gpu_check=args.skip_gpu_check,
+            )
+            print(json.dumps({"plan_json": str(written_plan)}, indent=2))
+            return SUCCESS_RETURN_CODE
         return run_suite(
             config,
             dry_run=args.dry_run,

@@ -771,6 +771,11 @@ def main() -> None:
         and "build_correlation_rows" in cluster_suite
         and "validate_suite_evidence" in cluster_suite
         and "suite_evidence" in cluster_suite
+        and "build_run_plan" in cluster_suite
+        and "write_run_plan" in cluster_suite
+        and "PLAN_REPORT_NAME" in cluster_suite
+        and "--plan-only" in cluster_suite
+        and "--plan-output" in cluster_suite
         and "case_summary.csv" in cluster_suite
         and "correlation.csv" in cluster_suite
         and "speedup_by_case.svg" in cluster_suite
@@ -789,6 +794,13 @@ def main() -> None:
         and "SHA-256" in doc
         and "`--collect-only`" in doc,
         "IsoDelta-Halo guide must document the cluster paper suite",
+    )
+    _require(
+        "--plan-only" in doc
+        and "preflight plan" in doc
+        and "The plan JSON records artifact existence and download intent" in doc
+        and "expected benchmark/trace/timing outputs" in doc,
+        "IsoDelta-Halo guide must document cluster preflight planning",
     )
     _require(
         "min_distinct_trace_models" in doc
