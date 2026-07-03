@@ -812,8 +812,11 @@ def main() -> None:
         and "READINESS_SCHEMA_VERSION" in cluster_suite
         and "ARTIFACT_PREPARATION_SCHEMA_VERSION" in cluster_suite
         and "PREFLIGHT_REPORT_SCHEMA_VERSION" in cluster_suite
+        and "PIPELINE_REPORT_SCHEMA_VERSION" in cluster_suite
         and "ARTIFACT_PREPARATION_REPORT_NAME" in cluster_suite
         and "PREFLIGHT_REPORT_NAME" in cluster_suite
+        and "PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME" in cluster_suite
+        and "PIPELINE_REPORT_NAME" in cluster_suite
         and "SHA256_HEX_LENGTH" in cluster_suite
         and "SHA256_HEX_PATTERN" in cluster_suite
         and "require_artifact_sha256" in cluster_suite
@@ -824,6 +827,9 @@ def main() -> None:
         and "run_preflight_only" in cluster_suite
         and "--preflight-only" in cluster_suite
         and "--preflight-output" in cluster_suite
+        and "run_pipeline" in cluster_suite
+        and "--pipeline" in cluster_suite
+        and "--pipeline-report" in cluster_suite
         and "PREFLIGHT_OUTPUT" in cluster_suite
         and "validate_gpu_count" in cluster_suite
         and "download_artifact" in cluster_suite
@@ -874,6 +880,8 @@ def main() -> None:
         and "artifact_fingerprints" in cluster_suite
         and "optional_artifact_paths" in cluster_suite
         and '"preflight_report": config.output_dir / PREFLIGHT_REPORT_NAME' in cluster_suite
+        and '"preflight_environment_snapshot": config.output_dir / PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME'
+        in cluster_suite
         and '"run_plan": config.output_dir / PLAN_REPORT_NAME' in cluster_suite
         and "write_manifest_snapshot" in cluster_suite
         and "EXTERNAL_TIMING_SCHEMA_VERSION" in cluster_suite
@@ -912,6 +920,8 @@ def main() -> None:
         and "`--prepare-artifacts`" in doc
         and "`--preflight-only`" in doc
         and "`preflight_report.json`" in doc
+        and "`--pipeline`" in doc
+        and "`pipeline_report.json`" in doc
         and "`artifact_preparation_report.json`" in doc
         and "does not probe GPUs" in doc
         and "uses `trace_only` instead of paired" in doc
@@ -974,10 +984,18 @@ def main() -> None:
     )
     _require(
         "`preflight_report.json`" in doc
+        and "`preflight_environment_snapshot.json`" in doc
         and "`isodelta_cluster_paper_plan.json`" in doc
         and "auxiliary pre-run artifacts are fingerprinted too" in doc
         and "records that absence explicitly" in doc,
         "IsoDelta-Halo guide must document optional pre-run artifact fingerprints",
+    )
+    _require(
+        "full pipeline" in doc
+        and "executes the final-paper readiness gate" in doc
+        and "verifies the output bundle fingerprints" in doc
+        and "Use `--reuse-passed` with `--pipeline`" in doc,
+        "IsoDelta-Halo guide must document the one-command paper pipeline",
     )
     _require(
         "`command_log_fingerprints`" in doc

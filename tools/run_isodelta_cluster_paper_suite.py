@@ -39,6 +39,7 @@ SUITE_SCHEMA_VERSION = "isodelta-cluster-paper-suite-v1"
 READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
 ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
+PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
 EXTERNAL_TIMING_SCHEMA_VERSION = "isodelta-external-pair-timing-v1"
 DEFAULT_OUTPUT_DIR = Path("isodelta_cluster_paper_runs")
 DEFAULT_EXPECTED_GPU_COUNT = 8
@@ -77,6 +78,9 @@ PREFLIGHT_STATUS_PLANNED = "planned"
 PREFLIGHT_STATUS_SKIPPED = "skipped"
 PREFLIGHT_SKIP_DOWNLOADS_REASON = "skip_downloads"
 PREFLIGHT_NO_COMMAND_REASON = "no preflight_command"
+PIPELINE_STATUS_PASSED = "passed"
+PIPELINE_STATUS_FAILED = "failed"
+PIPELINE_STATUS_PLANNED = "planned"
 SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_only"))
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
 BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
@@ -87,6 +91,9 @@ PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
 SUMMARY_REPORT_NAME = "isodelta_cluster_paper_summary.json"
 ARTIFACT_PREPARATION_REPORT_NAME = "artifact_preparation_report.json"
 PREFLIGHT_REPORT_NAME = "preflight_report.json"
+PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME = "preflight_environment_snapshot.json"
+READINESS_REPORT_NAME = "readiness_report.json"
+PIPELINE_REPORT_NAME = "pipeline_report.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
 ENVIRONMENT_SNAPSHOT_NAME = "environment_snapshot.json"
@@ -1166,9 +1173,11 @@ def collect_environment_snapshot(
 def write_environment_snapshot(
     config: SuiteConfig,
     gpu_record: dict[str, Any] | None,
+    *,
+    snapshot_name: str = ENVIRONMENT_SNAPSHOT_NAME,
 ) -> Path:
     """Write the environment snapshot next to tables and figures."""
-    snapshot_path = config.output_dir / ENVIRONMENT_SNAPSHOT_NAME
+    snapshot_path = config.output_dir / snapshot_name
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
     payload = collect_environment_snapshot(config, gpu_record)
     snapshot_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -1588,7 +1597,11 @@ def run_preflight_only(
         stage_index += MIN_REQUIRED_CASE_COUNT
 
     _progress(config.name, stage_index, total_stages, "writing preflight report")
-    environment_snapshot_path = write_environment_snapshot(config, gpu_record)
+    environment_snapshot_path = write_environment_snapshot(
+        config,
+        gpu_record,
+        snapshot_name=PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME,
+    )
     payload = {
         "preflight_report_schema_version": PREFLIGHT_REPORT_SCHEMA_VERSION,
         "status": _preflight_status_from_failures(dry_run=dry_run, failures=failures),
@@ -1618,6 +1631,281 @@ def run_preflight_only(
     final_report_path.parent.mkdir(parents=True, exist_ok=True)
     final_report_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload
+
+
+def _write_json_report(path: Path, payload: dict[str, Any]) -> Path:
+    """Write one JSON report and return its path for stage records."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return path
+
+
+def _pipeline_stage_record(
+    *,
+    name: str,
+    status: str,
+    report_path: Path | None = None,
+    detail: str | None = None,
+) -> dict[str, Any]:
+    """Return one machine-readable pipeline stage record."""
+    return {
+        "name": name,
+        "status": status,
+        "report_path": str(report_path) if report_path is not None else None,
+        "detail": detail,
+    }
+
+
+def _pipeline_status(*, dry_run: bool, failed: bool) -> str:
+    """Return the final pipeline status from dry-run and failure state."""
+    if failed:
+        return PIPELINE_STATUS_FAILED
+    return PIPELINE_STATUS_PLANNED if dry_run else PIPELINE_STATUS_PASSED
+
+
+def _write_pipeline_report(
+    *,
+    config: SuiteConfig,
+    report_path: Path,
+    dry_run: bool,
+    skip_downloads: bool,
+    skip_gpu_check: bool,
+    allow_gpu_mismatch: bool,
+    keep_going: bool,
+    reuse_passed: bool,
+    stages: list[dict[str, Any]],
+    failed: bool,
+) -> dict[str, Any]:
+    """Write the top-level paper pipeline report."""
+    payload = {
+        "pipeline_report_schema_version": PIPELINE_REPORT_SCHEMA_VERSION,
+        "status": _pipeline_status(dry_run=dry_run, failed=failed),
+        "report_path": str(report_path),
+        "provenance": collect_run_provenance(),
+        "modes": {
+            "dry_run": dry_run,
+            "skip_downloads": skip_downloads,
+            "skip_gpu_check": skip_gpu_check,
+            "allow_gpu_mismatch": allow_gpu_mismatch,
+            "keep_going": keep_going,
+            "reuse_passed": reuse_passed,
+        },
+        "suite": {
+            "name": config.name,
+            "manifest_path": str(config.manifest_path),
+            "manifest": manifest_record(config),
+            "output_dir": str(config.output_dir),
+            "expected_gpus": config.expected_gpus,
+            "required_models": list(config.required_models),
+        },
+        "stages": stages,
+    }
+    _write_json_report(report_path, payload)
+    return payload
+
+
+def run_pipeline(
+    config: SuiteConfig,
+    *,
+    dry_run: bool = False,
+    skip_downloads: bool = False,
+    skip_gpu_check: bool = False,
+    allow_gpu_mismatch: bool = False,
+    keep_going: bool = False,
+    reuse_passed: bool = False,
+    report_path: Path | None = None,
+) -> dict[str, Any]:
+    """Run the full paper pipeline from readiness checks through bundle verify."""
+    validate_suite_config(config)
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+    final_report_path = report_path or config.output_dir / PIPELINE_REPORT_NAME
+    stages: list[dict[str, Any]] = []
+
+    readiness_path = config.output_dir / READINESS_REPORT_NAME
+    readiness_report = build_readiness_report(config)
+    _write_json_report(readiness_path, readiness_report)
+    stages.append(
+        _pipeline_stage_record(
+            name="readiness",
+            status=readiness_report["status"],
+            report_path=readiness_path,
+        )
+    )
+    if readiness_report["status"] != "ready":
+        return _write_pipeline_report(
+            config=config,
+            report_path=final_report_path,
+            dry_run=dry_run,
+            skip_downloads=skip_downloads,
+            skip_gpu_check=skip_gpu_check,
+            allow_gpu_mismatch=allow_gpu_mismatch,
+            keep_going=keep_going,
+            reuse_passed=reuse_passed,
+            stages=stages,
+            failed=True,
+        )
+
+    if skip_downloads:
+        stages.append(
+            _pipeline_stage_record(
+                name="prepare_artifacts",
+                status=PREFLIGHT_STATUS_SKIPPED,
+                detail=PREFLIGHT_SKIP_DOWNLOADS_REASON,
+            )
+        )
+    else:
+        try:
+            artifact_report = prepare_artifacts(config, dry_run=dry_run)
+            stages.append(
+                _pipeline_stage_record(
+                    name="prepare_artifacts",
+                    status=str(artifact_report["status"]),
+                    report_path=Path(str(artifact_report["report_path"])),
+                )
+            )
+        except (ClusterSuiteError, OSError) as exc:
+            stages.append(
+                _pipeline_stage_record(
+                    name="prepare_artifacts",
+                    status=PIPELINE_STATUS_FAILED,
+                    report_path=config.output_dir / ARTIFACT_PREPARATION_REPORT_NAME,
+                    detail=str(exc),
+                )
+            )
+            return _write_pipeline_report(
+                config=config,
+                report_path=final_report_path,
+                dry_run=dry_run,
+                skip_downloads=skip_downloads,
+                skip_gpu_check=skip_gpu_check,
+                allow_gpu_mismatch=allow_gpu_mismatch,
+                keep_going=keep_going,
+                reuse_passed=reuse_passed,
+                stages=stages,
+                failed=True,
+            )
+
+    preflight_report = run_preflight_only(
+        config,
+        dry_run=dry_run,
+        skip_downloads=skip_downloads,
+        skip_gpu_check=skip_gpu_check,
+        allow_gpu_mismatch=allow_gpu_mismatch,
+        report_path=config.output_dir / PREFLIGHT_REPORT_NAME,
+    )
+    stages.append(
+        _pipeline_stage_record(
+            name="preflight",
+            status=str(preflight_report["status"]),
+            report_path=Path(str(preflight_report["report_path"])),
+        )
+    )
+    if preflight_report["status"] == PREFLIGHT_STATUS_FAILED:
+        return _write_pipeline_report(
+            config=config,
+            report_path=final_report_path,
+            dry_run=dry_run,
+            skip_downloads=skip_downloads,
+            skip_gpu_check=skip_gpu_check,
+            allow_gpu_mismatch=allow_gpu_mismatch,
+            keep_going=keep_going,
+            reuse_passed=reuse_passed,
+            stages=stages,
+            failed=True,
+        )
+
+    plan_path = write_run_plan(
+        config,
+        config.output_dir / PLAN_REPORT_NAME,
+        collect_only=False,
+        skip_downloads=skip_downloads,
+        skip_gpu_check=skip_gpu_check,
+        reuse_passed=reuse_passed,
+    )
+    stages.append(
+        _pipeline_stage_record(
+            name="plan",
+            status=PIPELINE_STATUS_PASSED,
+            report_path=plan_path,
+        )
+    )
+
+    run_returncode = run_suite(
+        config,
+        dry_run=dry_run,
+        collect_only=False,
+        skip_downloads=skip_downloads,
+        skip_gpu_check=skip_gpu_check,
+        allow_gpu_mismatch=allow_gpu_mismatch,
+        keep_going=keep_going,
+        reuse_passed=reuse_passed,
+    )
+    run_failed = run_returncode != SUCCESS_RETURN_CODE
+    stages.append(
+        _pipeline_stage_record(
+            name="run_suite",
+            status=PIPELINE_STATUS_FAILED if run_failed else PIPELINE_STATUS_PASSED,
+            report_path=config.output_dir / SUMMARY_REPORT_NAME,
+            detail=f"returncode={run_returncode}",
+        )
+    )
+    if run_failed:
+        return _write_pipeline_report(
+            config=config,
+            report_path=final_report_path,
+            dry_run=dry_run,
+            skip_downloads=skip_downloads,
+            skip_gpu_check=skip_gpu_check,
+            allow_gpu_mismatch=allow_gpu_mismatch,
+            keep_going=keep_going,
+            reuse_passed=reuse_passed,
+            stages=stages,
+            failed=True,
+        )
+
+    try:
+        verification = verify_output_bundle(config.output_dir)
+        stages.append(
+            _pipeline_stage_record(
+                name="verify_output_bundle",
+                status=str(verification["status"]),
+                report_path=Path(str(verification["summary_json"])),
+            )
+        )
+    except ClusterSuiteError as exc:
+        stages.append(
+            _pipeline_stage_record(
+                name="verify_output_bundle",
+                status=PIPELINE_STATUS_FAILED,
+                report_path=config.output_dir / SUMMARY_REPORT_NAME,
+                detail=str(exc),
+            )
+        )
+        return _write_pipeline_report(
+            config=config,
+            report_path=final_report_path,
+            dry_run=dry_run,
+            skip_downloads=skip_downloads,
+            skip_gpu_check=skip_gpu_check,
+            allow_gpu_mismatch=allow_gpu_mismatch,
+            keep_going=keep_going,
+            reuse_passed=reuse_passed,
+            stages=stages,
+            failed=True,
+        )
+
+    return _write_pipeline_report(
+        config=config,
+        report_path=final_report_path,
+        dry_run=dry_run,
+        skip_downloads=skip_downloads,
+        skip_gpu_check=skip_gpu_check,
+        allow_gpu_mismatch=allow_gpu_mismatch,
+        keep_going=keep_going,
+        reuse_passed=reuse_passed,
+        stages=stages,
+        failed=False,
+    )
 
 
 def validate_required_artifacts_available(
@@ -3579,6 +3867,7 @@ def write_paper_outputs(
     }
     optional_artifact_paths = {
         "preflight_report": config.output_dir / PREFLIGHT_REPORT_NAME,
+        "preflight_environment_snapshot": config.output_dir / PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME,
         "run_plan": config.output_dir / PLAN_REPORT_NAME,
     }
     artifact_fingerprints = {
@@ -3982,6 +4271,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--write-template", type=Path, help="Write a commented TOML template and exit")
     parser.add_argument("--write-slurm-script", type=Path, help="Write a commented SLURM sbatch script and exit")
     parser.add_argument("--verify-output-bundle", type=Path, help="Verify summary artifact and log fingerprints")
+    parser.add_argument("--pipeline", action="store_true", help="Run readiness, prepare, preflight, plan, suite, and bundle verification")
+    parser.add_argument("--pipeline-report", type=Path, help="Path for --pipeline JSON output")
     parser.add_argument("--readiness-check", action="store_true", help="Audit a manifest before final paper execution")
     parser.add_argument("--prepare-artifacts", action="store_true", help="Download and verify artifacts without using GPUs")
     parser.add_argument("--preflight-only", action="store_true", help="Run artifact, GPU, and case preflight checks only")
@@ -4047,6 +4338,29 @@ def main(argv: list[str] | None = None) -> int:
             args.preflight_output is None or args.preflight_only,
             "--preflight-output requires --preflight-only",
         )
+        _require(
+            args.pipeline_report is None or args.pipeline,
+            "--pipeline-report requires --pipeline",
+        )
+        if args.pipeline:
+            _require(args.write_slurm_script is None, "--pipeline cannot be combined with --write-slurm-script")
+            _require(not args.readiness_check, "--pipeline cannot be combined with --readiness-check")
+            _require(not args.prepare_artifacts, "--pipeline cannot be combined with --prepare-artifacts")
+            _require(not args.preflight_only, "--pipeline cannot be combined with --preflight-only")
+            _require(not args.plan_only, "--pipeline cannot be combined with --plan-only")
+            _require(not args.collect_only, "--pipeline cannot be combined with --collect-only")
+            report = run_pipeline(
+                config,
+                dry_run=args.dry_run,
+                skip_downloads=args.skip_downloads,
+                skip_gpu_check=args.skip_gpu_check,
+                allow_gpu_mismatch=args.allow_gpu_mismatch,
+                keep_going=args.keep_going,
+                reuse_passed=args.reuse_passed,
+                report_path=args.pipeline_report,
+            )
+            print(json.dumps({"pipeline_report": report["report_path"], "status": report["status"]}, indent=2))
+            return SUCCESS_RETURN_CODE if report["status"] != PIPELINE_STATUS_FAILED else 1
         if args.readiness_check:
             _require(args.write_slurm_script is None, "--readiness-check cannot be combined with --write-slurm-script")
             _require(not args.plan_only, "--readiness-check cannot be combined with --plan-only")

@@ -366,10 +366,27 @@ The `--preflight-only` mode verifies the manifest schema, probes the requested
 GPU count unless `--skip-gpu-check` is set, downloads or verifies declared
 artifacts, runs each case's `preflight_command`, writes command stdout/stderr
 logs, fingerprints those logs, and stores package/GPU environment details in
-`environment_snapshot.json`. It exits before any LAMMPS, MACE, or NequIP timing
-loop starts, so import failures, missing modules, broken URLs, wrong SHA-256
-digests, and unavailable GPUs are visible in `preflight_report.json` while the
-cluster job is still cheap to rerun.
+`preflight_environment_snapshot.json`. It exits before any LAMMPS, MACE, or
+NequIP timing loop starts, so import failures, missing modules, broken URLs,
+wrong SHA-256 digests, and unavailable GPUs are visible in
+`preflight_report.json` while the cluster job is still cheap to rerun.
+
+For a one-command final-paper path, run the full pipeline:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --manifest isodelta_cluster_suite.toml \
+  --pipeline \
+  --pipeline-report pipeline_report.json
+```
+
+The `--pipeline` mode executes the final-paper readiness gate, prepares
+artifacts, runs the cluster preflight gate, writes the plan JSON, executes the
+full suite, and then verifies the output bundle fingerprints. Its
+`pipeline_report.json` records every stage, stage report path, selected modes,
+manifest fingerprint, and final status. Use `--reuse-passed` with `--pipeline`
+after an interrupted run to reuse already validated case outputs while still
+rerunning readiness, preflight, summary generation, and bundle verification.
 
 On a SLURM cluster, generate a commented submission script from the same
 manifest:
@@ -465,12 +482,12 @@ JSON with the raw logs. The summary JSON stores the manifest SHA-256 digest and
 the copied `isodelta_cluster_suite_manifest.toml` snapshot path. It also stores
 `artifact_fingerprints` with the SHA-256 digest and byte size of each generated
 environment snapshot, table, SVG figure, and manifest snapshot. When
-`preflight_report.json` or `isodelta_cluster_paper_plan.json` already exists in
-the output directory, those auxiliary pre-run artifacts are fingerprinted too;
-when they are absent, the summary records that absence explicitly so the bundle
-verifier can still distinguish a single-command run from a missing archived
-file. This lets reviewers verify that the submitted paper artifacts match the
-archived run.
+`preflight_report.json`, `preflight_environment_snapshot.json`, or
+`isodelta_cluster_paper_plan.json` already exists in the output directory, those
+auxiliary pre-run artifacts are fingerprinted too; when they are absent, the
+summary records that absence explicitly so the bundle verifier can still
+distinguish a direct run from a missing archived file. This lets reviewers
+verify that the submitted paper artifacts match the archived run.
 `environment_snapshot.json` records Git/Python provenance, GPU check results,
 selected CUDA/SLURM environment variables, package versions for SevenNet, torch,
 e3nn, ASE, MACE, and NequIP when installed, and lightweight `nvidia-smi` GPU

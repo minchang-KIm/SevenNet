@@ -858,6 +858,10 @@ artifacts = ["dataset"]
         )
         self.assertIn("12345", stdout_text)
         self.assertEqual(len(report["command_log_fingerprints"]), 1)
+        self.assertIn(
+            isodelta_cluster_suite.PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME,
+            report["environment_snapshot"],
+        )
         self.assertGreater(report["environment_snapshot_fingerprint"]["size_bytes"], 0)
         self.assertEqual(
             len(report["environment_snapshot_fingerprint"]["sha256"]),
@@ -905,6 +909,129 @@ trace_input = "trace.json"
         self.assertEqual(report["status"], isodelta_cluster_suite.PREFLIGHT_STATUS_FAILED)
         self.assertEqual(report["case_preflights"][0]["returncode"], 7)
         self.assertEqual(report["failures"][0]["stage"], "case_preflight")
+
+    def test_pipeline_runs_all_paper_stages_and_verifies_bundle(self) -> None:
+        """Pipeline mode should chain readiness, preflight, run, and verification."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            python_bin = Path(sys.executable).as_posix()
+            source_path = root / "source-data.bin"
+            source_path.write_bytes(b"pipeline input")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            output_dir = root / "paper_outputs"
+            manifest_path = root / "suite.toml"
+            pipeline_report_path = root / "pipeline_report.json"
+            case_blocks = []
+            for model_name in ("SevenNet", "MACE", "NequIP"):
+                case_name = f"{model_name.lower()}-pipeline"
+                trace_path = root / f"{model_name.lower()}_trace.json"
+                trace_path.write_text(json.dumps(_trace_evidence(model_name)), encoding="utf-8")
+                case_blocks.append(
+                    f"""
+[[cases]]
+name = "{case_name}"
+model = "{model_name}"
+kind = "external_pair"
+preflight_command = '"{python_bin}" -c "print(12345)"'
+disabled_command = "unused-disabled"
+enabled_command = "unused-enabled"
+repeat_count = 3
+trace_evidence = ["{trace_path.as_posix()}"]
+required_trace_models = ["{model_name}"]
+artifacts = ["dataset"]
+"""
+                )
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "pipeline-suite"
+output_dir = "{output_dir.as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet", "MACE", "NequIP"]
+require_artifact_sha256 = true
+repeat_count = 3
+min_trace_count = 3
+min_distinct_trace_models = 3
+min_speedup = 1.05
+min_speedup_95ci_lower_bound = 1.0
+
+[[artifacts]]
+name = "dataset"
+path = "{(root / "downloaded.bin").as_posix()}"
+url = "{source_path.as_uri()}"
+sha256 = "{digest}"
+required_by = ["SevenNet", "MACE", "NequIP"]
+
+{''.join(case_blocks)}
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            for case in config.cases:
+                timing_path = isodelta_cluster_suite._external_timing_report_path(
+                    config,
+                    case,
+                )
+                timing_path.parent.mkdir(parents=True, exist_ok=True)
+                timing_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": isodelta_cluster_suite.EXTERNAL_TIMING_SCHEMA_VERSION,
+                            "case_name": case.name,
+                            "model": case.model,
+                            "repeat_count": 3,
+                            "disabled_success_count": 3,
+                            "enabled_success_count": 3,
+                            "baseline_times_seconds": [BASELINE_LOOP_TIME_SECONDS] * 3,
+                            "enabled_times_seconds": [ISODELTA_LOOP_TIME_SECONDS] * 3,
+                            "baseline_mean_seconds": BASELINE_LOOP_TIME_SECONDS,
+                            "enabled_mean_seconds": ISODELTA_LOOP_TIME_SECONDS,
+                            "baseline_sample_variance_seconds": 0.0,
+                            "enabled_sample_variance_seconds": 0.0,
+                            "baseline_sample_stddev_seconds": 0.0,
+                            "enabled_sample_stddev_seconds": 0.0,
+                            "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
+                            "commands": [],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--pipeline",
+                    "--pipeline-report",
+                    str(pipeline_report_path),
+                    "--skip-gpu-check",
+                    "--reuse-passed",
+                ]
+            )
+            pipeline_report = json.loads(pipeline_report_path.read_text(encoding="utf-8"))
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            verification = isodelta_cluster_suite.verify_output_bundle(output_dir)
+            stage_names = [stage["name"] for stage in pipeline_report["stages"]]
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(pipeline_report["status"], isodelta_cluster_suite.PIPELINE_STATUS_PASSED)
+        self.assertEqual(
+            stage_names,
+            [
+                "readiness",
+                "prepare_artifacts",
+                "preflight",
+                "plan",
+                "run_suite",
+                "verify_output_bundle",
+            ],
+        )
+        self.assertEqual(verification["status"], "passed")
+        self.assertIn("preflight_report", summary["artifact_fingerprints"])
+        self.assertIn("preflight_environment_snapshot", summary["artifact_fingerprints"])
+        self.assertIn("run_plan", summary["artifact_fingerprints"])
+        self.assertNotIn("pipeline_report", summary["artifact_fingerprints"])
 
     def test_readiness_check_accepts_strict_three_model_paired_manifest(self) -> None:
         """A final paper manifest should prove strict input and model coverage."""
