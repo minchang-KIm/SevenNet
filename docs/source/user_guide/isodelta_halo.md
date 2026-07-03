@@ -356,7 +356,10 @@ can present variability next to the speedup number instead of only reporting a
 single average. It also derives `speedup_95ci_lower_bound` and
 `speedup_95ci_upper_bound` from the conservative combination of baseline and
 enabled timing intervals, which makes it clear whether the measured improvement
-survives uncertainty in the repeat timings.
+survives uncertainty in the repeat timings. Set
+`min_speedup_95ci_lower_bound` in the manifest when the final paper run should
+fail any case whose conservative speedup bound does not exceed the required
+claim threshold.
 
 After successful collection, the suite writes:
 

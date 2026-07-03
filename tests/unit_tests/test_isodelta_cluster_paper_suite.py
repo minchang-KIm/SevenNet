@@ -660,6 +660,65 @@ artifacts = ["dataset"]
         ):
             isodelta_cluster_suite.validate_external_timing_report(report, case)
 
+    def test_speedup_lower_bound_gate_rejects_uncertain_case(self) -> None:
+        """A mean speedup should fail when its conservative CI bound is weak."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            sevennet_trace_path = root / "sevennet_trace.json"
+            nequip_trace_path = root / "nequip_trace.json"
+            nequip_timing_path = root / "nequip_timing.json"
+            output_dir = root / "paper_outputs"
+            sevennet_trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
+            nequip_trace_path.write_text(json.dumps(_trace_evidence("NequIP")), encoding="utf-8")
+            nequip_timing_path.write_text(json.dumps(_external_timing_report("NequIP")), encoding="utf-8")
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "lower-bound-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+min_trace_count = 1
+min_distinct_trace_models = 1
+
+[[cases]]
+name = "sevennet-pass"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["{sevennet_trace_path.as_posix()}"]
+
+[[cases]]
+name = "nequip-existing"
+model = "NequIP"
+kind = "external_pair"
+disabled_command = "baseline"
+enabled_command = "enabled"
+repeat_count = 2
+external_timing_report = "{nequip_timing_path.as_posix()}"
+trace_evidence = ["{nequip_trace_path.as_posix()}"]
+min_speedup_95ci_lower_bound = 1.1
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            exit_code = isodelta_cluster_suite.run_suite(
+                config,
+                collect_only=True,
+                skip_downloads=True,
+                skip_gpu_check=True,
+                keep_going=True,
+            )
+            summary = json.loads(
+                (output_dir / "isodelta_cluster_paper_summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            nequip_case = next(case for case in summary["cases"] if case["model"] == "NequIP")
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("speedup 95% CI lower bound", nequip_case["status"])
+        self.assertLess(nequip_case["speedup_95ci_lower_bound"], 1.1)
+
     def test_collect_only_writes_tables_correlations_and_svg_figures(self) -> None:
         """Existing evidence should become paper tables, correlations, and graphs."""
         with tempfile.TemporaryDirectory() as tmpdir:

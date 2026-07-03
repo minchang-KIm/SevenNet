@@ -46,6 +46,7 @@ DEFAULT_COMMAND_TIMEOUT_SECONDS = 3600.0
 DEFAULT_MAX_ABS_THERMO_DELTA = 1.0e-8
 DEFAULT_MIN_PAIRED_THERMO_COUNT = 1
 DEFAULT_MIN_SPEEDUP = 1.0
+DEFAULT_MIN_SPEEDUP_95CI_LOWER_BOUND: float | None = None
 DEFAULT_MIN_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS = 1
 DEFAULT_MIN_ENABLED_CACHE_HITS = 0
@@ -201,6 +202,7 @@ class CaseConfig:
     max_abs_thermo_delta: float = DEFAULT_MAX_ABS_THERMO_DELTA
     min_paired_thermo_count: int = DEFAULT_MIN_PAIRED_THERMO_COUNT
     min_speedup: float | None = DEFAULT_MIN_SPEEDUP
+    min_speedup_95ci_lower_bound: float | None = DEFAULT_MIN_SPEEDUP_95CI_LOWER_BOUND
     min_hit_rate_percent: float = DEFAULT_MIN_HIT_RATE_PERCENT
     min_enabled_cache_attempts: int = DEFAULT_MIN_ENABLED_CACHE_ATTEMPTS
     min_enabled_cache_hits: int = DEFAULT_MIN_ENABLED_CACHE_HITS
@@ -477,6 +479,11 @@ def _validate_case_thresholds(case: CaseConfig) -> None:
     )
     if case.min_speedup is not None:
         _require(case.min_speedup > MIN_POSITIVE_VALUE, f"{case.name}: min_speedup must be positive")
+    if case.min_speedup_95ci_lower_bound is not None:
+        _require(
+            case.min_speedup_95ci_lower_bound > MIN_POSITIVE_VALUE,
+            f"{case.name}: min_speedup_95ci_lower_bound must be positive",
+        )
     if case.min_trace_estimated_speedup is not None:
         _require(
             case.min_trace_estimated_speedup > MIN_POSITIVE_VALUE,
@@ -553,6 +560,11 @@ def load_manifest(manifest_path: Path) -> SuiteConfig:
         suite_payload.get("min_speedup"),
         "suite.min_speedup",
         DEFAULT_MIN_SPEEDUP,
+    )
+    default_min_speedup_95ci_lower_bound = _as_optional_float(
+        suite_payload.get("min_speedup_95ci_lower_bound"),
+        "suite.min_speedup_95ci_lower_bound",
+        DEFAULT_MIN_SPEEDUP_95CI_LOWER_BOUND,
     )
     default_min_hit_rate_percent = _as_float(
         suite_payload.get("min_hit_rate_percent"),
@@ -692,6 +704,11 @@ def load_manifest(manifest_path: Path) -> SuiteConfig:
                     case.get("min_speedup"),
                     f"cases[{index}].min_speedup",
                     default_min_speedup,
+                ),
+                min_speedup_95ci_lower_bound=_as_optional_float(
+                    case.get("min_speedup_95ci_lower_bound"),
+                    f"cases[{index}].min_speedup_95ci_lower_bound",
+                    default_min_speedup_95ci_lower_bound,
                 ),
                 min_hit_rate_percent=_as_float(
                     case.get("min_hit_rate_percent"),
@@ -1511,6 +1528,7 @@ def build_run_plan(
                     "repeat_count": case.repeat_count,
                     "preflight_timeout_seconds": case.preflight_timeout_seconds,
                     "min_speedup": case.min_speedup,
+                    "min_speedup_95ci_lower_bound": case.min_speedup_95ci_lower_bound,
                     "min_hit_rate_percent": case.min_hit_rate_percent,
                     "min_enabled_cache_attempts": case.min_enabled_cache_attempts,
                     "min_enabled_cache_hits": case.min_enabled_cache_hits,
@@ -2538,6 +2556,24 @@ def build_case_summary(
     )
 
 
+def validate_case_summary_thresholds(case: CaseConfig, summary: CaseSummary) -> None:
+    """Validate thresholds that depend on derived summary-table metrics."""
+    if case.min_speedup_95ci_lower_bound is None:
+        return
+    _require(
+        summary.speedup_95ci_lower_bound is not None,
+        f"{case.name}: speedup 95% CI lower bound is unavailable",
+    )
+    _require(
+        summary.speedup_95ci_lower_bound >= case.min_speedup_95ci_lower_bound,
+        (
+            f"{case.name}: speedup 95% CI lower bound "
+            f"{summary.speedup_95ci_lower_bound:g} is below "
+            f"{case.min_speedup_95ci_lower_bound:g}"
+        ),
+    )
+
+
 def _format_table_value(value: Any) -> str:
     """Format values for markdown tables without losing numeric readability."""
     if value is None:
@@ -2976,6 +3012,7 @@ def run_suite(
         bundle_evidence = case.bundle_evidence
         trace_evidence_paths = case.trace_evidence_paths
         external_timing_report: Path | None = None
+        case_summary: CaseSummary | None = None
         if collect_only:
             external_timing_report = case.external_timing_report
         try:
@@ -3034,6 +3071,16 @@ def run_suite(
             )
             if any(record.returncode != SUCCESS_RETURN_CODE for record in case_command_records):
                 raise ClusterSuiteError(f"{case.name}: one or more commands failed")
+            case_summary = build_case_summary(
+                case=case,
+                benchmark_report=benchmark_report,
+                bundle_evidence=bundle_evidence,
+                trace_evidence_paths=trace_evidence_paths,
+                external_timing_report=external_timing_report,
+                status=case_status,
+            )
+            if not dry_run:
+                validate_case_summary_thresholds(case, case_summary)
         except (
             ClusterSuiteError,
             benchmark_check.ReportCheckError,
@@ -3042,11 +3089,7 @@ def run_suite(
         ) as exc:
             case_status = f"failed: {exc}"
             failed = True
-            if not keep_going:
-                print(f"[{config.name}] {case_status}", file=sys.stderr)
-                return 1
-        case_summaries.append(
-            build_case_summary(
+            case_summary = build_case_summary(
                 case=case,
                 benchmark_report=benchmark_report,
                 bundle_evidence=bundle_evidence,
@@ -3054,7 +3097,11 @@ def run_suite(
                 external_timing_report=external_timing_report,
                 status=case_status,
             )
-        )
+            if not keep_going:
+                print(f"[{config.name}] {case_status}", file=sys.stderr)
+                return 1
+        _require(case_summary is not None, f"{case.name}: missing case summary")
+        case_summaries.append(case_summary)
 
     _progress(config.name, stage_index, total_stages, "writing tables, correlations, and figures")
     suite_evidence = validate_suite_evidence(
@@ -3090,6 +3137,9 @@ repeat_count = 5
 command_timeout_seconds = 7200
 benchmark_timeout_seconds = 3600
 min_speedup = 1.05
+# Optional but recommended for the final paper run: require the conservative
+# 95% CI lower bound for speedup to stay above no-speedup.
+min_speedup_95ci_lower_bound = 1.0
 min_hit_rate_percent = 50.0
 min_trace_hit_rate_percent = 50.0
 min_trace_estimated_speedup = 1.05
