@@ -164,6 +164,9 @@ PAPER_CASE_SUMMARY_COLUMNS = ("case", "model", "kind", "status")
 PAPER_CASE_SUMMARY_FIELD_MAP = {"case": "case_name"}
 PAPER_CORRELATION_COLUMNS = ("x_metric", "y_metric", "n", "pearson", "spearman")
 PAPER_SVG_ARTIFACT_NAMES = ("speedup_svg", "hit_rate_svg", "trace_svg")
+SPEEDUP_SVG_EMPTY_MESSAGE = "No measured speedup values"
+HIT_RATE_SCATTER_TITLE = "Cache hit rate vs measured speedup"
+TRACE_METADATA_SCATTER_TITLE = "Trace metadata fraction vs estimated speedup"
 DOWNLOAD_CHUNK_BYTES = 1024 * 1024
 HASH_CHUNK_BYTES = DOWNLOAD_CHUNK_BYTES
 PERCENT_SCALE = 100.0
@@ -2891,6 +2894,34 @@ def _summary_correlations_by_metric_pair(
     return correlations_by_pair
 
 
+def _summary_numeric_value(case_record: dict[str, Any], field_name: str) -> float | None:
+    """Return a finite numeric case field when a paper figure can plot it."""
+    value = case_record.get(field_name)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    numeric_value = float(value)
+    return numeric_value if math.isfinite(numeric_value) else None
+
+
+def _svg_local_name(element: Any) -> str:
+    """Return an SVG element tag without an XML namespace prefix."""
+    return str(element.tag).rsplit("}", maxsplit=1)[-1]
+
+
+def _svg_text_content(root: Any) -> str:
+    """Collect SVG text node content for figure-label semantic checks."""
+    return "\n".join(
+        "".join(element.itertext()).strip()
+        for element in root.iter()
+        if _svg_local_name(element) == "text"
+    )
+
+
+def _svg_element_count(root: Any, element_name: str) -> int:
+    """Count SVG elements by local tag name so namespaces do not matter."""
+    return sum(1 for element in root.iter() if _svg_local_name(element) == element_name)
+
+
 def _markdown_cells(line: str) -> list[str]:
     """Split one GitHub-flavored markdown table row into trimmed cells."""
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
@@ -3012,17 +3043,76 @@ def _require_correlation_csv(path: Path, summary_payload: dict[str, Any]) -> Non
     )
 
 
-def _require_svg_document(path: Path, label: str) -> None:
+def _require_svg_document(path: Path, label: str) -> Any:
     """Verify that a generated figure is parseable SVG with stable dimensions."""
     try:
         root = ElementTree.parse(path).getroot()
     except ElementTree.ParseError as exc:
         raise ClusterSuiteError(f"{label}: invalid SVG XML: {exc}") from exc
-    root_name = root.tag.rsplit("}", maxsplit=1)[-1]
+    root_name = _svg_local_name(root)
     _require(root_name == "svg", f"{label}: root element must be svg")
     _require(root.attrib.get("width") is not None, f"{label}: missing width")
     _require(root.attrib.get("height") is not None, f"{label}: missing height")
     _require(root.attrib.get("viewBox") is not None, f"{label}: missing viewBox")
+    return root
+
+
+def _require_speedup_svg_semantics(
+    path: Path,
+    cases_by_name: dict[str, dict[str, Any]],
+) -> None:
+    """Verify that the speedup bar chart labels every measured-speedup case."""
+    root = _require_svg_document(path, "speedup_svg")
+    text_content = _svg_text_content(root)
+    expected_case_names = [
+        case_name
+        for case_name, case_record in cases_by_name.items()
+        if _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
+    ]
+    if not expected_case_names:
+        _require(
+            SPEEDUP_SVG_EMPTY_MESSAGE in text_content,
+            "speedup_svg must state that no measured speedup values are available",
+        )
+        return
+    for case_name in expected_case_names:
+        _require(
+            case_name in text_content,
+            f"speedup_svg must include case label {case_name}",
+        )
+
+
+def _require_scatter_svg_semantics(
+    path: Path,
+    *,
+    label: str,
+    cases_by_name: dict[str, dict[str, Any]],
+    x_field: str,
+    y_field: str,
+    title: str,
+) -> None:
+    """Verify that a scatter figure has one plotted point per summary data pair."""
+    root = _require_svg_document(path, label)
+    text_content = _svg_text_content(root)
+    expected_point_count = sum(
+        1
+        for case_record in cases_by_name.values()
+        if _summary_numeric_value(case_record, x_field) is not None
+        and _summary_numeric_value(case_record, y_field) is not None
+    )
+    if expected_point_count == 0:
+        empty_message = f"No paired values for {title}"
+        _require(
+            empty_message in text_content,
+            f"{label} must state that no paired values are available",
+        )
+    else:
+        _require(title in text_content, f"{label} must include figure title {title!r}")
+    observed_point_count = _svg_element_count(root, "circle")
+    _require(
+        observed_point_count == expected_point_count,
+        f"{label} circle count must match summary data pairs",
+    )
 
 
 def _require_environment_snapshot(path: Path) -> None:
@@ -3068,8 +3158,23 @@ def _require_paper_artifact_semantics(
         cases_by_name,
     )
     _require_correlation_csv(resolved_artifact_paths["correlation_csv"], summary_payload)
-    for artifact_name in PAPER_SVG_ARTIFACT_NAMES:
-        _require_svg_document(resolved_artifact_paths[artifact_name], artifact_name)
+    _require_speedup_svg_semantics(resolved_artifact_paths["speedup_svg"], cases_by_name)
+    _require_scatter_svg_semantics(
+        resolved_artifact_paths["hit_rate_svg"],
+        label="hit_rate_svg",
+        cases_by_name=cases_by_name,
+        x_field="cache_hit_rate_percent",
+        y_field=SPEEDUP_VS_DISABLED_CACHE_KEY,
+        title=HIT_RATE_SCATTER_TITLE,
+    )
+    _require_scatter_svg_semantics(
+        resolved_artifact_paths["trace_svg"],
+        label="trace_svg",
+        cases_by_name=cases_by_name,
+        x_field="trace_metadata_fraction_percent",
+        y_field="trace_estimated_average_speedup",
+        title=TRACE_METADATA_SCATTER_TITLE,
+    )
     _require_manifest_snapshot(resolved_artifact_paths["manifest_snapshot"])
     return len(REQUIRED_PAPER_ARTIFACT_NAMES)
 
@@ -4913,7 +5018,7 @@ def write_speedup_svg(path: Path, case_summaries: list[CaseSummary]) -> None:
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     if not points:
-        path.write_text(_empty_svg("No measured speedup values"), encoding="utf-8")
+        path.write_text(_empty_svg(SPEEDUP_SVG_EMPTY_MESSAGE), encoding="utf-8")
         return
     plot_width = SVG_WIDTH - SVG_MARGIN_LEFT - SVG_MARGIN_RIGHT
     plot_height = SVG_HEIGHT - SVG_MARGIN_TOP - SVG_MARGIN_BOTTOM
@@ -5055,7 +5160,7 @@ def write_paper_outputs(
         case_summaries,
         x_field="cache_hit_rate_percent",
         y_field="speedup_vs_disabled_cache",
-        title="Cache hit rate vs measured speedup",
+        title=HIT_RATE_SCATTER_TITLE,
         x_label="cache hit rate (%)",
         y_label="measured speedup",
     )
@@ -5064,7 +5169,7 @@ def write_paper_outputs(
         case_summaries,
         x_field="trace_metadata_fraction_percent",
         y_field="trace_estimated_average_speedup",
-        title="Trace metadata fraction vs estimated speedup",
+        title=TRACE_METADATA_SCATTER_TITLE,
         x_label="metadata build fraction (%)",
         y_label="trace estimated speedup",
     )

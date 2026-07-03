@@ -573,7 +573,10 @@ It also performs semantic paper-artifact checks after the SHA-256 pass:
 `case_summary.csv` and `case_summary.md` must contain exactly one row per
 summary case and the same cell values as `summary["cases"]`.
 `correlation.csv` must contain the configured metric-pair rows and the same values as
-`summary["correlations"]`, each SVG figure must parse as an SVG document with width, height, and viewBox,
+`summary["correlations"]`. Each SVG figure must parse as an SVG document with
+width, height, and viewBox; the speedup chart must include every measured-speedup
+case label from `summary["cases"]`, and scatter plots must contain the same
+number of plotted points as the summary data pairs they visualize.
 `environment_snapshot.json` must carry the expected snapshot schema, and the
 manifest snapshot must contain the `[suite]` table. This catches a corrupted
 table or graph even when the summary JSON was regenerated with a matching hash.

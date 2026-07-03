@@ -357,14 +357,17 @@ def _summary_case_record(
     model: str = "SevenNet",
     kind: str = "trace_only",
     status: str = isodelta_cluster_suite.CASE_STATUS_PASSED,
+    **metrics: object,
 ) -> dict[str, object]:
     """Return the minimal case JSON fields needed to verify paper tables."""
-    return {
+    record = {
         "case_name": case_name,
         "model": model,
         "kind": kind,
         "status": status,
     }
+    record.update(metrics)
+    return record
 
 
 def _summary_correlations(case_count: int) -> list[dict[str, object]]:
@@ -435,9 +438,24 @@ def _write_required_paper_artifacts(
     isodelta_cluster_suite.write_csv(case_summary_csv, case_rows)
     isodelta_cluster_suite.write_markdown_table(case_summary_markdown, case_rows)
     isodelta_cluster_suite.write_csv(correlation_csv, correlation_rows)
-    speedup_svg.write_text(_minimal_svg("speedup"), encoding="utf-8")
-    hit_rate_svg.write_text(_minimal_svg("hit rate"), encoding="utf-8")
-    trace_svg.write_text(_minimal_svg("trace"), encoding="utf-8")
+    speedup_svg.write_text(
+        isodelta_cluster_suite._empty_svg(
+            isodelta_cluster_suite.SPEEDUP_SVG_EMPTY_MESSAGE
+        ),
+        encoding="utf-8",
+    )
+    hit_rate_svg.write_text(
+        isodelta_cluster_suite._empty_svg(
+            f"No paired values for {isodelta_cluster_suite.HIT_RATE_SCATTER_TITLE}"
+        ),
+        encoding="utf-8",
+    )
+    trace_svg.write_text(
+        isodelta_cluster_suite._empty_svg(
+            f"No paired values for {isodelta_cluster_suite.TRACE_METADATA_SCATTER_TITLE}"
+        ),
+        encoding="utf-8",
+    )
     artifact_paths = {
         "environment_snapshot": environment_snapshot,
         "case_summary_csv": case_summary_csv,
@@ -756,6 +774,106 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 "speedup_svg: invalid SVG XML",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_speedup_svg_label_drift(self) -> None:
+        """The speedup figure should label every case with measured speedup data."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_record = _summary_case_record(
+                "case",
+                speedup_vs_disabled_cache=1.25,
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=(case_record,),
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [case_record],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "speedup_svg must include case label case",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_scatter_svg_point_count_drift(self) -> None:
+        """Scatter figures should plot exactly one point per summary data pair."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_record = _summary_case_record(
+                "case",
+                cache_hit_rate_percent=87.5,
+                speedup_vs_disabled_cache=1.25,
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=(case_record,),
+            )
+            speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
+            speedup_svg.write_text(_minimal_svg("case"), encoding="utf-8")
+            artifact_fingerprints["speedup_svg"] = (
+                isodelta_cluster_suite.generated_artifact_record(speedup_svg)
+            )
+            hit_rate_svg = output_dir / "figures" / "hit_rate_vs_speedup.svg"
+            hit_rate_svg.write_text(
+                _minimal_svg(isodelta_cluster_suite.HIT_RATE_SCATTER_TITLE),
+                encoding="utf-8",
+            )
+            artifact_fingerprints["hit_rate_svg"] = (
+                isodelta_cluster_suite.generated_artifact_record(hit_rate_svg)
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [case_record],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "hit_rate_svg circle count must match summary data pairs",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 

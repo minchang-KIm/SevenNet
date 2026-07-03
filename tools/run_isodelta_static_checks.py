@@ -894,6 +894,10 @@ def main() -> None:
         and "test_verify_output_bundle_rejects_mutated_external_command_log" in cluster_suite_test
         and "test_verify_output_bundle_rejects_semantically_invalid_svg_artifact"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_speedup_svg_label_drift"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_scatter_svg_point_count_drift"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_mismatched_artifact_index_path"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_case_summary_value_drift"
@@ -950,6 +954,9 @@ def main() -> None:
         and "_require_paper_artifact_semantics" in cluster_suite
         and "verified_paper_artifact_semantic_count" in cluster_suite
         and "_require_svg_document" in cluster_suite
+        and "_require_speedup_svg_semantics" in cluster_suite
+        and "_require_scatter_svg_semantics" in cluster_suite
+        and "_svg_element_count" in cluster_suite
         and "CORRELATION_METRIC_PAIRS" in cluster_suite
         and "EXTERNAL_DISABLED_COMMAND_LABEL" in cluster_suite
         and "EXTERNAL_ENABLED_COMMAND_LABEL" in cluster_suite
@@ -1132,7 +1139,9 @@ def main() -> None:
         and "`correlation.csv` must contain the configured metric-pair rows" in doc
         and "same values as" in doc
         and "`summary[\"correlations\"]`" in doc
-        and "each SVG figure must parse as an SVG document" in doc
+        and "Each SVG figure must parse as an SVG document" in doc
+        and "speedup chart must include every measured-speedup" in doc
+        and "scatter plots must contain the same" in doc
         and "`environment_snapshot.json` must carry the expected snapshot schema" in doc
         and "matching hash" in doc,
         "IsoDelta-Halo guide must document semantic paper artifact verification",
