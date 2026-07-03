@@ -286,6 +286,22 @@ any case. Optional artifacts with `required = false` may be absent, but the
 download record marks them as skipped rather than silently treating them as
 present.
 
+On a SLURM cluster, generate a commented submission script from the same
+manifest:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --manifest isodelta_cluster_suite.toml \
+  --write-slurm-script run_isodelta_cluster_suite.sbatch
+```
+
+The generated `sbatch` file requests `expected_gpus`, writes scheduler logs
+under `slurm_logs/`, creates the preflight plan with the exact same
+`COMMON_ARGS` used by the final run, and then executes the full suite. The
+script defines `PYTHON_BIN` and `SUITE_RUNNER` as overridable shell variables so
+cluster module systems can select the intended environment without editing the
+recorded experiment command.
+
 Before submitting a long job, write a preflight plan:
 
 ```bash

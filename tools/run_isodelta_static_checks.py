@@ -778,6 +778,11 @@ def main() -> None:
         and "write_run_plan" in cluster_suite
         and "PLAN_REPORT_NAME" in cluster_suite
         and "MANIFEST_SNAPSHOT_NAME" in cluster_suite
+        and "DEFAULT_SLURM_JOB_NAME" in cluster_suite
+        and "write_slurm_script" in cluster_suite
+        and "--write-slurm-script" in cluster_suite
+        and "#SBATCH --gres=gpu:" in cluster_suite
+        and "COMMON_ARGS" in cluster_suite
         and "manifest_record" in cluster_suite
         and "generated_artifact_record" in cluster_suite
         and "artifact_fingerprints" in cluster_suite
@@ -818,6 +823,15 @@ def main() -> None:
         and "The plan JSON records artifact existence and download intent" in doc
         and "expected benchmark/trace/timing outputs" in doc,
         "IsoDelta-Halo guide must document cluster preflight planning",
+    )
+    _require(
+        "--write-slurm-script" in doc
+        and "SLURM cluster" in doc
+        and "`sbatch` file requests `expected_gpus`" in doc
+        and "COMMON_ARGS" in doc
+        and "PYTHON_BIN" in doc
+        and "SUITE_RUNNER" in doc,
+        "IsoDelta-Halo guide must document SLURM cluster launch generation",
     )
     _require(
         "manifest SHA-256 digest" in doc

@@ -249,6 +249,57 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
         self.assertIn('kind = "sevennet_lammps"', template)
         self.assertIn('kind = "external_pair"', template)
 
+    def test_write_slurm_script_creates_commented_plan_first_launcher(self) -> None:
+        """The SLURM wrapper should submit a reproducible plan before execution."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            output_dir = root / "paper outputs"
+            slurm_path = root / "run_isodelta.sbatch"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "slurm-suite"
+output_dir = "{output_dir.as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-trace"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["trace.json"]
+""",
+                encoding="utf-8",
+            )
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-script",
+                    str(slurm_path),
+                    "--skip-downloads",
+                    "--keep-going",
+                    "--slurm-job-name",
+                    "paper suite",
+                    "--slurm-cpus-per-task",
+                    "12",
+                ]
+            )
+            script = slurm_path.read_text(encoding="utf-8")
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(script.startswith("#!/usr/bin/env bash"))
+        self.assertIn("# IsoDelta-Halo cluster paper suite launcher.", script)
+        self.assertIn("#SBATCH --job-name=paper_suite", script)
+        self.assertIn("#SBATCH --gres=gpu:8", script)
+        self.assertIn("#SBATCH --cpus-per-task=12", script)
+        self.assertIn("COMMON_ARGS=(--manifest \"$MANIFEST_PATH\")", script)
+        self.assertIn("--plan-only --plan-output \"$PLAN_OUTPUT\"", script)
+        self.assertIn("COMMON_ARGS+=(--skip-downloads)", script)
+        self.assertIn("COMMON_ARGS+=(--keep-going)", script)
+        self.assertIn("# Run SevenNet, MACE, NequIP, and any extra manifest cases.", script)
+
     def test_manifest_validation_requires_all_default_foundation_models(self) -> None:
         """A paper manifest should not silently omit MACE or NequIP."""
         with tempfile.TemporaryDirectory() as tmpdir:

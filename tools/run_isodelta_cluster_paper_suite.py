@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -53,6 +54,9 @@ DEFAULT_MIN_TRACE_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT = 0.0
 DEFAULT_REQUIRED_MODELS = ("SevenNet", "MACE", "NequIP")
 DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 600.0
+DEFAULT_SLURM_JOB_NAME = "isodelta-halo-paper-suite"
+DEFAULT_SLURM_TIME_LIMIT = "24:00:00"
+DEFAULT_SLURM_CPUS_PER_TASK = 8
 SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_only"))
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
 BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
@@ -61,6 +65,7 @@ EXTERNAL_TIMING_REPORT_NAME = "external_pair_timing_report.json"
 TRACE_EVIDENCE_SUFFIX = "_trace_evidence.json"
 PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
+SLURM_LOG_DIR_NAME = "slurm_logs"
 SCHEMA_VERSION_KEY = "schema_version"
 CASE_NAME_KEY = "case_name"
 MODEL_KEY = "model"
@@ -2748,11 +2753,101 @@ artifacts = ["shared-dataset"]
     path.write_text(template, encoding="utf-8")
 
 
+def _bash_quote(value: str | Path) -> str:
+    """Quote one literal for the POSIX shell used by generated SLURM scripts."""
+    return shlex.quote(str(value))
+
+
+def _append_bash_array_args(lines: list[str], *values: str | Path) -> None:
+    """Append one Bash array extension line with safely quoted literals."""
+    quoted_values = " ".join(_bash_quote(value) for value in values)
+    lines.append(f"COMMON_ARGS+=({quoted_values})")
+
+
+def write_slurm_script(
+    path: Path,
+    config: SuiteConfig,
+    *,
+    collect_only: bool = False,
+    dry_run: bool = False,
+    skip_downloads: bool = False,
+    skip_gpu_check: bool = False,
+    allow_gpu_mismatch: bool = False,
+    keep_going: bool = False,
+    job_name: str = DEFAULT_SLURM_JOB_NAME,
+    time_limit: str = DEFAULT_SLURM_TIME_LIMIT,
+    cpus_per_task: int = DEFAULT_SLURM_CPUS_PER_TASK,
+) -> None:
+    """Write a commented SLURM wrapper that runs the plan and full suite."""
+    validate_suite_config(config)
+    _require(config.expected_gpus >= MIN_REQUIRED_CASE_COUNT, "SLURM GPU count must be positive")
+    _require(cpus_per_task >= MIN_REQUIRED_CASE_COUNT, "SLURM cpus-per-task must be positive")
+
+    plan_path = config.output_dir / PLAN_REPORT_NAME
+    slurm_job_name = _safe_name(job_name)
+    lines = [
+        "#!/usr/bin/env bash",
+        "# IsoDelta-Halo cluster paper suite launcher.",
+        "# Submit with: sbatch <this-file>",
+        "# The script writes a preflight plan first, then runs the full suite.",
+        f"#SBATCH --job-name={slurm_job_name}",
+        f"#SBATCH --gres=gpu:{config.expected_gpus}",
+        "#SBATCH --ntasks=1",
+        f"#SBATCH --cpus-per-task={cpus_per_task}",
+        f"#SBATCH --time={time_limit}",
+        f"#SBATCH --output={SLURM_LOG_DIR_NAME}/%x-%j.out",
+        f"#SBATCH --error={SLURM_LOG_DIR_NAME}/%x-%j.err",
+        "",
+        "set -euo pipefail",
+        "",
+        "# Override PYTHON_BIN or SUITE_RUNNER at submit time if the cluster uses modules.",
+        'PYTHON_BIN="${PYTHON_BIN:-python}"',
+        'SUITE_RUNNER="${SUITE_RUNNER:-tools/run_isodelta_cluster_paper_suite.py}"',
+        f"MANIFEST_PATH={_bash_quote(config.manifest_path)}",
+        f"PLAN_OUTPUT={_bash_quote(plan_path)}",
+        "",
+        "# Keep scheduler stdout/stderr directories explicit and reproducible.",
+        f"mkdir -p {_bash_quote(SLURM_LOG_DIR_NAME)}",
+        f"mkdir -p {_bash_quote(config.output_dir)}",
+        "",
+        "# COMMON_ARGS is reused for planning and execution to prevent argument drift.",
+        'COMMON_ARGS=(--manifest "$MANIFEST_PATH")',
+    ]
+    _append_bash_array_args(lines, "--output-dir", config.output_dir)
+    _append_bash_array_args(lines, "--expected-gpus", str(config.expected_gpus))
+    if collect_only:
+        _append_bash_array_args(lines, "--collect-only")
+    if dry_run:
+        _append_bash_array_args(lines, "--dry-run")
+    if skip_downloads:
+        _append_bash_array_args(lines, "--skip-downloads")
+    if skip_gpu_check:
+        _append_bash_array_args(lines, "--skip-gpu-check")
+    if allow_gpu_mismatch:
+        _append_bash_array_args(lines, "--allow-gpu-mismatch")
+    if keep_going:
+        _append_bash_array_args(lines, "--keep-going")
+    lines.extend(
+        [
+            "",
+            "# Generate the auditable preflight JSON before launching model runs.",
+            '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}" --plan-only --plan-output "$PLAN_OUTPUT"',
+            "",
+            "# Run SevenNet, MACE, NequIP, and any extra manifest cases.",
+            '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}"',
+            "",
+        ]
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI options for the cluster paper suite."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, help="TOML suite manifest")
     parser.add_argument("--write-template", type=Path, help="Write a commented TOML template and exit")
+    parser.add_argument("--write-slurm-script", type=Path, help="Write a commented SLURM sbatch script and exit")
     parser.add_argument("--plan-only", action="store_true", help="Write a preflight JSON plan and exit")
     parser.add_argument("--plan-output", type=Path, help="Path for --plan-only JSON output")
     parser.add_argument("--output-dir", type=Path, help="Override suite.output_dir")
@@ -2763,6 +2858,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--skip-gpu-check", action="store_true", help="Do not probe GPU count")
     parser.add_argument("--allow-gpu-mismatch", action="store_true", help="Record GPU mismatch instead of failing")
     parser.add_argument("--keep-going", action="store_true", help="Continue after a failed case and mark it in tables")
+    parser.add_argument("--slurm-job-name", default=DEFAULT_SLURM_JOB_NAME, help="Job name for --write-slurm-script")
+    parser.add_argument("--slurm-time-limit", default=DEFAULT_SLURM_TIME_LIMIT, help="Time limit for --write-slurm-script")
+    parser.add_argument(
+        "--slurm-cpus-per-task",
+        type=int,
+        default=DEFAULT_SLURM_CPUS_PER_TASK,
+        help="CPU cores requested by --write-slurm-script",
+    )
     return parser.parse_args(argv)
 
 
@@ -2792,6 +2895,23 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--manifest is required unless --write-template is used")
     try:
         config = _apply_cli_overrides(load_manifest(args.manifest), args)
+        if args.write_slurm_script is not None:
+            _require(not args.plan_only, "--write-slurm-script cannot be combined with --plan-only")
+            write_slurm_script(
+                args.write_slurm_script,
+                config,
+                collect_only=args.collect_only,
+                dry_run=args.dry_run,
+                skip_downloads=args.skip_downloads,
+                skip_gpu_check=args.skip_gpu_check,
+                allow_gpu_mismatch=args.allow_gpu_mismatch,
+                keep_going=args.keep_going,
+                job_name=args.slurm_job_name,
+                time_limit=args.slurm_time_limit,
+                cpus_per_task=args.slurm_cpus_per_task,
+            )
+            print(f"Wrote IsoDelta-Halo SLURM launcher to {args.write_slurm_script}")
+            return SUCCESS_RETURN_CODE
         if args.plan_only:
             plan_path = (
                 args.plan_output
