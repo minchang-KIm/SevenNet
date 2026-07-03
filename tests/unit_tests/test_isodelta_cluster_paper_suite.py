@@ -218,6 +218,7 @@ def _external_timing_report(
     *,
     disabled_command: str = "run baseline",
     enabled_command: str = "run enabled",
+    log_dir: Path | None = None,
 ) -> dict[str, object]:
     """Create an external-pair timing report for a non-SevenNet runtime."""
     case = isodelta_cluster_suite.CaseConfig(
@@ -228,7 +229,7 @@ def _external_timing_report(
         enabled_command=enabled_command,
         repeat_count=2,
     )
-    return _external_timing_report_for_case(case)
+    return _external_timing_report_for_case(case, log_dir=log_dir)
 
 
 def _external_timing_report_for_case(
@@ -236,6 +237,7 @@ def _external_timing_report_for_case(
     *,
     baseline_times: list[float] | None = None,
     enabled_times: list[float] | None = None,
+    log_dir: Path | None = None,
 ) -> dict[str, object]:
     """Create external-pair timing evidence for a concrete manifest case."""
     if baseline_times is None:
@@ -256,14 +258,23 @@ def _external_timing_report_for_case(
     enabled_stddev = isodelta_cluster_suite._sample_stddev(enabled_times)
     command_records = []
     for repeat_index, elapsed_seconds in enumerate(baseline_times):
+        if log_dir is None:
+            stdout_path = Path(f"{case.name}/disabled_{repeat_index}.stdout.log")
+            stderr_path = Path(f"{case.name}/disabled_{repeat_index}.stderr.log")
+        else:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            stdout_path = log_dir / f"{case.name}_disabled_{repeat_index}.stdout.log"
+            stderr_path = log_dir / f"{case.name}_disabled_{repeat_index}.stderr.log"
+            stdout_path.write_text(f"{case.name} disabled {repeat_index}\n", encoding="utf-8")
+            stderr_path.write_text("", encoding="utf-8")
         command_records.append(
             {
                 "name": f"{case.name}:{isodelta_cluster_suite.EXTERNAL_DISABLED_COMMAND_LABEL}:{repeat_index}",
                 "command": str(case.disabled_command),
                 "returncode": isodelta_cluster_suite.SUCCESS_RETURN_CODE,
                 "elapsed_seconds": elapsed_seconds,
-                "stdout_path": f"{case.name}/disabled_{repeat_index}.stdout.log",
-                "stderr_path": f"{case.name}/disabled_{repeat_index}.stderr.log",
+                "stdout_path": str(stdout_path),
+                "stderr_path": str(stderr_path),
                 "cwd": str(REPO_ROOT),
                 "tracked_env": isodelta_cluster_suite.command_environment_snapshot(
                     isodelta_cluster_suite._default_case_env(case.disabled_env, disabled=True)
@@ -271,20 +282,42 @@ def _external_timing_report_for_case(
             }
         )
     for repeat_index, elapsed_seconds in enumerate(enabled_times):
+        if log_dir is None:
+            stdout_path = Path(f"{case.name}/enabled_{repeat_index}.stdout.log")
+            stderr_path = Path(f"{case.name}/enabled_{repeat_index}.stderr.log")
+        else:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            stdout_path = log_dir / f"{case.name}_enabled_{repeat_index}.stdout.log"
+            stderr_path = log_dir / f"{case.name}_enabled_{repeat_index}.stderr.log"
+            stdout_path.write_text(f"{case.name} enabled {repeat_index}\n", encoding="utf-8")
+            stderr_path.write_text("", encoding="utf-8")
         command_records.append(
             {
                 "name": f"{case.name}:{isodelta_cluster_suite.EXTERNAL_ENABLED_COMMAND_LABEL}:{repeat_index}",
                 "command": str(case.enabled_command),
                 "returncode": isodelta_cluster_suite.SUCCESS_RETURN_CODE,
                 "elapsed_seconds": elapsed_seconds,
-                "stdout_path": f"{case.name}/enabled_{repeat_index}.stdout.log",
-                "stderr_path": f"{case.name}/enabled_{repeat_index}.stderr.log",
+                "stdout_path": str(stdout_path),
+                "stderr_path": str(stderr_path),
                 "cwd": str(REPO_ROOT),
                 "tracked_env": isodelta_cluster_suite.command_environment_snapshot(
                     isodelta_cluster_suite._default_case_env(case.enabled_env, disabled=False)
                 ),
             }
         )
+    command_log_fingerprints = [
+        {
+            "name": command["name"],
+            "returncode": command["returncode"],
+            "stdout": isodelta_cluster_suite.optional_file_fingerprint(
+                Path(str(command["stdout_path"]))
+            ),
+            "stderr": isodelta_cluster_suite.optional_file_fingerprint(
+                Path(str(command["stderr_path"]))
+            ),
+        }
+        for command in command_records
+    ]
     return {
         "schema_version": "isodelta-external-pair-timing-v1",
         "case_name": case.name,
@@ -303,6 +336,7 @@ def _external_timing_report_for_case(
         "speedup_vs_disabled_cache": baseline_mean / enabled_mean,
         "mode_controls": isodelta_cluster_suite.case_mode_control_record(case),
         "commands": command_records,
+        "command_log_fingerprints": command_log_fingerprints,
     }
 
 
@@ -650,6 +684,7 @@ trace_evidence = ["{trace_path.as_posix()}"]
                         "SevenNet",
                         disabled_command="should-not-run-disabled",
                         enabled_command="should-not-run-enabled",
+                        log_dir=timing_report_path.parent / "external_logs",
                     )
                 ),
                 encoding="utf-8",
@@ -1305,6 +1340,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                             case,
                             baseline_times=[BASELINE_LOOP_TIME_SECONDS] * case.repeat_count,
                             enabled_times=[ISODELTA_LOOP_TIME_SECONDS] * case.repeat_count,
+                            log_dir=timing_path.parent / "external_logs",
                         )
                     ),
                     encoding="utf-8",
@@ -1625,6 +1661,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                             case,
                             baseline_times=[BASELINE_LOOP_TIME_SECONDS] * case.repeat_count,
                             enabled_times=[ISODELTA_LOOP_TIME_SECONDS] * case.repeat_count,
+                            log_dir=timing_path.parent / "external_logs",
                         )
                     ),
                     encoding="utf-8",
@@ -1881,6 +1918,41 @@ artifacts = ["dataset"]
         ):
             isodelta_cluster_suite.validate_external_timing_report(report, case)
 
+    def test_external_timing_report_rejects_mutated_command_log(self) -> None:
+        """External timing report log fingerprints should protect archived logs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "nequip_timing.json"
+            report = _external_timing_report("NequIP", log_dir=root / "logs")
+            case = isodelta_cluster_suite.CaseConfig(
+                name="nequip-existing",
+                model="NequIP",
+                kind="external_pair",
+                disabled_command="run baseline",
+                enabled_command="run enabled",
+                repeat_count=2,
+                min_speedup=1.1,
+            )
+            verification = isodelta_cluster_suite.validate_external_timing_report(
+                report,
+                case,
+                report_path=report_path,
+            )
+            mutated_log = Path(str(report["commands"][0]["stdout_path"]))
+            mutated_log.write_text("changed after report\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "SHA-256 mismatch",
+            ):
+                isodelta_cluster_suite.validate_external_timing_report(
+                    report,
+                    case,
+                    report_path=report_path,
+                )
+
+        self.assertEqual(verification["verified_command_log_count"], 4)
+
     def test_speedup_lower_bound_gate_rejects_uncertain_case(self) -> None:
         """A mean speedup should fail when its conservative CI bound is weak."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1897,6 +1969,7 @@ artifacts = ["dataset"]
                         "NequIP",
                         disabled_command="baseline",
                         enabled_command="enabled",
+                        log_dir=nequip_timing_path.parent / "external_logs",
                     )
                 ),
                 encoding="utf-8",
@@ -1969,6 +2042,7 @@ min_speedup_95ci_lower_bound = 1.1
                         "NequIP",
                         disabled_command="python -c print('baseline')",
                         enabled_command="python -c print('enabled')",
+                        log_dir=nequip_timing_path.parent / "external_logs",
                     )
                 ),
                 encoding="utf-8",

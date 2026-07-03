@@ -884,6 +884,7 @@ def main() -> None:
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
         and "test_external_timing_report_requires_repeat_command_records" in cluster_suite_test
         and "test_external_timing_report_rejects_failed_command_record" in cluster_suite_test
+        and "test_external_timing_report_rejects_mutated_command_log" in cluster_suite_test
         and "test_command_records_include_cwd_and_tracked_environment" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mismatched_command_fingerprints" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_source_evidence" in cluster_suite_test
@@ -924,6 +925,8 @@ def main() -> None:
         and "EXTERNAL_TIMING_SCHEMA_VERSION" in cluster_suite
         and "validate_external_timing_report" in cluster_suite
         and "_validate_external_timing_command_records" in cluster_suite
+        and "_require_external_command_log_fingerprints" in cluster_suite
+        and "COMMAND_LOG_FINGERPRINTS_KEY" in cluster_suite
         and "EXTERNAL_DISABLED_COMMAND_LABEL" in cluster_suite
         and "EXTERNAL_ENABLED_COMMAND_LABEL" in cluster_suite
         and "BASELINE_TIMES_SECONDS_KEY" in cluster_suite
@@ -1108,6 +1111,8 @@ def main() -> None:
         and "`commands` array" in doc
         and "`case:disabled:N` and `case:enabled:N` command record" in doc
         and "tracked environment matching the manifest mode controls" in doc
+        and "`command_log_fingerprints` array fingerprints every external" in doc
+        and "suite validation rechecks those hashes" in doc
         and "`baseline_mean_seconds` and `enabled_mean_seconds`" in doc
         and "`speedup_vs_disabled_cache` to match baseline divided by enabled seconds" in doc,
         "IsoDelta-Halo guide must document external timing report validation",

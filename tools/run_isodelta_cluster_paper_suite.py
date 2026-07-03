@@ -137,6 +137,7 @@ ENABLED_SAMPLE_STDDEV_SECONDS_KEY = "enabled_sample_stddev_seconds"
 SPEEDUP_VS_DISABLED_CACHE_KEY = "speedup_vs_disabled_cache"
 MODE_CONTROLS_KEY = "mode_controls"
 COMMANDS_KEY = "commands"
+COMMAND_LOG_FINGERPRINTS_KEY = "command_log_fingerprints"
 EVIDENCE_FINGERPRINTS_KEY = "evidence_fingerprints"
 TRACE_EVIDENCE_KEY = "trace_evidence"
 CASE_EVIDENCE_FINGERPRINT_FIELDS = (
@@ -3394,6 +3395,7 @@ def _build_external_timing_report(
         SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
         MODE_CONTROLS_KEY: case_mode_control_record(case),
         COMMANDS_KEY: [asdict(record) for record in command_records],
+        COMMAND_LOG_FINGERPRINTS_KEY: command_log_fingerprints(command_records),
     }
 
 
@@ -3547,9 +3549,49 @@ def _validate_external_timing_command_records(
     return verified_count
 
 
+def _require_external_command_log_fingerprints(
+    report: dict[str, Any],
+    *,
+    report_path: Path | None,
+) -> int:
+    """Verify external timing command log fingerprints and optionally their files."""
+    command_fingerprints = report.get(COMMAND_LOG_FINGERPRINTS_KEY)
+    _require(
+        isinstance(command_fingerprints, list),
+        f"{COMMAND_LOG_FINGERPRINTS_KEY} must be a JSON array",
+    )
+    verified_count = _require_command_record_alignment(report, command_fingerprints)
+    if report_path is None:
+        return verified_count
+    bundle_root = report_path.parent
+    for index, raw_fingerprint in enumerate(command_fingerprints):
+        fingerprint_record = _as_json_object(
+            raw_fingerprint,
+            f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}]",
+        )
+        for stream_name in ("stdout", "stderr"):
+            stream_record = _as_json_object(
+                fingerprint_record.get(stream_name),
+                f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}].{stream_name}",
+            )
+            _require(
+                stream_record.get("exists") is True,
+                f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}].{stream_name} must exist",
+            )
+            _require_fingerprint_match(
+                stream_record,
+                f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}].{stream_name}",
+                bundle_root=bundle_root,
+                original_output_dir=None,
+            )
+    return verified_count
+
+
 def validate_external_timing_report(
     report: dict[str, Any],
     case: CaseConfig,
+    *,
+    report_path: Path | None = None,
 ) -> dict[str, Any]:
     """Validate external-pair timing evidence before it reaches paper tables."""
     report = _as_json_object(report, "external_timing_report")
@@ -3666,6 +3708,10 @@ def validate_external_timing_report(
         repeat_count,
         mode_controls,
     )
+    verified_command_log_count = _require_external_command_log_fingerprints(
+        report,
+        report_path=report_path,
+    )
     return {
         "status": "passed",
         SCHEMA_VERSION_KEY: schema_version,
@@ -3685,6 +3731,7 @@ def validate_external_timing_report(
         SPEEDUP_VS_DISABLED_CACHE_KEY: speedup,
         MODE_CONTROLS_KEY: mode_controls,
         "verified_command_record_count": verified_command_record_count,
+        "verified_command_log_count": verified_command_log_count,
     }
 
 
@@ -3775,7 +3822,11 @@ def validate_case_outputs(
             f"{case.name}: missing external timing report {external_timing_report}",
         )
         timing_payload = json.loads(external_timing_report.read_text(encoding="utf-8"))
-        validate_external_timing_report(timing_payload, case)
+        validate_external_timing_report(
+            timing_payload,
+            case,
+            report_path=external_timing_report,
+        )
 
 
 def try_reuse_case_outputs(

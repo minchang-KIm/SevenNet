@@ -486,6 +486,9 @@ match the manifest disabled/enabled commands and cache-off/cache-on environment
 before collect-only tables are accepted. Its `commands` array must also contain
 one successful `case:disabled:N` and `case:enabled:N` command record for every
 repeat, with command text and tracked environment matching the manifest mode controls.
+The companion `command_log_fingerprints` array fingerprints every external
+stdout/stderr log, and suite validation rechecks those hashes before accepting
+the timing report.
 In short, external timing report `mode_controls` must match the manifest.
 The generated table also reports baseline/enabled timing sample counts and
 normal-approximation 95% CI half-widths for the mean timings, so paper tables
