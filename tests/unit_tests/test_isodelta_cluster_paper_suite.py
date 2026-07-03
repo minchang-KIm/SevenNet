@@ -415,12 +415,20 @@ repeat_count = 1
                 / "preflight.stderr.log"
             )
             preflight_log_exists = preflight_log.exists()
+            preflight_log_digest = hashlib.sha256(preflight_log.read_bytes()).hexdigest()
+            preflight_fingerprint = next(
+                record
+                for record in summary["command_log_fingerprints"]
+                if record["name"] == "mace-preflight:preflight"
+            )
 
         self.assertEqual(exit_code, 1)
         self.assertIn("mace-preflight:preflight", command_names)
         self.assertFalse(any(":disabled:" in name for name in command_names))
         self.assertFalse(any(":enabled:" in name for name in command_names))
         self.assertTrue(preflight_log_exists)
+        self.assertTrue(preflight_fingerprint["stderr"]["exists"])
+        self.assertEqual(preflight_fingerprint["stderr"]["sha256"], preflight_log_digest)
         self.assertTrue(
             any(case["status"].startswith("failed:") for case in summary["cases"])
         )

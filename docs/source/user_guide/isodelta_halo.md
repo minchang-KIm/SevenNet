@@ -385,6 +385,10 @@ recounts all passed cases before writing the summary:
 `min_distinct_trace_models` must be satisfied by the `model` labels inside
 those trace files. This prevents a three-model claim from passing with
 duplicated MACE evidence mislabeled in the manifest.
+The summary also stores `command_log_fingerprints` for every launched command,
+including each stdout/stderr log path, existence flag, SHA-256 digest, and byte
+size. This lets reviewers confirm that the archived logs match the command
+records used to build the paper tables.
 
 For an interrupted cluster job, rerun with `--reuse-passed` instead of starting
 from zero:

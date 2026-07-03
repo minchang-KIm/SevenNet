@@ -799,6 +799,10 @@ def main() -> None:
         and "collect_environment_snapshot" in cluster_suite
         and "write_environment_snapshot" in cluster_suite
         and "environment_snapshot.json" in cluster_suite
+        and "command_log_fingerprints" in cluster_suite
+        and "optional_file_fingerprint" in cluster_suite
+        and '"stdout": optional_file_fingerprint' in cluster_suite
+        and '"stderr": optional_file_fingerprint' in cluster_suite
         and "manifest_record" in cluster_suite
         and "generated_artifact_record" in cluster_suite
         and "artifact_fingerprints" in cluster_suite
@@ -883,6 +887,15 @@ def main() -> None:
         and "SVG figure" in doc
         and "manifest snapshot" in doc,
         "IsoDelta-Halo guide must document generated paper artifact fingerprints",
+    )
+    _require(
+        "`command_log_fingerprints`" in doc
+        and "stdout/stderr log path" in doc
+        and "existence flag" in doc
+        and "SHA-256 digest" in doc
+        and "command" in doc
+        and "records" in doc,
+        "IsoDelta-Halo guide must document command log fingerprints",
     )
     _require(
         "`environment_snapshot.json`" in doc

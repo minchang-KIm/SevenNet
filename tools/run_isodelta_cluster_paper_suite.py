@@ -1371,6 +1371,36 @@ def generated_artifact_record(path: Path) -> dict[str, Any]:
     }
 
 
+def optional_file_fingerprint(path: Path) -> dict[str, Any]:
+    """Return a fingerprint record that explicitly handles absent log files."""
+    if not path.exists():
+        return {
+            "path": str(path),
+            "exists": False,
+            "sha256": None,
+            "size_bytes": None,
+        }
+    return {
+        "path": str(path),
+        "exists": True,
+        "sha256": sha256_file(path),
+        "size_bytes": path.stat().st_size,
+    }
+
+
+def command_log_fingerprints(command_records: list[CommandRecord]) -> list[dict[str, Any]]:
+    """Fingerprint stdout/stderr logs for every launched command."""
+    return [
+        {
+            "name": record.name,
+            "returncode": record.returncode,
+            "stdout": optional_file_fingerprint(Path(record.stdout_path)),
+            "stderr": optional_file_fingerprint(Path(record.stderr_path)),
+        }
+        for record in command_records
+    ]
+
+
 def write_manifest_snapshot(config: SuiteConfig) -> Path:
     """Copy the manifest into the output bundle for archival review."""
     snapshot_path = config.output_dir / MANIFEST_SNAPSHOT_NAME
@@ -2832,6 +2862,7 @@ def write_paper_outputs(
         "cases": [asdict(summary) for summary in case_summaries],
         "correlations": correlation_rows,
         "commands": [asdict(record) for record in command_records],
+        "command_log_fingerprints": command_log_fingerprints(command_records),
         "artifacts": {
             name: str(path) for name, path in artifact_paths.items()
         },
