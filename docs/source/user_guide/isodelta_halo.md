@@ -360,7 +360,7 @@ python tools/run_isodelta_cluster_paper_suite.py \
   --prepare-artifacts
 ```
 
-The `--prepare-artifacts` mode downloads missing datasets, checkpoints, input decks, and runtime bundles, verifies every declared SHA-256 digest, and writes `artifact_preparation_report.json` under the suite output directory. It does not probe GPUs or launch SevenNet/MACE/NequIP cases, so failed URLs or checksum mismatches are caught before the 8-GPU allocation starts.
+The `--prepare-artifacts` mode downloads missing datasets, checkpoints, input decks, and runtime bundles, verifies every declared SHA-256 digest, and writes `artifact_preparation_report.json` under the suite output directory. Each download record includes `download_progress` with total bytes, written bytes, percent, and completion status; the terminal also prints byte-level download progress for long transfers. It does not probe GPUs or launch SevenNet/MACE/NequIP cases, so failed URLs or checksum mismatches are caught before the 8-GPU allocation starts.
 
 Before occupying a long allocation, run the cluster preflight gate:
 

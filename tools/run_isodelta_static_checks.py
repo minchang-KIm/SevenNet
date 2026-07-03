@@ -838,6 +838,10 @@ def main() -> None:
         and "PREFLIGHT_OUTPUT" in cluster_suite
         and "validate_gpu_count" in cluster_suite
         and "download_artifact" in cluster_suite
+        and "DOWNLOAD_PROGRESS_INTERVAL_BYTES" in cluster_suite
+        and "_update_download_progress" in cluster_suite
+        and "_emit_download_progress" in cluster_suite
+        and "download_progress" in cluster_suite
         and "validate_required_artifacts_available" in cluster_suite
         and "skipped_optional_missing" in cluster_suite
         and "skip_downloads_would_fail" in cluster_suite
@@ -877,6 +881,8 @@ def main() -> None:
         and "run_case_preflight" in cluster_suite
         and "preflight.stdout.log" in cluster_suite
         and "test_preflight_only_downloads_artifacts_and_runs_case_checks" in cluster_suite_test
+        and "test_download_artifact_prints_terminal_progress_when_requested"
+        in cluster_suite_test
         and "test_preflight_only_reports_failed_case_check" in cluster_suite_test
         and "test_pipeline_stops_when_readiness_fails" in cluster_suite_test
         and "test_pipeline_stops_when_preflight_fails" in cluster_suite_test
@@ -997,6 +1003,8 @@ def main() -> None:
         and "`--prepare-artifacts`" in doc
         and "`--preflight-only`" in doc
         and "`preflight_report.json`" in doc
+        and "`download_progress`" in doc
+        and "byte-level download progress" in doc
         and "`--pipeline`" in doc
         and "`pipeline_report.json`" in doc
         and "`--verify-pipeline-report`" in doc

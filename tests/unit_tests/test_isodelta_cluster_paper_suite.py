@@ -6,7 +6,9 @@ tests use synthetic but fully validated benchmark and trace evidence.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import importlib.util
 import json
 from pathlib import Path
@@ -1414,7 +1416,8 @@ enabled_env = { SEVENN_ISODELTA_HALO_DISABLE = "1" }
         with tempfile.TemporaryDirectory() as tmpdir:
             source_path = Path(tmpdir) / "source.bin"
             destination_path = Path(tmpdir) / "downloaded.bin"
-            source_path.write_bytes(b"isodelta artifact")
+            artifact_bytes = b"isodelta artifact"
+            source_path.write_bytes(artifact_bytes)
             digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
             artifact = isodelta_cluster_suite.ArtifactConfig(
                 name="local-artifact",
@@ -1427,6 +1430,35 @@ enabled_env = { SEVENN_ISODELTA_HALO_DISABLE = "1" }
 
         self.assertTrue(record["downloaded"])
         self.assertEqual(record["sha256"], digest)
+        self.assertEqual(record["download_progress"]["bytes_total"], len(artifact_bytes))
+        self.assertEqual(record["download_progress"]["bytes_written"], len(artifact_bytes))
+        self.assertEqual(record["download_progress"]["percent"], 100.0)
+        self.assertTrue(record["download_progress"]["complete"])
+
+    def test_download_artifact_prints_terminal_progress_when_requested(self) -> None:
+        """Cluster runs should expose byte-level artifact download progress."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = Path(tmpdir) / "source.bin"
+            destination_path = Path(tmpdir) / "downloaded.bin"
+            source_path.write_bytes(b"progress bytes")
+            artifact = isodelta_cluster_suite.ArtifactConfig(
+                name="progress-artifact",
+                path=destination_path,
+                url=source_path.as_uri(),
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                record = isodelta_cluster_suite.download_artifact(
+                    artifact,
+                    progress_label="download-suite",
+                )
+
+        self.assertTrue(record["downloaded"])
+        self.assertIn(
+            "[download-suite] [download progress-artifact] progress-artifact: 100.0%",
+            stdout.getvalue(),
+        )
 
     def test_prepare_artifacts_downloads_and_writes_audit_report(self) -> None:
         """Artifact preparation should finish before any GPU case is launched."""
@@ -1475,6 +1507,11 @@ artifacts = ["dataset"]
         self.assertEqual(report["status"], "ready")
         self.assertEqual(report["artifacts"][0]["actual_sha256"], digest)
         self.assertEqual(report["artifacts"][0]["size_bytes"], len(b"prepared artifact bytes"))
+        self.assertEqual(
+            report["artifacts"][0]["download_progress"]["bytes_total"],
+            len(b"prepared artifact bytes"),
+        )
+        self.assertTrue(report["artifacts"][0]["download_progress"]["complete"])
 
     def test_download_artifact_skips_optional_missing_without_url(self) -> None:
         """Optional artifacts may be absent but should be recorded explicitly."""

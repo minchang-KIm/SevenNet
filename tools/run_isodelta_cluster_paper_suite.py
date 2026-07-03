@@ -27,7 +27,7 @@ import subprocess
 import sys
 import time
 import tomllib
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 from urllib.request import urlopen
 import xml.etree.ElementTree as ElementTree
@@ -168,6 +168,8 @@ SPEEDUP_SVG_EMPTY_MESSAGE = "No measured speedup values"
 HIT_RATE_SCATTER_TITLE = "Cache hit rate vs measured speedup"
 TRACE_METADATA_SCATTER_TITLE = "Trace metadata fraction vs estimated speedup"
 DOWNLOAD_CHUNK_BYTES = 1024 * 1024
+DOWNLOAD_PROGRESS_INTERVAL_BYTES = 64 * DOWNLOAD_CHUNK_BYTES
+DOWNLOAD_PROGRESS_PERCENT_DECIMALS = 1
 HASH_CHUNK_BYTES = DOWNLOAD_CHUNK_BYTES
 PERCENT_SCALE = 100.0
 SUCCESS_RETURN_CODE = 0
@@ -1341,8 +1343,81 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _copy_file_url(url: str, destination: Path) -> None:
-    """Copy a file:// artifact so tests and offline mirrors share one path."""
+def _download_progress_template() -> dict[str, Any]:
+    """Return the audit fields used for every artifact download attempt."""
+    return {
+        "bytes_total": None,
+        "bytes_written": 0,
+        "percent": None,
+        "complete": False,
+    }
+
+
+def _download_percent(bytes_written: int, bytes_total: int | None) -> float | None:
+    """Return a bounded download percent when the total byte count is known."""
+    if bytes_total is None or bytes_total <= 0:
+        return None
+    percent = PERCENT_SCALE * float(bytes_written) / float(bytes_total)
+    return round(min(percent, PERCENT_SCALE), DOWNLOAD_PROGRESS_PERCENT_DECIMALS)
+
+
+def _update_download_progress(
+    record: dict[str, Any],
+    *,
+    bytes_written: int,
+    bytes_total: int | None,
+    complete: bool,
+) -> None:
+    """Update the machine-readable download progress nested in one record."""
+    progress = _as_json_object(record["download_progress"], "download_progress")
+    progress["bytes_total"] = bytes_total
+    progress["bytes_written"] = bytes_written
+    progress["percent"] = _download_percent(bytes_written, bytes_total)
+    progress["complete"] = complete
+
+
+def _download_progress_message(
+    artifact_name: str,
+    *,
+    bytes_written: int,
+    bytes_total: int | None,
+) -> str:
+    """Return one compact terminal message for a download progress event."""
+    percent = _download_percent(bytes_written, bytes_total)
+    if percent is None:
+        return f"{artifact_name}: {bytes_written} bytes downloaded"
+    return f"{artifact_name}: {percent:.1f}% ({bytes_written}/{bytes_total} bytes)"
+
+
+def _emit_download_progress(
+    progress_label: str | None,
+    artifact_name: str,
+    *,
+    bytes_written: int,
+    bytes_total: int | None,
+) -> None:
+    """Print one download progress line when a suite run requested terminal updates."""
+    if progress_label is None:
+        return
+    message = _download_progress_message(
+        artifact_name,
+        bytes_written=bytes_written,
+        bytes_total=bytes_total,
+    )
+    print(f"[{progress_label}] [download {artifact_name}] {message}", flush=True)
+
+
+def _response_content_length(response: Any) -> int | None:
+    """Return an HTTP Content-Length value when the server provides one."""
+    header_value = response.headers.get("Content-Length")
+    if header_value is None:
+        return None
+    text = str(header_value).strip()
+    return int(text) if text.isdecimal() else None
+
+
+def _file_url_path(url: str) -> Path:
+    """Resolve a file:// artifact URL to a local path on Unix or Windows."""
     parsed_url = urlparse(url)
     source_path_text = parsed_url.path
     if os.name == "nt":
@@ -1350,11 +1425,39 @@ def _copy_file_url(url: str, destination: Path) -> None:
             source_path_text = f"//{parsed_url.netloc}{parsed_url.path}"
         elif re.match(r"^/[A-Za-z]:", parsed_url.path):
             source_path_text = parsed_url.path[1:]
-    source_path = Path(source_path_text)
-    shutil.copyfile(source_path, destination)
+    return Path(source_path_text)
 
 
-def download_artifact(artifact: ArtifactConfig, dry_run: bool = False) -> dict[str, Any]:
+def _copy_file_url(
+    url: str,
+    destination: Path,
+    *,
+    progress_callback: Callable[[int, int | None, bool], None] | None = None,
+) -> tuple[int, int]:
+    """Copy a file:// artifact so tests and offline mirrors share one path."""
+    source_path = _file_url_path(url)
+    bytes_total = source_path.stat().st_size
+    bytes_written = 0
+    with source_path.open("rb") as source, destination.open("wb") as output:
+        while True:
+            chunk = source.read(DOWNLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            output.write(chunk)
+            bytes_written += len(chunk)
+            if progress_callback is not None:
+                progress_callback(bytes_written, bytes_total, False)
+    if progress_callback is not None:
+        progress_callback(bytes_written, bytes_total, True)
+    return bytes_written, bytes_total
+
+
+def download_artifact(
+    artifact: ArtifactConfig,
+    dry_run: bool = False,
+    *,
+    progress_label: str | None = None,
+) -> dict[str, Any]:
     """Download a missing artifact and verify its optional SHA-256 digest."""
     path = artifact.path
     record: dict[str, Any] = {
@@ -1365,6 +1468,7 @@ def download_artifact(artifact: ArtifactConfig, dry_run: bool = False) -> dict[s
         "downloaded": False,
         "skipped_optional_missing": False,
         "sha256": None,
+        "download_progress": _download_progress_template(),
     }
     if path.exists():
         if artifact.sha256:
@@ -1390,15 +1494,55 @@ def download_artifact(artifact: ArtifactConfig, dry_run: bool = False) -> dict[s
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = path.with_name(path.name + ".download")
     parsed_url = urlparse(artifact.url)
+    last_progress_bytes = 0
+
+    def record_progress(
+        bytes_written: int,
+        bytes_total: int | None,
+        complete: bool,
+    ) -> None:
+        """Record progress and emit throttled terminal updates for one artifact."""
+        nonlocal last_progress_bytes
+        final_bytes_total = bytes_total if bytes_total is not None else bytes_written
+        _update_download_progress(
+            record,
+            bytes_written=bytes_written,
+            bytes_total=final_bytes_total if complete else bytes_total,
+            complete=complete,
+        )
+        should_emit = complete or (
+            bytes_written - last_progress_bytes >= DOWNLOAD_PROGRESS_INTERVAL_BYTES
+        )
+        if should_emit:
+            _emit_download_progress(
+                progress_label,
+                artifact.name,
+                bytes_written=bytes_written,
+                bytes_total=final_bytes_total if complete else bytes_total,
+            )
+            last_progress_bytes = bytes_written
+
     if parsed_url.scheme == "file":
-        _copy_file_url(artifact.url, temporary_path)
+        _copy_file_url(
+            artifact.url,
+            temporary_path,
+            progress_callback=record_progress,
+        )
     else:
-        with urlopen(artifact.url, timeout=DEFAULT_DOWNLOAD_TIMEOUT_SECONDS) as response, temporary_path.open("wb") as output:
+        with (
+            urlopen(artifact.url, timeout=DEFAULT_DOWNLOAD_TIMEOUT_SECONDS) as response,
+            temporary_path.open("wb") as output,
+        ):
+            bytes_total = _response_content_length(response)
+            bytes_written = 0
             while True:
                 chunk = response.read(DOWNLOAD_CHUNK_BYTES)
                 if not chunk:
                     break
                 output.write(chunk)
+                bytes_written += len(chunk)
+                record_progress(bytes_written, bytes_total, False)
+            record_progress(bytes_written, bytes_total, True)
     if artifact.sha256:
         digest = sha256_file(temporary_path)
         _require(
@@ -1435,7 +1579,11 @@ def prepare_artifacts(config: SuiteConfig, *, dry_run: bool = False) -> dict[str
         _progress(config.name, MIN_REQUIRED_CASE_COUNT, total_stages, "no artifacts declared")
     for index, artifact in enumerate(config.artifacts, start=MIN_REQUIRED_CASE_COUNT):
         _progress(config.name, index, total_stages, f"preparing artifact {artifact.name}")
-        record = download_artifact(artifact, dry_run=dry_run)
+        record = download_artifact(
+            artifact,
+            dry_run=dry_run,
+            progress_label=config.name,
+        )
         records.append(_augment_artifact_record(artifact, record))
 
     missing_required = [
@@ -1643,7 +1791,11 @@ def run_preflight_only(
         for artifact in config.artifacts:
             _progress(config.name, stage_index, total_stages, f"preflighting artifact {artifact.name}")
             try:
-                record = download_artifact(artifact, dry_run=dry_run)
+                record = download_artifact(
+                    artifact,
+                    dry_run=dry_run,
+                    progress_label=config.name,
+                )
                 download_records.append(_augment_artifact_record(artifact, record))
             except (ClusterSuiteError, OSError) as exc:
                 download_records.append(_preflight_download_failure_record(artifact, exc))
@@ -5289,7 +5441,13 @@ def run_suite(
         else:
             for artifact in config.artifacts:
                 _progress(config.name, stage_index, total_stages, f"checking artifact {artifact.name}")
-                download_records.append(download_artifact(artifact, dry_run=dry_run or collect_only))
+                download_records.append(
+                    download_artifact(
+                        artifact,
+                        dry_run=dry_run or collect_only,
+                        progress_label=config.name,
+                    )
+                )
                 stage_index += 1
 
     command_records: list[CommandRecord] = []
