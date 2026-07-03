@@ -37,6 +37,7 @@ from urllib.request import urlopen
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SUITE_SCHEMA_VERSION = "isodelta-cluster-paper-suite-v1"
 READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
+ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 EXTERNAL_TIMING_SCHEMA_VERSION = "isodelta-external-pair-timing-v1"
 DEFAULT_OUTPUT_DIR = Path("isodelta_cluster_paper_runs")
 DEFAULT_EXPECTED_GPU_COUNT = 8
@@ -77,6 +78,7 @@ EXTERNAL_TIMING_REPORT_NAME = "external_pair_timing_report.json"
 TRACE_EVIDENCE_SUFFIX = "_trace_evidence.json"
 PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
 SUMMARY_REPORT_NAME = "isodelta_cluster_paper_summary.json"
+ARTIFACT_PREPARATION_REPORT_NAME = "artifact_preparation_report.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
 ENVIRONMENT_SNAPSHOT_NAME = "environment_snapshot.json"
@@ -1309,6 +1311,66 @@ def download_artifact(artifact: ArtifactConfig, dry_run: bool = False) -> dict[s
     temporary_path.replace(path)
     record["downloaded"] = True
     return record
+
+
+def _augment_artifact_record(artifact: ArtifactConfig, record: dict[str, Any]) -> dict[str, Any]:
+    """Add post-prepare existence, size, and digest evidence to one record."""
+    enriched_record = dict(record)
+    artifact_exists = artifact.path.exists()
+    enriched_record["exists_after_prepare"] = artifact_exists
+    if artifact_exists:
+        enriched_record["size_bytes"] = artifact.path.stat().st_size
+        enriched_record["actual_sha256"] = sha256_file(artifact.path)
+    else:
+        enriched_record["size_bytes"] = None
+        enriched_record["actual_sha256"] = None
+    return enriched_record
+
+
+def prepare_artifacts(config: SuiteConfig, *, dry_run: bool = False) -> dict[str, Any]:
+    """Download and verify all declared artifacts before reserving GPUs."""
+    validate_suite_config(config)
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+    total_stages = max(len(config.artifacts), MIN_REQUIRED_CASE_COUNT)
+    records: list[dict[str, Any]] = []
+    if not config.artifacts:
+        _progress(config.name, MIN_REQUIRED_CASE_COUNT, total_stages, "no artifacts declared")
+    for index, artifact in enumerate(config.artifacts, start=MIN_REQUIRED_CASE_COUNT):
+        _progress(config.name, index, total_stages, f"preparing artifact {artifact.name}")
+        record = download_artifact(artifact, dry_run=dry_run)
+        records.append(_augment_artifact_record(artifact, record))
+
+    missing_required = [
+        record["name"]
+        for record in records
+        if record["required"] and not record["exists_after_prepare"]
+    ]
+    status = "planned" if dry_run else "ready"
+    if missing_required and not dry_run:
+        status = "failed"
+    report_path = config.output_dir / ARTIFACT_PREPARATION_REPORT_NAME
+    payload = {
+        "artifact_preparation_schema_version": ARTIFACT_PREPARATION_SCHEMA_VERSION,
+        "status": status,
+        "dry_run": dry_run,
+        "report_path": str(report_path),
+        "provenance": collect_run_provenance(),
+        "suite": {
+            "name": config.name,
+            "manifest_path": str(config.manifest_path),
+            "manifest": manifest_record(config),
+            "output_dir": str(config.output_dir),
+            "require_artifact_sha256": config.require_artifact_sha256,
+        },
+        "missing_required_artifacts": missing_required,
+        "artifacts": records,
+    }
+    report_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    _require(
+        dry_run or not missing_required,
+        "required artifacts were not prepared: " + MODEL_NAME_JOINER.join(missing_required),
+    )
+    return payload
 
 
 def validate_required_artifacts_available(
@@ -3659,6 +3721,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--write-slurm-script", type=Path, help="Write a commented SLURM sbatch script and exit")
     parser.add_argument("--verify-output-bundle", type=Path, help="Verify summary artifact and log fingerprints")
     parser.add_argument("--readiness-check", action="store_true", help="Audit a manifest before final paper execution")
+    parser.add_argument("--prepare-artifacts", action="store_true", help="Download and verify artifacts without using GPUs")
     parser.add_argument("--plan-only", action="store_true", help="Write a preflight JSON plan and exit")
     parser.add_argument("--plan-output", type=Path, help="Path for --plan-only JSON output")
     parser.add_argument("--output-dir", type=Path, help="Override suite.output_dir")
@@ -3719,9 +3782,18 @@ def main(argv: list[str] | None = None) -> int:
         if args.readiness_check:
             _require(args.write_slurm_script is None, "--readiness-check cannot be combined with --write-slurm-script")
             _require(not args.plan_only, "--readiness-check cannot be combined with --plan-only")
+            _require(not args.prepare_artifacts, "--readiness-check cannot be combined with --prepare-artifacts")
             report = build_readiness_report(config)
             print(json.dumps(report, indent=2))
             return SUCCESS_RETURN_CODE if report["status"] == "ready" else 1
+        if args.prepare_artifacts:
+            _require(args.write_slurm_script is None, "--prepare-artifacts cannot be combined with --write-slurm-script")
+            _require(not args.plan_only, "--prepare-artifacts cannot be combined with --plan-only")
+            _require(not args.collect_only, "--prepare-artifacts cannot be combined with --collect-only")
+            _require(not args.skip_downloads, "--prepare-artifacts cannot be combined with --skip-downloads")
+            report = prepare_artifacts(config, dry_run=args.dry_run)
+            print(json.dumps({"artifact_preparation_report": report["report_path"], "status": report["status"]}, indent=2))
+            return SUCCESS_RETURN_CODE
         if args.write_slurm_script is not None:
             _require(not args.plan_only, "--write-slurm-script cannot be combined with --plan-only")
             write_slurm_script(

@@ -303,6 +303,16 @@ any case. Optional artifacts with `required = false` may be absent, but the
 download record marks them as skipped rather than silently treating them as
 present.
 
+Before reserving GPUs, prepare the immutable inputs on a login or CPU node:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --manifest isodelta_cluster_suite.toml \
+  --prepare-artifacts
+```
+
+The `--prepare-artifacts` mode downloads missing datasets, checkpoints, input decks, and runtime bundles, verifies every declared SHA-256 digest, and writes `artifact_preparation_report.json` under the suite output directory. It does not probe GPUs or launch SevenNet/MACE/NequIP cases, so failed URLs or checksum mismatches are caught before the 8-GPU allocation starts.
+
 On a SLURM cluster, generate a commented submission script from the same
 manifest:
 

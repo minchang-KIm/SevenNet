@@ -770,11 +770,15 @@ def main() -> None:
         and "FINAL_PAPER_MIN_REPEAT_COUNT" in cluster_suite
         and "UNRESOLVED_TEMPLATE_MARKERS" in cluster_suite
         and "READINESS_SCHEMA_VERSION" in cluster_suite
+        and "ARTIFACT_PREPARATION_SCHEMA_VERSION" in cluster_suite
+        and "ARTIFACT_PREPARATION_REPORT_NAME" in cluster_suite
         and "SHA256_HEX_LENGTH" in cluster_suite
         and "SHA256_HEX_PATTERN" in cluster_suite
         and "require_artifact_sha256" in cluster_suite
         and "build_readiness_report" in cluster_suite
         and "--readiness-check" in cluster_suite
+        and "prepare_artifacts" in cluster_suite
+        and "--prepare-artifacts" in cluster_suite
         and "validate_gpu_count" in cluster_suite
         and "download_artifact" in cluster_suite
         and "validate_required_artifacts_available" in cluster_suite
@@ -854,6 +858,9 @@ def main() -> None:
         and "`require_artifact_sha256 = true`" in doc
         and "64-character SHA-256 digest" in doc
         and "`--readiness-check`" in doc
+        and "`--prepare-artifacts`" in doc
+        and "`artifact_preparation_report.json`" in doc
+        and "does not probe GPUs" in doc
         and "uses `trace_only` instead of paired" in doc
         and "`min_speedup_95ci_lower_bound` gates" in doc
         and "case_summary.csv" in doc

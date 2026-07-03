@@ -627,6 +627,54 @@ artifacts = ["dataset"]
         self.assertTrue(record["downloaded"])
         self.assertEqual(record["sha256"], digest)
 
+    def test_prepare_artifacts_downloads_and_writes_audit_report(self) -> None:
+        """Artifact preparation should finish before any GPU case is launched."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_path = root / "source.bin"
+            destination_path = root / "inputs" / "prepared.bin"
+            output_dir = root / "paper_outputs"
+            manifest_path = root / "suite.toml"
+            source_path.write_bytes(b"prepared artifact bytes")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "prepare-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+require_artifact_sha256 = true
+
+[[artifacts]]
+name = "dataset"
+path = "{destination_path.as_posix()}"
+url = "{source_path.as_uri()}"
+sha256 = "{digest}"
+required_by = ["SevenNet"]
+
+[[cases]]
+name = "sevennet"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["sevennet_trace.json"]
+artifacts = ["dataset"]
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                ["--manifest", str(manifest_path), "--prepare-artifacts"]
+            )
+            report_path = output_dir / isodelta_cluster_suite.ARTIFACT_PREPARATION_REPORT_NAME
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            destination_exists = destination_path.exists()
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(destination_exists)
+        self.assertEqual(report["status"], "ready")
+        self.assertEqual(report["artifacts"][0]["actual_sha256"], digest)
+        self.assertEqual(report["artifacts"][0]["size_bytes"], len(b"prepared artifact bytes"))
+
     def test_download_artifact_skips_optional_missing_without_url(self) -> None:
         """Optional artifacts may be absent but should be recorded explicitly."""
         with tempfile.TemporaryDirectory() as tmpdir:
