@@ -161,6 +161,7 @@ REQUIRED_PAPER_ARTIFACT_NAMES = (
     "manifest_snapshot",
 )
 PAPER_CASE_SUMMARY_COLUMNS = ("case", "model", "kind", "status")
+PAPER_CASE_SUMMARY_FIELD_MAP = {"case": "case_name"}
 PAPER_CORRELATION_COLUMNS = ("x_metric", "y_metric", "n", "pearson", "spearman")
 PAPER_SVG_ARTIFACT_NAMES = ("speedup_svg", "hit_rate_svg", "trace_svg")
 DOWNLOAD_CHUNK_BYTES = 1024 * 1024
@@ -2837,6 +2838,59 @@ def _as_csv_nonnegative_int(value: str | None, field_name: str) -> int:
     return int(text)
 
 
+def _format_csv_value(value: Any) -> str:
+    """Format a summary JSON value the way csv.DictWriter writes table cells."""
+    return "" if value is None else str(value)
+
+
+def _case_summary_field(column_name: str) -> str:
+    """Map a paper table column to the matching summary JSON case field."""
+    return PAPER_CASE_SUMMARY_FIELD_MAP.get(column_name, column_name)
+
+
+def _require_case_summary_cell_values(
+    *,
+    column_names: tuple[str, ...],
+    row_values_by_case: dict[str, dict[str, str]],
+    cases_by_name: dict[str, dict[str, Any]],
+    label: str,
+    formatter: Any,
+) -> None:
+    """Verify generated case-summary table cells against summary JSON cases."""
+    for case_name, row_values in row_values_by_case.items():
+        case_record = cases_by_name[case_name]
+        for column_name in column_names:
+            summary_field = _case_summary_field(column_name)
+            _require(
+                summary_field in case_record,
+                f"{label}.{case_name}: summary field {summary_field} is missing",
+            )
+            expected_value = formatter(case_record.get(summary_field))
+            actual_value = row_values.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                f"{label}.{case_name}.{column_name} must match summary cases",
+            )
+
+
+def _summary_correlations_by_metric_pair(
+    summary_payload: dict[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    """Return summary correlation records keyed by their metric pair."""
+    raw_correlations = summary_payload.get("correlations")
+    _require(isinstance(raw_correlations, list), "correlations must be a JSON array")
+    correlations_by_pair: dict[tuple[str, str], dict[str, Any]] = {}
+    for index, raw_record in enumerate(raw_correlations):
+        record = _as_json_object(raw_record, f"correlations[{index}]")
+        metric_pair = (
+            _as_json_string(record.get("x_metric"), f"correlations[{index}].x_metric"),
+            _as_json_string(record.get("y_metric"), f"correlations[{index}].y_metric"),
+        )
+        _require(metric_pair not in correlations_by_pair, f"duplicate correlation row {metric_pair}")
+        correlations_by_pair[metric_pair] = record
+    return correlations_by_pair
+
+
 def _markdown_cells(line: str) -> list[str]:
     """Split one GitHub-flavored markdown table row into trimmed cells."""
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
@@ -2858,6 +2912,16 @@ def _require_case_summary_csv(path: Path, cases_by_name: dict[str, dict[str, Any
     _require(
         row_case_names == expected_case_names,
         "case_summary.csv: case names must match summary cases",
+    )
+    _require_case_summary_cell_values(
+        column_names=fieldnames,
+        row_values_by_case={
+            _as_json_string(row.get("case"), f"case_summary.csv[{index}].case"): row
+            for index, row in enumerate(rows)
+        },
+        cases_by_name=cases_by_name,
+        label="case_summary.csv",
+        formatter=_format_csv_value,
     )
 
 
@@ -2898,26 +2962,50 @@ def _require_case_summary_markdown(
         row_case_names == expected_case_names,
         "case_summary.md: case names must match summary cases",
     )
+    _require_case_summary_cell_values(
+        column_names=tuple(header),
+        row_values_by_case={
+            _as_json_string(
+                _markdown_cells(line)[case_index],
+                f"case_summary.md[{index}].case",
+            ): dict(zip(header, _markdown_cells(line), strict=True))
+            for index, line in enumerate(lines[2:])
+        },
+        cases_by_name=cases_by_name,
+        label="case_summary.md",
+        formatter=_format_table_value,
+    )
 
 
-def _require_correlation_csv(path: Path) -> None:
-    """Verify that the correlation table contains the fixed paper metric pairs."""
+def _require_correlation_csv(path: Path, summary_payload: dict[str, Any]) -> None:
+    """Verify that the correlation table matches summary JSON correlation rows."""
     fieldnames, rows = _read_csv_rows(path, "correlation.csv")
     _require_columns(fieldnames, PAPER_CORRELATION_COLUMNS, "correlation.csv")
+    summary_correlations = _summary_correlations_by_metric_pair(summary_payload)
     _require(
-        len(rows) == len(CORRELATION_METRIC_PAIRS),
-        "correlation.csv: row count must match configured metric pairs",
+        len(rows) == len(summary_correlations),
+        "correlation.csv: row count must match summary correlations",
     )
     expected_pairs = set(CORRELATION_METRIC_PAIRS)
     observed_pairs: set[tuple[str, str]] = set()
     for index, row in enumerate(rows):
-        observed_pairs.add(
-            (
-                _as_json_string(row.get("x_metric"), f"correlation.csv[{index}].x_metric"),
-                _as_json_string(row.get("y_metric"), f"correlation.csv[{index}].y_metric"),
-            )
+        metric_pair = (
+            _as_json_string(row.get("x_metric"), f"correlation.csv[{index}].x_metric"),
+            _as_json_string(row.get("y_metric"), f"correlation.csv[{index}].y_metric"),
         )
+        observed_pairs.add(metric_pair)
         _as_csv_nonnegative_int(row.get("n"), f"correlation.csv[{index}].n")
+        summary_row = _as_json_object(
+            summary_correlations.get(metric_pair),
+            f"correlations.{metric_pair}",
+        )
+        for column_name in fieldnames:
+            expected_value = _format_csv_value(summary_row.get(column_name))
+            actual_value = row.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                f"correlation.csv.{metric_pair}.{column_name} must match summary correlations",
+            )
     _require(
         observed_pairs == expected_pairs,
         "correlation.csv: metric pairs must match configured paper correlations",
@@ -2979,7 +3067,7 @@ def _require_paper_artifact_semantics(
         resolved_artifact_paths["case_summary_markdown"],
         cases_by_name,
     )
-    _require_correlation_csv(resolved_artifact_paths["correlation_csv"])
+    _require_correlation_csv(resolved_artifact_paths["correlation_csv"], summary_payload)
     for artifact_name in PAPER_SVG_ARTIFACT_NAMES:
         _require_svg_document(resolved_artifact_paths[artifact_name], artifact_name)
     _require_manifest_snapshot(resolved_artifact_paths["manifest_snapshot"])

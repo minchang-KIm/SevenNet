@@ -896,6 +896,10 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_mismatched_artifact_index_path"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_case_summary_value_drift"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_correlation_value_drift"
+        in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
@@ -940,6 +944,9 @@ def main() -> None:
         and "REQUIRED_PAPER_ARTIFACT_NAMES" in cluster_suite
         and "_require_artifact_index_alignment" in cluster_suite
         and "verified_artifact_index_count" in cluster_suite
+        and "_require_case_summary_cell_values" in cluster_suite
+        and "_summary_correlations_by_metric_pair" in cluster_suite
+        and "_format_csv_value" in cluster_suite
         and "_require_paper_artifact_semantics" in cluster_suite
         and "verified_paper_artifact_semantic_count" in cluster_suite
         and "_require_svg_document" in cluster_suite
@@ -1121,7 +1128,10 @@ def main() -> None:
     _require(
         "semantic paper-artifact checks" in doc
         and "`case_summary.csv` and `case_summary.md` must contain exactly one row per" in doc
+        and "same cell values as `summary[\"cases\"]`" in doc
         and "`correlation.csv` must contain the configured metric-pair rows" in doc
+        and "same values as" in doc
+        and "`summary[\"correlations\"]`" in doc
         and "each SVG figure must parse as an SVG document" in doc
         and "`environment_snapshot.json` must carry the expected snapshot schema" in doc
         and "matching hash" in doc,

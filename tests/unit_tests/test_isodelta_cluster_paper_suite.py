@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -350,12 +351,45 @@ def _minimal_svg(title: str) -> str:
     )
 
 
+def _summary_case_record(
+    case_name: str,
+    *,
+    model: str = "SevenNet",
+    kind: str = "trace_only",
+    status: str = isodelta_cluster_suite.CASE_STATUS_PASSED,
+) -> dict[str, object]:
+    """Return the minimal case JSON fields needed to verify paper tables."""
+    return {
+        "case_name": case_name,
+        "model": model,
+        "kind": kind,
+        "status": status,
+    }
+
+
+def _summary_correlations(case_count: int) -> list[dict[str, object]]:
+    """Return correlation rows matching the generated minimal CSV table."""
+    return [
+        {
+            "x_metric": x_metric,
+            "y_metric": y_metric,
+            "n": case_count,
+            "pearson": None,
+            "spearman": None,
+        }
+        for x_metric, y_metric in isodelta_cluster_suite.CORRELATION_METRIC_PAIRS
+    ]
+
+
 def _write_required_paper_artifacts(
     output_dir: Path,
     *,
     case_names: tuple[str, ...] = ("case",),
+    case_records: tuple[dict[str, object], ...] | None = None,
 ) -> dict[str, dict[str, object]]:
     """Create the required paper artifacts that bundle verification expects."""
+    if case_records is None:
+        case_records = tuple(_summary_case_record(case_name) for case_name in case_names)
     tables_dir = output_dir / isodelta_cluster_suite.TABLES_DIR_NAME
     figures_dir = output_dir / isodelta_cluster_suite.FIGURES_DIR_NAME
     tables_dir.mkdir(parents=True, exist_ok=True)
@@ -381,18 +415,18 @@ def _write_required_paper_artifacts(
     manifest_snapshot.write_text('[suite]\nname = "test-suite"\n', encoding="utf-8")
     case_rows = [
         {
-            "case": case_name,
-            "model": "SevenNet",
-            "kind": "trace_only",
-            "status": isodelta_cluster_suite.CASE_STATUS_PASSED,
+            "case": record["case_name"],
+            "model": record["model"],
+            "kind": record["kind"],
+            "status": record["status"],
         }
-        for case_name in case_names
+        for record in case_records
     ]
     correlation_rows = [
         {
             "x_metric": x_metric,
             "y_metric": y_metric,
-            "n": len(case_names),
+            "n": len(case_records),
             "pearson": "",
             "spearman": "",
         }
@@ -449,7 +483,8 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 json.dumps(
                     {
                         "suite": {"output_dir": str(original_output_dir)},
-                        "cases": [{"case_name": "case"}],
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
                         "commands": [
                             {
                                 "name": "case",
@@ -528,7 +563,8 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 json.dumps(
                     {
                         "suite": {"output_dir": str(output_dir)},
-                        "cases": [{"case_name": "case"}],
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
                         "commands": [
                             {
                                 "name": "case",
@@ -588,7 +624,8 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 json.dumps(
                     {
                         "suite": {"output_dir": str(output_dir)},
-                        "cases": [{"case_name": "case"}],
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
                         "commands": [],
                         "command_log_fingerprints": [],
                         "artifacts": _artifact_index(artifact_fingerprints),
@@ -629,22 +666,22 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             timing_report_path.parent.mkdir(parents=True)
             timing_report = _external_timing_report("NequIP", log_dir=timing_report_path.parent / "logs")
             timing_report_path.write_text(json.dumps(timing_report), encoding="utf-8")
+            nequip_case_record = _summary_case_record(
+                "nequip-existing",
+                model="NequIP",
+                kind="external_pair",
+            )
             artifact_fingerprints = _write_required_paper_artifacts(
                 output_dir,
-                case_names=("nequip-existing",),
+                case_records=(nequip_case_record,),
             )
             summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary_path.write_text(
                 json.dumps(
                     {
                         "suite": {"output_dir": str(output_dir)},
-                        "cases": [
-                            {
-                                "case_name": "nequip-existing",
-                                "model": "NequIP",
-                                "kind": "external_pair",
-                            }
-                        ],
+                        "cases": [nequip_case_record],
+                        "correlations": _summary_correlations(1),
                         "case_mode_controls": {
                             "nequip-existing": timing_report["mode_controls"]
                         },
@@ -696,7 +733,8 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 json.dumps(
                     {
                         "suite": {"output_dir": str(output_dir)},
-                        "cases": [{"case_name": "case"}],
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
                         "commands": [],
                         "command_log_fingerprints": [],
                         "artifacts": _artifact_index(artifact_fingerprints),
@@ -721,6 +759,102 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
+    def test_verify_output_bundle_rejects_case_summary_value_drift(self) -> None:
+        """The main paper table should not drift from summary JSON case values."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            case_summary_csv = output_dir / "tables" / "case_summary.csv"
+            case_summary_csv.write_text(
+                "case,model,kind,status\ncase,MACE,trace_only,passed\n",
+                encoding="utf-8",
+            )
+            artifact_fingerprints["case_summary_csv"] = (
+                isodelta_cluster_suite.generated_artifact_record(case_summary_csv)
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "case_summary.csv.case.model must match summary cases",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_correlation_value_drift(self) -> None:
+        """The correlation appendix table should match summary JSON rows."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            correlation_csv = output_dir / "tables" / "correlation.csv"
+            drifted_rows = _summary_correlations(1)
+            drifted_rows[0] = dict(drifted_rows[0])
+            drifted_rows[0]["n"] = 2
+            isodelta_cluster_suite.write_csv(correlation_csv, drifted_rows)
+            artifact_fingerprints["correlation_csv"] = (
+                isodelta_cluster_suite.generated_artifact_record(correlation_csv)
+            )
+            first_metric_pair = (
+                drifted_rows[0]["x_metric"],
+                drifted_rows[0]["y_metric"],
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "correlation.csv."
+                    + re.escape(str(first_metric_pair))
+                    + ".n must match summary correlations"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
     def test_verify_output_bundle_rejects_mismatched_artifact_index_path(self) -> None:
         """The summary artifact index should not drift from fingerprint paths."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -733,7 +867,8 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 json.dumps(
                     {
                         "suite": {"output_dir": str(output_dir)},
-                        "cases": [{"case_name": "case"}],
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
                         "commands": [],
                         "command_log_fingerprints": [],
                         "artifacts": artifact_index,
