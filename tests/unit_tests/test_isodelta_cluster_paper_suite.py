@@ -281,6 +281,7 @@ trace_evidence = ["trace.json"]
                     str(slurm_path),
                     "--skip-downloads",
                     "--keep-going",
+                    "--reuse-passed",
                     "--slurm-job-name",
                     "paper suite",
                     "--slurm-cpus-per-task",
@@ -299,7 +300,64 @@ trace_evidence = ["trace.json"]
         self.assertIn("--plan-only --plan-output \"$PLAN_OUTPUT\"", script)
         self.assertIn("COMMON_ARGS+=(--skip-downloads)", script)
         self.assertIn("COMMON_ARGS+=(--keep-going)", script)
+        self.assertIn("COMMON_ARGS+=(--reuse-passed)", script)
         self.assertIn("# Run SevenNet, MACE, NequIP, and any extra manifest cases.", script)
+
+    def test_reuse_passed_skips_existing_valid_case_outputs(self) -> None:
+        """Validated outputs should be reusable after an interrupted cluster run."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            trace_path = root / "sevennet_trace.json"
+            output_dir = root / "paper_outputs"
+            manifest_path = root / "suite.toml"
+            trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "reuse-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+min_trace_count = 1
+min_distinct_trace_models = 1
+
+[[cases]]
+name = "sevennet-existing"
+model = "SevenNet"
+kind = "external_pair"
+disabled_command = "should-not-run-disabled"
+enabled_command = "should-not-run-enabled"
+repeat_count = 2
+trace_evidence = ["{trace_path.as_posix()}"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            timing_report_path = isodelta_cluster_suite._external_timing_report_path(
+                config,
+                config.cases[0],
+            )
+            timing_report_path.parent.mkdir(parents=True, exist_ok=True)
+            timing_report_path.write_text(
+                json.dumps(_external_timing_report("SevenNet")),
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.run_suite(
+                config,
+                skip_downloads=True,
+                skip_gpu_check=True,
+                reuse_passed=True,
+            )
+            summary = json.loads(
+                (output_dir / "isodelta_cluster_paper_summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(summary["cases"][0]["status"], "reused")
+        self.assertEqual(summary["suite_evidence"]["passed_models"], ["SevenNet"])
+        self.assertEqual(summary["commands"], [])
 
     def test_preflight_failure_skips_expensive_case_commands(self) -> None:
         """A failed case preflight should stop the paired timing loop early."""
@@ -533,6 +591,7 @@ artifacts = ["dataset"]
                     "--plan-output",
                     str(plan_path),
                     "--skip-gpu-check",
+                    "--reuse-passed",
                 ]
             )
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
@@ -540,6 +599,8 @@ artifacts = ["dataset"]
 
         self.assertEqual(exit_code, 0)
         self.assertFalse(plan["gpu_check_planned"])
+        self.assertTrue(plan["modes"]["reuse_passed"])
+        self.assertTrue(plan["cases"][0]["reuse"]["enabled"])
         self.assertTrue(plan["artifacts"][0]["will_download"])
         self.assertTrue(plan["artifacts"][0]["missing_required"])
         self.assertEqual(

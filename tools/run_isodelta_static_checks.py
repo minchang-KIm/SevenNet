@@ -789,6 +789,10 @@ def main() -> None:
         and "preflight_timeout_seconds" in cluster_suite
         and "run_case_preflight" in cluster_suite
         and "preflight.stdout.log" in cluster_suite
+        and "CASE_STATUS_REUSED" in cluster_suite
+        and "PASSING_CASE_STATUSES" in cluster_suite
+        and "try_reuse_case_outputs" in cluster_suite
+        and "--reuse-passed" in cluster_suite
         and "ENVIRONMENT_SNAPSHOT_NAME" in cluster_suite
         and "ENVIRONMENT_PACKAGE_NAMES" in cluster_suite
         and "ENVIRONMENT_VARIABLE_NAMES" in cluster_suite
@@ -844,6 +848,15 @@ def main() -> None:
         and "PYTHON_BIN" in doc
         and "SUITE_RUNNER" in doc,
         "IsoDelta-Halo guide must document SLURM cluster launch generation",
+    )
+    _require(
+        "--reuse-passed" in doc
+        and "interrupted cluster job" in doc
+        and "Reused rows are marked as `reused`" in doc
+        and "current validation gates" in doc
+        and "normal command" in doc
+        and "execution path" in doc,
+        "IsoDelta-Halo guide must document partial rerun reuse mode",
     )
     _require(
         "`preflight_command`" in doc

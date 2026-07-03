@@ -59,6 +59,9 @@ DEFAULT_SLURM_JOB_NAME = "isodelta-halo-paper-suite"
 DEFAULT_SLURM_TIME_LIMIT = "24:00:00"
 DEFAULT_SLURM_CPUS_PER_TASK = 8
 DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
+CASE_STATUS_PASSED = "passed"
+CASE_STATUS_REUSED = "reused"
+PASSING_CASE_STATUSES = frozenset((CASE_STATUS_PASSED, CASE_STATUS_REUSED))
 SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_only"))
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
 BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
@@ -1292,6 +1295,59 @@ def _planned_trace_paths(
     return case.trace_evidence_paths + generated_paths
 
 
+def planned_case_outputs(
+    config: SuiteConfig,
+    case: CaseConfig,
+    *,
+    collect_only: bool,
+) -> tuple[Path | None, Path | None, tuple[Path, ...], Path | None]:
+    """Return the output paths that a case should validate or reuse."""
+    trace_paths = _planned_trace_paths(config, case, collect_only=collect_only)
+    external_timing_report = (
+        case.external_timing_report
+        if collect_only
+        else (
+            _external_timing_report_path(config, case)
+            if case.kind == "external_pair"
+            else None
+        )
+    )
+    return (
+        _planned_benchmark_report(config, case, collect_only=collect_only),
+        _planned_bundle_evidence(
+            config,
+            case,
+            trace_paths,
+            collect_only=collect_only,
+        ),
+        trace_paths,
+        external_timing_report,
+    )
+
+
+def _planned_paths_exist(paths: tuple[Path | None, ...]) -> bool:
+    """Return whether every planned non-null path exists for reuse planning."""
+    concrete_paths = [path for path in paths if path is not None]
+    return bool(concrete_paths) and all(path.exists() for path in concrete_paths)
+
+
+def _has_reusable_case_outputs(
+    benchmark_report: Path | None,
+    bundle_evidence: Path | None,
+    trace_evidence_paths: tuple[Path, ...],
+    external_timing_report: Path | None,
+) -> bool:
+    """Return whether a case has at least one planned artifact to validate."""
+    return any(
+        (
+            benchmark_report is not None,
+            bundle_evidence is not None,
+            bool(trace_evidence_paths),
+            external_timing_report is not None,
+        )
+    )
+
+
 def manifest_record(config: SuiteConfig) -> dict[str, Any]:
     """Return a reproducible fingerprint for the suite manifest file."""
     return {
@@ -1324,6 +1380,7 @@ def build_run_plan(
     collect_only: bool,
     skip_downloads: bool,
     skip_gpu_check: bool,
+    reuse_passed: bool = False,
 ) -> dict[str, Any]:
     """Build a machine-readable preflight plan before using cluster time."""
     validate_suite_config(config)
@@ -1364,16 +1421,12 @@ def build_run_plan(
 
     case_plan = []
     for case in config.cases:
-        trace_paths = _planned_trace_paths(config, case, collect_only=collect_only)
-        external_timing_report = (
-            case.external_timing_report
-            if collect_only
-            else (
-                _external_timing_report_path(config, case)
-                if case.kind == "external_pair"
-                else None
-            )
-        )
+        (
+            planned_benchmark_report,
+            planned_bundle_evidence,
+            trace_paths,
+            external_timing_report,
+        ) = planned_case_outputs(config, case, collect_only=collect_only)
         case_plan.append(
             {
                 "name": case.name,
@@ -1395,23 +1448,27 @@ def build_run_plan(
                     "trace_input": _path_text(case.trace_input),
                 },
                 "expected_outputs": {
-                    "benchmark_report": _path_text(
-                        _planned_benchmark_report(
-                            config,
-                            case,
-                            collect_only=collect_only,
-                        )
-                    ),
-                    "bundle_evidence": _path_text(
-                        _planned_bundle_evidence(
-                            config,
-                            case,
-                            trace_paths,
-                            collect_only=collect_only,
-                        )
-                    ),
+                    "benchmark_report": _path_text(planned_benchmark_report),
+                    "bundle_evidence": _path_text(planned_bundle_evidence),
                     "trace_evidence": [str(path) for path in trace_paths],
                     "external_timing_report": _path_text(external_timing_report),
+                },
+                "reuse": {
+                    "enabled": reuse_passed,
+                    "eligible": _has_reusable_case_outputs(
+                        planned_benchmark_report,
+                        planned_bundle_evidence,
+                        trace_paths,
+                        external_timing_report,
+                    ),
+                    "all_expected_outputs_exist": _planned_paths_exist(
+                        (
+                            planned_benchmark_report,
+                            planned_bundle_evidence,
+                            external_timing_report,
+                            *trace_paths,
+                        )
+                    ),
                 },
                 "thresholds": {
                     "repeat_count": case.repeat_count,
@@ -1446,6 +1503,7 @@ def build_run_plan(
             "collect_only": collect_only,
             "skip_downloads": skip_downloads,
             "skip_gpu_check": skip_gpu_check,
+            "reuse_passed": reuse_passed,
         },
         "gpu_check_planned": not skip_gpu_check,
         "artifacts": artifact_plan,
@@ -1472,6 +1530,7 @@ def write_run_plan(
     collect_only: bool,
     skip_downloads: bool,
     skip_gpu_check: bool,
+    reuse_passed: bool = False,
 ) -> Path:
     """Write the cluster preflight plan to a JSON file."""
     plan_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1480,6 +1539,7 @@ def write_run_plan(
         collect_only=collect_only,
         skip_downloads=skip_downloads,
         skip_gpu_check=skip_gpu_check,
+        reuse_passed=reuse_passed,
     )
     plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
     return plan_path
@@ -2020,6 +2080,44 @@ def validate_case_outputs(
         validate_external_timing_report(timing_payload, case)
 
 
+def try_reuse_case_outputs(
+    config: SuiteConfig,
+    case: CaseConfig,
+) -> tuple[Path | None, Path | None, tuple[Path, ...], Path | None] | None:
+    """Return reusable outputs only when existing artifacts pass current gates."""
+    (
+        benchmark_report,
+        bundle_evidence,
+        trace_evidence_paths,
+        external_timing_report,
+    ) = planned_case_outputs(config, case, collect_only=False)
+    if not _has_reusable_case_outputs(
+        benchmark_report,
+        bundle_evidence,
+        trace_evidence_paths,
+        external_timing_report,
+    ):
+        return None
+    try:
+        validate_case_outputs(
+            case,
+            benchmark_report,
+            bundle_evidence,
+            trace_evidence_paths,
+            external_timing_report,
+            dry_run=False,
+        )
+    except (
+        ClusterSuiteError,
+        benchmark_check.ReportCheckError,
+        trace_check.TraceCheckError,
+        bundle_check.EvidenceBundleError,
+        json.JSONDecodeError,
+    ):
+        return None
+    return benchmark_report, bundle_evidence, trace_evidence_paths, external_timing_report
+
+
 def _load_json_if_exists(path: Path | None) -> dict[str, Any] | None:
     """Load a JSON object when the path exists."""
     if path is None or not path.exists():
@@ -2037,7 +2135,7 @@ def validate_suite_evidence(
 ) -> dict[str, Any]:
     """Gate the complete paper matrix after all per-case checks pass."""
     passed_summaries = [
-        summary for summary in case_summaries if summary.status == "passed"
+        summary for summary in case_summaries if summary.status in PASSING_CASE_STATUSES
     ]
     passed_models = {summary.model for summary in passed_summaries}
     missing_passed_models = [
@@ -2703,6 +2801,7 @@ def run_suite(
     skip_gpu_check: bool = False,
     allow_gpu_mismatch: bool = False,
     keep_going: bool = False,
+    reuse_passed: bool = False,
 ) -> int:
     """Run the full cluster suite and write all paper-ready artifacts."""
     validate_suite_config(config)
@@ -2744,7 +2843,7 @@ def run_suite(
     for case in config.cases:
         _progress(config.name, stage_index, total_stages, f"running case {case.name} ({case.model})")
         stage_index += 1
-        case_status = "passed"
+        case_status = CASE_STATUS_PASSED
         benchmark_report = case.benchmark_report
         bundle_evidence = case.bundle_evidence
         trace_evidence_paths = case.trace_evidence_paths
@@ -2754,37 +2853,49 @@ def run_suite(
         try:
             case_command_records: list[CommandRecord] = []
             if not collect_only:
-                preflight_records = run_case_preflight(config, case, dry_run=dry_run)
-                case_command_records.extend(preflight_records)
-                command_records.extend(preflight_records)
-                if any(record.returncode != SUCCESS_RETURN_CODE for record in preflight_records):
-                    raise ClusterSuiteError(f"{case.name}: preflight command failed")
-                if case.kind == "sevennet_lammps":
-                    benchmark_report, bundle_evidence, trace_evidence_paths, records = run_sevennet_case(
-                        config,
-                        case,
-                        dry_run=dry_run,
-                    )
-                    case_command_records.extend(records)
-                    command_records.extend(records)
-                elif case.kind == "external_pair":
+                reused_outputs = (
+                    None if dry_run or not reuse_passed else try_reuse_case_outputs(config, case)
+                )
+                if reused_outputs is not None:
                     (
                         benchmark_report,
                         bundle_evidence,
                         trace_evidence_paths,
                         external_timing_report,
-                        records,
-                    ) = run_external_pair_case(config, case, dry_run=dry_run)
-                    case_command_records.extend(records)
-                    command_records.extend(records)
-                elif case.kind == "trace_only":
-                    trace_evidence_paths, records = run_trace_only_case(
-                        config,
-                        case,
-                        dry_run=dry_run,
-                    )
-                    case_command_records.extend(records)
-                    command_records.extend(records)
+                    ) = reused_outputs
+                    case_status = CASE_STATUS_REUSED
+                else:
+                    preflight_records = run_case_preflight(config, case, dry_run=dry_run)
+                    case_command_records.extend(preflight_records)
+                    command_records.extend(preflight_records)
+                    if any(record.returncode != SUCCESS_RETURN_CODE for record in preflight_records):
+                        raise ClusterSuiteError(f"{case.name}: preflight command failed")
+                    if case.kind == "sevennet_lammps":
+                        benchmark_report, bundle_evidence, trace_evidence_paths, records = run_sevennet_case(
+                            config,
+                            case,
+                            dry_run=dry_run,
+                        )
+                        case_command_records.extend(records)
+                        command_records.extend(records)
+                    elif case.kind == "external_pair":
+                        (
+                            benchmark_report,
+                            bundle_evidence,
+                            trace_evidence_paths,
+                            external_timing_report,
+                            records,
+                        ) = run_external_pair_case(config, case, dry_run=dry_run)
+                        case_command_records.extend(records)
+                        command_records.extend(records)
+                    elif case.kind == "trace_only":
+                        trace_evidence_paths, records = run_trace_only_case(
+                            config,
+                            case,
+                            dry_run=dry_run,
+                        )
+                        case_command_records.extend(records)
+                        command_records.extend(records)
             validate_case_outputs(
                 case,
                 benchmark_report,
@@ -2795,7 +2906,12 @@ def run_suite(
             )
             if any(record.returncode != SUCCESS_RETURN_CODE for record in case_command_records):
                 raise ClusterSuiteError(f"{case.name}: one or more commands failed")
-        except (ClusterSuiteError, benchmark_check.ReportCheckError, trace_check.TraceCheckError) as exc:
+        except (
+            ClusterSuiteError,
+            benchmark_check.ReportCheckError,
+            trace_check.TraceCheckError,
+            bundle_check.EvidenceBundleError,
+        ) as exc:
             case_status = f"failed: {exc}"
             failed = True
             if not keep_going:
@@ -2932,6 +3048,7 @@ def write_slurm_script(
     skip_gpu_check: bool = False,
     allow_gpu_mismatch: bool = False,
     keep_going: bool = False,
+    reuse_passed: bool = False,
     job_name: str = DEFAULT_SLURM_JOB_NAME,
     time_limit: str = DEFAULT_SLURM_TIME_LIMIT,
     cpus_per_task: int = DEFAULT_SLURM_CPUS_PER_TASK,
@@ -2985,6 +3102,8 @@ def write_slurm_script(
         _append_bash_array_args(lines, "--allow-gpu-mismatch")
     if keep_going:
         _append_bash_array_args(lines, "--keep-going")
+    if reuse_passed:
+        _append_bash_array_args(lines, "--reuse-passed")
     lines.extend(
         [
             "",
@@ -3016,6 +3135,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--skip-gpu-check", action="store_true", help="Do not probe GPU count")
     parser.add_argument("--allow-gpu-mismatch", action="store_true", help="Record GPU mismatch instead of failing")
     parser.add_argument("--keep-going", action="store_true", help="Continue after a failed case and mark it in tables")
+    parser.add_argument("--reuse-passed", action="store_true", help="Reuse existing case outputs that pass current gates")
     parser.add_argument("--slurm-job-name", default=DEFAULT_SLURM_JOB_NAME, help="Job name for --write-slurm-script")
     parser.add_argument("--slurm-time-limit", default=DEFAULT_SLURM_TIME_LIMIT, help="Time limit for --write-slurm-script")
     parser.add_argument(
@@ -3064,6 +3184,7 @@ def main(argv: list[str] | None = None) -> int:
                 skip_gpu_check=args.skip_gpu_check,
                 allow_gpu_mismatch=args.allow_gpu_mismatch,
                 keep_going=args.keep_going,
+                reuse_passed=args.reuse_passed,
                 job_name=args.slurm_job_name,
                 time_limit=args.slurm_time_limit,
                 cpus_per_task=args.slurm_cpus_per_task,
@@ -3082,6 +3203,7 @@ def main(argv: list[str] | None = None) -> int:
                 collect_only=args.collect_only,
                 skip_downloads=args.skip_downloads,
                 skip_gpu_check=args.skip_gpu_check,
+                reuse_passed=args.reuse_passed,
             )
             print(json.dumps({"plan_json": str(written_plan)}, indent=2))
             return SUCCESS_RETURN_CODE
@@ -3093,6 +3215,7 @@ def main(argv: list[str] | None = None) -> int:
             skip_gpu_check=args.skip_gpu_check,
             allow_gpu_mismatch=args.allow_gpu_mismatch,
             keep_going=args.keep_going,
+            reuse_passed=args.reuse_passed,
         )
     except ClusterSuiteError as exc:
         print(f"IsoDelta-Halo cluster paper suite failed: {exc}", file=sys.stderr)

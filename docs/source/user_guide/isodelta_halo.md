@@ -382,6 +382,22 @@ recounts all passed cases before writing the summary:
 those trace files. This prevents a three-model claim from passing with
 duplicated MACE evidence mislabeled in the manifest.
 
+For an interrupted cluster job, rerun with `--reuse-passed` instead of starting
+from zero:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --manifest isodelta_cluster_suite.toml \
+  --reuse-passed
+```
+
+The runner only reuses a case when the planned benchmark report, external timing
+report, trace evidence, or bundle evidence already exists and still passes the
+current validation gates. Reused rows are marked as `reused` in the summary
+table, and suite-level evidence treats them as passed evidence. If a threshold
+changed or a file is missing/corrupt, that case falls back to the normal command
+execution path.
+
 ## Paired Benchmark
 
 Use the benchmark runner after building a LAMMPS binary that contains
