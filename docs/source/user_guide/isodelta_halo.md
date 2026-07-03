@@ -141,7 +141,8 @@ Leave `SEVENN_ISODELTA_HALO_DISABLE` unset for the enabled run.
 Run the dependency-free validation suite before each commit:
 
 ```bash
-python tools/run_isodelta_validation.py
+python tools/run_isodelta_validation.py \
+  --report-path isodelta_validation_report.json
 ```
 
 The validation script checks:
@@ -153,11 +154,17 @@ The validation script checks:
 - Python syntax for validation tools
 - whitespace errors through `git diff --check`
 
+With `--report-path`, the runner writes `isodelta_validation_report.json` with
+the schema version, Git branch/commit/status metadata, every validation command,
+return code, elapsed time, and bounded stdout/stderr tails. Keep that report
+with the sync attempt when validating a commit before pushing.
+
 This does not replace a full LAMMPS/LibTorch build. It is a fast local guard so
 the implementation does not drift while runtime environments are being prepared.
 The same dependency-free gate runs as the `IsoDelta-Halo lightweight validation`
 GitHub Actions workflow in `.github/workflows/isodelta-halo.yml`
-whenever IsoDelta-Halo sources, validation tools, tests, or this guide change.
+whenever IsoDelta-Halo sources, validation tools, tests, or this guide change,
+and the workflow uploads the same JSON validation report as an artifact.
 
 ## Build Prerequisite Check
 

@@ -40,4 +40,10 @@ jobs:
           python-version: "3.13"
 
       - name: Run IsoDelta-Halo validation
-        run: python tools/run_isodelta_validation.py
+        run: python tools/run_isodelta_validation.py --report-path isodelta_validation_report.json
+
+      - name: Upload IsoDelta-Halo validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: isodelta-validation-report
+          path: isodelta_validation_report.json

@@ -25,6 +25,7 @@ PREREQ_PATH = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 MLIP_TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
 MLIP_TRACE_DEMO_PATH = REPO_ROOT / "tools" / "run_isodelta_mlip_trace_demo.py"
+VALIDATION_RUNNER_PATH = REPO_ROOT / "tools" / "run_isodelta_validation.py"
 PATCH_SCRIPT_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "patch_lammps.sh"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "isodelta-halo.yml"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
@@ -57,6 +58,7 @@ def main() -> None:
     binary_check = _read(BINARY_CHECK_PATH)
     mlip_trace_check = _read(MLIP_TRACE_CHECK_PATH)
     mlip_trace_demo = _read(MLIP_TRACE_DEMO_PATH)
+    validation_runner = _read(VALIDATION_RUNNER_PATH)
     patch_script = _read(PATCH_SCRIPT_PATH)
     workflow = _read(WORKFLOW_PATH)
     doc = _read(DOC_PATH)
@@ -297,9 +299,20 @@ def main() -> None:
         workflow.lstrip().startswith("#")
         and "Run IsoDelta-Halo validation" in workflow
         and "python tools/run_isodelta_validation.py" in workflow
+        and "--report-path isodelta_validation_report.json" in workflow
+        and "actions/upload-artifact@v4" in workflow
         and "sevenn/pair_e3gnn/**" in workflow
         and "tools/run_isodelta_*.py" in workflow,
         "IsoDelta-Halo workflow must run the lightweight validation gate",
+    )
+    _require(
+        "VALIDATION_REPORT_SCHEMA_VERSION" in validation_runner
+        and "--report-path" in validation_runner
+        and "stdout_tail" in validation_runner
+        and "stderr_tail" in validation_runner
+        and "git_status_short" in validation_runner
+        and "test_isodelta_validation_runner.py" in validation_runner,
+        "validation runner must emit auditable sync reports",
     )
     _require(
         "check_isodelta_build_prereqs.py" in doc,
@@ -983,7 +996,9 @@ def main() -> None:
     )
     _require(
         "IsoDelta-Halo lightweight validation" in doc
-        and ".github/workflows/isodelta-halo.yml" in doc,
+        and ".github/workflows/isodelta-halo.yml" in doc
+        and "`isodelta_validation_report.json`" in doc
+        and "uploads the same JSON validation report" in doc,
         "IsoDelta-Halo guide must document the CI validation workflow",
     )
     for miss_key in (
