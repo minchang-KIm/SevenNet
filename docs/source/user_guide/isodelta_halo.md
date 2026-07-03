@@ -334,6 +334,16 @@ paper artifact paths. It also records the manifest SHA-256 digest, so reviewers
 can confirm the submitted job used the same manifest they inspected. Review
 this file before occupying the 8-GPU queue.
 
+For the final paper run, add a readiness gate before submitting the job:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --manifest isodelta_cluster_suite.toml \
+  --readiness-check
+```
+
+The `--readiness-check` mode fails if the manifest is still in template form, requests fewer than 8 GPUs, omits SevenNet/MACE/NequIP, uses `trace_only` instead of paired enabled/disabled cases for the required model families, leaves required artifacts without SHA-256 protection, omits case preflight commands, or lacks `min_speedup_95ci_lower_bound` gates for paired timing claims. The JSON output lists every passed and failed readiness item so the cluster job is not submitted until the paper claim is auditable.
+
 Run the complete suite on the cluster:
 
 ```bash

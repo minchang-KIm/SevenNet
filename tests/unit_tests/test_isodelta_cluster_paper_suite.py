@@ -741,6 +741,93 @@ artifacts = ["dataset"]
         self.assertIn("environment_snapshot.json", plan["paper_outputs"]["environment_snapshot"])
         self.assertIn("speedup_by_case.svg", plan["paper_outputs"]["speedup_svg"])
 
+    def test_readiness_check_accepts_strict_three_model_paired_manifest(self) -> None:
+        """A final paper manifest should prove strict input and model coverage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_path = root / "source-data.bin"
+            source_path.write_bytes(b"strict cluster input")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "ready-suite"
+output_dir = "{(root / "paper_outputs").as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet", "MACE", "NequIP"]
+require_artifact_sha256 = true
+repeat_count = 3
+min_speedup_95ci_lower_bound = 1.0
+
+[[artifacts]]
+name = "dataset"
+path = "{(root / "downloaded.bin").as_posix()}"
+url = "{source_path.as_uri()}"
+sha256 = "{digest}"
+required_by = ["SevenNet", "MACE", "NequIP"]
+
+[[cases]]
+name = "sevennet-ready"
+model = "SevenNet"
+kind = "sevennet_lammps"
+preflight_command = 'python -c "import sevenn"'
+lammps_command = "mpiexec -n 8 lmp"
+input = "inputs/in.sevennet"
+artifacts = ["dataset"]
+
+[[cases]]
+name = "mace-ready"
+model = "MACE"
+kind = "external_pair"
+preflight_command = 'python -c "import mace"'
+disabled_command = "python run_mace.py --mode baseline"
+enabled_command = "python run_mace.py --mode isodelta"
+artifacts = ["dataset"]
+
+[[cases]]
+name = "nequip-ready"
+model = "NequIP"
+kind = "external_pair"
+preflight_command = 'python -c "import nequip"'
+disabled_command = "python run_nequip.py --mode baseline"
+enabled_command = "python run_nequip.py --mode isodelta"
+artifacts = ["dataset"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+            report = isodelta_cluster_suite.build_readiness_report(config)
+            exit_code = isodelta_cluster_suite.main(
+                ["--manifest", str(manifest_path), "--readiness-check"]
+            )
+
+        self.assertEqual(report["status"], "ready")
+        self.assertTrue(all(check["passed"] for check in report["checks"]))
+        self.assertEqual(exit_code, 0)
+
+    def test_readiness_check_rejects_unedited_template_manifest(self) -> None:
+        """A generated template must be filled in before paper execution."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            isodelta_cluster_suite.write_template(manifest_path)
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+            report = isodelta_cluster_suite.build_readiness_report(config)
+            exit_code = isodelta_cluster_suite.main(
+                ["--manifest", str(manifest_path), "--readiness-check"]
+            )
+            failed_checks = {
+                check["name"] for check in report["checks"] if not check["passed"]
+            }
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(exit_code, 1)
+        self.assertIn("manifest_schema", failed_checks)
+        self.assertIn("artifact_template_markers_removed", failed_checks)
+
     def test_external_timing_report_rejects_inconsistent_speedup(self) -> None:
         """External MACE/NequIP timing rows should be internally auditable."""
         report = _external_timing_report("NequIP")

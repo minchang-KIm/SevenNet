@@ -36,6 +36,7 @@ from urllib.request import urlopen
 # method: reviewers should see every gate and unit without hunting literals.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SUITE_SCHEMA_VERSION = "isodelta-cluster-paper-suite-v1"
+READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
 EXTERNAL_TIMING_SCHEMA_VERSION = "isodelta-external-pair-timing-v1"
 DEFAULT_OUTPUT_DIR = Path("isodelta_cluster_paper_runs")
 DEFAULT_EXPECTED_GPU_COUNT = 8
@@ -56,6 +57,10 @@ DEFAULT_MIN_TRACE_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT = 0.0
 DEFAULT_REQUIRED_MODELS = ("SevenNet", "MACE", "NequIP")
 DEFAULT_REQUIRE_ARTIFACT_SHA256 = False
+FINAL_PAPER_REQUIRED_MODELS = DEFAULT_REQUIRED_MODELS
+FINAL_PAPER_PAIRED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair"))
+FINAL_PAPER_MIN_REPEAT_COUNT = DEFAULT_REPEAT_COUNT
+UNRESOLVED_TEMPLATE_MARKERS = ("example.org", "replace-with-real")
 DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 600.0
 DEFAULT_SLURM_JOB_NAME = "isodelta-halo-paper-suite"
 DEFAULT_SLURM_TIME_LIMIT = "24:00:00"
@@ -881,6 +886,179 @@ def validate_suite_config(config: SuiteConfig) -> None:
                 f"{case.name}: duplicate trace evidence paths: "
                 + MODEL_NAME_JOINER.join(duplicate_trace_paths),
             )
+
+
+def _readiness_record(name: str, passed: bool, detail: str) -> dict[str, Any]:
+    """Create one machine-readable final-paper readiness check row."""
+    return {"name": name, "passed": passed, "detail": detail}
+
+
+def _has_unresolved_template_marker(value: str | None) -> bool:
+    """Return whether a manifest field still contains a template marker."""
+    if value is None:
+        return False
+    lowered_value = value.lower()
+    return any(marker in lowered_value for marker in UNRESOLVED_TEMPLATE_MARKERS)
+
+
+def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
+    """Audit whether a manifest is strict enough for final paper execution."""
+    checks: list[dict[str, Any]] = []
+    try:
+        validate_suite_config(config)
+    except ClusterSuiteError as exc:
+        checks.append(_readiness_record("manifest_schema", False, str(exc)))
+    else:
+        checks.append(_readiness_record("manifest_schema", True, "manifest validation passed"))
+
+    missing_required_models = [
+        model for model in FINAL_PAPER_REQUIRED_MODELS if model not in config.required_models
+    ]
+    checks.append(
+        _readiness_record(
+            "foundation_models_required",
+            not missing_required_models,
+            "missing required models: " + MODEL_NAME_JOINER.join(missing_required_models)
+            if missing_required_models
+            else "SevenNet, MACE, and NequIP are required",
+        )
+    )
+
+    paired_cases = [
+        case
+        for case in config.cases
+        if case.model in FINAL_PAPER_REQUIRED_MODELS
+        and case.kind in FINAL_PAPER_PAIRED_CASE_KINDS
+    ]
+    paired_models = {case.model for case in paired_cases}
+    missing_paired_models = [
+        model for model in FINAL_PAPER_REQUIRED_MODELS if model not in paired_models
+    ]
+    checks.append(
+        _readiness_record(
+            "paired_enabled_disabled_cases",
+            not missing_paired_models,
+            "missing paired cases: " + MODEL_NAME_JOINER.join(missing_paired_models)
+            if missing_paired_models
+            else "all required models have paired enabled/disabled cases",
+        )
+    )
+
+    checks.append(
+        _readiness_record(
+            "expected_gpu_count",
+            config.expected_gpus >= DEFAULT_EXPECTED_GPU_COUNT,
+            f"expected_gpus={config.expected_gpus}, required>={DEFAULT_EXPECTED_GPU_COUNT}",
+        )
+    )
+    checks.append(
+        _readiness_record(
+            "artifact_sha256_gate",
+            config.require_artifact_sha256,
+            "suite.require_artifact_sha256 is enabled"
+            if config.require_artifact_sha256
+            else "suite.require_artifact_sha256 must be true",
+        )
+    )
+
+    required_artifacts = [artifact for artifact in config.artifacts if artifact.required]
+    checks.append(
+        _readiness_record(
+            "required_artifacts_declared",
+            bool(required_artifacts),
+            "required artifact count: " + str(len(required_artifacts)),
+        )
+    )
+    missing_artifact_sources = [
+        artifact.name
+        for artifact in required_artifacts
+        if not artifact.path.exists() and artifact.url is None
+    ]
+    checks.append(
+        _readiness_record(
+            "required_artifacts_materializable",
+            not missing_artifact_sources,
+            "missing path and URL: " + MODEL_NAME_JOINER.join(missing_artifact_sources)
+            if missing_artifact_sources
+            else "required artifacts exist locally or have a download URL",
+        )
+    )
+
+    unresolved_artifact_fields: list[str] = []
+    for artifact in config.artifacts:
+        artifact_fields = {
+            "path": str(artifact.path),
+            "url": artifact.url,
+            "sha256": artifact.sha256,
+        }
+        unresolved_artifact_fields.extend(
+            f"{artifact.name}.{field_name}"
+            for field_name, field_value in artifact_fields.items()
+            if _has_unresolved_template_marker(field_value)
+        )
+    checks.append(
+        _readiness_record(
+            "artifact_template_markers_removed",
+            not unresolved_artifact_fields,
+            "unresolved fields: " + MODEL_NAME_JOINER.join(unresolved_artifact_fields)
+            if unresolved_artifact_fields
+            else "artifact fields contain no unresolved template markers",
+        )
+    )
+
+    missing_preflight_cases = [case.name for case in paired_cases if not case.preflight_command]
+    checks.append(
+        _readiness_record(
+            "paired_case_preflights",
+            not missing_preflight_cases,
+            "missing preflight_command: " + MODEL_NAME_JOINER.join(missing_preflight_cases)
+            if missing_preflight_cases
+            else "paired cases define preflight commands",
+        )
+    )
+    low_repeat_cases = [
+        case.name for case in paired_cases if case.repeat_count < FINAL_PAPER_MIN_REPEAT_COUNT
+    ]
+    checks.append(
+        _readiness_record(
+            "paired_case_repeats",
+            not low_repeat_cases,
+            "repeat_count below "
+            + str(FINAL_PAPER_MIN_REPEAT_COUNT)
+            + ": "
+            + MODEL_NAME_JOINER.join(low_repeat_cases)
+            if low_repeat_cases
+            else f"paired cases repeat at least {FINAL_PAPER_MIN_REPEAT_COUNT} times",
+        )
+    )
+    missing_uncertainty_gate_cases = [
+        case.name for case in paired_cases if case.min_speedup_95ci_lower_bound is None
+    ]
+    checks.append(
+        _readiness_record(
+            "paired_case_uncertainty_gate",
+            not missing_uncertainty_gate_cases,
+            "missing min_speedup_95ci_lower_bound: "
+            + MODEL_NAME_JOINER.join(missing_uncertainty_gate_cases)
+            if missing_uncertainty_gate_cases
+            else "paired cases require conservative speedup bounds",
+        )
+    )
+
+    ready = all(check["passed"] for check in checks)
+    return {
+        "readiness_schema_version": READINESS_SCHEMA_VERSION,
+        "status": "ready" if ready else "failed",
+        "suite": {
+            "name": config.name,
+            "manifest_path": str(config.manifest_path),
+            "output_dir": str(config.output_dir),
+            "expected_gpus": config.expected_gpus,
+            "required_models": list(config.required_models),
+            "final_paper_required_models": list(FINAL_PAPER_REQUIRED_MODELS),
+        },
+        "checks": checks,
+    }
 
 
 def _run_metadata_command(argv: list[str]) -> str | None:
@@ -3480,6 +3658,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--write-template", type=Path, help="Write a commented TOML template and exit")
     parser.add_argument("--write-slurm-script", type=Path, help="Write a commented SLURM sbatch script and exit")
     parser.add_argument("--verify-output-bundle", type=Path, help="Verify summary artifact and log fingerprints")
+    parser.add_argument("--readiness-check", action="store_true", help="Audit a manifest before final paper execution")
     parser.add_argument("--plan-only", action="store_true", help="Write a preflight JSON plan and exit")
     parser.add_argument("--plan-output", type=Path, help="Path for --plan-only JSON output")
     parser.add_argument("--output-dir", type=Path, help="Override suite.output_dir")
@@ -3512,6 +3691,7 @@ def _apply_cli_overrides(config: SuiteConfig, args: argparse.Namespace) -> Suite
         required_models=config.required_models,
         min_trace_count=config.min_trace_count,
         min_distinct_trace_models=config.min_distinct_trace_models,
+        require_artifact_sha256=config.require_artifact_sha256,
         artifacts=config.artifacts,
         cases=config.cases,
     )
@@ -3536,6 +3716,12 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--manifest is required unless --write-template or --verify-output-bundle is used")
     try:
         config = _apply_cli_overrides(load_manifest(args.manifest), args)
+        if args.readiness_check:
+            _require(args.write_slurm_script is None, "--readiness-check cannot be combined with --write-slurm-script")
+            _require(not args.plan_only, "--readiness-check cannot be combined with --plan-only")
+            report = build_readiness_report(config)
+            print(json.dumps(report, indent=2))
+            return SUCCESS_RETURN_CODE if report["status"] == "ready" else 1
         if args.write_slurm_script is not None:
             _require(not args.plan_only, "--write-slurm-script cannot be combined with --plan-only")
             write_slurm_script(
