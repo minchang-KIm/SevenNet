@@ -418,11 +418,16 @@ artifacts = ["dataset"]
                 ]
             )
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            manifest_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
 
         self.assertEqual(exit_code, 0)
         self.assertFalse(plan["gpu_check_planned"])
         self.assertTrue(plan["artifacts"][0]["will_download"])
         self.assertTrue(plan["artifacts"][0]["missing_required"])
+        self.assertEqual(
+            plan["suite"]["manifest"]["sha256"],
+            manifest_digest,
+        )
         self.assertEqual(plan["cases"][0]["model"], "SevenNet")
         self.assertIn("trace_evidence", plan["cases"][0]["expected_outputs"])
         self.assertIn("speedup_by_case.svg", plan["paper_outputs"]["speedup_svg"])
@@ -535,18 +540,26 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             case_summary_csv = output_dir / "tables" / "case_summary.csv"
             correlation_csv = output_dir / "tables" / "correlation.csv"
             speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
+            manifest_snapshot = output_dir / "isodelta_cluster_suite_manifest.toml"
 
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             case_summary_exists = case_summary_csv.exists()
             correlation_exists = correlation_csv.exists()
             speedup_svg_exists = speedup_svg.exists()
+            manifest_snapshot_exists = manifest_snapshot.exists()
             case_summary_text = case_summary_csv.read_text(encoding="utf-8")
             speedup_svg_text = speedup_svg.read_text(encoding="utf-8")
+            manifest_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
 
         self.assertEqual(exit_code, 0)
         self.assertTrue(case_summary_exists)
         self.assertTrue(correlation_exists)
         self.assertTrue(speedup_svg_exists)
+        self.assertTrue(manifest_snapshot_exists)
+        self.assertEqual(
+            summary["suite"]["manifest"]["sha256"],
+            manifest_digest,
+        )
         self.assertEqual(len(summary["cases"]), 3)
         self.assertEqual(summary["suite_evidence"]["distinct_trace_model_count"], 3)
         self.assertIn("speedup_vs_disabled_cache", case_summary_text)

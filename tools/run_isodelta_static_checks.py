@@ -777,6 +777,9 @@ def main() -> None:
         and "build_run_plan" in cluster_suite
         and "write_run_plan" in cluster_suite
         and "PLAN_REPORT_NAME" in cluster_suite
+        and "MANIFEST_SNAPSHOT_NAME" in cluster_suite
+        and "manifest_record" in cluster_suite
+        and "write_manifest_snapshot" in cluster_suite
         and "EXTERNAL_TIMING_SCHEMA_VERSION" in cluster_suite
         and "validate_external_timing_report" in cluster_suite
         and "BASELINE_TIMES_SECONDS_KEY" in cluster_suite
@@ -815,6 +818,12 @@ def main() -> None:
         "IsoDelta-Halo guide must document cluster preflight planning",
     )
     _require(
+        "manifest SHA-256 digest" in doc
+        and "isodelta_cluster_suite_manifest.toml" in doc
+        and "snapshot path" in doc,
+        "IsoDelta-Halo guide must document cluster manifest fingerprints",
+    )
+    _require(
         "external timing report" in doc
         and "repeat success counts" in doc
         and "`baseline_mean_seconds` and `enabled_mean_seconds`" in doc
@@ -829,7 +838,8 @@ def main() -> None:
     )
     _require(
         "min_distinct_trace_models" in doc
-        and "model` labels inside those trace files" in doc
+        and "`model` labels inside" in doc
+        and "those trace files" in doc
         and "duplicated MACE evidence" in doc
         and "Artifact `required_by`" in doc,
         "IsoDelta-Halo guide must document suite-level cluster evidence gates",

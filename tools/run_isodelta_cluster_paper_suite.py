@@ -60,6 +60,7 @@ EXPERIMENT_REPORT_NAME = "isodelta_experiment_report.json"
 EXTERNAL_TIMING_REPORT_NAME = "external_pair_timing_report.json"
 TRACE_EVIDENCE_SUFFIX = "_trace_evidence.json"
 PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
+MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SCHEMA_VERSION_KEY = "schema_version"
 CASE_NAME_KEY = "case_name"
 MODEL_KEY = "model"
@@ -1172,6 +1173,23 @@ def _planned_trace_paths(
     return case.trace_evidence_paths + generated_paths
 
 
+def manifest_record(config: SuiteConfig) -> dict[str, Any]:
+    """Return a reproducible fingerprint for the suite manifest file."""
+    return {
+        "path": str(config.manifest_path),
+        "sha256": sha256_file(config.manifest_path),
+        "size_bytes": config.manifest_path.stat().st_size,
+    }
+
+
+def write_manifest_snapshot(config: SuiteConfig) -> Path:
+    """Copy the manifest into the output bundle for archival review."""
+    snapshot_path = config.output_dir / MANIFEST_SNAPSHOT_NAME
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(config.manifest_path, snapshot_path)
+    return snapshot_path
+
+
 def build_run_plan(
     config: SuiteConfig,
     *,
@@ -1287,6 +1305,7 @@ def build_run_plan(
         "suite": {
             "name": config.name,
             "manifest_path": str(config.manifest_path),
+            "manifest": manifest_record(config),
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
@@ -2467,11 +2486,13 @@ def write_paper_outputs(
         y_label="trace estimated speedup",
     )
     summary_path = config.output_dir / "isodelta_cluster_paper_summary.json"
+    manifest_snapshot_path = write_manifest_snapshot(config)
     payload = {
         "provenance": collect_run_provenance(),
         "suite": {
             "name": config.name,
             "manifest_path": str(config.manifest_path),
+            "manifest": manifest_record(config),
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
@@ -2489,6 +2510,7 @@ def write_paper_outputs(
             "speedup_svg": str(speedup_svg),
             "hit_rate_svg": str(hit_rate_svg),
             "trace_svg": str(trace_svg),
+            "manifest_snapshot": str(manifest_snapshot_path),
         },
     }
     config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -2501,6 +2523,7 @@ def write_paper_outputs(
         "speedup_svg": str(speedup_svg),
         "hit_rate_svg": str(hit_rate_svg),
         "trace_svg": str(trace_svg),
+        "manifest_snapshot": str(manifest_snapshot_path),
     }
 
 
