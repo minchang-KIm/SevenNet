@@ -354,6 +354,7 @@ the suite recomputes sample variance/stddev before writing the summary table.
 After successful collection, the suite writes:
 
 - `isodelta_cluster_paper_summary.json`
+- `environment_snapshot.json`
 - `tables/case_summary.csv`
 - `tables/case_summary.md`
 - `tables/correlation.csv`
@@ -369,8 +370,12 @@ CI tests; for paper runs, keep the GPU check enabled and archive the summary
 JSON with the raw logs. The summary JSON stores the manifest SHA-256 digest and
 the copied `isodelta_cluster_suite_manifest.toml` snapshot path. It also stores
 `artifact_fingerprints` with the SHA-256 digest and byte size of each generated
-table, SVG figure, and manifest snapshot, so reviewers can verify that the
-submitted paper artifacts match the archived run. The suite-level evidence gate
+environment snapshot, table, SVG figure, and manifest snapshot, so reviewers can
+verify that the submitted paper artifacts match the archived run.
+`environment_snapshot.json` records Git/Python provenance, GPU check results,
+selected CUDA/SLURM environment variables, package versions for SevenNet, torch,
+e3nn, ASE, MACE, and NequIP when installed, and lightweight `nvidia-smi` GPU
+identity rows when that tool is available. The suite-level evidence gate
 recounts all passed cases before writing the summary:
 `min_trace_count` must be satisfied by distinct trace evidence files, and
 `min_distinct_trace_models` must be satisfied by the `model` labels inside

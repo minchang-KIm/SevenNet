@@ -548,6 +548,7 @@ artifacts = ["dataset"]
         )
         self.assertEqual(plan["cases"][0]["model"], "SevenNet")
         self.assertIn("trace_evidence", plan["cases"][0]["expected_outputs"])
+        self.assertIn("environment_snapshot.json", plan["paper_outputs"]["environment_snapshot"])
         self.assertIn("speedup_by_case.svg", plan["paper_outputs"]["speedup_svg"])
 
     def test_external_timing_report_rejects_inconsistent_speedup(self) -> None:
@@ -655,12 +656,15 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             )
 
             summary_path = output_dir / "isodelta_cluster_paper_summary.json"
+            environment_snapshot = output_dir / "environment_snapshot.json"
             case_summary_csv = output_dir / "tables" / "case_summary.csv"
             correlation_csv = output_dir / "tables" / "correlation.csv"
             speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
             manifest_snapshot = output_dir / "isodelta_cluster_suite_manifest.toml"
 
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            environment_payload = json.loads(environment_snapshot.read_text(encoding="utf-8"))
+            environment_snapshot_exists = environment_snapshot.exists()
             case_summary_exists = case_summary_csv.exists()
             correlation_exists = correlation_csv.exists()
             speedup_svg_exists = speedup_svg.exists()
@@ -668,12 +672,15 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             case_summary_text = case_summary_csv.read_text(encoding="utf-8")
             speedup_svg_text = speedup_svg.read_text(encoding="utf-8")
             manifest_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            environment_digest = hashlib.sha256(environment_snapshot.read_bytes()).hexdigest()
             case_summary_digest = hashlib.sha256(case_summary_csv.read_bytes()).hexdigest()
             manifest_snapshot_digest = hashlib.sha256(manifest_snapshot.read_bytes()).hexdigest()
+            environment_size = environment_snapshot.stat().st_size
             case_summary_size = case_summary_csv.stat().st_size
             manifest_snapshot_size = manifest_snapshot.stat().st_size
 
         self.assertEqual(exit_code, 0)
+        self.assertTrue(environment_snapshot_exists)
         self.assertTrue(case_summary_exists)
         self.assertTrue(correlation_exists)
         self.assertTrue(speedup_svg_exists)
@@ -688,6 +695,20 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertIn("baseline_sample_variance_seconds", case_summary_text)
         self.assertIn("enabled_sample_stddev_seconds", case_summary_text)
         self.assertIn("<svg", speedup_svg_text)
+        self.assertEqual(
+            environment_payload["snapshot_schema_version"],
+            isodelta_cluster_suite.ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION,
+        )
+        self.assertIn("torch", environment_payload["package_versions"])
+        self.assertIn("CUDA_VISIBLE_DEVICES", environment_payload["selected_environment"])
+        self.assertEqual(
+            summary["artifact_fingerprints"]["environment_snapshot"]["sha256"],
+            environment_digest,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["environment_snapshot"]["size_bytes"],
+            environment_size,
+        )
         self.assertEqual(
             summary["artifact_fingerprints"]["case_summary_csv"]["sha256"],
             case_summary_digest,

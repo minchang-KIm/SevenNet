@@ -10,6 +10,7 @@ foundation model uses the same checkpoint format, dataset URL, or launcher.
 from __future__ import annotations
 
 import argparse
+import importlib.metadata as importlib_metadata
 from dataclasses import asdict, dataclass, field
 import csv
 import hashlib
@@ -67,6 +68,28 @@ TRACE_EVIDENCE_SUFFIX = "_trace_evidence.json"
 PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
+ENVIRONMENT_SNAPSHOT_NAME = "environment_snapshot.json"
+ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION = "isodelta-cluster-environment-snapshot-v1"
+ENVIRONMENT_PACKAGE_NAMES = (
+    "sevenn",
+    "torch",
+    "e3nn",
+    "ase",
+    "numpy",
+    "scipy",
+    "mace-torch",
+    "nequip",
+)
+ENVIRONMENT_VARIABLE_NAMES = (
+    "CUDA_VISIBLE_DEVICES",
+    "SLURM_JOB_ID",
+    "SLURM_JOB_NAME",
+    "SLURM_GPUS",
+    "SLURM_JOB_GPUS",
+    "SLURM_CPUS_PER_TASK",
+    "CONDA_PREFIX",
+    "VIRTUAL_ENV",
+)
 SCHEMA_VERSION_KEY = "schema_version"
 CASE_NAME_KEY = "case_name"
 MODEL_KEY = "model"
@@ -842,6 +865,76 @@ def collect_run_provenance() -> dict[str, Any]:
     }
 
 
+def _package_version(package_name: str) -> str | None:
+    """Return an installed package version without importing heavy frameworks."""
+    try:
+        return importlib_metadata.version(package_name)
+    except importlib_metadata.PackageNotFoundError:
+        return None
+
+
+def collect_nvidia_smi_snapshot() -> dict[str, Any]:
+    """Collect lightweight GPU identity details when nvidia-smi is available."""
+    nvidia_smi = shutil.which("nvidia-smi")
+    if not nvidia_smi:
+        return {
+            "available": False,
+            "path": None,
+            "query": None,
+            "rows": [],
+        }
+    query_fields = "index,name,driver_version,memory.total"
+    query_output = _run_metadata_command(
+        [
+            nvidia_smi,
+            f"--query-gpu={query_fields}",
+            "--format=csv,noheader",
+        ]
+    )
+    return {
+        "available": query_output is not None,
+        "path": nvidia_smi,
+        "query": query_fields,
+        "rows": [] if query_output is None else query_output.splitlines(),
+    }
+
+
+def collect_environment_snapshot(
+    config: SuiteConfig,
+    gpu_record: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Collect reproducibility context that should travel with paper outputs."""
+    return {
+        "snapshot_schema_version": ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION,
+        "suite_name": config.name,
+        "manifest_path": str(config.manifest_path),
+        "output_dir": str(config.output_dir),
+        "provenance": collect_run_provenance(),
+        "gpu_check": gpu_record,
+        "package_versions": {
+            package_name: _package_version(package_name)
+            for package_name in ENVIRONMENT_PACKAGE_NAMES
+        },
+        "selected_environment": {
+            variable_name: os.environ.get(variable_name)
+            for variable_name in ENVIRONMENT_VARIABLE_NAMES
+        },
+        "nvidia_smi": collect_nvidia_smi_snapshot(),
+    }
+
+
+def write_environment_snapshot(
+    config: SuiteConfig,
+    gpu_record: dict[str, Any] | None,
+) -> Path:
+    """Write the environment snapshot next to tables and figures."""
+    snapshot_path = config.output_dir / ENVIRONMENT_SNAPSHOT_NAME
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = collect_environment_snapshot(config, gpu_record)
+    snapshot_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return snapshot_path
+
+
 def detect_gpu_count() -> tuple[int | None, str]:
     """Detect visible NVIDIA GPUs with nvidia-smi, then fall back to torch."""
     nvidia_smi = shutil.which("nvidia-smi")
@@ -1359,6 +1452,7 @@ def build_run_plan(
         "cases": case_plan,
         "paper_outputs": {
             "summary_json": str(config.output_dir / "isodelta_cluster_paper_summary.json"),
+            "environment_snapshot": str(config.output_dir / ENVIRONMENT_SNAPSHOT_NAME),
             "case_summary_csv": str(config.output_dir / TABLES_DIR_NAME / "case_summary.csv"),
             "case_summary_markdown": str(config.output_dir / TABLES_DIR_NAME / "case_summary.md"),
             "correlation_csv": str(config.output_dir / TABLES_DIR_NAME / "correlation.csv"),
@@ -2550,7 +2644,9 @@ def write_paper_outputs(
     )
     summary_path = config.output_dir / "isodelta_cluster_paper_summary.json"
     manifest_snapshot_path = write_manifest_snapshot(config)
+    environment_snapshot_path = write_environment_snapshot(config, gpu_record)
     artifact_paths = {
+        "environment_snapshot": environment_snapshot_path,
         "case_summary_csv": case_summary_csv,
         "case_summary_markdown": case_summary_md,
         "correlation_csv": correlation_csv,
@@ -2587,6 +2683,7 @@ def write_paper_outputs(
     summary_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return {
         "summary_json": str(summary_path),
+        "environment_snapshot": str(environment_snapshot_path),
         "case_summary_csv": str(case_summary_csv),
         "case_summary_markdown": str(case_summary_md),
         "correlation_csv": str(correlation_csv),

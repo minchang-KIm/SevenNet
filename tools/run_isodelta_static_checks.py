@@ -789,6 +789,12 @@ def main() -> None:
         and "preflight_timeout_seconds" in cluster_suite
         and "run_case_preflight" in cluster_suite
         and "preflight.stdout.log" in cluster_suite
+        and "ENVIRONMENT_SNAPSHOT_NAME" in cluster_suite
+        and "ENVIRONMENT_PACKAGE_NAMES" in cluster_suite
+        and "ENVIRONMENT_VARIABLE_NAMES" in cluster_suite
+        and "collect_environment_snapshot" in cluster_suite
+        and "write_environment_snapshot" in cluster_suite
+        and "environment_snapshot.json" in cluster_suite
         and "manifest_record" in cluster_suite
         and "generated_artifact_record" in cluster_suite
         and "artifact_fingerprints" in cluster_suite
@@ -857,9 +863,18 @@ def main() -> None:
         "`artifact_fingerprints`" in doc
         and "SHA-256 digest and byte size" in doc
         and "generated" in doc
+        and "environment snapshot" in doc
         and "SVG figure" in doc
         and "manifest snapshot" in doc,
         "IsoDelta-Halo guide must document generated paper artifact fingerprints",
+    )
+    _require(
+        "`environment_snapshot.json`" in doc
+        and "Git/Python provenance" in doc
+        and "CUDA/SLURM environment variables" in doc
+        and "package versions" in doc
+        and "`nvidia-smi` GPU" in doc,
+        "IsoDelta-Halo guide must document cluster environment snapshots",
     )
     _require(
         "external timing report" in doc
