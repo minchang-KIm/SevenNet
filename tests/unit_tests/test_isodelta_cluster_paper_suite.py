@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -236,6 +237,56 @@ def _external_timing_report(model_name: str) -> dict[str, object]:
 
 class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
     """Check manifest validation and paper artifact generation."""
+
+    def test_verify_output_bundle_accepts_relocated_bundle_paths(self) -> None:
+        """Bundle verification should survive archiving to a different directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            original_output_dir = root / "paper_outputs"
+            logs_dir = original_output_dir / "logs"
+            tables_dir = original_output_dir / "tables"
+            logs_dir.mkdir(parents=True)
+            tables_dir.mkdir(parents=True)
+            table_path = tables_dir / "case_summary.csv"
+            stdout_path = logs_dir / "case.stdout"
+            missing_stderr_path = logs_dir / "case.stderr"
+            table_path.write_text("case,speedup\nsevennet,1.2\n", encoding="utf-8")
+            stdout_path.write_text("completed\n", encoding="utf-8")
+            summary_path = original_output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(original_output_dir)},
+                        "artifact_fingerprints": {
+                            "case_summary_csv": isodelta_cluster_suite.generated_artifact_record(
+                                table_path
+                            )
+                        },
+                        "command_log_fingerprints": [
+                            {
+                                "name": "case",
+                                "stdout": isodelta_cluster_suite.optional_file_fingerprint(
+                                    stdout_path
+                                ),
+                                "stderr": isodelta_cluster_suite.optional_file_fingerprint(
+                                    missing_stderr_path
+                                ),
+                            }
+                        ],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            relocated_output_dir = root / "archived_outputs"
+            shutil.copytree(original_output_dir, relocated_output_dir)
+            shutil.rmtree(original_output_dir)
+            verification = isodelta_cluster_suite.verify_output_bundle(relocated_output_dir)
+
+        self.assertEqual(verification["status"], "passed")
+        self.assertEqual(verification["verified_artifact_count"], 1)
+        self.assertEqual(verification["verified_command_log_count"], 2)
 
     def test_write_template_creates_commented_three_model_manifest(self) -> None:
         """The template should be editable and include the required models."""
@@ -809,8 +860,17 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             nequip_case = next(
                 case for case in summary["cases"] if case["model"] == "NequIP"
             )
+            verification = isodelta_cluster_suite.verify_output_bundle(output_dir)
+            case_summary_csv.write_text(case_summary_text + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "SHA-256 mismatch",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(summary_path)
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(verification["status"], "passed")
+        self.assertGreaterEqual(verification["verified_artifact_count"], 1)
         self.assertTrue(environment_snapshot_exists)
         self.assertTrue(case_summary_exists)
         self.assertTrue(correlation_exists)

@@ -395,6 +395,16 @@ The summary also stores `command_log_fingerprints` for every launched command,
 including each stdout/stderr log path, existence flag, SHA-256 digest, and byte
 size. This lets reviewers confirm that the archived logs match the command
 records used to build the paper tables.
+After archiving or moving a result directory, verify the bundle fingerprints:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --verify-output-bundle isodelta_cluster_paper_runs
+```
+
+The verifier accepts either the output directory or the
+`isodelta_cluster_paper_summary.json` path and fails if any recorded artifact or
+command log fingerprint no longer matches the filesystem.
 
 For an interrupted cluster job, rerun with `--reuse-passed` instead of starting
 from zero:

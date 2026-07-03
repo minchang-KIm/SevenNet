@@ -70,6 +70,7 @@ EXPERIMENT_REPORT_NAME = "isodelta_experiment_report.json"
 EXTERNAL_TIMING_REPORT_NAME = "external_pair_timing_report.json"
 TRACE_EVIDENCE_SUFFIX = "_trace_evidence.json"
 PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
+SUMMARY_REPORT_NAME = "isodelta_cluster_paper_summary.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
 ENVIRONMENT_SNAPSHOT_NAME = "environment_snapshot.json"
@@ -1420,6 +1421,152 @@ def command_log_fingerprints(command_records: list[CommandRecord]) -> list[dict[
     ]
 
 
+def _resolve_summary_path(bundle_or_summary_path: Path) -> Path:
+    """Resolve either an output directory or a direct summary JSON path."""
+    candidate_path = bundle_or_summary_path.resolve()
+    return candidate_path / SUMMARY_REPORT_NAME if candidate_path.is_dir() else candidate_path
+
+
+def _candidate_fingerprint_paths(
+    recorded_path: Path,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> list[Path]:
+    """Return filesystem locations that may hold one recorded bundle file."""
+    candidates = [recorded_path]
+    if not recorded_path.is_absolute():
+        candidates.append(bundle_root / recorded_path)
+    if original_output_dir is not None and recorded_path.is_absolute():
+        try:
+            relative_path = recorded_path.resolve().relative_to(original_output_dir.resolve())
+        except ValueError:
+            relative_path = None
+        if relative_path is not None:
+            candidates.append(bundle_root / relative_path)
+    unique_candidates: list[Path] = []
+    seen_paths: set[str] = set()
+    for candidate in candidates:
+        candidate_key = str(candidate.resolve())
+        if candidate_key in seen_paths:
+            continue
+        seen_paths.add(candidate_key)
+        unique_candidates.append(candidate)
+    return unique_candidates
+
+
+def _original_output_dir(summary_payload: dict[str, Any]) -> Path | None:
+    """Return the original output_dir stored in a summary if it is available."""
+    suite_record = summary_payload.get("suite")
+    if not isinstance(suite_record, dict):
+        return None
+    output_dir = suite_record.get("output_dir")
+    if not isinstance(output_dir, str) or not output_dir:
+        return None
+    return Path(output_dir)
+
+
+def _require_fingerprint_match(
+    record: dict[str, Any],
+    label: str,
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> None:
+    """Validate one fingerprint record against the current filesystem."""
+    path_text = _as_json_string(record.get("path"), f"{label}.path")
+    recorded_path = Path(path_text)
+    candidate_paths = _candidate_fingerprint_paths(
+        recorded_path,
+        bundle_root,
+        original_output_dir,
+    )
+    expected_exists = record.get("exists", True)
+    if expected_exists is False:
+        existing_paths = [path for path in candidate_paths if path.exists()]
+        if existing_paths:
+            _require(False, f"{label}: expected absent file exists: {existing_paths[0]}")
+        return
+    path = next((candidate for candidate in candidate_paths if candidate.exists()), None)
+    _require(
+        path is not None,
+        f"{label}: missing file {recorded_path}; checked {', '.join(str(path) for path in candidate_paths)}",
+    )
+    expected_sha256 = _as_json_string(record.get("sha256"), f"{label}.sha256")
+    expected_size = _as_json_nonnegative_int(record.get("size_bytes"), f"{label}.size_bytes")
+    actual_sha256 = sha256_file(path)
+    actual_size = path.stat().st_size
+    _require(
+        actual_sha256 == expected_sha256,
+        f"{label}: SHA-256 mismatch for {path}",
+    )
+    _require(
+        actual_size == expected_size,
+        f"{label}: byte size mismatch for {path}",
+    )
+
+
+def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
+    """Verify summary-recorded artifact and command-log fingerprints."""
+    summary_path = _resolve_summary_path(bundle_or_summary_path)
+    _require(summary_path.exists(), f"missing output summary {summary_path}")
+    bundle_root = summary_path.parent
+    summary_payload = _as_json_object(
+        json.loads(summary_path.read_text(encoding="utf-8")),
+        "summary",
+    )
+    artifact_fingerprints = _as_json_object(
+        summary_payload.get("artifact_fingerprints"),
+        "artifact_fingerprints",
+    )
+    command_fingerprints = summary_payload.get("command_log_fingerprints", [])
+    _require(
+        isinstance(command_fingerprints, list),
+        "command_log_fingerprints must be a JSON array",
+    )
+    original_output_dir = _original_output_dir(summary_payload)
+
+    verified_artifact_count = 0
+    for artifact_name, raw_record in artifact_fingerprints.items():
+        record = _as_json_object(raw_record, f"artifact_fingerprints.{artifact_name}")
+        _require_fingerprint_match(
+            record,
+            f"artifact_fingerprints.{artifact_name}",
+            bundle_root=bundle_root,
+            original_output_dir=original_output_dir,
+        )
+        verified_artifact_count += 1
+
+    verified_log_count = 0
+    for index, raw_command_record in enumerate(command_fingerprints):
+        command_record = _as_json_object(
+            raw_command_record,
+            f"command_log_fingerprints[{index}]",
+        )
+        command_name = _as_json_string(
+            command_record.get("name"),
+            f"command_log_fingerprints[{index}].name",
+        )
+        for stream_name in ("stdout", "stderr"):
+            stream_record = _as_json_object(
+                command_record.get(stream_name),
+                f"command_log_fingerprints[{index}].{stream_name}",
+            )
+            _require_fingerprint_match(
+                stream_record,
+                f"{command_name}.{stream_name}",
+                bundle_root=bundle_root,
+                original_output_dir=original_output_dir,
+            )
+            verified_log_count += 1
+
+    return {
+        "status": "passed",
+        "summary_json": str(summary_path),
+        "verified_artifact_count": verified_artifact_count,
+        "verified_command_log_count": verified_log_count,
+    }
+
+
 def write_manifest_snapshot(config: SuiteConfig) -> Path:
     """Copy the manifest into the output bundle for archival review."""
     snapshot_path = config.output_dir / MANIFEST_SNAPSHOT_NAME
@@ -1564,7 +1711,7 @@ def build_run_plan(
         "artifacts": artifact_plan,
         "cases": case_plan,
         "paper_outputs": {
-            "summary_json": str(config.output_dir / "isodelta_cluster_paper_summary.json"),
+            "summary_json": str(config.output_dir / SUMMARY_REPORT_NAME),
             "environment_snapshot": str(config.output_dir / ENVIRONMENT_SNAPSHOT_NAME),
             "case_summary_csv": str(config.output_dir / TABLES_DIR_NAME / "case_summary.csv"),
             "case_summary_markdown": str(config.output_dir / TABLES_DIR_NAME / "case_summary.md"),
@@ -2903,7 +3050,7 @@ def write_paper_outputs(
         x_label="metadata build fraction (%)",
         y_label="trace estimated speedup",
     )
-    summary_path = config.output_dir / "isodelta_cluster_paper_summary.json"
+    summary_path = config.output_dir / SUMMARY_REPORT_NAME
     manifest_snapshot_path = write_manifest_snapshot(config)
     environment_snapshot_path = write_environment_snapshot(config, gpu_record)
     artifact_paths = {
@@ -3303,6 +3450,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, help="TOML suite manifest")
     parser.add_argument("--write-template", type=Path, help="Write a commented TOML template and exit")
     parser.add_argument("--write-slurm-script", type=Path, help="Write a commented SLURM sbatch script and exit")
+    parser.add_argument("--verify-output-bundle", type=Path, help="Verify summary artifact and log fingerprints")
     parser.add_argument("--plan-only", action="store_true", help="Write a preflight JSON plan and exit")
     parser.add_argument("--plan-output", type=Path, help="Path for --plan-only JSON output")
     parser.add_argument("--output-dir", type=Path, help="Override suite.output_dir")
@@ -3347,8 +3495,16 @@ def main(argv: list[str] | None = None) -> int:
         write_template(args.write_template)
         print(f"Wrote IsoDelta-Halo cluster suite template to {args.write_template}")
         return SUCCESS_RETURN_CODE
+    if args.verify_output_bundle is not None:
+        try:
+            verification = verify_output_bundle(args.verify_output_bundle)
+        except ClusterSuiteError as exc:
+            print(f"IsoDelta-Halo output bundle verification failed: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(verification, indent=2))
+        return SUCCESS_RETURN_CODE
     if args.manifest is None:
-        raise SystemExit("--manifest is required unless --write-template is used")
+        raise SystemExit("--manifest is required unless --write-template or --verify-output-bundle is used")
     try:
         config = _apply_cli_overrides(load_manifest(args.manifest), args)
         if args.write_slurm_script is not None:

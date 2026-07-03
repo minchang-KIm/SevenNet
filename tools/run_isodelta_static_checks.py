@@ -801,6 +801,9 @@ def main() -> None:
         and "environment_snapshot.json" in cluster_suite
         and "command_log_fingerprints" in cluster_suite
         and "optional_file_fingerprint" in cluster_suite
+        and "verify_output_bundle" in cluster_suite
+        and "--verify-output-bundle" in cluster_suite
+        and "SUMMARY_REPORT_NAME" in cluster_suite
         and '"stdout": optional_file_fingerprint' in cluster_suite
         and '"stderr": optional_file_fingerprint' in cluster_suite
         and "manifest_record" in cluster_suite
@@ -900,6 +903,13 @@ def main() -> None:
         and "command" in doc
         and "records" in doc,
         "IsoDelta-Halo guide must document command log fingerprints",
+    )
+    _require(
+        "--verify-output-bundle" in doc
+        and "isodelta_cluster_paper_summary.json" in doc
+        and "fails if any recorded artifact or" in doc
+        and "command log fingerprint" in doc,
+        "IsoDelta-Halo guide must document output bundle verification",
     )
     _require(
         "`environment_snapshot.json`" in doc
