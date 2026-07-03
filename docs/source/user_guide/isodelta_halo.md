@@ -353,7 +353,10 @@ the suite recomputes sample variance/stddev before writing the summary table.
 The generated table also reports baseline/enabled timing sample counts and
 normal-approximation 95% CI half-widths for the mean timings, so paper tables
 can present variability next to the speedup number instead of only reporting a
-single average.
+single average. It also derives `speedup_95ci_lower_bound` and
+`speedup_95ci_upper_bound` from the conservative combination of baseline and
+enabled timing intervals, which makes it clear whether the measured improvement
+survives uncertainty in the repeat timings.
 
 After successful collection, the suite writes:
 

@@ -266,6 +266,8 @@ class CaseSummary:
     baseline_mean_95ci_half_width_seconds: float | None
     enabled_mean_95ci_half_width_seconds: float | None
     speedup_vs_disabled_cache: float | None
+    speedup_95ci_lower_bound: float | None
+    speedup_95ci_upper_bound: float | None
     cache_attempts: float | None
     cache_hits: float | None
     cache_hit_rate_percent: float | None
@@ -1836,6 +1838,29 @@ def _mean_ci_half_width(stddev: float | None, count: int | None) -> float | None
     return NORMAL_APPROX_95_CI_MULTIPLIER * stddev / math.sqrt(count)
 
 
+def _speedup_ci_bounds(
+    baseline_mean_seconds: float | None,
+    enabled_mean_seconds: float | None,
+    baseline_ci_half_width_seconds: float | None,
+    enabled_ci_half_width_seconds: float | None,
+) -> tuple[float | None, float | None]:
+    """Return conservative speedup bounds derived from mean timing CIs."""
+    if (
+        baseline_mean_seconds is None
+        or enabled_mean_seconds is None
+        or baseline_ci_half_width_seconds is None
+        or enabled_ci_half_width_seconds is None
+    ):
+        return None, None
+    lower_baseline = baseline_mean_seconds - baseline_ci_half_width_seconds
+    upper_baseline = baseline_mean_seconds + baseline_ci_half_width_seconds
+    lower_enabled = enabled_mean_seconds - enabled_ci_half_width_seconds
+    upper_enabled = enabled_mean_seconds + enabled_ci_half_width_seconds
+    if lower_baseline <= MIN_POSITIVE_VALUE or lower_enabled <= MIN_POSITIVE_VALUE:
+        return None, None
+    return lower_baseline / upper_enabled, upper_baseline / lower_enabled
+
+
 def _build_external_timing_report(
     *,
     case: CaseConfig,
@@ -2466,6 +2491,20 @@ def build_case_summary(
         if benchmark_metrics["enabled_timing_count"] is not None
         else external_metrics["enabled_timing_count"]
     )
+    baseline_ci_half_width = _mean_ci_half_width(
+        baseline_stddev,
+        baseline_timing_count,
+    )
+    enabled_ci_half_width = _mean_ci_half_width(
+        enabled_stddev,
+        enabled_timing_count,
+    )
+    speedup_ci_lower_bound, speedup_ci_upper_bound = _speedup_ci_bounds(
+        baseline_seconds,
+        enabled_seconds,
+        baseline_ci_half_width,
+        enabled_ci_half_width,
+    )
     return CaseSummary(
         case_name=case.name,
         model=case.model,
@@ -2483,15 +2522,11 @@ def build_case_summary(
         enabled_sample_stddev_seconds=enabled_stddev,
         baseline_timing_count=baseline_timing_count,
         enabled_timing_count=enabled_timing_count,
-        baseline_mean_95ci_half_width_seconds=_mean_ci_half_width(
-            baseline_stddev,
-            baseline_timing_count,
-        ),
-        enabled_mean_95ci_half_width_seconds=_mean_ci_half_width(
-            enabled_stddev,
-            enabled_timing_count,
-        ),
+        baseline_mean_95ci_half_width_seconds=baseline_ci_half_width,
+        enabled_mean_95ci_half_width_seconds=enabled_ci_half_width,
         speedup_vs_disabled_cache=speedup,
+        speedup_95ci_lower_bound=speedup_ci_lower_bound,
+        speedup_95ci_upper_bound=speedup_ci_upper_bound,
         cache_attempts=benchmark_metrics["attempts"],
         cache_hits=benchmark_metrics["hits"],
         cache_hit_rate_percent=benchmark_metrics["hit_rate_percent"],
@@ -2539,6 +2574,8 @@ def _summary_rows(case_summaries: list[CaseSummary]) -> list[dict[str, Any]]:
                     summary.enabled_mean_95ci_half_width_seconds
                 ),
                 "speedup_vs_disabled_cache": summary.speedup_vs_disabled_cache,
+                "speedup_95ci_lower_bound": summary.speedup_95ci_lower_bound,
+                "speedup_95ci_upper_bound": summary.speedup_95ci_upper_bound,
                 "cache_hit_rate_percent": summary.cache_hit_rate_percent,
                 "cache_attempts": summary.cache_attempts,
                 "cache_hits": summary.cache_hits,

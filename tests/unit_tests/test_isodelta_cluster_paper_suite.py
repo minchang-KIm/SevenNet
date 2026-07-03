@@ -767,6 +767,7 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertIn("baseline_sample_variance_seconds", case_summary_text)
         self.assertIn("enabled_sample_stddev_seconds", case_summary_text)
         self.assertIn("baseline_mean_95ci_half_width_seconds", case_summary_text)
+        self.assertIn("speedup_95ci_lower_bound", case_summary_text)
         self.assertEqual(nequip_case["baseline_timing_count"], 2)
         self.assertAlmostEqual(
             nequip_case["baseline_mean_95ci_half_width_seconds"],
@@ -775,6 +776,28 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertAlmostEqual(
             nequip_case["enabled_mean_95ci_half_width_seconds"],
             isodelta_cluster_suite.NORMAL_APPROX_95_CI_MULTIPLIER,
+        )
+        self.assertAlmostEqual(
+            nequip_case["speedup_95ci_lower_bound"],
+            (
+                BASELINE_LOOP_TIME_SECONDS
+                - isodelta_cluster_suite.NORMAL_APPROX_95_CI_MULTIPLIER
+            )
+            / (
+                ISODELTA_LOOP_TIME_SECONDS
+                + isodelta_cluster_suite.NORMAL_APPROX_95_CI_MULTIPLIER
+            ),
+        )
+        self.assertAlmostEqual(
+            nequip_case["speedup_95ci_upper_bound"],
+            (
+                BASELINE_LOOP_TIME_SECONDS
+                + isodelta_cluster_suite.NORMAL_APPROX_95_CI_MULTIPLIER
+            )
+            / (
+                ISODELTA_LOOP_TIME_SECONDS
+                - isodelta_cluster_suite.NORMAL_APPROX_95_CI_MULTIPLIER
+            ),
         )
         self.assertIn("<svg", speedup_svg_text)
         self.assertEqual(

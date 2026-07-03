@@ -817,6 +817,8 @@ def main() -> None:
         and "NORMAL_APPROX_95_CI_MULTIPLIER" in cluster_suite
         and "_mean_ci_half_width" in cluster_suite
         and "baseline_mean_95ci_half_width_seconds" in cluster_suite
+        and "_speedup_ci_bounds" in cluster_suite
+        and "speedup_95ci_lower_bound" in cluster_suite
         and "must match baseline / enabled seconds" in cluster_suite
         and "must match raw timing samples" in cluster_suite
         and "--plan-only" in cluster_suite
@@ -916,6 +918,8 @@ def main() -> None:
         "`baseline_times_seconds` and `enabled_times_seconds`" in doc
         and "sample variance/stddev" in doc
         and "95% CI half-widths" in doc
+        and "speedup_95ci_lower_bound" in doc
+        and "survives uncertainty" in doc
         and "summary table" in doc,
         "IsoDelta-Halo guide must document external timing repeat statistics",
     )
