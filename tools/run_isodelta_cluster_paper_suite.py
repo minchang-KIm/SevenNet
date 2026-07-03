@@ -155,6 +155,8 @@ REQUIRED_PAPER_ARTIFACT_NAMES = (
     "case_summary_csv",
     "case_summary_markdown",
     "correlation_csv",
+    "command_timing_csv",
+    "command_timing_markdown",
     "speedup_svg",
     "hit_rate_svg",
     "trace_svg",
@@ -163,6 +165,14 @@ REQUIRED_PAPER_ARTIFACT_NAMES = (
 PAPER_CASE_SUMMARY_COLUMNS = ("case", "model", "kind", "status")
 PAPER_CASE_SUMMARY_FIELD_MAP = {"case": "case_name"}
 PAPER_CORRELATION_COLUMNS = ("x_metric", "y_metric", "n", "pearson", "spearman")
+PAPER_COMMAND_TIMING_COLUMNS = (
+    "name",
+    "returncode",
+    "elapsed_seconds",
+    "stdout_path",
+    "stderr_path",
+    "cwd",
+)
 PAPER_SVG_ARTIFACT_NAMES = ("speedup_svg", "hit_rate_svg", "trace_svg")
 SPEEDUP_SVG_EMPTY_MESSAGE = "No measured speedup values"
 HIT_RATE_SCATTER_TITLE = "Cache hit rate vs measured speedup"
@@ -3197,6 +3207,87 @@ def _require_correlation_csv(path: Path, summary_payload: dict[str, Any]) -> Non
     )
 
 
+def _summary_command_rows(summary_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return summary command records as table rows with the paper command schema."""
+    raw_commands = summary_payload.get(COMMANDS_KEY)
+    _require(isinstance(raw_commands, list), f"{COMMANDS_KEY} must be a JSON array")
+    rows: list[dict[str, Any]] = []
+    for index, raw_command in enumerate(raw_commands):
+        command_record = _as_json_object(raw_command, f"{COMMANDS_KEY}[{index}]")
+        rows.append(
+            {
+                "name": command_record.get("name"),
+                "returncode": command_record.get("returncode"),
+                "elapsed_seconds": command_record.get("elapsed_seconds"),
+                "stdout_path": command_record.get("stdout_path"),
+                "stderr_path": command_record.get("stderr_path"),
+                "cwd": command_record.get("cwd"),
+            }
+        )
+    return rows
+
+
+def _require_command_timing_csv(
+    path: Path,
+    summary_payload: dict[str, Any],
+) -> None:
+    """Verify that the command timing CSV matches summary command records."""
+    fieldnames, rows = _read_csv_rows(path, "command_timing.csv")
+    _require_columns(fieldnames, PAPER_COMMAND_TIMING_COLUMNS, "command_timing.csv")
+    summary_rows = _summary_command_rows(summary_payload)
+    _require(
+        len(rows) == len(summary_rows),
+        "command_timing.csv: row count must match summary commands",
+    )
+    for index, summary_row in enumerate(summary_rows):
+        csv_row = rows[index]
+        for column_name in PAPER_COMMAND_TIMING_COLUMNS:
+            expected_value = _format_csv_value(summary_row.get(column_name))
+            actual_value = csv_row.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                f"command_timing.csv[{index}].{column_name} must match summary commands",
+            )
+
+
+def _require_command_timing_markdown(
+    path: Path,
+    summary_payload: dict[str, Any],
+) -> None:
+    """Verify that the command timing Markdown table matches summary commands."""
+    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    summary_rows = _summary_command_rows(summary_payload)
+    _require(
+        len(lines) == len(summary_rows) + 2,
+        "command_timing.md: row count must match summary commands plus header",
+    )
+    header = _markdown_cells(lines[0])
+    separator = _markdown_cells(lines[1])
+    _require_columns(tuple(header), PAPER_COMMAND_TIMING_COLUMNS, "command_timing.md")
+    _require(
+        len(separator) == len(header),
+        "command_timing.md: separator width must match header",
+    )
+    _require(
+        all(cell == "---" for cell in separator),
+        "command_timing.md: separator row must contain markdown column markers",
+    )
+    for index, summary_row in enumerate(summary_rows):
+        cells = _markdown_cells(lines[index + 2])
+        _require(
+            len(cells) == len(header),
+            f"command_timing.md[{index}]: row width must match header",
+        )
+        row = dict(zip(header, cells, strict=True))
+        for column_name in PAPER_COMMAND_TIMING_COLUMNS:
+            expected_value = _format_table_value(summary_row.get(column_name))
+            actual_value = row.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                f"command_timing.md[{index}].{column_name} must match summary commands",
+            )
+
+
 def _require_svg_document(path: Path, label: str) -> Any:
     """Verify that a generated figure is parseable SVG with stable dimensions."""
     try:
@@ -3312,6 +3403,14 @@ def _require_paper_artifact_semantics(
         cases_by_name,
     )
     _require_correlation_csv(resolved_artifact_paths["correlation_csv"], summary_payload)
+    _require_command_timing_csv(
+        resolved_artifact_paths["command_timing_csv"],
+        summary_payload,
+    )
+    _require_command_timing_markdown(
+        resolved_artifact_paths["command_timing_markdown"],
+        summary_payload,
+    )
     _require_speedup_svg_semantics(resolved_artifact_paths["speedup_svg"], cases_by_name)
     _require_scatter_svg_semantics(
         resolved_artifact_paths["hit_rate_svg"],
@@ -5055,25 +5154,51 @@ def _summary_rows(case_summaries: list[CaseSummary]) -> list[dict[str, Any]]:
     return rows
 
 
-def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+def _command_timing_rows(command_records: list[CommandRecord]) -> list[dict[str, Any]]:
+    """Return paper-table rows for launched command timing evidence."""
+    return [
+        {
+            "name": record.name,
+            "returncode": record.returncode,
+            "elapsed_seconds": record.elapsed_seconds,
+            "stdout_path": record.stdout_path,
+            "stderr_path": record.stderr_path,
+            "cwd": record.cwd,
+        }
+        for record in command_records
+    ]
+
+
+def write_csv(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    fieldnames: tuple[str, ...] | None = None,
+) -> None:
     """Write rows to CSV with stable column order."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not rows:
+    if not rows and fieldnames is None:
         path.write_text("", encoding="utf-8")
         return
+    resolved_fieldnames = list(fieldnames) if fieldnames is not None else list(rows[0].keys())
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(handle, fieldnames=resolved_fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
 
-def write_markdown_table(path: Path, rows: list[dict[str, Any]]) -> None:
+def write_markdown_table(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    fieldnames: tuple[str, ...] | None = None,
+) -> None:
     """Write rows to a compact GitHub-flavored markdown table."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not rows:
+    if not rows and fieldnames is None:
         path.write_text("| empty |\n| --- |\n", encoding="utf-8")
         return
-    headers = list(rows[0].keys())
+    headers = list(fieldnames) if fieldnames is not None else list(rows[0].keys())
     lines = [
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join("---" for _ in headers) + " |",
@@ -5299,12 +5424,25 @@ def write_paper_outputs(
     figures_dir = config.output_dir / FIGURES_DIR_NAME
     summary_rows = _summary_rows(case_summaries)
     correlation_rows = build_correlation_rows(case_summaries)
+    command_timing_rows = _command_timing_rows(command_records)
     case_summary_csv = tables_dir / "case_summary.csv"
     case_summary_md = tables_dir / "case_summary.md"
     correlation_csv = tables_dir / "correlation.csv"
+    command_timing_csv = tables_dir / "command_timing.csv"
+    command_timing_md = tables_dir / "command_timing.md"
     write_csv(case_summary_csv, summary_rows)
     write_markdown_table(case_summary_md, summary_rows)
     write_csv(correlation_csv, correlation_rows)
+    write_csv(
+        command_timing_csv,
+        command_timing_rows,
+        fieldnames=PAPER_COMMAND_TIMING_COLUMNS,
+    )
+    write_markdown_table(
+        command_timing_md,
+        command_timing_rows,
+        fieldnames=PAPER_COMMAND_TIMING_COLUMNS,
+    )
     speedup_svg = figures_dir / "speedup_by_case.svg"
     hit_rate_svg = figures_dir / "hit_rate_vs_speedup.svg"
     trace_svg = figures_dir / "trace_metadata_fraction_vs_speedup.svg"
@@ -5335,6 +5473,8 @@ def write_paper_outputs(
         "case_summary_csv": case_summary_csv,
         "case_summary_markdown": case_summary_md,
         "correlation_csv": correlation_csv,
+        "command_timing_csv": command_timing_csv,
+        "command_timing_markdown": command_timing_md,
         "speedup_svg": speedup_svg,
         "hit_rate_svg": hit_rate_svg,
         "trace_svg": trace_svg,
@@ -5390,6 +5530,8 @@ def write_paper_outputs(
         "case_summary_csv": str(case_summary_csv),
         "case_summary_markdown": str(case_summary_md),
         "correlation_csv": str(correlation_csv),
+        "command_timing_csv": str(command_timing_csv),
+        "command_timing_markdown": str(command_timing_md),
         "speedup_svg": str(speedup_svg),
         "hit_rate_svg": str(hit_rate_svg),
         "trace_svg": str(trace_svg),

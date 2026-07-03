@@ -514,6 +514,8 @@ After successful collection, the suite writes:
 - `tables/case_summary.csv`
 - `tables/case_summary.md`
 - `tables/correlation.csv`
+- `tables/command_timing.csv`
+- `tables/command_timing.md`
 - `figures/speedup_by_case.svg`
 - `figures/hit_rate_vs_speedup.svg`
 - `figures/trace_metadata_fraction_vs_speedup.svg`
@@ -555,7 +557,11 @@ duplicated MACE evidence mislabeled in the manifest.
 The summary also stores `command_log_fingerprints` for every launched command,
 including each stdout/stderr log path, existence flag, SHA-256 digest, and byte
 size. This lets reviewers confirm that the archived logs match the command
-records used to build the paper tables. Each command record also stores the
+records used to build the paper tables. The generated `command_timing.csv` and
+`command_timing.md` tables mirror those command records with command name,
+return code, elapsed seconds, stdout/stderr paths, and working directory so
+repeat-level timing provenance is inspectable without opening the JSON first.
+Each command record also stores the
 working directory and a focused `tracked_env` snapshot for cache mode, CUDA,
 SLURM, and CPU thread variables. That makes a disabled/enabled MACE, NequIP, or
 SevenNet timing row auditable without dumping unrelated environment variables.
@@ -576,7 +582,8 @@ It also performs semantic paper-artifact checks after the SHA-256 pass:
 `case_summary.csv` and `case_summary.md` must contain exactly one row per
 summary case and the same cell values as `summary["cases"]`.
 `correlation.csv` must contain the configured metric-pair rows and the same values as
-`summary["correlations"]`. Each SVG figure must parse as an SVG document with
+`summary["correlations"]`, and `command_timing.csv`/`command_timing.md` must
+contain the same command rows as `summary["commands"]`. Each SVG figure must parse as an SVG document with
 width, height, and viewBox; the speedup chart must include every measured-speedup
 case label from `summary["cases"]`, and scatter plots must contain the same
 number of plotted points as the summary data pairs they visualize.

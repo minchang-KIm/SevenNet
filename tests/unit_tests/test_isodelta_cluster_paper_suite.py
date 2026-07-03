@@ -391,6 +391,7 @@ def _write_required_paper_artifacts(
     *,
     case_names: tuple[str, ...] = ("case",),
     case_records: tuple[dict[str, object], ...] | None = None,
+    command_records: tuple[dict[str, object], ...] = (),
 ) -> dict[str, dict[str, object]]:
     """Create the required paper artifacts that bundle verification expects."""
     if case_records is None:
@@ -404,6 +405,8 @@ def _write_required_paper_artifacts(
     case_summary_csv = tables_dir / "case_summary.csv"
     case_summary_markdown = tables_dir / "case_summary.md"
     correlation_csv = tables_dir / "correlation.csv"
+    command_timing_csv = tables_dir / "command_timing.csv"
+    command_timing_markdown = tables_dir / "command_timing.md"
     speedup_svg = figures_dir / "speedup_by_case.svg"
     hit_rate_svg = figures_dir / "hit_rate_vs_speedup.svg"
     trace_svg = figures_dir / "trace_metadata_fraction_vs_speedup.svg"
@@ -437,9 +440,30 @@ def _write_required_paper_artifacts(
         }
         for x_metric, y_metric in isodelta_cluster_suite.CORRELATION_METRIC_PAIRS
     ]
+    command_rows = [
+        {
+            "name": record["name"],
+            "returncode": record["returncode"],
+            "elapsed_seconds": record["elapsed_seconds"],
+            "stdout_path": record["stdout_path"],
+            "stderr_path": record["stderr_path"],
+            "cwd": record["cwd"],
+        }
+        for record in command_records
+    ]
     isodelta_cluster_suite.write_csv(case_summary_csv, case_rows)
     isodelta_cluster_suite.write_markdown_table(case_summary_markdown, case_rows)
     isodelta_cluster_suite.write_csv(correlation_csv, correlation_rows)
+    isodelta_cluster_suite.write_csv(
+        command_timing_csv,
+        command_rows,
+        fieldnames=isodelta_cluster_suite.PAPER_COMMAND_TIMING_COLUMNS,
+    )
+    isodelta_cluster_suite.write_markdown_table(
+        command_timing_markdown,
+        command_rows,
+        fieldnames=isodelta_cluster_suite.PAPER_COMMAND_TIMING_COLUMNS,
+    )
     speedup_svg.write_text(
         isodelta_cluster_suite._empty_svg(
             isodelta_cluster_suite.SPEEDUP_SVG_EMPTY_MESSAGE
@@ -463,6 +487,8 @@ def _write_required_paper_artifacts(
         "case_summary_csv": case_summary_csv,
         "case_summary_markdown": case_summary_markdown,
         "correlation_csv": correlation_csv,
+        "command_timing_csv": command_timing_csv,
+        "command_timing_markdown": command_timing_markdown,
         "speedup_svg": speedup_svg,
         "hit_rate_svg": hit_rate_svg,
         "trace_svg": trace_svg,
@@ -497,7 +523,20 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             stdout_path = logs_dir / "case.stdout"
             missing_stderr_path = logs_dir / "case.stderr"
             stdout_path.write_text("completed\n", encoding="utf-8")
-            artifact_fingerprints = _write_required_paper_artifacts(original_output_dir)
+            command_record = {
+                "name": "case",
+                "command": "run-case",
+                "returncode": 0,
+                "elapsed_seconds": 1.0,
+                "stdout_path": str(stdout_path),
+                "stderr_path": str(missing_stderr_path),
+                "cwd": str(original_output_dir),
+                "tracked_env": isodelta_cluster_suite.command_environment_snapshot({}),
+            }
+            artifact_fingerprints = _write_required_paper_artifacts(
+                original_output_dir,
+                command_records=(command_record,),
+            )
             summary_path = original_output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary_path.write_text(
                 json.dumps(
@@ -505,18 +544,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                         "suite": {"output_dir": str(original_output_dir)},
                         "cases": [_summary_case_record("case")],
                         "correlations": _summary_correlations(1),
-                        "commands": [
-                            {
-                                "name": "case",
-                                "command": "run-case",
-                                "returncode": 0,
-                                "elapsed_seconds": 1.0,
-                                "stdout_path": str(stdout_path),
-                                "stderr_path": str(missing_stderr_path),
-                                "cwd": str(original_output_dir),
-                                "tracked_env": isodelta_cluster_suite.command_environment_snapshot({}),
-                            }
-                        ],
+                        "commands": [command_record],
                         "evidence_fingerprints": {
                             "case": {
                                 "benchmark_report": None,
@@ -577,7 +605,20 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             stderr_path = logs_dir / "case.stderr"
             stdout_path.write_text("completed\n", encoding="utf-8")
             stderr_path.write_text("", encoding="utf-8")
-            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            command_record = {
+                "name": "case",
+                "command": "run-case",
+                "returncode": 0,
+                "elapsed_seconds": 1.0,
+                "stdout_path": str(stdout_path),
+                "stderr_path": str(stderr_path),
+                "cwd": str(output_dir),
+                "tracked_env": isodelta_cluster_suite.command_environment_snapshot({}),
+            }
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                command_records=(command_record,),
+            )
             summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary_path.write_text(
                 json.dumps(
@@ -585,18 +626,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                         "suite": {"output_dir": str(output_dir)},
                         "cases": [_summary_case_record("case")],
                         "correlations": _summary_correlations(1),
-                        "commands": [
-                            {
-                                "name": "case",
-                                "command": "run-case",
-                                "returncode": 0,
-                                "elapsed_seconds": 1.0,
-                                "stdout_path": str(stdout_path),
-                                "stderr_path": str(stderr_path),
-                                "cwd": str(output_dir),
-                                "tracked_env": isodelta_cluster_suite.command_environment_snapshot({}),
-                            }
-                        ],
+                        "commands": [command_record],
                         "evidence_fingerprints": {
                             "case": {
                                 "benchmark_report": None,
@@ -972,6 +1002,82 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                     + re.escape(str(first_metric_pair))
                     + ".n must match summary correlations"
                 ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_command_timing_value_drift(self) -> None:
+        """The command timing table should match summary JSON command records."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            stdout_path = output_dir / "logs" / "case.stdout"
+            stderr_path = output_dir / "logs" / "case.stderr"
+            stdout_path.parent.mkdir(parents=True)
+            stdout_path.write_text("completed\n", encoding="utf-8")
+            stderr_path.write_text("", encoding="utf-8")
+            command_record = {
+                "name": "case",
+                "command": "run-case",
+                "returncode": 0,
+                "elapsed_seconds": 1.0,
+                "stdout_path": str(stdout_path),
+                "stderr_path": str(stderr_path),
+                "cwd": str(output_dir),
+                "tracked_env": isodelta_cluster_suite.command_environment_snapshot({}),
+            }
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                command_records=(command_record,),
+            )
+            command_timing_csv = output_dir / "tables" / "command_timing.csv"
+            command_timing_csv.write_text(
+                (
+                    "name,returncode,elapsed_seconds,stdout_path,stderr_path,cwd\n"
+                    f"case,0,2.0,{stdout_path},{stderr_path},{output_dir}\n"
+                ),
+                encoding="utf-8",
+            )
+            artifact_fingerprints["command_timing_csv"] = (
+                isodelta_cluster_suite.generated_artifact_record(command_timing_csv)
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [command_record],
+                        "command_log_fingerprints": [
+                            {
+                                "name": "case",
+                                "returncode": 0,
+                                "stdout": isodelta_cluster_suite.optional_file_fingerprint(
+                                    stdout_path
+                                ),
+                                "stderr": isodelta_cluster_suite.optional_file_fingerprint(
+                                    stderr_path
+                                ),
+                            }
+                        ],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                r"command_timing\.csv\[0\]\.elapsed_seconds must match summary commands",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
