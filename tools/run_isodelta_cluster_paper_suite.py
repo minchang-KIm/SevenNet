@@ -2705,6 +2705,134 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     }
 
 
+def _pipeline_report_output_dir(report_path: Path, original_output_dir: Path) -> Path:
+    """Return the best local output directory candidate for a pipeline report."""
+    if original_output_dir.exists():
+        return original_output_dir
+    sibling_output_dir = report_path.parent / original_output_dir.name
+    if sibling_output_dir.exists():
+        return sibling_output_dir
+    return report_path.parent
+
+
+def _require_pipeline_stage_report_fingerprints(
+    pipeline_payload: dict[str, Any],
+    *,
+    pipeline_report_path: Path,
+    original_output_dir: Path,
+) -> int:
+    """Verify the stage report fingerprints embedded in a pipeline report."""
+    stage_fingerprints = pipeline_payload.get(STAGE_REPORT_FINGERPRINTS_KEY)
+    _require(
+        isinstance(stage_fingerprints, list),
+        f"{STAGE_REPORT_FINGERPRINTS_KEY} must be a JSON array",
+    )
+    bundle_root = _pipeline_report_output_dir(pipeline_report_path, original_output_dir)
+    verified_count = 0
+    for index, raw_record in enumerate(stage_fingerprints):
+        record = _as_json_object(raw_record, f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}]")
+        _as_json_string(record.get("name"), f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].name")
+        raw_report_record = record.get("report")
+        if raw_report_record is None:
+            continue
+        report_record = _as_json_object(
+            raw_report_record,
+            f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].report",
+        )
+        _require_fingerprint_match(
+            report_record,
+            f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].report",
+            bundle_root=bundle_root,
+            original_output_dir=original_output_dir,
+        )
+        verified_count += 1
+    return verified_count
+
+
+def _require_pipeline_bundle_verification(
+    pipeline_payload: dict[str, Any],
+    *,
+    pipeline_report_path: Path,
+    original_output_dir: Path,
+) -> dict[str, Any] | None:
+    """Re-run the final output-bundle verification referenced by a pipeline report."""
+    raw_verification = pipeline_payload.get(OUTPUT_BUNDLE_VERIFICATION_KEY)
+    if raw_verification is None:
+        return None
+    recorded_verification = _as_json_object(
+        raw_verification,
+        OUTPUT_BUNDLE_VERIFICATION_KEY,
+    )
+    recorded_status = _as_json_string(
+        recorded_verification.get("status"),
+        f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.status",
+    )
+    if recorded_status != "passed":
+        _as_json_string(
+            recorded_verification.get("detail"),
+            f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.detail",
+        )
+        return recorded_verification
+    bundle_root = _pipeline_report_output_dir(pipeline_report_path, original_output_dir)
+    verification = verify_output_bundle(bundle_root)
+    for count_key in (
+        "verified_artifact_count",
+        "verified_evidence_file_count",
+        "verified_command_record_count",
+        "verified_command_log_count",
+    ):
+        recorded_count = _as_json_nonnegative_int(
+            recorded_verification.get(count_key),
+            f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.{count_key}",
+        )
+        actual_count = _as_json_nonnegative_int(
+            verification.get(count_key),
+            f"actual_{count_key}",
+        )
+        _require(
+            recorded_count == actual_count,
+            f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.{count_key} must match current bundle verification",
+        )
+    return verification
+
+
+def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
+    """Verify a pipeline report and all stage reports it fingerprints."""
+    _require(pipeline_report_path.exists(), f"missing pipeline report {pipeline_report_path}")
+    pipeline_payload = _as_json_object(
+        json.loads(pipeline_report_path.read_text(encoding="utf-8")),
+        "pipeline_report",
+    )
+    schema_version = _as_json_string(
+        pipeline_payload.get("pipeline_report_schema_version"),
+        "pipeline_report_schema_version",
+    )
+    _require(
+        schema_version == PIPELINE_REPORT_SCHEMA_VERSION,
+        f"pipeline_report_schema_version must be {PIPELINE_REPORT_SCHEMA_VERSION!r}",
+    )
+    pipeline_status = _as_json_string(pipeline_payload.get("status"), "status")
+    suite_record = _as_json_object(pipeline_payload.get("suite"), "suite")
+    original_output_dir = Path(_as_json_string(suite_record.get("output_dir"), "suite.output_dir"))
+    verified_stage_report_count = _require_pipeline_stage_report_fingerprints(
+        pipeline_payload,
+        pipeline_report_path=pipeline_report_path,
+        original_output_dir=original_output_dir,
+    )
+    bundle_verification = _require_pipeline_bundle_verification(
+        pipeline_payload,
+        pipeline_report_path=pipeline_report_path,
+        original_output_dir=original_output_dir,
+    )
+    return {
+        "status": "passed",
+        "pipeline_report": str(pipeline_report_path),
+        "pipeline_status": pipeline_status,
+        "verified_stage_report_count": verified_stage_report_count,
+        OUTPUT_BUNDLE_VERIFICATION_KEY: bundle_verification,
+    }
+
+
 def write_manifest_snapshot(config: SuiteConfig) -> Path:
     """Copy the manifest into the output bundle for archival review."""
     snapshot_path = config.output_dir / MANIFEST_SNAPSHOT_NAME
@@ -4704,6 +4832,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--write-template", type=Path, help="Write a commented TOML template and exit")
     parser.add_argument("--write-slurm-script", type=Path, help="Write a commented SLURM sbatch script and exit")
     parser.add_argument("--verify-output-bundle", type=Path, help="Verify summary artifact and log fingerprints")
+    parser.add_argument("--verify-pipeline-report", type=Path, help="Verify a pipeline report and its stage fingerprints")
     parser.add_argument("--pipeline", action="store_true", help="Run readiness, prepare, preflight, plan, suite, and bundle verification")
     parser.add_argument("--pipeline-report", type=Path, help="Path for --pipeline JSON output")
     parser.add_argument("--readiness-check", action="store_true", help="Audit a manifest before final paper execution")
@@ -4763,8 +4892,16 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(json.dumps(verification, indent=2))
         return SUCCESS_RETURN_CODE
+    if args.verify_pipeline_report is not None:
+        try:
+            verification = verify_pipeline_report(args.verify_pipeline_report)
+        except ClusterSuiteError as exc:
+            print(f"IsoDelta-Halo pipeline report verification failed: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(verification, indent=2))
+        return SUCCESS_RETURN_CODE
     if args.manifest is None:
-        raise SystemExit("--manifest is required unless --write-template or --verify-output-bundle is used")
+        raise SystemExit("--manifest is required unless --write-template or a verify mode is used")
     try:
         config = _apply_cli_overrides(load_manifest(args.manifest), args)
         _require(

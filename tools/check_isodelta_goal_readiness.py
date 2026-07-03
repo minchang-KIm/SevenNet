@@ -45,6 +45,8 @@ REQUIRED_FILE_SNIPPETS = {
         "--pipeline",
         "--readiness-check",
         "--verify-output-bundle",
+        "--verify-pipeline-report",
+        "verify_pipeline_report",
         "PIPELINE_OUTPUT",
         "STAGE_REPORT_FINGERPRINTS_KEY",
         "OUTPUT_BUNDLE_VERIFICATION_KEY",

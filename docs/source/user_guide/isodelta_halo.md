@@ -405,6 +405,16 @@ pipeline failed, and stops before plan, timing runs, or summary generation.
 If output bundle verification fails after the suite writes tables and figures,
 the pipeline records the fingerprint mismatch in `pipeline_report.json` and
 does not report the run as passed.
+After archiving a pipeline run, verify the top-level pipeline evidence with
+`--verify-pipeline-report`:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --verify-pipeline-report pipeline_report.json
+```
+
+This rechecks the pipeline report schema, every recorded stage report
+fingerprint, and the embedded final output-bundle verification counts.
 
 On a SLURM cluster, generate a commented submission script from the same
 manifest:

@@ -833,6 +833,8 @@ def main() -> None:
         and "run_pipeline" in cluster_suite
         and "--pipeline" in cluster_suite
         and "--pipeline-report" in cluster_suite
+        and "verify_pipeline_report" in cluster_suite
+        and "--verify-pipeline-report" in cluster_suite
         and "PREFLIGHT_OUTPUT" in cluster_suite
         and "validate_gpu_count" in cluster_suite
         and "download_artifact" in cluster_suite
@@ -877,6 +879,7 @@ def main() -> None:
         and "test_pipeline_stops_when_readiness_fails" in cluster_suite_test
         and "test_pipeline_stops_when_preflight_fails" in cluster_suite_test
         and "test_pipeline_reports_bundle_verification_failure" in cluster_suite_test
+        and "--verify-pipeline-report" in cluster_suite_test
         and "test_manifest_validation_rejects_enabled_external_pair_disable_env" in cluster_suite_test
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
         and "test_command_records_include_cwd_and_tracked_environment" in cluster_suite_test
@@ -954,6 +957,7 @@ def main() -> None:
         and "`preflight_report.json`" in doc
         and "`--pipeline`" in doc
         and "`pipeline_report.json`" in doc
+        and "`--verify-pipeline-report`" in doc
         and "stage report fingerprints" in doc
         and "final bundle verification counts" in doc
         and "`artifact_preparation_report.json`" in doc

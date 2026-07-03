@@ -1294,8 +1294,26 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             pipeline_verification = pipeline_report[
                 isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY
             ]
+            pipeline_report_verification = isodelta_cluster_suite.verify_pipeline_report(
+                pipeline_report_path
+            )
+            pipeline_cli_exit_code = isodelta_cluster_suite.main(
+                ["--verify-pipeline-report", str(pipeline_report_path)]
+            )
+            readiness_report_path = output_dir / isodelta_cluster_suite.READINESS_REPORT_NAME
+            readiness_report_path.write_text(
+                readiness_report_path.read_text(encoding="utf-8") + "\n",
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                mutated_stage_report_error = str(exc)
+            else:
+                mutated_stage_report_error = ""
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(pipeline_cli_exit_code, 0)
         self.assertEqual(pipeline_report["status"], isodelta_cluster_suite.PIPELINE_STATUS_PASSED)
         self.assertEqual(
             stage_names,
@@ -1310,6 +1328,11 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         )
         self.assertEqual(verification["status"], "passed")
         self.assertEqual(len(stage_fingerprints), len(stage_names))
+        self.assertEqual(pipeline_report_verification["status"], "passed")
+        self.assertEqual(
+            pipeline_report_verification["verified_stage_report_count"],
+            len(stage_names),
+        )
         self.assertEqual(pipeline_verification["status"], "passed")
         self.assertEqual(
             pipeline_verification["verified_evidence_file_count"],
@@ -1323,6 +1346,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn("preflight_environment_snapshot", summary["artifact_fingerprints"])
         self.assertIn("run_plan", summary["artifact_fingerprints"])
         self.assertNotIn("pipeline_report", summary["artifact_fingerprints"])
+        self.assertIn("SHA-256 mismatch", mutated_stage_report_error)
 
     def test_pipeline_stops_when_readiness_fails(self) -> None:
         """Pipeline mode should not prepare inputs or run cases after a failed gate."""
