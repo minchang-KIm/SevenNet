@@ -390,6 +390,9 @@ commands, timing runs, or summary generation. Use `--reuse-passed` with
 `--pipeline` after an interrupted run to reuse already validated case outputs
 while still rerunning readiness, preflight, summary generation, and bundle
 verification.
+If the preflight gate fails after artifact preparation, the pipeline keeps
+`preflight_report.json` and `artifact_preparation_report.json`, marks the
+pipeline failed, and stops before plan, timing runs, or summary generation.
 
 On a SLURM cluster, generate a commented submission script from the same
 manifest:

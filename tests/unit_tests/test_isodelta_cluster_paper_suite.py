@@ -1104,6 +1104,98 @@ trace_evidence = ["missing_nequip_trace.json"]
         self.assertTrue(stopped_before_plan)
         self.assertTrue(stopped_before_summary)
 
+    def test_pipeline_stops_when_preflight_fails(self) -> None:
+        """A failed model preflight should stop before plan, run, and summary stages."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            python_bin = Path(sys.executable).as_posix()
+            source_path = root / "source-data.bin"
+            source_path.write_bytes(b"pipeline preflight failure input")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            output_dir = root / "paper_outputs"
+            manifest_path = root / "suite.toml"
+            pipeline_report_path = root / "pipeline_report.json"
+            case_blocks = []
+            for model_name in ("SevenNet", "MACE", "NequIP"):
+                case_name = f"{model_name.lower()}-preflight-fails"
+                trace_path = root / f"{model_name.lower()}_trace.json"
+                trace_path.write_text(json.dumps(_trace_evidence(model_name)), encoding="utf-8")
+                preflight_exit_code = 7 if model_name == "MACE" else 0
+                case_blocks.append(
+                    f"""
+[[cases]]
+name = "{case_name}"
+model = "{model_name}"
+kind = "external_pair"
+preflight_command = '"{python_bin}" -c "import sys; sys.exit({preflight_exit_code})"'
+disabled_command = "unused-disabled"
+enabled_command = "unused-enabled"
+repeat_count = 3
+trace_evidence = ["{trace_path.as_posix()}"]
+required_trace_models = ["{model_name}"]
+artifacts = ["dataset"]
+"""
+                )
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "pipeline-preflight-fails"
+output_dir = "{output_dir.as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet", "MACE", "NequIP"]
+require_artifact_sha256 = true
+repeat_count = 3
+min_trace_count = 3
+min_distinct_trace_models = 3
+min_speedup = 1.05
+min_speedup_95ci_lower_bound = 1.0
+
+[[artifacts]]
+name = "dataset"
+path = "{(root / "downloaded.bin").as_posix()}"
+url = "{source_path.as_uri()}"
+sha256 = "{digest}"
+required_by = ["SevenNet", "MACE", "NequIP"]
+
+{''.join(case_blocks)}
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--pipeline",
+                    "--pipeline-report",
+                    str(pipeline_report_path),
+                    "--skip-gpu-check",
+                ]
+            )
+            pipeline_report = json.loads(pipeline_report_path.read_text(encoding="utf-8"))
+            preflight_path = output_dir / isodelta_cluster_suite.PREFLIGHT_REPORT_NAME
+            preflight_report = json.loads(preflight_path.read_text(encoding="utf-8"))
+            stage_names = [stage["name"] for stage in pipeline_report["stages"]]
+            stopped_before_plan = not (
+                output_dir / isodelta_cluster_suite.PLAN_REPORT_NAME
+            ).exists()
+            stopped_before_summary = not (
+                output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            ).exists()
+            artifact_report_exists = (
+                output_dir / isodelta_cluster_suite.ARTIFACT_PREPARATION_REPORT_NAME
+            ).exists()
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(pipeline_report["status"], isodelta_cluster_suite.PIPELINE_STATUS_FAILED)
+        self.assertEqual(stage_names, ["readiness", "prepare_artifacts", "preflight"])
+        self.assertEqual(preflight_report["status"], isodelta_cluster_suite.PREFLIGHT_STATUS_FAILED)
+        self.assertEqual(preflight_report["failures"][0]["stage"], "case_preflight")
+        self.assertEqual(preflight_report["case_preflights"][1]["returncode"], 7)
+        self.assertTrue(artifact_report_exists)
+        self.assertTrue(stopped_before_plan)
+        self.assertTrue(stopped_before_summary)
+
     def test_readiness_check_accepts_strict_three_model_paired_manifest(self) -> None:
         """A final paper manifest should prove strict input and model coverage."""
         with tempfile.TemporaryDirectory() as tmpdir:
