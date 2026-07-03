@@ -904,6 +904,7 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_correlation_value_drift"
         in cluster_suite_test
+        and "test_run_suite_verifies_output_bundle_after_writing" in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
         and "PASSING_CASE_STATUSES" in cluster_suite
@@ -957,6 +958,8 @@ def main() -> None:
         and "_require_speedup_svg_semantics" in cluster_suite
         and "_require_scatter_svg_semantics" in cluster_suite
         and "_svg_element_count" in cluster_suite
+        and "verify_output" in cluster_suite
+        and "verifying output bundle" in cluster_suite
         and "CORRELATION_METRIC_PAIRS" in cluster_suite
         and "EXTERNAL_DISABLED_COMMAND_LABEL" in cluster_suite
         and "EXTERNAL_ENABLED_COMMAND_LABEL" in cluster_suite
@@ -1151,6 +1154,11 @@ def main() -> None:
         and "nested `command_log_fingerprints`" in doc
         and "MACE/NequIP stdout/stderr logs cannot drift silently" in doc,
         "IsoDelta-Halo guide must document nested external timing log verification",
+    )
+    _require(
+        "normal suite run also reopens the completed" in doc
+        and "bundle verification failure returns a nonzero exit code" in doc,
+        "IsoDelta-Halo guide must document automatic run-suite bundle verification",
     )
     _require(
         "`environment_snapshot.json`" in doc

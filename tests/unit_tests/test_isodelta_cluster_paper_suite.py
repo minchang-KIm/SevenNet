@@ -2762,6 +2762,52 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             nequip_timing_digest,
         )
 
+    def test_run_suite_verifies_output_bundle_after_writing(self) -> None:
+        """A normal suite run should reopen and verify its own paper bundle."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            trace_path = root / "sevennet_trace.json"
+            trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "verify-after-write-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+min_trace_count = 1
+min_distinct_trace_models = 1
+
+[[cases]]
+name = "sevennet-trace"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["{trace_path.as_posix()}"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            verification_calls: list[Path] = []
+            original_verify_output_bundle = isodelta_cluster_suite.verify_output_bundle
+
+            def failing_verify_output_bundle(path: Path) -> dict[str, object]:
+                verification_calls.append(Path(path))
+                raise isodelta_cluster_suite.ClusterSuiteError("forced bundle failure")
+
+            try:
+                isodelta_cluster_suite.verify_output_bundle = failing_verify_output_bundle
+                exit_code = isodelta_cluster_suite.run_suite(
+                    config,
+                    skip_downloads=True,
+                    skip_gpu_check=True,
+                )
+            finally:
+                isodelta_cluster_suite.verify_output_bundle = original_verify_output_bundle
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(verification_calls, [output_dir])
+
     def test_collect_only_rejects_insufficient_distinct_trace_models(self) -> None:
         """Suite-level gates should count model labels inside trace evidence."""
         with tempfile.TemporaryDirectory() as tmpdir:

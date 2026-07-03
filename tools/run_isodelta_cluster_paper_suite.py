@@ -1819,6 +1819,7 @@ def run_pipeline(
     allow_gpu_mismatch: bool = False,
     keep_going: bool = False,
     reuse_passed: bool = False,
+    verify_output: bool = False,
     report_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run the full paper pipeline from readiness checks through bundle verify."""
@@ -1945,6 +1946,7 @@ def run_pipeline(
         allow_gpu_mismatch=allow_gpu_mismatch,
         keep_going=keep_going,
         reuse_passed=reuse_passed,
+        verify_output=verify_output,
     )
     run_failed = run_returncode != SUCCESS_RETURN_CODE
     stages.append(
@@ -5253,6 +5255,7 @@ def run_suite(
     allow_gpu_mismatch: bool = False,
     keep_going: bool = False,
     reuse_passed: bool = False,
+    verify_output: bool = True,
 ) -> int:
     """Run the full cluster suite and write all paper-ready artifacts."""
     validate_suite_config(config)
@@ -5264,7 +5267,8 @@ def run_suite(
     )
     config.output_dir.mkdir(parents=True, exist_ok=True)
     download_stage_count = 1 if skip_downloads or not config.artifacts else len(config.artifacts)
-    total_stages = 1 + download_stage_count + len(config.cases) + 1
+    verify_stage_count = 1 if verify_output and not dry_run else 0
+    total_stages = 1 + download_stage_count + len(config.cases) + 1 + verify_stage_count
     stage_index = 1
     gpu_record = None
     if skip_gpu_check:
@@ -5404,7 +5408,18 @@ def run_suite(
         gpu_record,
         suite_evidence,
     )
-    print(json.dumps(artifacts, indent=2), flush=True)
+    stage_index += 1
+    artifact_report: dict[str, Any] = dict(artifacts)
+    if verify_output and not dry_run:
+        _progress(config.name, stage_index, total_stages, "verifying output bundle")
+        try:
+            artifact_report["output_bundle_verification"] = verify_output_bundle(
+                config.output_dir
+            )
+        except ClusterSuiteError as exc:
+            print(f"[{config.name}] output bundle verification failed: {exc}", file=sys.stderr)
+            return 1
+    print(json.dumps(artifact_report, indent=2), flush=True)
     return 1 if failed else SUCCESS_RETURN_CODE
 
 
