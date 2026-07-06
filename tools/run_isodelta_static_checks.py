@@ -367,7 +367,10 @@ def main() -> None:
         and "REMOTE_REF_VERIFICATION_KEY" in sync_gate
         and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate
         and "VALIDATION_REPORT_FINGERPRINT_KEY" in sync_gate
+        and "VALIDATION_REPORT_SUMMARY_KEY" in sync_gate
         and "STATUS_VALIDATION_REPORT_MISSING" in sync_gate
+        and "STATUS_VALIDATION_REPORT_INVALID" in sync_gate
+        and "_validation_report_summary" in sync_gate
         and "STATUS_DIRTY_WORKTREE" in sync_gate
         and "WORKTREE_STATUS_KEY" in sync_gate
         and "_parse_status_short" in sync_gate
@@ -393,9 +396,11 @@ def main() -> None:
         and "test_run_sync_records_git_provenance_for_push_target" in sync_gate_test
         and "test_run_sync_fails_when_remote_ref_does_not_match" in sync_gate_test
         and "test_run_sync_rejects_missing_validation_report" in sync_gate_test
+        and "test_run_sync_rejects_failed_validation_report_json" in sync_gate_test
         and "test_run_sync_can_require_clean_worktree" in sync_gate_test
         and "WORKTREE_STATUS_KEY" in sync_gate_test
         and "VALIDATION_REPORT_FINGERPRINT_KEY" in sync_gate_test
+        and "VALIDATION_REPORT_SUMMARY_KEY" in sync_gate_test
         and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate_test
         and "test_run_sync_can_write_bundle_after_push_failure" in sync_gate_test
         and "PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME" in sync_gate_test
@@ -1428,7 +1433,9 @@ def main() -> None:
         and "run_isodelta_sync_gate.py" in doc
         and "`isodelta_sync_report.json`" in doc
         and "`validation_report_fingerprint`" in doc
+        and "`validation_report_summary`" in doc
         and "`validation_report_missing`" in doc
+        and "`validation_report_invalid`" in doc
         and "`worktree_status`" in doc
         and "`--require-clean-worktree`" in doc
         and "`dirty_worktree`" in doc

@@ -185,7 +185,10 @@ target remote/branch, the push stderr tail, and a
 `validation_report_fingerprint` object with the validation report SHA-256
 digest and byte size. If the validation command exits successfully but the
 validation report file is missing, the sync gate reports
-`validation_report_missing` and does not push. The report also stores
+`validation_report_missing` and does not push. It also parses the validation
+report JSON into `validation_report_summary`; if that summary does not show
+`status = "passed"` for the same expected branch and current HEAD commit, the
+gate reports `validation_report_invalid` and does not push. The report also stores
 `worktree_status`, a parsed `git status --short` snapshot with entry count,
 per-entry index/worktree status, paths, and a clean flag. For final paper
 syncs, add `--require-clean-worktree` to fail with `dirty_worktree` before

@@ -36,12 +36,14 @@ STATUS_SYNCED = "synced"
 STATUS_VALIDATED = "validated"
 STATUS_VALIDATION_FAILED = "validation_failed"
 STATUS_VALIDATION_REPORT_MISSING = "validation_report_missing"
+STATUS_VALIDATION_REPORT_INVALID = "validation_report_invalid"
 STATUS_DIRTY_WORKTREE = "dirty_worktree"
 STATUS_PUSH_FAILED = "push_failed"
 STATUS_REMOTE_VERIFICATION_FAILED = "remote_verification_failed"
 REMOTE_REF_VERIFICATION_KEY = "remote_ref_verification"
 REMOTE_REF_VERIFY_COMMAND_NAME = "remote_ref_verify"
 VALIDATION_REPORT_FINGERPRINT_KEY = "validation_report_fingerprint"
+VALIDATION_REPORT_SUMMARY_KEY = "validation_report_summary"
 WORKTREE_STATUS_KEY = "worktree_status"
 PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_COMMAND_NAME = "push_failure_bundle"
@@ -52,6 +54,7 @@ PUSH_FAILURE_BUNDLE_STATUS_SKIPPED = "skipped"
 PUSH_FAILURE_REASON_AUTH_PROMPT_DISABLED = "auth-prompt-disabled"
 PUSH_FAILURE_REASON_NETWORK_UNREACHABLE = "network-unreachable"
 PUSH_FAILURE_REASON_UNKNOWN = "unknown"
+VALIDATION_REPORT_PASSED_STATUS = "passed"
 AUTH_PROMPT_DISABLED_MARKERS = (
     "Cannot prompt because user interactivity has been disabled",
     "could not read Username for",
@@ -225,6 +228,62 @@ def _file_fingerprint(path: Path) -> dict[str, Any]:
 def _bundle_file_fingerprint(bundle_path: Path) -> dict[str, Any]:
     """Return a SHA-256 fingerprint for a generated git bundle."""
     return _file_fingerprint(bundle_path)
+
+
+def _validation_report_summary(
+    validation_report_path: Path,
+    *,
+    expected_branch: str | None,
+    expected_commit: str | None,
+) -> dict[str, Any]:
+    """Validate and summarize the lightweight validation report JSON."""
+    summary: dict[str, Any] = {
+        "path": str(validation_report_path),
+        "valid": False,
+        "schema_version": None,
+        "status": None,
+        "expected_branch": None,
+        "git_commit": None,
+        "command_count": None,
+        "detail": None,
+    }
+    try:
+        payload = json.loads(validation_report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        summary["detail"] = f"validation report is not readable JSON: {exc}"
+        return summary
+    if not isinstance(payload, dict):
+        summary["detail"] = "validation report root must be a JSON object"
+        return summary
+    schema_version = payload.get("validation_report_schema_version")
+    status = payload.get("status")
+    recorded_expected_branch = payload.get("expected_branch")
+    git_commit = payload.get("git_commit")
+    commands = payload.get("commands")
+    command_count = len(commands) if isinstance(commands, list) else None
+    summary.update(
+        {
+            "schema_version": schema_version,
+            "status": status,
+            "expected_branch": recorded_expected_branch,
+            "git_commit": git_commit,
+            "command_count": command_count,
+        }
+    )
+    if status != VALIDATION_REPORT_PASSED_STATUS:
+        summary["detail"] = "validation report status is not passed"
+        return summary
+    if expected_branch is not None and recorded_expected_branch != expected_branch:
+        summary["detail"] = "validation report expected_branch does not match push branch"
+        return summary
+    if expected_commit is not None and git_commit != expected_commit:
+        summary["detail"] = "validation report git_commit does not match current HEAD"
+        return summary
+    if command_count is None:
+        summary["detail"] = "validation report commands must be a JSON array"
+        return summary
+    summary["valid"] = True
+    return summary
 
 
 def _sync_git_provenance(remote: str, branch: str | None) -> dict[str, str | None]:
@@ -404,8 +463,10 @@ def run_sync(
     command_records: list[dict[str, Any]] = []
     worktree_report = _worktree_status()
     validation_report_fingerprint: dict[str, Any] | None = None
+    validation_report_summary: dict[str, Any] | None = None
     push_record: dict[str, Any] | None = None
     remote_ref_verification_report: dict[str, Any] | None = None
+    expected_head_commit = _metadata_command(("git", "rev-parse", "HEAD"))
     status = (
         STATUS_DIRTY_WORKTREE
         if require_clean_worktree and not worktree_report["clean"]
@@ -421,12 +482,20 @@ def run_sync(
             if validation_report_path.exists()
             else None
         )
+        if validation_report_fingerprint is not None:
+            validation_report_summary = _validation_report_summary(
+                validation_report_path,
+                expected_branch=resolved_branch,
+                expected_commit=expected_head_commit,
+            )
     else:
         validation_record = None
 
     if validation_record is not None and validation_record["returncode"] == SUCCESS_RETURN_CODE:
         if validation_report_fingerprint is None:
             status = STATUS_VALIDATION_REPORT_MISSING
+        elif validation_report_summary is None or not validation_report_summary["valid"]:
+            status = STATUS_VALIDATION_REPORT_INVALID
         elif skip_push:
             status = STATUS_VALIDATED
         elif resolved_branch:
@@ -484,6 +553,7 @@ def run_sync(
         "branch": resolved_branch,
         "validation_report_path": str(validation_report_path),
         VALIDATION_REPORT_FINGERPRINT_KEY: validation_report_fingerprint,
+        VALIDATION_REPORT_SUMMARY_KEY: validation_report_summary,
         WORKTREE_STATUS_KEY: worktree_report,
         "git_commit": _metadata_command(("git", "rev-parse", "HEAD")),
         "git_status_short": _metadata_command(("git", "status", "--short")),

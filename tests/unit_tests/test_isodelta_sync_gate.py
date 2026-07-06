@@ -26,7 +26,7 @@ COMMAND_COUNT_AFTER_VALIDATION_FAILURE = 1
 COMMAND_COUNT_AFTER_DIRTY_WORKTREE = 0
 INTENTIONAL_VALIDATION_FAILURE_CODE = 3
 INTENTIONAL_PUSH_FAILURE_CODE = 128
-VALIDATION_REPORT_TEXT = "validation report"
+VALIDATION_REPORT_COMMAND_COUNT = 1
 REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 SYNC_GATE_SCRIPT = REPO_ROOT / "tools" / "run_isodelta_sync_gate.py"
 SPEC = importlib.util.spec_from_file_location("isodelta_sync_gate", SYNC_GATE_SCRIPT)
@@ -36,12 +36,27 @@ sys.modules[SPEC.name] = sync_gate
 SPEC.loader.exec_module(sync_gate)
 
 
-def _validation_report_command(validation_report_path: Path) -> tuple[str, ...]:
+def _validation_report_command(
+    validation_report_path: Path,
+    *,
+    expected_branch: str = "feature",
+    git_commit: str = "feature-sha",
+    status: str | None = None,
+) -> tuple[str, ...]:
     """Return a tiny command that writes the validation report under test."""
+    report_status = status or sync_gate.VALIDATION_REPORT_PASSED_STATUS
+    report_payload = {
+        "validation_report_schema_version": "isodelta-lightweight-validation-report-v1",
+        "status": report_status,
+        "expected_branch": expected_branch,
+        "git_commit": git_commit,
+        "commands": [{"command": ["test"], "returncode": 0}],
+    }
+    report_text = json.dumps(report_payload, indent=2)
     script = (
         "from pathlib import Path; "
         f"Path({str(validation_report_path)!r}).write_text("
-        f"{VALIDATION_REPORT_TEXT!r}, encoding='utf-8'); "
+        f"{report_text!r}, encoding='utf-8'); "
         "print('valid')"
     )
     return (sys.executable, "-c", script)
@@ -49,10 +64,29 @@ def _validation_report_command(validation_report_path: Path) -> tuple[str, ...]:
 
 def _validation_report_fingerprint(validation_report_path: Path) -> dict[str, object]:
     """Return the expected fingerprint for the test validation report."""
+    report_bytes = validation_report_path.read_bytes()
     return {
         "path": str(validation_report_path),
-        "sha256": hashlib.sha256(VALIDATION_REPORT_TEXT.encode("utf-8")).hexdigest(),
-        "size_bytes": len(VALIDATION_REPORT_TEXT.encode("utf-8")),
+        "sha256": hashlib.sha256(report_bytes).hexdigest(),
+        "size_bytes": len(report_bytes),
+    }
+
+
+def _passed_validation_report_summary(
+    validation_report_path: Path,
+    *,
+    git_commit: str = "feature-sha",
+) -> dict[str, object]:
+    """Return the expected sync-gate summary for a passing test report."""
+    return {
+        "path": str(validation_report_path),
+        "valid": True,
+        "schema_version": "isodelta-lightweight-validation-report-v1",
+        "status": sync_gate.VALIDATION_REPORT_PASSED_STATUS,
+        "expected_branch": "feature",
+        "git_commit": git_commit,
+        "command_count": VALIDATION_REPORT_COMMAND_COUNT,
+        "detail": None,
     }
 
 
@@ -110,6 +144,12 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                 sync_gate.REPO_ROOT = original_root
                 sync_gate._metadata_command = original_metadata_command
             report = json.loads(report_path.read_text(encoding="utf-8"))
+            expected_validation_fingerprint = _validation_report_fingerprint(
+                validation_report_path
+            )
+            expected_validation_summary = _passed_validation_report_summary(
+                validation_report_path
+            )
 
         self.assertEqual(exit_code, sync_gate.SUCCESS_RETURN_CODE)
         self.assertEqual(report["status"], sync_gate.STATUS_SYNCED)
@@ -134,7 +174,11 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         )
         self.assertEqual(
             report[sync_gate.VALIDATION_REPORT_FINGERPRINT_KEY],
-            _validation_report_fingerprint(validation_report_path),
+            expected_validation_fingerprint,
+        )
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY],
+            expected_validation_summary,
         )
         self.assertEqual(
             report[sync_gate.WORKTREE_STATUS_KEY],
@@ -155,7 +199,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         expected_remote_ref = "refs/remotes/origin/feature"
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "head-sha",
+            ("git", "rev-parse", "HEAD"): "feature-sha",
             ("git", "rev-parse", "feature"): "feature-sha",
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
             ("git", "rev-parse", "--verify", expected_remote_ref): "remote-feature-sha",
@@ -188,13 +232,19 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                 sync_gate.REPO_ROOT = original_root
                 sync_gate._metadata_command = original_metadata_command
             report = json.loads(report_path.read_text(encoding="utf-8"))
+            expected_validation_fingerprint = _validation_report_fingerprint(
+                validation_report_path
+            )
+            expected_validation_summary = _passed_validation_report_summary(
+                validation_report_path
+            )
 
         self.assertEqual(exit_code, sync_gate.SUCCESS_RETURN_CODE)
         self.assertEqual(
             report["git_provenance"],
             {
                 "current_branch": "feature",
-                "head_commit": "head-sha",
+                "head_commit": "feature-sha",
                 "target_branch_commit": "feature-sha",
                 "remote_url": "https://example.invalid/repo.git",
                 "remote_tracking_ref": expected_remote_ref,
@@ -203,7 +253,11 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         )
         self.assertEqual(
             report[sync_gate.VALIDATION_REPORT_FINGERPRINT_KEY],
-            _validation_report_fingerprint(validation_report_path),
+            expected_validation_fingerprint,
+        )
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY],
+            expected_validation_summary,
         )
 
     def test_run_sync_can_require_clean_worktree(self) -> None:
@@ -213,7 +267,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         status_short = " M tools/run.py\n?? scratch.txt"
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "head-sha",
+            ("git", "rev-parse", "HEAD"): "feature-sha",
             ("git", "rev-parse", "feature"): "feature-sha",
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
             ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
@@ -312,6 +366,9 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                 sync_gate.REPO_ROOT = original_root
                 sync_gate._metadata_command = original_metadata_command
             report = json.loads(report_path.read_text(encoding="utf-8"))
+            expected_validation_fingerprint = _validation_report_fingerprint(
+                validation_report_path
+            )
 
         self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
         self.assertEqual(report["status"], sync_gate.STATUS_REMOTE_VERIFICATION_FAILED)
@@ -328,9 +385,53 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         )
         self.assertEqual(
             report[sync_gate.VALIDATION_REPORT_FINGERPRINT_KEY],
-            _validation_report_fingerprint(validation_report_path),
+            expected_validation_fingerprint,
         )
         self.assertIsNone(report["push_failure"])
+
+    def test_run_sync_rejects_failed_validation_report_json(self) -> None:
+        """A zero exit code cannot override a failed validation report payload."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): "feature-sha",
+            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            status="failed",
+                        ),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_REPORT_INVALID)
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
+            "validation report status is not passed",
+        )
 
     def test_run_sync_rejects_missing_validation_report(self) -> None:
         """A zero exit code is not enough evidence without the JSON report."""
@@ -358,6 +459,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_REPORT_MISSING)
         self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
         self.assertIsNone(report[sync_gate.VALIDATION_REPORT_FINGERPRINT_KEY])
+        self.assertIsNone(report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY])
 
     def test_run_sync_skips_push_after_validation_failure(self) -> None:
         """A failing validation command should prevent the push command."""
