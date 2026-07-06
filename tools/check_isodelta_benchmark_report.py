@@ -70,6 +70,7 @@ PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
 ENV_FLAG_ENABLED = "1"
+ENV_FLAG_FALSE_VALUES = frozenset(("", "0", "false", "no", "off"))
 REQUIRED_CASE_ENVIRONMENT_OVERRIDES = {
     BASELINE_CASE: {
         PRINT_INFO_ENV: ENV_FLAG_ENABLED,
@@ -194,6 +195,19 @@ def _as_nonempty_string(value: Any, field_name: str) -> str:
     return value
 
 
+def _as_env_string(value: Any, field_name: str) -> str:
+    """Return an environment string, preserving explicit empty false flags."""
+    _require(isinstance(value, str), f"{field_name} must be a string")
+    return value
+
+
+def env_flag_is_enabled(value: str | None) -> bool:
+    """Return whether a runtime env flag is enabled under PairE3GNN rules."""
+    if value is None:
+        return False
+    return value.strip().lower() not in ENV_FLAG_FALSE_VALUES
+
+
 def _as_boolean(value: Any, field_name: str) -> bool:
     """Return a boolean field without accepting integer aliases."""
     _require(isinstance(value, bool), f"{field_name} must be boolean")
@@ -256,19 +270,35 @@ def _check_case_environment_overrides(overrides: dict[str, Any]) -> None:
         field_prefix = f"{PROVENANCE_KEY}.{CASE_ENVIRONMENT_OVERRIDES_KEY}.{case_name}"
         case_overrides = _as_mapping(overrides.get(case_name), field_prefix)
         for env_name, expected_value in expected_env.items():
-            actual_value = _as_nonempty_string(
-                case_overrides.get(env_name),
-                f"{field_prefix}.{env_name}",
-            )
-            _require(
-                actual_value == expected_value,
-                f"{field_prefix}.{env_name} must be {expected_value!r}",
-            )
+            field_name = f"{field_prefix}.{env_name}"
+            if env_name == DISABLE_CACHE_ENV:
+                actual_value = _as_env_string(case_overrides.get(env_name), field_name)
+                _require(
+                    env_flag_is_enabled(actual_value),
+                    f"{field_name} must enable the disabled-cache baseline",
+                )
+            else:
+                actual_value = _as_nonempty_string(
+                    case_overrides.get(env_name),
+                    field_name,
+                )
+                _require(
+                    actual_value == expected_value,
+                    f"{field_name} must be {expected_value!r}",
+                )
         if case_name == ISODELTA_CASE:
-            _require(
-                DISABLE_CACHE_ENV not in case_overrides,
-                f"{field_prefix}.{DISABLE_CACHE_ENV} must be absent for enabled case",
-            )
+            if DISABLE_CACHE_ENV in case_overrides:
+                disable_value = _as_env_string(
+                    case_overrides.get(DISABLE_CACHE_ENV),
+                    f"{field_prefix}.{DISABLE_CACHE_ENV}",
+                )
+                _require(
+                    not env_flag_is_enabled(disable_value),
+                    (
+                        f"{field_prefix}.{DISABLE_CACHE_ENV} must be absent "
+                        "or false for enabled case"
+                    ),
+                )
 
 
 def _check_provenance(report: dict[str, Any]) -> dict[str, Any]:

@@ -352,6 +352,24 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
                 isodelta_report_check.ReportThresholds(),
             )
 
+    def test_validate_report_accepts_false_disable_env_in_enabled_case(self) -> None:
+        """Enabled evidence may record an explicit false cache-disable flag."""
+        report = _valid_report()
+        provenance = report["provenance"]
+        assert isinstance(provenance, dict)
+        overrides = provenance["case_environment_overrides"]
+        assert isinstance(overrides, dict)
+        enabled = overrides["isodelta-enabled"]
+        assert isinstance(enabled, dict)
+        enabled[DISABLE_CACHE_ENV] = " off "
+
+        evidence = isodelta_report_check.validate_report(
+            report,
+            isodelta_report_check.ReportThresholds(),
+        )
+
+        self.assertEqual(evidence["status"], "passed")
+
     def test_validate_report_rejects_wrong_summary_run_count(self) -> None:
         """The summary run count should match result rows."""
         report = _valid_report()

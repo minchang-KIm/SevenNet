@@ -375,8 +375,10 @@ modes auditable with `disabled_env` and `enabled_env`. The runner always starts
 the disabled command with `SEVENN_ISODELTA_HALO_DISABLE` set and the enabled
 command with that variable unset, then records those external_pair mode
 controls in the run plan, generated timing report, and summary
-`case_mode_controls`. If `enabled_env` sets `SEVENN_ISODELTA_HALO_DISABLE`, the
-manifest is rejected because the "applied" run would actually be cache-off too.
+`case_mode_controls`. If `enabled_env` sets `SEVENN_ISODELTA_HALO_DISABLE` to a
+truthy value, the manifest is rejected because the "applied" run would actually
+be cache-off too. Explicit false values such as `0`, `false`, `no`, and `off`
+are treated as cache-enabled evidence, matching the C++ runtime parser.
 These external_pair mode controls are part of the paper audit trail, not only a
 runtime convenience.
 For `sevennet_lammps` and `external_pair` cases, the manifest can set

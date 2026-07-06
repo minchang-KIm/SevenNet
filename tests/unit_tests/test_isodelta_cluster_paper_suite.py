@@ -2081,9 +2081,42 @@ enabled_env = { SEVENN_ISODELTA_HALO_DISABLE = "1" }
 
         with self.assertRaisesRegex(
             isodelta_cluster_suite.ClusterSuiteError,
-            "enabled mode must leave SEVENN_ISODELTA_HALO_DISABLE unset",
+            "enabled mode must leave SEVENN_ISODELTA_HALO_DISABLE unset or false",
         ):
             isodelta_cluster_suite.validate_suite_config(config)
+
+    def test_manifest_validation_accepts_false_enabled_disable_env(self) -> None:
+        """Explicit false disable flags should match the C++ enabled runtime."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "false-mode-controls"
+required_models = ["MACE"]
+
+[[cases]]
+name = "mace-pair"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "python run_mace.py --mode baseline"
+enabled_command = "python run_mace.py --mode isodelta"
+enabled_env = { SEVENN_ISODELTA_HALO_DISABLE = " off " }
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+        isodelta_cluster_suite.validate_suite_config(config)
+        mode_controls = isodelta_cluster_suite.case_mode_control_record(
+            config.cases[0]
+        )
+        self.assertTrue(mode_controls["disabled_cache_disabled"])
+        self.assertFalse(mode_controls["enabled_cache_disabled"])
+        self.assertEqual(
+            mode_controls["enabled_env"][isodelta_cluster_suite.SEVENNET_DISABLE_ENV],
+            "off",
+        )
 
     def test_download_artifact_copies_file_url_and_checks_sha256(self) -> None:
         """Artifact downloads should verify immutable paper inputs."""

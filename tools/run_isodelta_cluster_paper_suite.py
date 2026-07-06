@@ -238,6 +238,7 @@ SEVENNET_DISABLE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 SEVENNET_PROFILE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
 SEVENNET_PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 ENV_FLAG_ENABLED = "1"
+ENV_FLAG_FALSE_VALUES = frozenset(("", "0", "false", "no", "off"))
 MODE_CONTROL_ENV_KEYS = (
     SEVENNET_DISABLE_ENV,
     SEVENNET_PROFILE_ENV,
@@ -574,6 +575,13 @@ def _as_env_mapping(value: Any, field_name: str) -> dict[str, str]:
         _as_string(key, f"{field_name}.key"): _as_string(raw_value, f"{field_name}.{key}")
         for key, raw_value in mapping.items()
     }
+
+
+def env_flag_is_enabled(value: str | None) -> bool:
+    """Return whether a runtime env flag is enabled under PairE3GNN rules."""
+    if value is None:
+        return False
+    return value.strip().lower() not in ENV_FLAG_FALSE_VALUES
 
 
 def _resolve_path(raw_path: str | Path | None, base_dir: Path) -> Path | None:
@@ -4365,8 +4373,12 @@ def _external_pair_mode_control_record(case: CaseConfig) -> dict[str, Any]:
         "enabled_command": case.enabled_command,
         "disabled_env": disabled_controls,
         "enabled_env": enabled_controls,
-        "disabled_cache_disabled": disabled_controls[SEVENNET_DISABLE_ENV] is not None,
-        "enabled_cache_disabled": enabled_controls[SEVENNET_DISABLE_ENV] is not None,
+        "disabled_cache_disabled": env_flag_is_enabled(
+            disabled_controls[SEVENNET_DISABLE_ENV]
+        ),
+        "enabled_cache_disabled": env_flag_is_enabled(
+            enabled_controls[SEVENNET_DISABLE_ENV]
+        ),
     }
 
 
@@ -4384,7 +4396,7 @@ def _external_pair_mode_control_errors(case: CaseConfig) -> list[str]:
         EXTERNAL_ENABLED_COMMAND_LABEL in timing_modes
         and mode_control["enabled_cache_disabled"]
     ):
-        errors.append(f"enabled mode must leave {SEVENNET_DISABLE_ENV} unset")
+        errors.append(f"enabled mode must leave {SEVENNET_DISABLE_ENV} unset or false")
     return errors
 
 
