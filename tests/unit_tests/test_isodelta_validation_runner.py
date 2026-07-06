@@ -154,6 +154,10 @@ class IsoDeltaValidationRunnerTest(unittest.TestCase):
             report["validation_report_schema_version"],
             validation_runner.VALIDATION_REPORT_SCHEMA_VERSION,
         )
+        self.assertEqual(
+            report[validation_runner.GENERATED_REPORT_COMMENT_KEY],
+            validation_runner.VALIDATION_REPORT_COMMENT,
+        )
         self.assertIn(
             "validation-ok",
             report["commands"][FIRST_COMMAND_INDEX]["stdout_tail"],

@@ -162,9 +162,9 @@ The validation script checks:
 - whitespace errors through `git diff --check`
 
 With `--report-path`, the runner writes `isodelta_validation_report.json` with
-the schema version, Git branch/commit/status metadata, every validation command,
-return code, elapsed time, and bounded stdout/stderr tails. Keep that report
-with the sync attempt when validating a commit before pushing.
+the schema version, `report_comment`, Git branch/commit/status metadata, every
+validation command, return code, elapsed time, and bounded stdout/stderr tails.
+Keep that report with the sync attempt when validating a commit before pushing.
 
 To make the validation-and-push sequence itself auditable, run the sync gate
 after committing:
@@ -183,7 +183,10 @@ non-interactive `git push -u` when validation passes. It writes
 record, `git ls-remote --heads` remote-ref verification record, Git status,
 target remote/branch, the push stderr tail, and a
 `validation_report_fingerprint` object with the validation report SHA-256
-digest and byte size. If the validation command exits successfully but the
+digest and byte size. The sync report also carries its own `report_comment`,
+and `validation_report_summary` records the validation report `report_comment`
+so reviewers can see that both generated JSON files describe their evidence purpose.
+If the validation command exits successfully but the
 validation report file is missing, the sync gate reports
 `validation_report_missing` and does not push. It also parses the validation
 report JSON into `validation_report_summary`; if that summary does not show

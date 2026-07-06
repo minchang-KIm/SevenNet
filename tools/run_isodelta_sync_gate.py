@@ -25,6 +25,15 @@ REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 VALIDATION_RUNNER_PATH = REPO_ROOT / "tools" / "run_isodelta_validation.py"
 SYNC_REPORT_SCHEMA_VERSION = "isodelta-sync-gate-report-v1"
 EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION = "isodelta-lightweight-validation-report-v1"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+SYNC_REPORT_COMMENT = (
+    "IsoDelta-Halo sync gate report linking validation evidence, push outcome, "
+    "remote ref verification, worktree state, and failure handoff data."
+)
+EXPECTED_VALIDATION_REPORT_COMMENT = (
+    "IsoDelta-Halo lightweight validation report for pre-commit and pre-push "
+    "evidence; records every dependency-free command used by the sync gate."
+)
 DEFAULT_SYNC_REPORT_PATH = Path("isodelta_sync_report.json")
 DEFAULT_VALIDATION_REPORT_PATH = Path("isodelta_validation_report.json")
 DEFAULT_REMOTE = "fork"
@@ -340,6 +349,7 @@ def _validation_report_summary(
         "path": str(validation_report_path),
         "valid": False,
         "schema_version": None,
+        GENERATED_REPORT_COMMENT_KEY: None,
         "status": None,
         "expected_branch": None,
         "git_commit": None,
@@ -358,6 +368,7 @@ def _validation_report_summary(
         summary["detail"] = "validation report root must be a JSON object"
         return summary
     schema_version = payload.get("validation_report_schema_version")
+    report_comment = payload.get(GENERATED_REPORT_COMMENT_KEY)
     status = payload.get("status")
     recorded_expected_branch = payload.get("expected_branch")
     git_commit = payload.get("git_commit")
@@ -399,6 +410,7 @@ def _validation_report_summary(
     summary.update(
         {
             "schema_version": schema_version,
+            GENERATED_REPORT_COMMENT_KEY: report_comment,
             "status": status,
             "expected_branch": recorded_expected_branch,
             "git_commit": git_commit,
@@ -410,6 +422,9 @@ def _validation_report_summary(
     )
     if schema_version != EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION:
         summary["detail"] = "validation report schema_version does not match expected version"
+        return summary
+    if report_comment != EXPECTED_VALIDATION_REPORT_COMMENT:
+        summary["detail"] = "validation report report_comment does not describe sync validation evidence"
         return summary
     if status != VALIDATION_REPORT_PASSED_STATUS:
         summary["detail"] = "validation report status is not passed"
@@ -692,6 +707,7 @@ def run_sync(
 
     payload = {
         "sync_report_schema_version": SYNC_REPORT_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: SYNC_REPORT_COMMENT,
         "status": status,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "remote": remote,

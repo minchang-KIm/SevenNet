@@ -62,12 +62,18 @@ def _validation_report_command(
     expected_branch: str | None = "feature",
     git_commit: str = "feature-sha",
     status: str | None = None,
+    report_comment: str | None = None,
     command_returncode: int = sync_gate.SUCCESS_RETURN_CODE,
     include_command_required_fields: bool = True,
     command_record_updates: dict[str, object] | None = None,
 ) -> tuple[str, ...]:
     """Return a tiny command that writes the validation report under test."""
     report_status = status or sync_gate.VALIDATION_REPORT_PASSED_STATUS
+    resolved_report_comment = (
+        sync_gate.EXPECTED_VALIDATION_REPORT_COMMENT
+        if report_comment is None
+        else report_comment
+    )
     command_record: dict[str, object] = {
         "command": ["test"],
         "returncode": command_returncode,
@@ -86,6 +92,7 @@ def _validation_report_command(
         "validation_report_schema_version": (
             sync_gate.EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION
         ),
+        sync_gate.GENERATED_REPORT_COMMENT_KEY: resolved_report_comment,
         "status": report_status,
         "expected_branch": expected_branch,
         "git_commit": git_commit,
@@ -121,6 +128,9 @@ def _passed_validation_report_summary(
         "path": str(validation_report_path),
         "valid": True,
         "schema_version": sync_gate.EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION,
+        sync_gate.GENERATED_REPORT_COMMENT_KEY: (
+            sync_gate.EXPECTED_VALIDATION_REPORT_COMMENT
+        ),
         "status": sync_gate.VALIDATION_REPORT_PASSED_STATUS,
         "expected_branch": "feature",
         "git_commit": git_commit,
@@ -235,6 +245,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, sync_gate.SUCCESS_RETURN_CODE)
+        self.assertEqual(
+            report[sync_gate.GENERATED_REPORT_COMMENT_KEY],
+            sync_gate.SYNC_REPORT_COMMENT,
+        )
         self.assertEqual(report["status"], sync_gate.STATUS_SYNCED)
         self.assertEqual(
             [record["name"] for record in report["commands"]],
@@ -590,6 +604,50 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertEqual(
             report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
             "validation report status is not passed",
+        )
+
+    def test_run_sync_rejects_validation_report_without_comment(self) -> None:
+        """A passed validation report should describe what evidence it contains."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): "feature-sha",
+            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            report_comment="wrong evidence purpose",
+                        ),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_REPORT_INVALID)
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
+            "validation report report_comment does not describe sync validation evidence",
         )
 
     def test_run_sync_rejects_failed_validation_report_command(self) -> None:

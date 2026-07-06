@@ -19,6 +19,11 @@ import time
 REPO_ROOT_PARENT_DEPTH = 1
 REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 VALIDATION_REPORT_SCHEMA_VERSION = "isodelta-lightweight-validation-report-v1"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+VALIDATION_REPORT_COMMENT = (
+    "IsoDelta-Halo lightweight validation report for pre-commit and pre-push "
+    "evidence; records every dependency-free command used by the sync gate."
+)
 DEFAULT_OUTPUT_TAIL_CHARS = 4000
 SUCCESS_RETURN_CODE = 0
 GOAL_READINESS_SCRIPT = "tools/check_isodelta_goal_readiness.py"
@@ -156,6 +161,7 @@ def run_validation(
             break
     payload: dict[str, object] = {
         "validation_report_schema_version": VALIDATION_REPORT_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: VALIDATION_REPORT_COMMENT,
         "status": status,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "expected_branch": expected_branch,

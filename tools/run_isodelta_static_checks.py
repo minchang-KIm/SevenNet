@@ -345,6 +345,7 @@ def main() -> None:
     )
     _require(
         "VALIDATION_REPORT_SCHEMA_VERSION" in validation_runner
+        and "VALIDATION_REPORT_COMMENT" in validation_runner
         and "--report-path" in validation_runner
         and "--expected-branch" in validation_runner
         and "_validation_commands" in validation_runner
@@ -362,6 +363,8 @@ def main() -> None:
     _require(
         "SYNC_REPORT_SCHEMA_VERSION" in sync_gate
         and "EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION" in sync_gate
+        and "SYNC_REPORT_COMMENT" in sync_gate
+        and "EXPECTED_VALIDATION_REPORT_COMMENT" in sync_gate
         and "PUSH_AUTH_ENVIRONMENT" in sync_gate
         and "GIT_TERMINAL_PROMPT" in sync_gate
         and "run_sync" in sync_gate
@@ -415,6 +418,7 @@ def main() -> None:
         and "test_run_sync_rejects_missing_validation_report" in sync_gate_test
         and "test_run_sync_rejects_failed_validation_report_json" in sync_gate_test
         and "test_run_sync_rejects_failed_validation_report_command" in sync_gate_test
+        and "test_run_sync_rejects_validation_report_without_comment" in sync_gate_test
         and "test_run_sync_can_require_clean_worktree" in sync_gate_test
         and "WORKTREE_STATUS_KEY" in sync_gate_test
         and "VALIDATION_REPORT_FINGERPRINT_KEY" in sync_gate_test
@@ -1560,8 +1564,11 @@ def main() -> None:
         and "completion-readiness audit" in doc
         and "run_isodelta_sync_gate.py" in doc
         and "`isodelta_sync_report.json`" in doc
+        and "`report_comment`" in doc
         and "`validation_report_fingerprint`" in doc
         and "`validation_report_summary`" in doc
+        and "validation report `report_comment`" in doc
+        and "both generated JSON files describe their evidence purpose" in doc
         and "`sync_command_summary`" in doc
         and "`push_branch_precondition`" in doc
         and "`validation_report_missing`" in doc
