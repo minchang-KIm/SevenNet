@@ -508,6 +508,8 @@ Runtime overrides are limited to known keys, and a passed publication report may
 only record `ablation_mode = "paired"`; a one-sided ablation override must stay
 in the ablation-only path instead of being accepted as final paper evidence. It
 also reopens the fingerprinted readiness report and requires every final-paper readiness check to be present and passed.
+It reopens the fingerprinted artifact preparation report, requires `dry_run = false`,
+and checks `missing_required_artifacts` plus each required artifact SHA-256 digest.
 It then reopens the fingerprinted preflight report and checks `gpu_check` so the
 archive proves the requested GPU count was actually detected.
 

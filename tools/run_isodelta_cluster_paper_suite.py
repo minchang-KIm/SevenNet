@@ -120,6 +120,21 @@ PIPELINE_READINESS_CHECKS_ERROR = (
 PIPELINE_READINESS_SUITE_ERROR = (
     "passed pipeline readiness report suite metadata must match the pipeline suite"
 )
+PIPELINE_ARTIFACT_PREPARATION_REPORT_REQUIRED_ERROR = (
+    "passed pipeline report must fingerprint a present artifact preparation report"
+)
+PIPELINE_ARTIFACT_PREPARATION_STATUS_ERROR = (
+    "passed pipeline artifact preparation report status must be 'ready'"
+)
+PIPELINE_ARTIFACT_PREPARATION_DRY_RUN_ERROR = (
+    "passed pipeline artifact preparation report must record dry_run=false"
+)
+PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR = (
+    "passed pipeline artifact preparation report suite metadata must match the pipeline suite"
+)
+PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR = (
+    "passed pipeline artifact preparation report must prove all required artifacts"
+)
 PIPELINE_DRY_RUN_PASSED_ERROR = "passed pipeline report must record dry_run=false"
 PIPELINE_GPU_CHECK_SKIPPED_ERROR = (
     "passed pipeline report must record skip_gpu_check=false"
@@ -4380,6 +4395,163 @@ def _require_pipeline_readiness_report(
     }
 
 
+def _require_sha256_digest(value: Any, field_name: str) -> str:
+    """Return a valid SHA-256 digest from a JSON report field."""
+    digest = _as_json_string(value, field_name).lower()
+    _require(
+        SHA256_HEX_PATTERN.fullmatch(digest) is not None,
+        f"{field_name} must be a 64-character hexadecimal SHA-256 digest",
+    )
+    return digest
+
+
+def _require_pipeline_artifact_preparation_report(
+    stage_report_paths: dict[str, Path],
+    suite_record: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify the artifact preparation stage proved required inputs exist."""
+    artifact_report_path = stage_report_paths.get(PIPELINE_STAGE_PREPARE_ARTIFACTS)
+    _require(
+        artifact_report_path is not None,
+        PIPELINE_ARTIFACT_PREPARATION_REPORT_REQUIRED_ERROR,
+    )
+    artifact_payload = _as_json_object(
+        json.loads(artifact_report_path.read_text(encoding="utf-8")),
+        "artifact_preparation_report",
+    )
+    schema_version = _as_json_string(
+        artifact_payload.get("artifact_preparation_schema_version"),
+        "artifact_preparation_report.artifact_preparation_schema_version",
+    )
+    _require(
+        schema_version == ARTIFACT_PREPARATION_SCHEMA_VERSION,
+        (
+            "artifact_preparation_report.artifact_preparation_schema_version "
+            f"must be {ARTIFACT_PREPARATION_SCHEMA_VERSION!r}"
+        ),
+    )
+    status = _as_json_string(
+        artifact_payload.get("status"),
+        "artifact_preparation_report.status",
+    )
+    _require(
+        status == PIPELINE_STAGE_STATUS_READY,
+        PIPELINE_ARTIFACT_PREPARATION_STATUS_ERROR,
+    )
+    _require(
+        not _as_json_bool(
+            artifact_payload.get("dry_run"),
+            "artifact_preparation_report.dry_run",
+        ),
+        PIPELINE_ARTIFACT_PREPARATION_DRY_RUN_ERROR,
+    )
+    artifact_suite = _as_json_object(
+        artifact_payload.get("suite"),
+        "artifact_preparation_report.suite",
+    )
+    _require(
+        _as_json_bool(
+            artifact_suite.get("require_artifact_sha256"),
+            "artifact_preparation_report.suite.require_artifact_sha256",
+        ),
+        PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
+    )
+    suite_manifest = _as_json_object(suite_record.get("manifest"), "suite.manifest")
+    suite_manifest_digest = _require_sha256_digest(
+        suite_manifest.get("sha256"),
+        "suite.manifest.sha256",
+    )
+    artifact_manifest = _as_json_object(
+        artifact_suite.get("manifest"),
+        "artifact_preparation_report.suite.manifest",
+    )
+    artifact_manifest_digest = _require_sha256_digest(
+        artifact_manifest.get("sha256"),
+        "artifact_preparation_report.suite.manifest.sha256",
+    )
+    _require(
+        artifact_manifest_digest == suite_manifest_digest,
+        PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
+    )
+    runtime_overrides = _as_json_object(
+        suite_record.get("runtime_overrides"),
+        "suite.runtime_overrides",
+    )
+    artifact_runtime_overrides = _as_json_object(
+        artifact_suite.get("runtime_overrides"),
+        "artifact_preparation_report.suite.runtime_overrides",
+    )
+    _require(
+        artifact_runtime_overrides == runtime_overrides,
+        PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
+    )
+    missing_required = artifact_payload.get("missing_required_artifacts")
+    _require(
+        isinstance(missing_required, list),
+        "artifact_preparation_report.missing_required_artifacts must be a JSON array",
+    )
+    _require(
+        not missing_required,
+        PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR,
+    )
+    raw_artifacts = artifact_payload.get("artifacts")
+    _require(
+        isinstance(raw_artifacts, list),
+        "artifact_preparation_report.artifacts must be a JSON array",
+    )
+    verified_required_count = 0
+    for index, raw_artifact in enumerate(raw_artifacts):
+        artifact = _as_json_object(
+            raw_artifact,
+            f"artifact_preparation_report.artifacts[{index}]",
+        )
+        _as_json_string(
+            artifact.get("name"),
+            f"artifact_preparation_report.artifacts[{index}].name",
+        )
+        required = _as_json_bool(
+            artifact.get("required"),
+            f"artifact_preparation_report.artifacts[{index}].required",
+        )
+        exists_after_prepare = _as_json_bool(
+            artifact.get("exists_after_prepare"),
+            f"artifact_preparation_report.artifacts[{index}].exists_after_prepare",
+        )
+        if not required:
+            continue
+        _require(
+            exists_after_prepare,
+            PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR,
+        )
+        _as_json_nonnegative_int(
+            artifact.get("size_bytes"),
+            f"artifact_preparation_report.artifacts[{index}].size_bytes",
+        )
+        expected_digest = _require_sha256_digest(
+            artifact.get("sha256"),
+            f"artifact_preparation_report.artifacts[{index}].sha256",
+        )
+        actual_digest = _require_sha256_digest(
+            artifact.get("actual_sha256"),
+            f"artifact_preparation_report.artifacts[{index}].actual_sha256",
+        )
+        _require(
+            actual_digest == expected_digest,
+            PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR,
+        )
+        verified_required_count += 1
+    _require(
+        verified_required_count > 0,
+        PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR,
+    )
+    return {
+        "status": status,
+        "artifact_preparation_report": str(artifact_report_path),
+        "verified_artifact_record_count": len(raw_artifacts),
+        "verified_required_artifact_count": verified_required_count,
+    }
+
+
 def _require_pipeline_preflight_gpu_check(
     stage_report_paths: dict[str, Path],
     suite_record: dict[str, Any],
@@ -4600,6 +4772,10 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         stage_report_paths,
         suite_record,
     )
+    artifact_preparation_report = _require_pipeline_artifact_preparation_report(
+        stage_report_paths,
+        suite_record,
+    )
     preflight_gpu_check = _require_pipeline_preflight_gpu_check(
         stage_report_paths,
         suite_record,
@@ -4620,6 +4796,7 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "pipeline_status": pipeline_status,
         "verified_stage_report_count": verified_stage_report_count,
         "readiness_report": readiness_report,
+        "artifact_preparation_report": artifact_preparation_report,
         "preflight_gpu_check": preflight_gpu_check,
         OUTPUT_BUNDLE_VERIFICATION_KEY: bundle_verification,
     }

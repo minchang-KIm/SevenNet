@@ -1169,6 +1169,7 @@ def main() -> None:
         and "PIPELINE_GPU_MISMATCH_ALLOWED_ERROR" in cluster_suite
         and "PIPELINE_PREFLIGHT_GPU_CHECK_REQUIRED_ERROR" in cluster_suite
         and "PIPELINE_PREFLIGHT_GPU_COUNT_ERROR" in cluster_suite
+        and "PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR" in cluster_suite
         and "PIPELINE_READINESS_CHECKS_ERROR" in cluster_suite
         and "PIPELINE_SUITE_REQUIRED_MODELS_ERROR" in cluster_suite
         and "PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
@@ -1181,6 +1182,7 @@ def main() -> None:
         and "_as_json_bool" in cluster_suite
         and "_require_pipeline_report_modes" in cluster_suite
         and "_require_pipeline_readiness_report" in cluster_suite
+        and "_require_pipeline_artifact_preparation_report" in cluster_suite
         and "_require_pipeline_preflight_gpu_check" in cluster_suite
         and "_require_pipeline_runtime_overrides" in cluster_suite
         and "_require_pipeline_suite_metadata" in cluster_suite
@@ -1197,6 +1199,8 @@ def main() -> None:
         and "test_verify_pipeline_report_rejects_allowed_gpu_mismatch_mode"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_readiness_check"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_failed_artifact_preparation"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_preflight_skipped_gpu_check"
         in cluster_suite_test
@@ -1261,6 +1265,10 @@ def main() -> None:
         and "reopens the fingerprinted readiness report" in doc
         and "every final-paper readiness check" in doc
         and "present and passed" in doc
+        and "reopens the fingerprinted artifact preparation report" in doc
+        and "`dry_run = false`" in doc
+        and "missing_required_artifacts" in doc
+        and "required artifact SHA-256 digest" in doc
         and "reopens the fingerprinted preflight report" in doc
         and "checks `gpu_check`" in doc
         and "requested GPU count was actually detected" in doc

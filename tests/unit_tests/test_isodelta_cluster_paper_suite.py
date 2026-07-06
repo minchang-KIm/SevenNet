@@ -45,6 +45,9 @@ PIPELINE_PREFLIGHT_FAILURE_RETURN_CODE = 7
 PIPELINE_MIN_SPEEDUP = 1.05
 PIPELINE_MIN_SPEEDUP_LOWER_BOUND = 1.0
 PAPER_REPEAT_COUNT = isodelta_cluster_suite.FINAL_PAPER_MIN_REPEAT_COUNT
+UNIT_TEST_REQUIRED_ARTIFACT_NAME = "dataset"
+UNIT_TEST_ARTIFACT_SIZE_BYTES = 1
+UNIT_TEST_ARTIFACT_SHA256 = "0" * isodelta_cluster_suite.SHA256_HEX_LENGTH
 TRACE_ATTEMPTS = 4.0
 TRACE_HITS = 3.0
 TRACE_HIT_RATE_PERCENT = PERCENT_SCALE * TRACE_HITS / TRACE_ATTEMPTS
@@ -645,6 +648,40 @@ def _pipeline_readiness_report(
                 "detail": "unit-test readiness fixture",
             }
             for check_name in isodelta_cluster_suite.FINAL_PAPER_READINESS_CHECK_NAMES
+        ],
+    }
+
+
+def _pipeline_artifact_preparation_report(
+    suite_record: dict[str, object],
+    *,
+    missing_required: bool = False,
+    dry_run: bool = False,
+) -> dict[str, object]:
+    """Return artifact-preparation evidence for pipeline semantic checks."""
+    return {
+        "artifact_preparation_schema_version": (
+            isodelta_cluster_suite.ARTIFACT_PREPARATION_SCHEMA_VERSION
+        ),
+        "status": isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
+        "dry_run": dry_run,
+        "suite": {
+            "manifest": suite_record["manifest"],
+            "require_artifact_sha256": True,
+            "runtime_overrides": suite_record["runtime_overrides"],
+        },
+        "missing_required_artifacts": (
+            [UNIT_TEST_REQUIRED_ARTIFACT_NAME] if missing_required else []
+        ),
+        "artifacts": [
+            {
+                "name": UNIT_TEST_REQUIRED_ARTIFACT_NAME,
+                "required": True,
+                "exists_after_prepare": not missing_required,
+                "size_bytes": UNIT_TEST_ARTIFACT_SIZE_BYTES,
+                "sha256": UNIT_TEST_ARTIFACT_SHA256,
+                "actual_sha256": UNIT_TEST_ARTIFACT_SHA256,
+            }
         ],
     }
 
@@ -2778,6 +2815,12 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             pipeline_report_verification["readiness_report"]["verified_check_count"],
             len(isodelta_cluster_suite.FINAL_PAPER_READINESS_CHECK_NAMES),
         )
+        self.assertGreaterEqual(
+            pipeline_report_verification["artifact_preparation_report"][
+                "verified_required_artifact_count"
+            ],
+            1,
+        )
         self.assertEqual(pipeline_verification["status"], "passed")
         self.assertEqual(
             pipeline_verification["verified_artifact_index_count"],
@@ -3461,6 +3504,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             output_dir = root / "paper_outputs"
             output_dir.mkdir()
             pipeline_report_path = root / "pipeline_report.json"
+            suite_record = _pipeline_suite_record(root, output_dir)
             stage_names = isodelta_cluster_suite.REQUIRED_PIPELINE_STAGE_NAMES
             stage_statuses = _pipeline_success_stage_statuses()
             report_paths = [
@@ -3475,6 +3519,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 report_path.write_text("{}", encoding="utf-8")
             report_paths[0].write_text(
                 json.dumps(_pipeline_readiness_report()),
+                encoding="utf-8",
+            )
+            report_paths[1].write_text(
+                json.dumps(_pipeline_artifact_preparation_report(suite_record)),
                 encoding="utf-8",
             )
             report_paths[2].write_text(
@@ -3508,7 +3556,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                         ),
                         "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
                         "modes": _pipeline_report_modes(),
-                        "suite": _pipeline_suite_record(root, output_dir),
+                        "suite": suite_record,
                         "stages": stages,
                         isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [
                             {
@@ -3542,6 +3590,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             output_dir = root / "paper_outputs"
             output_dir.mkdir()
             pipeline_report_path = root / "pipeline_report.json"
+            suite_record = _pipeline_suite_record(root, output_dir)
             report_paths = [
                 output_dir / "readiness.json",
                 output_dir / "artifacts.json",
@@ -3585,7 +3634,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                         ),
                         "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
                         "modes": _pipeline_report_modes(),
-                        "suite": _pipeline_suite_record(root, output_dir),
+                        "suite": suite_record,
                         "stages": stages,
                         isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [
                             {
@@ -3610,13 +3659,14 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ):
                 isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
 
-    def test_verify_pipeline_report_requires_passed_bundle_verification(self) -> None:
-        """A passed pipeline report should include final bundle verification."""
+    def test_verify_pipeline_report_rejects_failed_artifact_preparation(self) -> None:
+        """A ready pipeline stage should still prove prepared artifacts."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             output_dir = root / "paper_outputs"
             output_dir.mkdir()
             pipeline_report_path = root / "pipeline_report.json"
+            suite_record = _pipeline_suite_record(root, output_dir)
             report_paths = [
                 output_dir / "readiness.json",
                 output_dir / "artifacts.json",
@@ -3629,6 +3679,15 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 report_path.write_text("{}", encoding="utf-8")
             report_paths[0].write_text(
                 json.dumps(_pipeline_readiness_report()),
+                encoding="utf-8",
+            )
+            report_paths[1].write_text(
+                json.dumps(
+                    _pipeline_artifact_preparation_report(
+                        suite_record,
+                        missing_required=True,
+                    )
+                ),
                 encoding="utf-8",
             )
             report_paths[2].write_text(
@@ -3658,7 +3717,87 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                         ),
                         "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
                         "modes": _pipeline_report_modes(),
-                        "suite": _pipeline_suite_record(root, output_dir),
+                        "suite": suite_record,
+                        "stages": stages,
+                        isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [
+                            {
+                                "name": stage["name"],
+                                "report": isodelta_cluster_suite.generated_artifact_record(
+                                    Path(str(stage["report_path"]))
+                                ),
+                            }
+                            for stage in stages
+                        ],
+                        isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY: {
+                            "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(
+                    isodelta_cluster_suite.PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR
+                ),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
+    def test_verify_pipeline_report_requires_passed_bundle_verification(self) -> None:
+        """A passed pipeline report should include final bundle verification."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            output_dir.mkdir()
+            pipeline_report_path = root / "pipeline_report.json"
+            suite_record = _pipeline_suite_record(root, output_dir)
+            report_paths = [
+                output_dir / "readiness.json",
+                output_dir / "artifacts.json",
+                output_dir / "preflight.json",
+                output_dir / "plan.json",
+                output_dir / "summary.json",
+                output_dir / "summary.json",
+            ]
+            for report_path in set(report_paths):
+                report_path.write_text("{}", encoding="utf-8")
+            report_paths[0].write_text(
+                json.dumps(_pipeline_readiness_report()),
+                encoding="utf-8",
+            )
+            report_paths[1].write_text(
+                json.dumps(_pipeline_artifact_preparation_report(suite_record)),
+                encoding="utf-8",
+            )
+            report_paths[2].write_text(
+                json.dumps(_pipeline_preflight_report()),
+                encoding="utf-8",
+            )
+            stage_names = isodelta_cluster_suite.REQUIRED_PIPELINE_STAGE_NAMES
+            stage_statuses = _pipeline_success_stage_statuses()
+            stages = [
+                {
+                    "name": stage_name,
+                    "status": stage_status,
+                    "report_path": str(report_path),
+                    "detail": None,
+                }
+                for stage_name, stage_status, report_path in zip(
+                    stage_names,
+                    stage_statuses,
+                    report_paths,
+                )
+            ]
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "modes": _pipeline_report_modes(),
+                        "suite": suite_record,
                         "stages": stages,
                         isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [
                             {
