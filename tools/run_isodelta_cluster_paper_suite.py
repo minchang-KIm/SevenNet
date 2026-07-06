@@ -4116,12 +4116,21 @@ def _require_pipeline_stage_report_fingerprints(
             raw_report_record,
             f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].report",
         )
-        _require_fingerprint_match(
-            report_record,
-            f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].report",
-            bundle_root=bundle_root,
-            original_output_dir=original_output_dir,
-        )
+        report_label = f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].report"
+        if fingerprint_required:
+            _resolve_present_fingerprint_path(
+                report_record,
+                report_label,
+                bundle_root=bundle_root,
+                original_output_dir=original_output_dir,
+            )
+        else:
+            _require_fingerprint_match(
+                report_record,
+                report_label,
+                bundle_root=bundle_root,
+                original_output_dir=original_output_dir,
+            )
         verified_count += 1
     return verified_count
 

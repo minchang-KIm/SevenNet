@@ -498,7 +498,9 @@ nonzero even when its diagnostic stage fingerprints are internally consistent.
 It also requires the full final-paper stage sequence, non-skipped stage
 fingerprints, and a passed `output_bundle_verification` object, so changing only
 the top-level status field cannot turn an incomplete run into publication
-evidence.
+evidence. Non-skipped stage fingerprints must point to present report files;
+an absent-file fingerprint is accepted only for a skipped artifact-preparation
+stage.
 
 On a SLURM cluster, generate a commented submission script from the same
 manifest:

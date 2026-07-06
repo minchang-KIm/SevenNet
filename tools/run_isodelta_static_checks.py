@@ -1167,6 +1167,7 @@ def main() -> None:
         and "PIPELINE_REQUIRED_STAGES_ERROR" in cluster_suite
         and "PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR" in cluster_suite
         and "_require_pipeline_success_stages" in cluster_suite
+        and "_resolve_present_fingerprint_path" in cluster_suite
         and "# CLI runtime overrides: ablation_mode=isodelta-enabled." in cluster_suite_test
         and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
@@ -1174,6 +1175,8 @@ def main() -> None:
         and "test_verify_pipeline_report_rejects_shallow_passed_report"
         in cluster_suite_test
         and "test_verify_pipeline_report_requires_success_stage_fingerprints"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_absent_success_stage_fingerprint"
         in cluster_suite_test
         and "test_verify_pipeline_report_requires_passed_bundle_verification"
         in cluster_suite_test
@@ -1210,6 +1213,8 @@ def main() -> None:
         and "failed or planned `pipeline_report.json` exits" in doc
         and "full final-paper stage sequence" in doc
         and "non-skipped stage" in doc
+        and "present report files" in doc
+        and "skipped artifact-preparation" in doc
         and "changing only" in doc
         and "stage report fingerprints" in doc
         and "final bundle verification counts" in doc

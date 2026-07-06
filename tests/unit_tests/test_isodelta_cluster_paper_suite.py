@@ -3120,6 +3120,66 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ):
                 isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
 
+    def test_verify_pipeline_report_rejects_absent_success_stage_fingerprint(self) -> None:
+        """Success stage fingerprints should prove existing report files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            pipeline_report_path = root / "pipeline_report.json"
+            stages = [
+                {
+                    "name": stage_name,
+                    "status": stage_status,
+                    "report_path": str(output_dir / f"{stage_name}.json"),
+                    "detail": None,
+                }
+                for stage_name, stage_status in zip(
+                    isodelta_cluster_suite.REQUIRED_PIPELINE_STAGE_NAMES,
+                    [
+                        isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
+                        isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
+                        isodelta_cluster_suite.PREFLIGHT_STATUS_PASSED,
+                        isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                    ],
+                )
+            ]
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "suite": {"output_dir": str(output_dir)},
+                        "stages": stages,
+                        isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [
+                            {
+                                "name": stage["name"],
+                                "report": {
+                                    "path": stage["report_path"],
+                                    "exists": False,
+                                    "sha256": None,
+                                    "size_bytes": None,
+                                },
+                            }
+                            for stage in stages
+                        ],
+                        isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY: {
+                            "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "expected a present fingerprint record",
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
     def test_verify_pipeline_report_requires_passed_bundle_verification(self) -> None:
         """A passed pipeline report should include final bundle verification."""
         with tempfile.TemporaryDirectory() as tmpdir:
