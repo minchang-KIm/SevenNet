@@ -44,6 +44,10 @@ JSON_INDENT_SPACES = 2
 EVIDENCE_FILE_SUFFIX = "_isodelta_trace_evidence.json"
 TRACE_FILE_SUFFIX = "_halo_trace.json"
 SUMMARY_FILE_NAME = "isodelta_mlip_trace_demo_summary.json"
+SUMMARY_REPORT_COMMENT = (
+    "IsoDelta-Halo portable MLIP trace demo summary linking generated traces, "
+    "validated evidence files, thresholds, and estimated speedups."
+)
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 
@@ -106,6 +110,9 @@ def build_demo_trace(model_name: str) -> dict[str, Any]:
     """Build a stable, model-labeled trace using the portable schema."""
     graph_tags, _, _ = _model_tags(model_name)
     return {
+        trace_check.GENERATED_ARTIFACT_COMMENT_KEY: (
+            trace_check.TRACE_ARTIFACT_COMMENT
+        ),
         "model": model_name,
         "schema_version": trace_check.TRACE_SCHEMA_VERSION,
         "steps": [
@@ -165,6 +172,7 @@ def run_demo(
         )
 
     summary = {
+        trace_check.GENERATED_REPORT_COMMENT_KEY: SUMMARY_REPORT_COMMENT,
         "status": "passed",
         "models": model_summaries,
         "thresholds": {

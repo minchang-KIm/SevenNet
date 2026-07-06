@@ -184,6 +184,9 @@ def _benchmark_report() -> dict[str, object]:
 def _trace_evidence(model_name: str) -> dict[str, object]:
     """Create portable trace evidence accepted by the trace checker."""
     return {
+        isodelta_cluster_suite.trace_check.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_cluster_suite.trace_check.TRACE_EVIDENCE_REPORT_COMMENT
+        ),
         "status": "passed",
         "model": model_name,
         "attempts": TRACE_ATTEMPTS,

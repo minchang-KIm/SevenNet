@@ -39,6 +39,12 @@ BENCHMARK_REPORT_TEST_PATH = (
 EVIDENCE_BUNDLE_TEST_PATH = (
     REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_evidence_bundle_check.py"
 )
+MLIP_TRACE_CHECK_TEST_PATH = (
+    REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_mlip_trace_check.py"
+)
+MLIP_TRACE_DEMO_TEST_PATH = (
+    REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_mlip_trace_demo.py"
+)
 GOAL_READINESS_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_goal_readiness.py"
 SYNC_GATE_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_sync_gate.py"
 VALIDATION_RUNNER_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_validation_runner.py"
@@ -80,6 +86,8 @@ def main() -> None:
     cluster_suite_test = _read(CLUSTER_SUITE_TEST_PATH)
     benchmark_report_test = _read(BENCHMARK_REPORT_TEST_PATH)
     evidence_bundle_test = _read(EVIDENCE_BUNDLE_TEST_PATH)
+    mlip_trace_check_test = _read(MLIP_TRACE_CHECK_TEST_PATH)
+    mlip_trace_demo_test = _read(MLIP_TRACE_DEMO_TEST_PATH)
     goal_readiness_test = _read(GOAL_READINESS_TEST_PATH)
     sync_gate_test = _read(SYNC_GATE_TEST_PATH)
     validation_runner_test = _read(VALIDATION_RUNNER_TEST_PATH)
@@ -483,6 +491,13 @@ def main() -> None:
     _require(
         "MODEL_KEY = \"model\"" in mlip_trace_check
         and "STATUS_KEY = \"status\"" in mlip_trace_check
+        and "TRACE_ARTIFACT_COMMENT" in mlip_trace_check
+        and "TRACE_EVIDENCE_REPORT_COMMENT" in mlip_trace_check
+        and "GENERATED_ARTIFACT_COMMENT_KEY" in mlip_trace_check
+        and "GENERATED_REPORT_COMMENT_KEY" in mlip_trace_check
+        and "_check_report_comment" in mlip_trace_check
+        and "must describe the trace evidence purpose" in mlip_trace_check
+        and "GENERATED_REPORT_COMMENT_KEY: TRACE_EVIDENCE_REPORT_COMMENT" in mlip_trace_check
         and "EVALUATED_STATUS" in mlip_trace_check
         and "_as_nonempty_string(evidence.get(STATUS_KEY)" in mlip_trace_check
         and "_as_nonempty_string(evidence.get(MODEL_KEY)" in mlip_trace_check
@@ -520,10 +535,25 @@ def main() -> None:
         and "check_isodelta_mlip_trace.py" in mlip_trace_demo
         and "build_demo_trace" in mlip_trace_demo
         and "run_demo" in mlip_trace_demo
+        and "SUMMARY_REPORT_COMMENT" in mlip_trace_demo
+        and "trace_check.TRACE_ARTIFACT_COMMENT" in mlip_trace_demo
+        and "trace_check.GENERATED_REPORT_COMMENT_KEY" in mlip_trace_demo
         and "TraceThresholds" in mlip_trace_demo
         and "estimated_average_speedup" in mlip_trace_demo
         and "estimated_worst_case_speedup" in mlip_trace_demo,
         "MLIP trace demo must generate validated multi-model portability evidence",
+    )
+    _require(
+        "EXPECTED_TRACE_EVIDENCE_REPORT_COMMENT" in mlip_trace_check_test
+        and "test_validate_trace_rejects_missing_report_comment" in mlip_trace_check_test
+        and "test_validate_trace_rejects_wrong_report_comment" in mlip_trace_check_test
+        and 'written["report_comment"]' in mlip_trace_check_test
+        and "EXPECTED_TRACE_ARTIFACT_COMMENT" in mlip_trace_demo_test
+        and "EXPECTED_SUMMARY_REPORT_COMMENT" in mlip_trace_demo_test
+        and 'trace["artifact_comment"]' in mlip_trace_demo_test
+        and 'evidence["report_comment"]' in mlip_trace_demo_test
+        and 'persisted_summary["report_comment"]' in mlip_trace_demo_test,
+        "MLIP trace generated JSON files must keep self-describing comments",
     )
     _require(
         "check_isodelta_benchmark_report.py" in evidence_bundle_check
@@ -575,6 +605,8 @@ def main() -> None:
         and "comm_phases" in doc
         and "SevenNet, MACE, NequIP, and Allegro" in doc
         and "--print-schema" in doc
+        and "top-level `report_comment`" in doc
+        and "expected trace evidence `report_comment`" in doc
         and "estimated_average_speedup" in doc
         and "MACE" in doc
         and "NequIP" in doc
@@ -615,6 +647,12 @@ def main() -> None:
         and "ordered graph node tags" in doc
         and "communication list" in doc,
         "IsoDelta-Halo guide must document trace reuse guard evidence",
+    )
+    _require(
+        "Demo raw trace files carry `artifact_comment`" in doc
+        and "validated trace evidence and the demo" in doc
+        and "self-describing outside the repository" in doc,
+        "IsoDelta-Halo guide must document trace demo generated-file comments",
     )
     _require(
         "check_isodelta_evidence_bundle.py" in doc

@@ -35,6 +35,10 @@ BASELINE_STEP_TIME_SECONDS = 10.0
 METADATA_BUILD_SECONDS = 2.0
 STABLE_TRACE_STEP_COUNT = 4
 EXPECTED_TRACE_SCHEMA_VERSION = "1.0"
+EXPECTED_TRACE_EVIDENCE_REPORT_COMMENT = (
+    isodelta_mlip_trace.TRACE_EVIDENCE_REPORT_COMMENT
+)
+EXPECTED_TRACE_ARTIFACT_COMMENT = isodelta_mlip_trace.TRACE_ARTIFACT_COMMENT
 EXPECTED_STABLE_HIT_RATE_PERCENT = 75.0
 EXPECTED_ZERO_TRACE_COUNT_RESIDUAL = 0.0
 MIN_STABLE_TRACE_SPEEDUP = 1.15
@@ -112,6 +116,10 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         )
 
         self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(
+            evidence["report_comment"],
+            EXPECTED_TRACE_EVIDENCE_REPORT_COMMENT,
+        )
         self.assertEqual(evidence["model"], "MACE")
         self.assertEqual(evidence["hits"], 3.0)
         self.assertIn(
@@ -153,6 +161,34 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         with self.assertRaisesRegex(
             isodelta_mlip_trace.TraceCheckError,
             "status",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_missing_report_comment(self) -> None:
+        """Precomputed trace evidence should identify its generated purpose."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        del evidence["report_comment"]
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "report_comment",
+        ):
+            isodelta_mlip_trace.validate_trace_evidence(
+                evidence,
+                isodelta_mlip_trace.TraceThresholds(),
+            )
+
+    def test_validate_trace_rejects_wrong_report_comment(self) -> None:
+        """Trace evidence comments should not be copied from another report."""
+        evidence = isodelta_mlip_trace.evaluate_trace(_stable_trace("MACE"))
+        evidence["report_comment"] = "wrong evidence purpose"
+
+        with self.assertRaisesRegex(
+            isodelta_mlip_trace.TraceCheckError,
+            "trace evidence purpose",
         ):
             isodelta_mlip_trace.validate_trace_evidence(
                 evidence,
@@ -422,6 +458,11 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         """The checker should expose a schema for non-SevenNet trace exporters."""
         schema = isodelta_mlip_trace.trace_schema()
         self.assertEqual(schema["schema_version"], EXPECTED_TRACE_SCHEMA_VERSION)
+        self.assertIn("artifact_comment", schema["root"])
+        self.assertEqual(
+            schema["evidence_output"]["report_comment"],
+            EXPECTED_TRACE_EVIDENCE_REPORT_COMMENT,
+        )
         self.assertIn("graph_node_tags", schema["required_step_fields"])
         self.assertIn("comm_phases", schema["required_step_fields"])
         self.assertIn("send_tags", schema["required_comm_phase_fields"])
@@ -461,6 +502,7 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         schema = json.loads(stdout.getvalue())
         self.assertEqual(schema["schema_version"], EXPECTED_TRACE_SCHEMA_VERSION)
+        self.assertIn("artifact_comment", schema["root"])
         self.assertIn("required_comm_phase_fields", schema)
 
     def test_main_reads_json_trace_and_writes_evidence(self) -> None:
@@ -488,6 +530,10 @@ class IsoDeltaMlipTraceCheckTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             written = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                written["report_comment"],
+                EXPECTED_TRACE_EVIDENCE_REPORT_COMMENT,
+            )
             self.assertEqual(written["model"], "MACE")
             self.assertEqual(written["status"], "passed")
 

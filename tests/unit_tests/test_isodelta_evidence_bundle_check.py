@@ -218,6 +218,9 @@ def _benchmark_report() -> dict[str, object]:
 def _trace_evidence(model_name: str = "MACE") -> dict[str, object]:
     """Create portable trace evidence produced by the trace checker."""
     return {
+        isodelta_evidence_bundle.trace_check.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_evidence_bundle.trace_check.TRACE_EVIDENCE_REPORT_COMMENT
+        ),
         "status": "evaluated",
         "model": model_name,
         "attempts": 4.0,

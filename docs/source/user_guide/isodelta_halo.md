@@ -78,18 +78,19 @@ python tools/check_isodelta_mlip_trace.py \
   --output mace_isodelta_trace_evidence.json
 ```
 
-The output includes `hit_rate_percent`, a miss breakdown using the same reason
-names as the C++ cache, `estimated_average_speedup`, and
-`estimated_worst_case_speedup`. A trace passes only when graph node tags, edge
-count, neighbor-list rebuild state, communication topology, and phase-local
-send/receive tag order show that reuse would be safe. This lets a paper compare
-SevenNet implementation results with NequIP/MACE/Allegro trace evidence without
-claiming that another model's kernels were modified.
+The output includes a top-level `report_comment`, `hit_rate_percent`, a miss
+breakdown using the same reason names as the C++ cache,
+`estimated_average_speedup`, and `estimated_worst_case_speedup`. A trace passes
+only when graph node tags, edge count, neighbor-list rebuild state,
+communication topology, and phase-local send/receive tag order show that reuse
+would be safe. This lets a paper compare SevenNet implementation results with
+NequIP/MACE/Allegro trace evidence without claiming that another model's
+kernels were modified.
 For precomputed trace evidence, the checker also verifies that `hit_rate_percent`
 matches `hits / attempts` and that the miss breakdown counters sum to
 `attempts - hits`. It treats `attempts`, `hits`, and each miss counter as
 whole nonnegative reuse-decision counts. The evidence must also include
-`status` as `evaluated` or `passed`, a non-empty `model` label, and
+the expected trace evidence `report_comment`, `status` as `evaluated` or `passed`, a non-empty `model` label, and
 `model_agnostic_requirements` flags proving that ordered graph node tags, edge
 count, neighbor-list rebuilds, communication topology, and communication list
 tag order were all used as reuse guards.
@@ -117,7 +118,9 @@ are a reference shape for exporter authors: each file uses the same
 ordered `graph_node_tags`, `comm_phases`, send/receive tag arrays, timing
 fields, and threshold gates that the publication checker expects. The summary
 file `isodelta_mlip_trace_demo_summary.json` records per-model hit rate,
-`estimated_average_speedup`, and `estimated_worst_case_speedup`.
+`estimated_average_speedup`, and `estimated_worst_case_speedup`. Demo raw trace files carry `artifact_comment`,
+while validated trace evidence and the demo summary carry `report_comment` so
+generated portability artifacts remain self-describing outside the repository.
 
 ## Runtime Controls
 

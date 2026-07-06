@@ -29,6 +29,13 @@ SPEC.loader.exec_module(isodelta_mlip_trace_demo)
 
 EXPECTED_MODEL_COUNT = 4
 EXPECTED_HIT_RATE_PERCENT = 80.0
+EXPECTED_TRACE_ARTIFACT_COMMENT = (
+    isodelta_mlip_trace_demo.trace_check.TRACE_ARTIFACT_COMMENT
+)
+EXPECTED_TRACE_EVIDENCE_REPORT_COMMENT = (
+    isodelta_mlip_trace_demo.trace_check.TRACE_EVIDENCE_REPORT_COMMENT
+)
+EXPECTED_SUMMARY_REPORT_COMMENT = isodelta_mlip_trace_demo.SUMMARY_REPORT_COMMENT
 MIN_EXPECTED_SPEEDUP = 1.05
 MIN_METADATA_FRACTION_PERCENT = 10.0
 ZERO_CACHE_LOOKUP_OVERHEAD_SECONDS = 0.0
@@ -63,8 +70,17 @@ class IsoDeltaMlipTraceDemoTest(unittest.TestCase):
                 evidence_path = Path(model_entry["evidence"])
                 self.assertTrue(trace_path.exists())
                 self.assertTrue(evidence_path.exists())
+                trace = json.loads(trace_path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    trace["artifact_comment"],
+                    EXPECTED_TRACE_ARTIFACT_COMMENT,
+                )
                 evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
                 self.assertEqual(evidence["status"], "passed")
+                self.assertEqual(
+                    evidence["report_comment"],
+                    EXPECTED_TRACE_EVIDENCE_REPORT_COMMENT,
+                )
                 self.assertEqual(
                     evidence["hit_rate_percent"],
                     EXPECTED_HIT_RATE_PERCENT,
@@ -73,6 +89,7 @@ class IsoDeltaMlipTraceDemoTest(unittest.TestCase):
     def test_build_demo_trace_uses_string_tags_for_mace_like_models(self) -> None:
         """The demo should exercise portable non-integer tag handling."""
         trace = isodelta_mlip_trace_demo.build_demo_trace("MACE")
+        self.assertEqual(trace["artifact_comment"], EXPECTED_TRACE_ARTIFACT_COMMENT)
         first_step = trace["steps"][FIRST_DEMO_STEP_INDEX]
         self.assertIsInstance(first_step["graph_node_tags"][FIRST_GRAPH_TAG_INDEX], str)
         first_phase = first_step["comm_phases"][FIRST_DEMO_PHASE_INDEX]
@@ -98,8 +115,14 @@ class IsoDeltaMlipTraceDemoTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             summary = json.loads(stdout.getvalue())
             self.assertEqual(summary["status"], "passed")
+            self.assertEqual(summary["report_comment"], EXPECTED_SUMMARY_REPORT_COMMENT)
             summary_path = Path(tmpdir) / isodelta_mlip_trace_demo.SUMMARY_FILE_NAME
             self.assertTrue(summary_path.exists())
+            persisted_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                persisted_summary["report_comment"],
+                EXPECTED_SUMMARY_REPORT_COMMENT,
+            )
 
 
 if __name__ == "__main__":

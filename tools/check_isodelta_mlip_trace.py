@@ -23,6 +23,16 @@ MODEL_KEY = "model"
 STATUS_KEY = "status"
 EVALUATED_STATUS = "evaluated"
 PASSED_STATUS = "passed"
+GENERATED_ARTIFACT_COMMENT_KEY = "artifact_comment"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+TRACE_ARTIFACT_COMMENT = (
+    "IsoDelta-Halo portable MLIP halo trace input containing graph and "
+    "communication metadata for reuse analysis."
+)
+TRACE_EVIDENCE_REPORT_COMMENT = (
+    "IsoDelta-Halo model-agnostic MLIP trace evidence report recording reuse "
+    "decisions, hit/miss breakdowns, timing estimates, and portability guards."
+)
 SCHEMA_VERSION_KEY = "schema_version"
 STEPS_KEY = "steps"
 STEP_ID_KEY = "step"
@@ -211,11 +221,17 @@ def trace_schema() -> dict[str, Any]:
     return {
         SCHEMA_VERSION_KEY: TRACE_SCHEMA_VERSION,
         "root": {
+            GENERATED_ARTIFACT_COMMENT_KEY: (
+                "optional description for generated trace artifacts"
+            ),
             MODEL_KEY: (
                 "optional non-empty string label such as SevenNet, NequIP, "
                 "MACE, or Allegro"
             ),
             STEPS_KEY: "non-empty array of per-MD-step metadata records",
+        },
+        "evidence_output": {
+            GENERATED_REPORT_COMMENT_KEY: TRACE_EVIDENCE_REPORT_COMMENT,
         },
         "required_step_fields": list(SCHEMA_REQUIRED_STEP_FIELDS),
         "optional_step_fields": list(SCHEMA_OPTIONAL_STEP_FIELDS),
@@ -314,6 +330,19 @@ def _as_nonempty_string(value: Any, field_name: str) -> str:
     _require(isinstance(value, str), f"{field_name} must be a string")
     _require(bool(value.strip()), f"{field_name} must not be empty")
     return value.strip()
+
+
+def _check_report_comment(evidence: dict[str, Any]) -> str:
+    """Require trace evidence JSON to explain its publication purpose."""
+    report_comment = _as_nonempty_string(
+        evidence.get(GENERATED_REPORT_COMMENT_KEY),
+        GENERATED_REPORT_COMMENT_KEY,
+    )
+    _require(
+        report_comment == TRACE_EVIDENCE_REPORT_COMMENT,
+        f"{GENERATED_REPORT_COMMENT_KEY} must describe the trace evidence purpose",
+    )
+    return report_comment
 
 
 def _as_nonnegative_int(value: Any, field_name: str) -> int:
@@ -613,6 +642,7 @@ def evaluate_trace(
     hits = float(sum(hit_flags))
     hit_rate_percent = PERCENT_SCALE * hits / attempts
     return {
+        GENERATED_REPORT_COMMENT_KEY: TRACE_EVIDENCE_REPORT_COMMENT,
         STATUS_KEY: EVALUATED_STATUS,
         MODEL_KEY: model_name,
         ATTEMPTS_KEY: attempts,
@@ -803,6 +833,7 @@ def validate_trace_evidence(
 ) -> dict[str, Any]:
     """Gate evaluated trace evidence before using it as a generality claim."""
     validate_thresholds(thresholds)
+    _check_report_comment(evidence)
     status = _as_nonempty_string(evidence.get(STATUS_KEY), STATUS_KEY)
     _require(
         status in (EVALUATED_STATUS, PASSED_STATUS),
@@ -862,6 +893,7 @@ def validate_trace_evidence(
         )
     timing = _as_mapping(evidence.get(TIMING_KEY), TIMING_KEY)
     _check_trace_timing(timing, thresholds)
+    evidence[GENERATED_REPORT_COMMENT_KEY] = TRACE_EVIDENCE_REPORT_COMMENT
     evidence[STATUS_KEY] = PASSED_STATUS
     evidence[MODEL_KEY] = model_name
     evidence["thresholds"] = asdict(thresholds)
