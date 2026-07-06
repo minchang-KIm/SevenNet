@@ -1163,9 +1163,19 @@ def main() -> None:
         and "one-sided ablation suite" in cluster_suite
         and "PIPELINE_REPORT_PASSED_STATUS_ERROR" in cluster_suite
         and "pipeline report status must be 'passed'" in cluster_suite
+        and "REQUIRED_PIPELINE_STAGE_NAMES" in cluster_suite
+        and "PIPELINE_REQUIRED_STAGES_ERROR" in cluster_suite
+        and "PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR" in cluster_suite
+        and "_require_pipeline_success_stages" in cluster_suite
         and "# CLI runtime overrides: ablation_mode=isodelta-enabled." in cluster_suite_test
         and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_shallow_passed_report"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_requires_success_stage_fingerprints"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_requires_passed_bundle_verification"
         in cluster_suite_test
         and "TIMING_MODES_KEY" in cluster_suite
         and "_external_timing_modes_for_ablation" in cluster_suite
@@ -1198,6 +1208,9 @@ def main() -> None:
         and "`--verify-pipeline-report`" in doc
         and "publication-success gate" in doc
         and "failed or planned `pipeline_report.json` exits" in doc
+        and "full final-paper stage sequence" in doc
+        and "non-skipped stage" in doc
+        and "changing only" in doc
         and "stage report fingerprints" in doc
         and "final bundle verification counts" in doc
         and "`artifact_preparation_report.json`" in doc

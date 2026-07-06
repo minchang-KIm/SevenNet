@@ -3020,6 +3020,176 @@ required_by = ["SevenNet", "MACE", "NequIP"]
 
         self.assertEqual(cli_exit_code, 1)
 
+    def test_verify_pipeline_report_rejects_shallow_passed_report(self) -> None:
+        """A top-level passed status should not replace the full stage sequence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            pipeline_report_path = root / "pipeline_report.json"
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "suite": {"output_dir": str(root / "paper_outputs")},
+                        "stages": [],
+                        isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [],
+                        isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY: {
+                            "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(isodelta_cluster_suite.PIPELINE_REQUIRED_STAGES_ERROR),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
+    def test_verify_pipeline_report_requires_success_stage_fingerprints(self) -> None:
+        """Every non-skipped success stage should carry a report fingerprint."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            pipeline_report_path = root / "pipeline_report.json"
+            stages = [
+                {
+                    "name": isodelta_cluster_suite.PIPELINE_STAGE_READINESS,
+                    "status": isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
+                    "report_path": str(output_dir / "readiness.json"),
+                    "detail": None,
+                },
+                {
+                    "name": isodelta_cluster_suite.PIPELINE_STAGE_PREPARE_ARTIFACTS,
+                    "status": isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
+                    "report_path": str(output_dir / "artifacts.json"),
+                    "detail": None,
+                },
+                {
+                    "name": isodelta_cluster_suite.PIPELINE_STAGE_PREFLIGHT,
+                    "status": isodelta_cluster_suite.PREFLIGHT_STATUS_PASSED,
+                    "report_path": str(output_dir / "preflight.json"),
+                    "detail": None,
+                },
+                {
+                    "name": isodelta_cluster_suite.PIPELINE_STAGE_PLAN,
+                    "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                    "report_path": str(output_dir / "plan.json"),
+                    "detail": None,
+                },
+                {
+                    "name": isodelta_cluster_suite.PIPELINE_STAGE_RUN_SUITE,
+                    "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                    "report_path": str(output_dir / "summary.json"),
+                    "detail": None,
+                },
+                {
+                    "name": isodelta_cluster_suite.PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE,
+                    "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                    "report_path": str(output_dir / "summary.json"),
+                    "detail": None,
+                },
+            ]
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "suite": {"output_dir": str(output_dir)},
+                        "stages": stages,
+                        isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [
+                            {"name": stage["name"], "report": None}
+                            for stage in stages
+                        ],
+                        isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY: {
+                            "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "report is required for readiness",
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
+    def test_verify_pipeline_report_requires_passed_bundle_verification(self) -> None:
+        """A passed pipeline report should include final bundle verification."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            output_dir.mkdir()
+            pipeline_report_path = root / "pipeline_report.json"
+            report_paths = [
+                output_dir / "readiness.json",
+                output_dir / "artifacts.json",
+                output_dir / "preflight.json",
+                output_dir / "plan.json",
+                output_dir / "summary.json",
+                output_dir / "summary.json",
+            ]
+            for report_path in set(report_paths):
+                report_path.write_text("{}", encoding="utf-8")
+            stage_names = isodelta_cluster_suite.REQUIRED_PIPELINE_STAGE_NAMES
+            stage_statuses = [
+                isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
+                isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
+                isodelta_cluster_suite.PREFLIGHT_STATUS_PASSED,
+                isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+            ]
+            stages = [
+                {
+                    "name": stage_name,
+                    "status": stage_status,
+                    "report_path": str(report_path),
+                    "detail": None,
+                }
+                for stage_name, stage_status, report_path in zip(
+                    stage_names,
+                    stage_statuses,
+                    report_paths,
+                )
+            ]
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "suite": {"output_dir": str(output_dir)},
+                        "stages": stages,
+                        isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [
+                            {
+                                "name": stage["name"],
+                                "report": isodelta_cluster_suite.generated_artifact_record(
+                                    Path(str(stage["report_path"]))
+                                ),
+                            }
+                            for stage in stages
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(
+                    isodelta_cluster_suite.PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR
+                ),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
     def test_readiness_check_accepts_strict_three_model_paired_manifest(self) -> None:
         """A final paper manifest should prove strict input and model coverage."""
         with tempfile.TemporaryDirectory() as tmpdir:

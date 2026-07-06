@@ -86,6 +86,38 @@ PIPELINE_STATUS_PLANNED = "planned"
 PIPELINE_REPORT_PASSED_STATUS_ERROR = (
     "pipeline report status must be 'passed' before publication verification"
 )
+PIPELINE_REQUIRED_STAGES_ERROR = (
+    "passed pipeline report must contain the final-paper stages in order"
+)
+PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR = (
+    "output_bundle_verification.status must be 'passed' for a passed pipeline report"
+)
+PIPELINE_STAGE_STATUS_READY = "ready"
+PIPELINE_STAGE_READINESS = "readiness"
+PIPELINE_STAGE_PREPARE_ARTIFACTS = "prepare_artifacts"
+PIPELINE_STAGE_PREFLIGHT = "preflight"
+PIPELINE_STAGE_PLAN = "plan"
+PIPELINE_STAGE_RUN_SUITE = "run_suite"
+PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE = "verify_output_bundle"
+REQUIRED_PIPELINE_STAGE_NAMES = (
+    PIPELINE_STAGE_READINESS,
+    PIPELINE_STAGE_PREPARE_ARTIFACTS,
+    PIPELINE_STAGE_PREFLIGHT,
+    PIPELINE_STAGE_PLAN,
+    PIPELINE_STAGE_RUN_SUITE,
+    PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE,
+)
+PIPELINE_SUCCESS_STAGE_STATUSES = {
+    PIPELINE_STAGE_READINESS: (PIPELINE_STAGE_STATUS_READY,),
+    PIPELINE_STAGE_PREPARE_ARTIFACTS: (
+        PIPELINE_STAGE_STATUS_READY,
+        PREFLIGHT_STATUS_SKIPPED,
+    ),
+    PIPELINE_STAGE_PREFLIGHT: (PREFLIGHT_STATUS_PASSED,),
+    PIPELINE_STAGE_PLAN: (PIPELINE_STATUS_PASSED,),
+    PIPELINE_STAGE_RUN_SUITE: (PIPELINE_STATUS_PASSED,),
+    PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE: (PIPELINE_STATUS_PASSED,),
+}
 SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_only"))
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
 BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
@@ -4041,6 +4073,7 @@ def _require_pipeline_stage_report_fingerprints(
     *,
     pipeline_report_path: Path,
     original_output_dir: Path,
+    expected_stage_names: tuple[str, ...],
 ) -> int:
     """Verify the stage report fingerprints embedded in a pipeline report."""
     stage_fingerprints = pipeline_payload.get(STAGE_REPORT_FINGERPRINTS_KEY)
@@ -4048,13 +4081,36 @@ def _require_pipeline_stage_report_fingerprints(
         isinstance(stage_fingerprints, list),
         f"{STAGE_REPORT_FINGERPRINTS_KEY} must be a JSON array",
     )
+    _require(
+        len(stage_fingerprints) == len(expected_stage_names),
+        f"{STAGE_REPORT_FINGERPRINTS_KEY} must match the pipeline stage count",
+    )
+    raw_stages = pipeline_payload.get("stages")
+    _require(isinstance(raw_stages, list), "stages must be a JSON array")
     bundle_root = _pipeline_report_output_dir(pipeline_report_path, original_output_dir)
     verified_count = 0
     for index, raw_record in enumerate(stage_fingerprints):
         record = _as_json_object(raw_record, f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}]")
-        _as_json_string(record.get("name"), f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].name")
+        stage_name = _as_json_string(
+            record.get("name"),
+            f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].name",
+        )
+        _require(
+            stage_name == expected_stage_names[index],
+            f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].name must match stages[{index}].name",
+        )
+        stage = _as_json_object(raw_stages[index], f"stages[{index}]")
+        stage_status = _as_json_string(stage.get("status"), f"stages[{index}].status")
+        fingerprint_required = not (
+            stage_name == PIPELINE_STAGE_PREPARE_ARTIFACTS
+            and stage_status == PREFLIGHT_STATUS_SKIPPED
+        )
         raw_report_record = record.get("report")
         if raw_report_record is None:
+            _require(
+                not fingerprint_required,
+                f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].report is required for {stage_name}",
+            )
             continue
         report_record = _as_json_object(
             raw_report_record,
@@ -4068,6 +4124,40 @@ def _require_pipeline_stage_report_fingerprints(
         )
         verified_count += 1
     return verified_count
+
+
+def _require_pipeline_success_stages(
+    pipeline_payload: dict[str, Any],
+) -> tuple[str, ...]:
+    """Verify that a passed pipeline report contains the full success path."""
+    raw_stages = pipeline_payload.get("stages")
+    _require(isinstance(raw_stages, list), "stages must be a JSON array")
+    stage_names = tuple(
+        _as_json_string(
+            _as_json_object(raw_stage, f"stages[{index}]").get("name"),
+            f"stages[{index}].name",
+        )
+        for index, raw_stage in enumerate(raw_stages)
+    )
+    _require(stage_names == REQUIRED_PIPELINE_STAGE_NAMES, PIPELINE_REQUIRED_STAGES_ERROR)
+    for index, stage_name in enumerate(REQUIRED_PIPELINE_STAGE_NAMES):
+        stage = _as_json_object(raw_stages[index], f"stages[{index}]")
+        stage_status = _as_json_string(stage.get("status"), f"stages[{index}].status")
+        allowed_statuses = PIPELINE_SUCCESS_STAGE_STATUSES[stage_name]
+        _require(
+            stage_status in allowed_statuses,
+            (
+                f"stages[{index}].status for {stage_name} must be one of "
+                f"{MODEL_NAME_JOINER.join(allowed_statuses)}"
+            ),
+        )
+        if (
+            stage_name == PIPELINE_STAGE_PREPARE_ARTIFACTS
+            and stage_status == PREFLIGHT_STATUS_SKIPPED
+        ):
+            continue
+        _as_json_string(stage.get("report_path"), f"stages[{index}].report_path")
+    return stage_names
 
 
 def _require_pipeline_bundle_verification(
@@ -4142,15 +4232,22 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
     )
     suite_record = _as_json_object(pipeline_payload.get("suite"), "suite")
     original_output_dir = Path(_as_json_string(suite_record.get("output_dir"), "suite.output_dir"))
+    expected_stage_names = _require_pipeline_success_stages(pipeline_payload)
     verified_stage_report_count = _require_pipeline_stage_report_fingerprints(
         pipeline_payload,
         pipeline_report_path=pipeline_report_path,
         original_output_dir=original_output_dir,
+        expected_stage_names=expected_stage_names,
     )
     bundle_verification = _require_pipeline_bundle_verification(
         pipeline_payload,
         pipeline_report_path=pipeline_report_path,
         original_output_dir=original_output_dir,
+    )
+    _require(
+        bundle_verification is not None
+        and bundle_verification.get("status") == PIPELINE_STATUS_PASSED,
+        PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR,
     )
     return {
         "status": "passed",
