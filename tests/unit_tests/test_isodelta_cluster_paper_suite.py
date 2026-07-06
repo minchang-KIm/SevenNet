@@ -1380,7 +1380,6 @@ name = "mace-ablation"
 model = "MACE"
 kind = "external_pair"
 disabled_command = "run baseline"
-enabled_command = "run enabled"
 ablation_mode = "baseline-disabled"
 """,
                 encoding="utf-8",
@@ -1403,6 +1402,76 @@ ablation_mode = "baseline-disabled"
         self.assertEqual(config.cases[0].ablation_mode, "baseline-disabled")
         self.assertIn("mace-ablation:disabled:0", command_names)
         self.assertNotIn("mace-ablation:enabled:0", command_names)
+
+    def test_external_pair_enabled_ablation_omits_disabled_command(self) -> None:
+        """External enabled-only ablation should not require a disabled command."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            output_dir = root / "paper_outputs"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "external-enabled-ablation-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["NequIP"]
+
+[[cases]]
+name = "nequip-ablation"
+model = "NequIP"
+kind = "external_pair"
+enabled_command = "run enabled"
+ablation_mode = "isodelta-enabled"
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            (
+                _benchmark_report_path,
+                _bundle_evidence,
+                _trace_paths,
+                timing_report_path,
+                records,
+            ) = isodelta_cluster_suite.run_external_pair_case(
+                config,
+                config.cases[0],
+                dry_run=True,
+            )
+
+        command_names = [record.name for record in records]
+        self.assertIsNotNone(timing_report_path)
+        self.assertEqual(config.cases[0].ablation_mode, "isodelta-enabled")
+        self.assertNotIn("nequip-ablation:disabled:0", command_names)
+        self.assertIn("nequip-ablation:enabled:0", command_names)
+
+    def test_external_pair_paired_mode_still_requires_both_commands(self) -> None:
+        """Paired external timing must still define both disabled and enabled commands."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "external-paired-suite"
+required_models = ["MACE"]
+
+[[cases]]
+name = "mace-paired"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "run baseline"
+ablation_mode = "paired"
+""",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "enabled_command is required",
+            ):
+                isodelta_cluster_suite.validate_suite_config(
+                    isodelta_cluster_suite.load_manifest(manifest_path)
+                )
 
     def test_cli_ablation_override_updates_runtime_timing_cases(self) -> None:
         """A CLI override should switch SevenNet and external-pair smoke runs."""

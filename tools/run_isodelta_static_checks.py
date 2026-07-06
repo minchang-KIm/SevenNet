@@ -1088,9 +1088,14 @@ def main() -> None:
         and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
         and "TIMING_MODES_KEY" in cluster_suite
         and "_external_timing_modes_for_ablation" in cluster_suite
+        and "_external_pair_command_requirement_errors" in cluster_suite
         and "_validate_one_sided_benchmark_report" in cluster_suite
         and "external_pair_final_paper_ablation_mode" in cluster_suite
         and "sevennet_final_paper_ablation_mode" in cluster_suite
+        and "test_external_pair_enabled_ablation_omits_disabled_command"
+        in cluster_suite_test
+        and "test_external_pair_paired_mode_still_requires_both_commands"
+        in cluster_suite_test
         and "required_models = [\"SevenNet\", \"MACE\", \"NequIP\"]" in cluster_suite,
         "cluster paper suite must orchestrate 8-GPU multi-model paper artifacts",
     )
@@ -1126,6 +1131,8 @@ def main() -> None:
         and "`suite.runtime_overrides`" in doc
         and "one-sided SevenNet" in doc
         and "external_pair ablation" in doc
+        and "`baseline-disabled` needs `disabled_command`" in doc
+        and "`isodelta-enabled` needs `enabled_command`" in doc
         and "SHA-256" in doc
         and "`--collect-only`" in doc,
         "IsoDelta-Halo guide must document the cluster paper suite",

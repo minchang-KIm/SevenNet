@@ -379,6 +379,11 @@ produce speedup and final-thermo delta evidence. A one-sided SevenNet or
 external_pair ablation is useful for quick smoke timing inside the cluster
 suite, but the readiness gate treats it as ablation-only evidence rather than a
 publishable disabled/enabled comparison.
+For one-sided `external_pair` ablation manifests, only the command side named by
+`ablation_mode` is required: `baseline-disabled` needs `disabled_command`, and
+`isodelta-enabled` needs `enabled_command`. Paired `external_pair` timing still
+requires both commands because it is the only mode that can support a speedup
+claim.
 For temporary sweeps, keep the TOML manifest at `ablation_mode = "paired"` and
 use `--ablation-mode-override` to pass
 `--ablation-mode-override baseline-disabled` or

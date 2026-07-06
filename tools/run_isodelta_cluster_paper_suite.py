@@ -616,6 +616,17 @@ def _external_timing_modes_for_ablation(case: CaseConfig) -> tuple[str, ...]:
     return ABLATION_MODE_EXTERNAL_TIMING_MODES[case.ablation_mode]
 
 
+def _external_pair_command_requirement_errors(case: CaseConfig) -> list[str]:
+    """Return missing external commands for the requested timing modes."""
+    timing_modes = _external_timing_modes_for_ablation(case)
+    errors: list[str] = []
+    if EXTERNAL_DISABLED_COMMAND_LABEL in timing_modes and not case.disabled_command:
+        errors.append("disabled_command is required")
+    if EXTERNAL_ENABLED_COMMAND_LABEL in timing_modes and not case.enabled_command:
+        errors.append("enabled_command is required")
+    return errors
+
+
 def _apply_ablation_mode_override(
     config: SuiteConfig,
     ablation_mode_override: str | None,
@@ -1064,8 +1075,12 @@ def validate_suite_config(config: SuiteConfig) -> None:
             _require(bool(case.lammps_command), f"{case.name}: lammps_command is required")
             _require(case.input_path is not None, f"{case.name}: input is required")
         elif case.kind == "external_pair":
-            _require(bool(case.disabled_command), f"{case.name}: disabled_command is required")
-            _require(bool(case.enabled_command), f"{case.name}: enabled_command is required")
+            command_errors = _external_pair_command_requirement_errors(case)
+            _require(
+                not command_errors,
+                f"{case.name}: invalid requested timing commands: "
+                + MODEL_NAME_JOINER.join(command_errors),
+            )
             mode_control_errors = _external_pair_mode_control_errors(case)
             _require(
                 not mode_control_errors,
@@ -4358,10 +4373,17 @@ def _external_pair_mode_control_record(case: CaseConfig) -> dict[str, Any]:
 def _external_pair_mode_control_errors(case: CaseConfig) -> list[str]:
     """Return configuration errors that would make paired modes ambiguous."""
     mode_control = _external_pair_mode_control_record(case)
+    timing_modes = _external_timing_modes_for_ablation(case)
     errors: list[str] = []
-    if not mode_control["disabled_cache_disabled"]:
+    if (
+        EXTERNAL_DISABLED_COMMAND_LABEL in timing_modes
+        and not mode_control["disabled_cache_disabled"]
+    ):
         errors.append(f"disabled mode must set {SEVENNET_DISABLE_ENV}")
-    if mode_control["enabled_cache_disabled"]:
+    if (
+        EXTERNAL_ENABLED_COMMAND_LABEL in timing_modes
+        and mode_control["enabled_cache_disabled"]
+    ):
         errors.append(f"enabled mode must leave {SEVENNET_DISABLE_ENV} unset")
     return errors
 
