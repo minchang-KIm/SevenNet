@@ -330,6 +330,13 @@ ABLATION_MODE_EXTERNAL_TIMING_MODES = {
     ABLATION_MODE_BASELINE_ONLY: (EXTERNAL_DISABLED_COMMAND_LABEL,),
     ABLATION_MODE_ENABLED_ONLY: (EXTERNAL_ENABLED_COMMAND_LABEL,),
 }
+PIPELINE_ALLOWED_RUNTIME_OVERRIDE_KEYS = ("ablation_mode",)
+PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR = (
+    "pipeline suite runtime_overrides contains unsupported keys"
+)
+PIPELINE_ONE_SIDED_RUNTIME_OVERRIDE_ERROR = (
+    "passed pipeline report only permits paired ablation runtime overrides"
+)
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 SAFE_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -4201,6 +4208,28 @@ def _require_pipeline_report_modes(pipeline_payload: dict[str, Any]) -> dict[str
     return modes
 
 
+def _require_pipeline_runtime_overrides(
+    runtime_overrides: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify CLI overrides do not weaken a final-paper pipeline report."""
+    unsupported_keys = [
+        override_key
+        for override_key in runtime_overrides
+        if override_key not in PIPELINE_ALLOWED_RUNTIME_OVERRIDE_KEYS
+    ]
+    _require(not unsupported_keys, PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR)
+    if "ablation_mode" in runtime_overrides:
+        ablation_mode = _as_json_string(
+            runtime_overrides.get("ablation_mode"),
+            "suite.runtime_overrides.ablation_mode",
+        )
+        _require(
+            ablation_mode == ABLATION_MODE_PAIRED,
+            PIPELINE_ONE_SIDED_RUNTIME_OVERRIDE_ERROR,
+        )
+    return runtime_overrides
+
+
 def _require_pipeline_suite_metadata(
     pipeline_payload: dict[str, Any],
 ) -> tuple[dict[str, Any], Path]:
@@ -4238,7 +4267,9 @@ def _require_pipeline_suite_metadata(
         if model_name not in required_models
     ]
     _require(not missing_models, PIPELINE_SUITE_REQUIRED_MODELS_ERROR)
-    _as_json_object(suite_record.get("runtime_overrides"), "suite.runtime_overrides")
+    _require_pipeline_runtime_overrides(
+        _as_json_object(suite_record.get("runtime_overrides"), "suite.runtime_overrides")
+    )
     return suite_record, original_output_dir
 
 

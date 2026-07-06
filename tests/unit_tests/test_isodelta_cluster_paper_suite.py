@@ -3112,6 +3112,72 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ):
                 isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
 
+    def test_verify_pipeline_report_rejects_unsupported_runtime_override(
+        self,
+    ) -> None:
+        """Pipeline reports should not hide unknown CLI overrides."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            suite_record = _pipeline_suite_record(root, output_dir)
+            suite_record["runtime_overrides"] = {"unknown_override": "1"}
+            pipeline_report_path = root / "pipeline_report.json"
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "modes": _pipeline_report_modes(),
+                        "suite": suite_record,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(
+                    isodelta_cluster_suite.PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR
+                ),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
+    def test_verify_pipeline_report_rejects_one_sided_runtime_override(
+        self,
+    ) -> None:
+        """Final-paper pipeline evidence should not pass as one-sided ablation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            suite_record = _pipeline_suite_record(root, output_dir)
+            suite_record["runtime_overrides"] = {
+                "ablation_mode": isodelta_cluster_suite.ABLATION_MODE_ENABLED_ONLY
+            }
+            pipeline_report_path = root / "pipeline_report.json"
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "modes": _pipeline_report_modes(),
+                        "suite": suite_record,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(
+                    isodelta_cluster_suite.PIPELINE_ONE_SIDED_RUNTIME_OVERRIDE_ERROR
+                ),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
     def test_verify_pipeline_report_rejects_shallow_passed_report(self) -> None:
         """A top-level passed status should not replace the full stage sequence."""
         with tempfile.TemporaryDirectory() as tmpdir:

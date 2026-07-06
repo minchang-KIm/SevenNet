@@ -1165,12 +1165,16 @@ def main() -> None:
         and "pipeline report status must be 'passed'" in cluster_suite
         and "PIPELINE_DRY_RUN_PASSED_ERROR" in cluster_suite
         and "PIPELINE_SUITE_REQUIRED_MODELS_ERROR" in cluster_suite
+        and "PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
+        and "PIPELINE_ONE_SIDED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
+        and "PIPELINE_ALLOWED_RUNTIME_OVERRIDE_KEYS" in cluster_suite
         and "PIPELINE_REQUIRED_MODE_KEYS" in cluster_suite
         and "REQUIRED_PIPELINE_STAGE_NAMES" in cluster_suite
         and "PIPELINE_REQUIRED_STAGES_ERROR" in cluster_suite
         and "PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR" in cluster_suite
         and "_as_json_bool" in cluster_suite
         and "_require_pipeline_report_modes" in cluster_suite
+        and "_require_pipeline_runtime_overrides" in cluster_suite
         and "_require_pipeline_suite_metadata" in cluster_suite
         and "_require_pipeline_success_stages" in cluster_suite
         and "_resolve_present_fingerprint_path" in cluster_suite
@@ -1181,6 +1185,10 @@ def main() -> None:
         and "test_verify_pipeline_report_rejects_dry_run_passed_mode"
         in cluster_suite_test
         and "test_verify_pipeline_report_requires_final_paper_suite_models"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_unsupported_runtime_override"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_one_sided_runtime_override"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_shallow_passed_report"
         in cluster_suite_test
@@ -1229,6 +1237,9 @@ def main() -> None:
         and "`dry_run = true`" in doc
         and "SevenNet/MACE/NequIP required-model scope" in doc
         and "well-formed manifest fingerprint" in doc
+        and "Runtime overrides are limited to known keys" in doc
+        and "`ablation_mode = \"paired\"`" in doc
+        and "one-sided ablation override" in doc
         and "changing only" in doc
         and "stage report fingerprints" in doc
         and "final bundle verification counts" in doc
