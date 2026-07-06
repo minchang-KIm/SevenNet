@@ -368,6 +368,11 @@ def main() -> None:
         and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate
         and "VALIDATION_REPORT_FINGERPRINT_KEY" in sync_gate
         and "STATUS_VALIDATION_REPORT_MISSING" in sync_gate
+        and "STATUS_DIRTY_WORKTREE" in sync_gate
+        and "WORKTREE_STATUS_KEY" in sync_gate
+        and "_parse_status_short" in sync_gate
+        and "_worktree_status" in sync_gate
+        and "--require-clean-worktree" in sync_gate
         and "_file_fingerprint" in sync_gate
         and "_remote_ref_verify_command" in sync_gate
         and "_verify_remote_ref" in sync_gate
@@ -388,6 +393,8 @@ def main() -> None:
         and "test_run_sync_records_git_provenance_for_push_target" in sync_gate_test
         and "test_run_sync_fails_when_remote_ref_does_not_match" in sync_gate_test
         and "test_run_sync_rejects_missing_validation_report" in sync_gate_test
+        and "test_run_sync_can_require_clean_worktree" in sync_gate_test
+        and "WORKTREE_STATUS_KEY" in sync_gate_test
         and "VALIDATION_REPORT_FINGERPRINT_KEY" in sync_gate_test
         and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate_test
         and "test_run_sync_can_write_bundle_after_push_failure" in sync_gate_test
@@ -1422,6 +1429,9 @@ def main() -> None:
         and "`isodelta_sync_report.json`" in doc
         and "`validation_report_fingerprint`" in doc
         and "`validation_report_missing`" in doc
+        and "`worktree_status`" in doc
+        and "`--require-clean-worktree`" in doc
+        and "`dirty_worktree`" in doc
         and "`git_provenance` fields" in doc
         and "`git ls-remote --heads`" in doc
         and "`remote_ref_verification`" in doc

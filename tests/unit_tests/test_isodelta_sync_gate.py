@@ -23,6 +23,7 @@ VALIDATION_COMMAND_INDEX = 0
 PUSH_COMMAND_INDEX = 1
 REMOTE_REF_VERIFY_COMMAND_INDEX = 2
 COMMAND_COUNT_AFTER_VALIDATION_FAILURE = 1
+COMMAND_COUNT_AFTER_DIRTY_WORKTREE = 0
 INTENTIONAL_VALIDATION_FAILURE_CODE = 3
 INTENTIONAL_PUSH_FAILURE_CODE = 128
 VALIDATION_REPORT_TEXT = "validation report"
@@ -135,6 +136,16 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             report[sync_gate.VALIDATION_REPORT_FINGERPRINT_KEY],
             _validation_report_fingerprint(validation_report_path),
         )
+        self.assertEqual(
+            report[sync_gate.WORKTREE_STATUS_KEY],
+            {
+                "available": True,
+                "clean": True,
+                "entry_count": 0,
+                "entries": [],
+                "raw": "",
+            },
+        )
         self.assertIsNone(report["push_failure"])
 
     def test_run_sync_records_git_provenance_for_push_target(self) -> None:
@@ -194,6 +205,73 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             report[sync_gate.VALIDATION_REPORT_FINGERPRINT_KEY],
             _validation_report_fingerprint(validation_report_path),
         )
+
+    def test_run_sync_can_require_clean_worktree(self) -> None:
+        """A final-paper sync can refuse dirty source trees before pushing."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        status_short = " M tools/run.py\n?? scratch.txt"
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): "head-sha",
+            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "status", "--short"): status_short,
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            forbidden_marker = root / "validation-ran"
+            forbidden_validation_script = (
+                "from pathlib import Path; "
+                f"Path({str(forbidden_marker)!r}).write_text('ran', encoding='utf-8')"
+            )
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        require_clean_worktree=True,
+                        validation_command=(sys.executable, "-c", forbidden_validation_script),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertFalse(forbidden_marker.exists())
+        self.assertEqual(report["status"], sync_gate.STATUS_DIRTY_WORKTREE)
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_DIRTY_WORKTREE)
+        self.assertEqual(
+            report[sync_gate.WORKTREE_STATUS_KEY],
+            {
+                "available": True,
+                "clean": False,
+                "entry_count": 2,
+                "entries": [
+                    {
+                        "index_status": " ",
+                        "worktree_status": "M",
+                        "path": "tools/run.py",
+                    },
+                    {
+                        "index_status": "?",
+                        "worktree_status": "?",
+                        "path": "scratch.txt",
+                    },
+                ],
+                "raw": status_short,
+            },
+        )
+        self.assertIsNone(report[sync_gate.VALIDATION_REPORT_FINGERPRINT_KEY])
 
     def test_run_sync_fails_when_remote_ref_does_not_match(self) -> None:
         """A push is not synced until the remote branch reports the same commit."""

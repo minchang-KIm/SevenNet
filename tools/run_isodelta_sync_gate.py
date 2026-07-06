@@ -36,11 +36,13 @@ STATUS_SYNCED = "synced"
 STATUS_VALIDATED = "validated"
 STATUS_VALIDATION_FAILED = "validation_failed"
 STATUS_VALIDATION_REPORT_MISSING = "validation_report_missing"
+STATUS_DIRTY_WORKTREE = "dirty_worktree"
 STATUS_PUSH_FAILED = "push_failed"
 STATUS_REMOTE_VERIFICATION_FAILED = "remote_verification_failed"
 REMOTE_REF_VERIFICATION_KEY = "remote_ref_verification"
 REMOTE_REF_VERIFY_COMMAND_NAME = "remote_ref_verify"
 VALIDATION_REPORT_FINGERPRINT_KEY = "validation_report_fingerprint"
+WORKTREE_STATUS_KEY = "worktree_status"
 PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_COMMAND_NAME = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME = "push_failure_bundle_verify"
@@ -127,6 +129,48 @@ def _metadata_command(command: tuple[str, ...]) -> str | None:
 def _current_branch() -> str | None:
     """Return the currently checked-out branch name for the default push target."""
     return _metadata_command(("git", "branch", "--show-current"))
+
+
+def _parse_status_short(status_short: str | None) -> list[dict[str, str]]:
+    """Parse git status --short output into stable JSON entries."""
+    if status_short is None:
+        return []
+    entries: list[dict[str, str]] = []
+    for line in status_short.splitlines():
+        if not line:
+            continue
+        index_status = line[0] if len(line) >= 1 else " "
+        worktree_status = line[1] if len(line) >= 2 else " "
+        path = line[3:] if len(line) >= 4 and line[2] == " " else line[2:].strip()
+        entries.append(
+            {
+                "index_status": index_status,
+                "worktree_status": worktree_status,
+                "path": path,
+            }
+        )
+    return entries
+
+
+def _worktree_status() -> dict[str, Any]:
+    """Return a structured dirty-worktree snapshot for sync provenance."""
+    status_short = _metadata_command(("git", "status", "--short"))
+    if status_short is None:
+        return {
+            "available": False,
+            "clean": False,
+            "entry_count": 0,
+            "entries": [],
+            "raw": None,
+        }
+    entries = _parse_status_short(status_short)
+    return {
+        "available": True,
+        "clean": not entries,
+        "entry_count": len(entries),
+        "entries": entries,
+        "raw": status_short,
+    }
 
 
 def _validation_command(
@@ -348,6 +392,7 @@ def run_sync(
     validation_report_path: Path,
     skip_push: bool = False,
     push_failure_bundle_path: Path | None = None,
+    require_clean_worktree: bool = False,
     validation_command: tuple[str, ...] | None = None,
     push_command: tuple[str, ...] | None = None,
     remote_ref_verify_command: tuple[str, ...] | None = None,
@@ -357,19 +402,29 @@ def run_sync(
     """Run validation, then optionally push, and write one sync evidence report."""
     resolved_branch = branch or _current_branch()
     command_records: list[dict[str, Any]] = []
-    validation_record = _run_command(
-        validation_command or _validation_command(validation_report_path, resolved_branch)
-    )
-    command_records.append({"name": "validation", **validation_record})
-    validation_report_fingerprint = (
-        _file_fingerprint(validation_report_path)
-        if validation_report_path.exists()
-        else None
-    )
+    worktree_report = _worktree_status()
+    validation_report_fingerprint: dict[str, Any] | None = None
     push_record: dict[str, Any] | None = None
     remote_ref_verification_report: dict[str, Any] | None = None
-    status = STATUS_VALIDATION_FAILED
-    if validation_record["returncode"] == SUCCESS_RETURN_CODE:
+    status = (
+        STATUS_DIRTY_WORKTREE
+        if require_clean_worktree and not worktree_report["clean"]
+        else STATUS_VALIDATION_FAILED
+    )
+    if status != STATUS_DIRTY_WORKTREE:
+        validation_record = _run_command(
+            validation_command or _validation_command(validation_report_path, resolved_branch)
+        )
+        command_records.append({"name": "validation", **validation_record})
+        validation_report_fingerprint = (
+            _file_fingerprint(validation_report_path)
+            if validation_report_path.exists()
+            else None
+        )
+    else:
+        validation_record = None
+
+    if validation_record is not None and validation_record["returncode"] == SUCCESS_RETURN_CODE:
         if validation_report_fingerprint is None:
             status = STATUS_VALIDATION_REPORT_MISSING
         elif skip_push:
@@ -429,6 +484,7 @@ def run_sync(
         "branch": resolved_branch,
         "validation_report_path": str(validation_report_path),
         VALIDATION_REPORT_FINGERPRINT_KEY: validation_report_fingerprint,
+        WORKTREE_STATUS_KEY: worktree_report,
         "git_commit": _metadata_command(("git", "rev-parse", "HEAD")),
         "git_status_short": _metadata_command(("git", "status", "--short")),
         "git_provenance": _sync_git_provenance(remote, resolved_branch),
@@ -461,6 +517,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--skip-push", action="store_true", help="Validate and report without attempting git push")
     parser.add_argument(
+        "--require-clean-worktree",
+        action="store_true",
+        help="Fail before validation and push if git status --short is not clean",
+    )
+    parser.add_argument(
         "--push-failure-bundle",
         type=Path,
         help="Create a git bundle for the validated branch when git push fails",
@@ -478,6 +539,7 @@ def main(argv: list[str] | None = None) -> int:
         validation_report_path=args.validation_report_path,
         skip_push=args.skip_push,
         push_failure_bundle_path=args.push_failure_bundle,
+        require_clean_worktree=args.require_clean_worktree,
     )
 
 

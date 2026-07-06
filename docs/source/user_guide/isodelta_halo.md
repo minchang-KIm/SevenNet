@@ -186,6 +186,10 @@ target remote/branch, the push stderr tail, and a
 digest and byte size. If the validation command exits successfully but the
 validation report file is missing, the sync gate reports
 `validation_report_missing` and does not push. The report also stores
+`worktree_status`, a parsed `git status --short` snapshot with entry count,
+per-entry index/worktree status, paths, and a clean flag. For final paper
+syncs, add `--require-clean-worktree` to fail with `dirty_worktree` before
+validation or push when tracked or untracked files are present. It also stores
 `git_provenance` fields for the current branch, validated HEAD commit, local
 target branch commit, remote URL, and locally known remote-tracking commit. It
 also writes `remote_ref_verification` and only reports `synced` when the remote
