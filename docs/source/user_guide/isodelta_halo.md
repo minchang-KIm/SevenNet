@@ -510,6 +510,8 @@ in the ablation-only path instead of being accepted as final paper evidence. It
 also reopens the fingerprinted readiness report and requires every final-paper readiness check to be present and passed.
 It reopens the fingerprinted artifact preparation report, requires `dry_run = false`,
 and checks `missing_required_artifacts` plus each required artifact SHA-256 digest.
+It also reopens the fingerprinted run plan report, requires final-paper execution modes,
+checks `gpu_check_planned`, and verifies required model case plans plus paper output paths.
 It then reopens the fingerprinted preflight report and checks `gpu_check` so the
 archive proves the requested GPU count was actually detected.
 

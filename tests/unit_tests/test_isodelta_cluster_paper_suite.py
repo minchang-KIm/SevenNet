@@ -686,6 +686,63 @@ def _pipeline_artifact_preparation_report(
     }
 
 
+def _pipeline_plan_report(
+    suite_record: dict[str, object],
+    *,
+    skip_gpu_check: bool = False,
+) -> dict[str, object]:
+    """Return run-plan evidence for pipeline semantic verification."""
+    paper_outputs = {
+        output_key: f"paper_outputs/{output_key}.out"
+        for output_key in isodelta_cluster_suite.PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS
+    }
+    return {
+        "plan_schema_version": isodelta_cluster_suite.SUITE_SCHEMA_VERSION,
+        "suite": {
+            "manifest": suite_record["manifest"],
+            "expected_gpus": suite_record["expected_gpus"],
+            "required_models": suite_record["required_models"],
+            "require_artifact_sha256": True,
+            "runtime_overrides": suite_record["runtime_overrides"],
+        },
+        "modes": {
+            "collect_only": False,
+            "skip_downloads": False,
+            "skip_gpu_check": skip_gpu_check,
+            "reuse_passed": False,
+        },
+        "gpu_check_planned": not skip_gpu_check,
+        "artifacts": [
+            {
+                "name": UNIT_TEST_REQUIRED_ARTIFACT_NAME,
+                "required": True,
+                "has_sha256": True,
+                "sha256_required": True,
+                "missing_required": False,
+                "missing_without_url": False,
+                "skip_downloads_would_fail": False,
+                "sha256": UNIT_TEST_ARTIFACT_SHA256,
+            }
+        ],
+        "cases": [
+            {
+                "name": f"{model_name.lower()}-plan",
+                "model": model_name,
+                "kind": "external_pair",
+                "thresholds": {
+                    "ablation_mode": isodelta_cluster_suite.ABLATION_MODE_PAIRED,
+                    "repeat_count": PAPER_REPEAT_COUNT,
+                },
+                "expected_outputs": {
+                    "benchmark_report": f"{model_name.lower()}_benchmark.json",
+                },
+            }
+            for model_name in isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS
+        ],
+        "paper_outputs": paper_outputs,
+    }
+
+
 class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
     """Check manifest validation and paper artifact generation."""
 
@@ -2821,6 +2878,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ],
             1,
         )
+        self.assertEqual(
+            pipeline_report_verification["run_plan_report"]["verified_case_plan_count"],
+            len(isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS),
+        )
         self.assertEqual(pipeline_verification["status"], "passed")
         self.assertEqual(
             pipeline_verification["verified_artifact_index_count"],
@@ -3525,6 +3586,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(_pipeline_artifact_preparation_report(suite_record)),
                 encoding="utf-8",
             )
+            report_paths[3].write_text(
+                json.dumps(_pipeline_plan_report(suite_record)),
+                encoding="utf-8",
+            )
             report_paths[2].write_text(
                 json.dumps(
                     _pipeline_preflight_report(
@@ -3744,6 +3809,88 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ):
                 isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
 
+    def test_verify_pipeline_report_rejects_gpu_skipped_run_plan(self) -> None:
+        """A passed pipeline should reject a plan that skipped GPU checking."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            output_dir.mkdir()
+            pipeline_report_path = root / "pipeline_report.json"
+            suite_record = _pipeline_suite_record(root, output_dir)
+            report_paths = [
+                output_dir / "readiness.json",
+                output_dir / "artifacts.json",
+                output_dir / "preflight.json",
+                output_dir / "plan.json",
+                output_dir / "summary.json",
+                output_dir / "summary.json",
+            ]
+            for report_path in set(report_paths):
+                report_path.write_text("{}", encoding="utf-8")
+            report_paths[0].write_text(
+                json.dumps(_pipeline_readiness_report()),
+                encoding="utf-8",
+            )
+            report_paths[1].write_text(
+                json.dumps(_pipeline_artifact_preparation_report(suite_record)),
+                encoding="utf-8",
+            )
+            report_paths[2].write_text(
+                json.dumps(_pipeline_preflight_report()),
+                encoding="utf-8",
+            )
+            report_paths[3].write_text(
+                json.dumps(_pipeline_plan_report(suite_record, skip_gpu_check=True)),
+                encoding="utf-8",
+            )
+            stage_names = isodelta_cluster_suite.REQUIRED_PIPELINE_STAGE_NAMES
+            stage_statuses = _pipeline_success_stage_statuses()
+            stages = [
+                {
+                    "name": stage_name,
+                    "status": stage_status,
+                    "report_path": str(report_path),
+                    "detail": None,
+                }
+                for stage_name, stage_status, report_path in zip(
+                    stage_names,
+                    stage_statuses,
+                    report_paths,
+                )
+            ]
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "modes": _pipeline_report_modes(),
+                        "suite": suite_record,
+                        "stages": stages,
+                        isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [
+                            {
+                                "name": stage["name"],
+                                "report": isodelta_cluster_suite.generated_artifact_record(
+                                    Path(str(stage["report_path"]))
+                                ),
+                            }
+                            for stage in stages
+                        ],
+                        isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY: {
+                            "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(isodelta_cluster_suite.PIPELINE_PLAN_MODES_ERROR),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
     def test_verify_pipeline_report_requires_passed_bundle_verification(self) -> None:
         """A passed pipeline report should include final bundle verification."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -3768,6 +3915,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             )
             report_paths[1].write_text(
                 json.dumps(_pipeline_artifact_preparation_report(suite_record)),
+                encoding="utf-8",
+            )
+            report_paths[3].write_text(
+                json.dumps(_pipeline_plan_report(suite_record)),
                 encoding="utf-8",
             )
             report_paths[2].write_text(

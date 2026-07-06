@@ -135,6 +135,24 @@ PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR = (
 PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR = (
     "passed pipeline artifact preparation report must prove all required artifacts"
 )
+PIPELINE_PLAN_REPORT_REQUIRED_ERROR = (
+    "passed pipeline report must fingerprint a present run plan report"
+)
+PIPELINE_PLAN_SUITE_ERROR = (
+    "passed pipeline run plan suite metadata must match the pipeline suite"
+)
+PIPELINE_PLAN_MODES_ERROR = (
+    "passed pipeline run plan must describe final-paper execution modes"
+)
+PIPELINE_PLAN_ARTIFACTS_ERROR = (
+    "passed pipeline run plan must prove required artifact inputs are planned"
+)
+PIPELINE_PLAN_CASES_ERROR = (
+    "passed pipeline run plan must include SevenNet, MACE, and NequIP cases"
+)
+PIPELINE_PLAN_OUTPUTS_ERROR = (
+    "passed pipeline run plan must include required paper output paths"
+)
 PIPELINE_DRY_RUN_PASSED_ERROR = "passed pipeline report must record dry_run=false"
 PIPELINE_GPU_CHECK_SKIPPED_ERROR = (
     "passed pipeline report must record skip_gpu_check=false"
@@ -191,6 +209,16 @@ PIPELINE_SUCCESS_STAGE_STATUSES = {
     PIPELINE_STAGE_RUN_SUITE: (PIPELINE_STATUS_PASSED,),
     PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE: (PIPELINE_STATUS_PASSED,),
 }
+PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS = (
+    "summary_json",
+    "environment_snapshot",
+    "case_summary_csv",
+    "case_summary_markdown",
+    "correlation_csv",
+    "speedup_svg",
+    "hit_rate_svg",
+    "trace_svg",
+)
 SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_only"))
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
 BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
@@ -4552,6 +4580,196 @@ def _require_pipeline_artifact_preparation_report(
     }
 
 
+def _require_pipeline_plan_report(
+    stage_report_paths: dict[str, Path],
+    suite_record: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify the run plan matches final-paper pipeline execution."""
+    plan_report_path = stage_report_paths.get(PIPELINE_STAGE_PLAN)
+    _require(
+        plan_report_path is not None,
+        PIPELINE_PLAN_REPORT_REQUIRED_ERROR,
+    )
+    plan_payload = _as_json_object(
+        json.loads(plan_report_path.read_text(encoding="utf-8")),
+        "run_plan",
+    )
+    schema_version = _as_json_string(
+        plan_payload.get("plan_schema_version"),
+        "run_plan.plan_schema_version",
+    )
+    _require(
+        schema_version == SUITE_SCHEMA_VERSION,
+        f"run_plan.plan_schema_version must be {SUITE_SCHEMA_VERSION!r}",
+    )
+    plan_suite = _as_json_object(plan_payload.get("suite"), "run_plan.suite")
+    expected_gpus = _as_json_nonnegative_int(
+        suite_record.get("expected_gpus"),
+        "suite.expected_gpus",
+    )
+    plan_expected_gpus = _as_json_nonnegative_int(
+        plan_suite.get("expected_gpus"),
+        "run_plan.suite.expected_gpus",
+    )
+    _require(plan_expected_gpus == expected_gpus, PIPELINE_PLAN_SUITE_ERROR)
+    required_models = _as_string_tuple(
+        suite_record.get("required_models"),
+        "suite.required_models",
+    )
+    plan_required_models = _as_string_tuple(
+        plan_suite.get("required_models"),
+        "run_plan.suite.required_models",
+    )
+    _require(plan_required_models == required_models, PIPELINE_PLAN_SUITE_ERROR)
+    _require(
+        _as_json_bool(
+            plan_suite.get("require_artifact_sha256"),
+            "run_plan.suite.require_artifact_sha256",
+        ),
+        PIPELINE_PLAN_SUITE_ERROR,
+    )
+    runtime_overrides = _as_json_object(
+        suite_record.get("runtime_overrides"),
+        "suite.runtime_overrides",
+    )
+    plan_runtime_overrides = _as_json_object(
+        plan_suite.get("runtime_overrides"),
+        "run_plan.suite.runtime_overrides",
+    )
+    _require(plan_runtime_overrides == runtime_overrides, PIPELINE_PLAN_SUITE_ERROR)
+    suite_manifest = _as_json_object(suite_record.get("manifest"), "suite.manifest")
+    suite_manifest_digest = _require_sha256_digest(
+        suite_manifest.get("sha256"),
+        "suite.manifest.sha256",
+    )
+    plan_manifest = _as_json_object(plan_suite.get("manifest"), "run_plan.suite.manifest")
+    plan_manifest_digest = _require_sha256_digest(
+        plan_manifest.get("sha256"),
+        "run_plan.suite.manifest.sha256",
+    )
+    _require(plan_manifest_digest == suite_manifest_digest, PIPELINE_PLAN_SUITE_ERROR)
+    modes = _as_json_object(plan_payload.get("modes"), "run_plan.modes")
+    _require(
+        not _as_json_bool(modes.get("collect_only"), "run_plan.modes.collect_only"),
+        PIPELINE_PLAN_MODES_ERROR,
+    )
+    _require(
+        not _as_json_bool(modes.get("skip_downloads"), "run_plan.modes.skip_downloads"),
+        PIPELINE_PLAN_MODES_ERROR,
+    )
+    _require(
+        not _as_json_bool(modes.get("skip_gpu_check"), "run_plan.modes.skip_gpu_check"),
+        PIPELINE_PLAN_MODES_ERROR,
+    )
+    _as_json_bool(modes.get("reuse_passed"), "run_plan.modes.reuse_passed")
+    _require(
+        _as_json_bool(plan_payload.get("gpu_check_planned"), "run_plan.gpu_check_planned"),
+        PIPELINE_PLAN_MODES_ERROR,
+    )
+    raw_artifacts = plan_payload.get("artifacts")
+    _require(isinstance(raw_artifacts, list), "run_plan.artifacts must be a JSON array")
+    verified_required_artifact_count = 0
+    for index, raw_artifact in enumerate(raw_artifacts):
+        artifact = _as_json_object(raw_artifact, f"run_plan.artifacts[{index}]")
+        _as_json_string(artifact.get("name"), f"run_plan.artifacts[{index}].name")
+        required = _as_json_bool(
+            artifact.get("required"),
+            f"run_plan.artifacts[{index}].required",
+        )
+        if not required:
+            continue
+        _require(
+            _as_json_bool(
+                artifact.get("has_sha256"),
+                f"run_plan.artifacts[{index}].has_sha256",
+            ),
+            PIPELINE_PLAN_ARTIFACTS_ERROR,
+        )
+        _require(
+            _as_json_bool(
+                artifact.get("sha256_required"),
+                f"run_plan.artifacts[{index}].sha256_required",
+            ),
+            PIPELINE_PLAN_ARTIFACTS_ERROR,
+        )
+        _require(
+            not _as_json_bool(
+                artifact.get("missing_required"),
+                f"run_plan.artifacts[{index}].missing_required",
+            ),
+            PIPELINE_PLAN_ARTIFACTS_ERROR,
+        )
+        _require(
+            not _as_json_bool(
+                artifact.get("missing_without_url"),
+                f"run_plan.artifacts[{index}].missing_without_url",
+            ),
+            PIPELINE_PLAN_ARTIFACTS_ERROR,
+        )
+        _require(
+            not _as_json_bool(
+                artifact.get("skip_downloads_would_fail"),
+                f"run_plan.artifacts[{index}].skip_downloads_would_fail",
+            ),
+            PIPELINE_PLAN_ARTIFACTS_ERROR,
+        )
+        _require_sha256_digest(
+            artifact.get("sha256"),
+            f"run_plan.artifacts[{index}].sha256",
+        )
+        verified_required_artifact_count += 1
+    _require(verified_required_artifact_count > 0, PIPELINE_PLAN_ARTIFACTS_ERROR)
+    raw_cases = plan_payload.get("cases")
+    _require(isinstance(raw_cases, list), "run_plan.cases must be a JSON array")
+    planned_models: set[str] = set()
+    for index, raw_case in enumerate(raw_cases):
+        case = _as_json_object(raw_case, f"run_plan.cases[{index}]")
+        _as_json_string(case.get("name"), f"run_plan.cases[{index}].name")
+        planned_models.add(_as_json_string(case.get("model"), f"run_plan.cases[{index}].model"))
+        _as_json_string(case.get("kind"), f"run_plan.cases[{index}].kind")
+        thresholds = _as_json_object(
+            case.get("thresholds"),
+            f"run_plan.cases[{index}].thresholds",
+        )
+        _require(
+            _as_json_string(
+                thresholds.get("ablation_mode"),
+                f"run_plan.cases[{index}].thresholds.ablation_mode",
+            )
+            == ABLATION_MODE_PAIRED,
+            PIPELINE_PLAN_CASES_ERROR,
+        )
+        _as_json_nonnegative_int(
+            thresholds.get("repeat_count"),
+            f"run_plan.cases[{index}].thresholds.repeat_count",
+        )
+        expected_outputs = _as_json_object(
+            case.get("expected_outputs"),
+            f"run_plan.cases[{index}].expected_outputs",
+        )
+        _require(
+            any(value is not None for value in expected_outputs.values()),
+            PIPELINE_PLAN_CASES_ERROR,
+        )
+    missing_models = [
+        model_name for model_name in FINAL_PAPER_REQUIRED_MODELS if model_name not in planned_models
+    ]
+    _require(not missing_models, PIPELINE_PLAN_CASES_ERROR)
+    paper_outputs = _as_json_object(plan_payload.get("paper_outputs"), "run_plan.paper_outputs")
+    for output_key in PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS:
+        _as_json_string(
+            paper_outputs.get(output_key),
+            f"run_plan.paper_outputs.{output_key}",
+        )
+    return {
+        "status": "passed",
+        "run_plan_report": str(plan_report_path),
+        "gpu_check_planned": True,
+        "verified_required_artifact_plan_count": verified_required_artifact_count,
+        "verified_case_plan_count": len(raw_cases),
+    }
+
+
 def _require_pipeline_preflight_gpu_check(
     stage_report_paths: dict[str, Path],
     suite_record: dict[str, Any],
@@ -4776,6 +4994,10 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         stage_report_paths,
         suite_record,
     )
+    run_plan_report = _require_pipeline_plan_report(
+        stage_report_paths,
+        suite_record,
+    )
     preflight_gpu_check = _require_pipeline_preflight_gpu_check(
         stage_report_paths,
         suite_record,
@@ -4797,6 +5019,7 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "verified_stage_report_count": verified_stage_report_count,
         "readiness_report": readiness_report,
         "artifact_preparation_report": artifact_preparation_report,
+        "run_plan_report": run_plan_report,
         "preflight_gpu_check": preflight_gpu_check,
         OUTPUT_BUNDLE_VERIFICATION_KEY: bundle_verification,
     }
