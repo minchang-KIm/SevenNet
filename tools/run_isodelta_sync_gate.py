@@ -45,6 +45,13 @@ REMOTE_REF_VERIFICATION_KEY = "remote_ref_verification"
 REMOTE_REF_VERIFY_COMMAND_NAME = "remote_ref_verify"
 VALIDATION_REPORT_FINGERPRINT_KEY = "validation_report_fingerprint"
 VALIDATION_REPORT_SUMMARY_KEY = "validation_report_summary"
+VALIDATION_REPORT_COMMAND_REQUIRED_FIELDS = (
+    "command",
+    "returncode",
+    "elapsed_seconds",
+    "stdout_tail",
+    "stderr_tail",
+)
 WORKTREE_STATUS_KEY = "worktree_status"
 PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_COMMAND_NAME = "push_failure_bundle"
@@ -247,6 +254,7 @@ def _validation_report_summary(
         "git_commit": None,
         "command_count": None,
         "command_failure_count": None,
+        "command_missing_field_count": None,
         "detail": None,
     }
     try:
@@ -273,6 +281,19 @@ def _validation_report_summary(
         if isinstance(commands, list)
         else None
     )
+    command_missing_field_count = (
+        sum(
+            1
+            for command_record in commands
+            if not isinstance(command_record, dict)
+            or any(
+                required_field not in command_record
+                for required_field in VALIDATION_REPORT_COMMAND_REQUIRED_FIELDS
+            )
+        )
+        if isinstance(commands, list)
+        else None
+    )
     summary.update(
         {
             "schema_version": schema_version,
@@ -281,6 +302,7 @@ def _validation_report_summary(
             "git_commit": git_commit,
             "command_count": command_count,
             "command_failure_count": command_failure_count,
+            "command_missing_field_count": command_missing_field_count,
         }
     )
     if schema_version != EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION:
@@ -300,6 +322,9 @@ def _validation_report_summary(
         return summary
     if command_count < 1:
         summary["detail"] = "validation report commands must not be empty"
+        return summary
+    if command_missing_field_count != 0:
+        summary["detail"] = "validation report commands are missing required fields"
         return summary
     if command_failure_count != 0:
         summary["detail"] = "validation report commands include nonzero returncodes"
