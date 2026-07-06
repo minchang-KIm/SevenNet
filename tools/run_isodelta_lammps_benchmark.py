@@ -37,6 +37,14 @@ TIMEOUT_RETURN_CODE = 124
 LAMMPS_INPUT_FLAG = "-in"
 BASELINE_CASE = "baseline-disabled"
 ISODELTA_CASE = "isodelta-enabled"
+ABLATION_MODE_PAIRED = "paired"
+ABLATION_MODE_BASELINE_ONLY = BASELINE_CASE
+ABLATION_MODE_ENABLED_ONLY = ISODELTA_CASE
+ABLATION_MODE_CHOICES = (
+    ABLATION_MODE_PAIRED,
+    ABLATION_MODE_BASELINE_ONLY,
+    ABLATION_MODE_ENABLED_ONLY,
+)
 PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
@@ -133,6 +141,7 @@ def validate_benchmark_options(
     lammps_command: str,
     repeat_count: int,
     run_timeout_seconds: float,
+    ablation_mode: str = ABLATION_MODE_PAIRED,
 ) -> None:
     """Reject benchmark options that cannot produce paired timing evidence."""
     _split_lammps_command(lammps_command)
@@ -142,6 +151,25 @@ def validate_benchmark_options(
         raise ValueError("run_timeout_seconds must be finite")
     if run_timeout_seconds <= MIN_POSITIVE_TIMEOUT_SECONDS:
         raise ValueError("run_timeout_seconds must be positive")
+    if ablation_mode not in ABLATION_MODE_CHOICES:
+        raise ValueError(
+            "ablation_mode must be one of " + ", ".join(ABLATION_MODE_CHOICES)
+        )
+
+
+def benchmark_cases_for_ablation_mode(
+    ablation_mode: str,
+) -> tuple[BenchmarkCase, ...]:
+    """Return the benchmark cases requested by a paired or one-sided ablation."""
+    if ablation_mode == ABLATION_MODE_PAIRED:
+        return BENCHMARK_CASES
+    if ablation_mode == ABLATION_MODE_BASELINE_ONLY:
+        return (BENCHMARK_CASES[0],)
+    if ablation_mode == ABLATION_MODE_ENABLED_ONLY:
+        return (BENCHMARK_CASES[1],)
+    raise ValueError(
+        "ablation_mode must be one of " + ", ".join(ABLATION_MODE_CHOICES)
+    )
 
 
 def parse_loop_time(log_text: str) -> float | None:
@@ -170,11 +198,15 @@ def _run_metadata_command(argv: list[str]) -> str | None:
     return completed.stdout.strip()
 
 
-def collect_run_provenance() -> dict[str, Any]:
+def collect_run_provenance(
+    ablation_mode: str = ABLATION_MODE_PAIRED,
+    benchmark_cases: tuple[BenchmarkCase, ...] = BENCHMARK_CASES,
+) -> dict[str, Any]:
     """Collect report provenance so benchmark numbers remain auditable."""
     git_status_short = _run_metadata_command(["git", "status", "--short"])
     return {
         "report_schema_version": REPORT_SCHEMA_VERSION,
+        "ablation_mode": ablation_mode,
         "git_commit": _run_metadata_command(["git", "rev-parse", "HEAD"]),
         "git_branch": _run_metadata_command(["git", "branch", "--show-current"]),
         "git_dirty": bool(git_status_short),
@@ -183,7 +215,7 @@ def collect_run_provenance() -> dict[str, Any]:
         "python_version": sys.version,
         "platform": platform.platform(),
         "case_environment_overrides": {
-            case.name: case.env_updates for case in BENCHMARK_CASES
+            case.name: case.env_updates for case in benchmark_cases
         },
     }
 
@@ -443,6 +475,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Maximum seconds to wait for each LAMMPS benchmark run",
     )
     parser.add_argument(
+        "--ablation-mode",
+        choices=ABLATION_MODE_CHOICES,
+        default=ABLATION_MODE_PAIRED,
+        help=(
+            "Run both cases for publishable paired evidence, or only one "
+            "case for a quick ablation timing pass"
+        ),
+    )
+    parser.add_argument(
         "--work-dir",
         type=Path,
         help="Directory where LAMMPS should run; defaults to the input directory",
@@ -458,6 +499,7 @@ def main(argv: list[str] | None = None) -> int:
             args.lammps_command,
             args.repeat,
             args.run_timeout_seconds,
+            args.ablation_mode,
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -467,10 +509,11 @@ def main(argv: list[str] | None = None) -> int:
     work_dir = args.work_dir.resolve() if args.work_dir else input_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
     command = _build_command(args.lammps_command, input_path)
+    benchmark_cases = benchmark_cases_for_ablation_mode(args.ablation_mode)
 
     results: list[BenchmarkResult] = []
     for repeat_index in range(args.repeat):
-        for case in BENCHMARK_CASES:
+        for case in benchmark_cases:
             results.append(
                 _run_case(
                     command=command,
@@ -484,7 +527,9 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     report = {
-        "provenance": collect_run_provenance(),
+        "provenance": collect_run_provenance(args.ablation_mode, benchmark_cases),
+        "ablation_mode": args.ablation_mode,
+        "benchmark_cases": [case.name for case in benchmark_cases],
         "command": command,
         "input": str(input_path),
         "work_dir": str(work_dir),

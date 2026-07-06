@@ -274,6 +274,13 @@ The report checker requires `provenance.report_schema_version`,
 runtime fields, and case environment overrides before accepting benchmark
 evidence.
 
+For quick ablation timing, add `--ablation-mode baseline-disabled` or
+`--ablation-mode isodelta-enabled` to the experiment driver. The default
+`--ablation-mode paired` keeps the publishable disabled/enabled gate. A
+one-sided ablation run launches only the requested benchmark case and writes the
+raw benchmark JSON, but it intentionally skips the paired report and evidence
+bundle gates because speedup and final-thermo deltas require both modes.
+
 To append the publication evidence bundle gate to the same driver run, add one
 or more trace evidence files:
 
@@ -646,6 +653,11 @@ The runner executes each repeat twice:
 LAMMPS runs in the input file directory by default, so relative model and data
 paths inside the input script keep working. Use `--work-dir` when the benchmark
 must run elsewhere.
+For one-sided ablation smoke runs, pass `--ablation-mode baseline-disabled` or
+`--ablation-mode isodelta-enabled`. The report records both `ablation_mode` and
+`benchmark_cases`, and `summary.speedup_vs_disabled_cache` is left empty unless
+both modes were run. Use the default `--ablation-mode paired` for paper numbers
+and for `check_isodelta_benchmark_report.py`.
 The runner rejects `--repeat` values below 1 because a zero-repeat report has
 no paired timing, cache-hit, or final-thermo evidence to audit.
 It rejects an empty `--lammps-command` before launching any external process.

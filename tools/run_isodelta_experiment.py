@@ -43,6 +43,14 @@ DEFAULT_MIN_TRACE_HIT_RATE_PERCENT = 0.0
 DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT = 0.0
 DEFAULT_BINARY_TIMEOUT_SECONDS = 60.0
 DEFAULT_BENCHMARK_TIMEOUT_SECONDS = 3600.0
+ABLATION_MODE_PAIRED = "paired"
+ABLATION_MODE_BASELINE_ONLY = "baseline-disabled"
+ABLATION_MODE_ENABLED_ONLY = "isodelta-enabled"
+ABLATION_MODE_CHOICES = (
+    ABLATION_MODE_PAIRED,
+    ABLATION_MODE_BASELINE_ONLY,
+    ABLATION_MODE_ENABLED_ONLY,
+)
 MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
 MIN_POSITIVE_SPEEDUP = 0.0
 MIN_NONNEGATIVE_VALUE = 0.0
@@ -89,6 +97,7 @@ class ExperimentConfig:
     )
     binary_timeout_seconds: float = DEFAULT_BINARY_TIMEOUT_SECONDS
     benchmark_timeout_seconds: float = DEFAULT_BENCHMARK_TIMEOUT_SECONDS
+    ablation_mode: str = ABLATION_MODE_PAIRED
 
     def benchmark_output_dir(self) -> Path:
         """Return the directory where the paired benchmark writes logs."""
@@ -106,8 +115,8 @@ class ExperimentConfig:
         """Return the optional combined evidence bundle report path."""
         return self.output_dir / BUNDLE_EVIDENCE_REPORT_NAME
 
-    def should_run_bundle_gate(self) -> bool:
-        """Return whether trace evidence options request the bundle gate."""
+    def has_trace_gate_request(self) -> bool:
+        """Return whether trace evidence options request bundle validation."""
         return bool(
             self.trace_evidence_paths
             or self.required_trace_models
@@ -118,6 +127,14 @@ class ExperimentConfig:
             or self.min_trace_metadata_fraction_percent
             != DEFAULT_MIN_TRACE_METADATA_FRACTION_PERCENT
         )
+
+    def should_run_publishable_pair_gates(self) -> bool:
+        """Return whether paired benchmark report gates should run."""
+        return self.ablation_mode == ABLATION_MODE_PAIRED
+
+    def should_run_bundle_gate(self) -> bool:
+        """Return whether trace evidence options request the bundle gate."""
+        return self.should_run_publishable_pair_gates() and self.has_trace_gate_request()
 
 
 @dataclass(frozen=True)
@@ -195,6 +212,10 @@ def validate_config(config: ExperimentConfig) -> None:
         config.repeat_count >= MIN_REPEAT_COUNT,
         f"repeat_count must be at least {MIN_REPEAT_COUNT}",
     )
+    _require_valid_config(
+        config.ablation_mode in ABLATION_MODE_CHOICES,
+        "ablation_mode must be one of " + PATH_SEPARATOR.join(ABLATION_MODE_CHOICES),
+    )
     _validate_finite(config.binary_timeout_seconds, "binary_timeout_seconds")
     _require_valid_config(
         config.binary_timeout_seconds > MIN_POSITIVE_TIMEOUT_SECONDS,
@@ -240,6 +261,10 @@ def validate_config(config: ExperimentConfig) -> None:
             config.min_speedup > MIN_POSITIVE_SPEEDUP,
             "min_speedup must be positive when provided",
         )
+        _require_valid_config(
+            config.should_run_publishable_pair_gates(),
+            "min_speedup requires paired ablation_mode",
+        )
     if config.min_trace_estimated_speedup is not None:
         _validate_finite(
             config.min_trace_estimated_speedup,
@@ -278,7 +303,15 @@ def validate_config(config: ExperimentConfig) -> None:
         "duplicate required_trace_models: "
         + PATH_SEPARATOR.join(duplicate_required_trace_models),
     )
-    if config.should_run_bundle_gate():
+    _require_valid_config(
+        config.should_run_publishable_pair_gates() or not config.has_trace_gate_request(),
+        "trace evidence bundle gates require paired ablation_mode",
+    )
+    _require_valid_config(
+        config.should_run_publishable_pair_gates() or not config.allow_failed_report_runs,
+        "allow_failed_report_runs requires paired ablation_mode",
+    )
+    if config.has_trace_gate_request():
         trace_evidence_count = len(config.trace_evidence_paths)
         _validate_unique_trace_evidence_paths(config.trace_evidence_paths)
         _require_valid_config(
@@ -364,6 +397,8 @@ def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentComman
         str(config.benchmark_timeout_seconds),
         "--output-dir",
         str(config.benchmark_output_dir()),
+        "--ablation-mode",
+        config.ablation_mode,
     ]
     if config.work_dir is not None:
         benchmark_argv.extend(["--work-dir", str(config.work_dir)])
@@ -390,6 +425,11 @@ def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentComman
     if config.allow_failed_report_runs:
         report_argv.append("--allow-failed-runs")
 
+    benchmark_stage_name = (
+        "paired-benchmark"
+        if config.should_run_publishable_pair_gates()
+        else "ablation-benchmark"
+    )
     commands = [
         ExperimentCommand(
             name="prerequisites",
@@ -404,18 +444,24 @@ def build_experiment_commands(config: ExperimentConfig) -> list[ExperimentComman
             stderr_path=log_dir / "binary_smoke.stderr.log",
         ),
         ExperimentCommand(
-            name="paired-benchmark",
+            name=benchmark_stage_name,
             argv=benchmark_argv,
             stdout_path=log_dir / "paired_benchmark.stdout.log",
             stderr_path=log_dir / "paired_benchmark.stderr.log",
         ),
+    ]
+
+    if not config.should_run_publishable_pair_gates():
+        return commands
+
+    commands.append(
         ExperimentCommand(
             name="report-gate",
             argv=report_argv,
             stdout_path=log_dir / "report_gate.stdout.log",
             stderr_path=log_dir / "report_gate.stderr.log",
-        ),
-    ]
+        )
+    )
 
     if config.should_run_bundle_gate():
         bundle_argv = [
@@ -685,6 +731,15 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         default=DEFAULT_BENCHMARK_TIMEOUT_SECONDS,
         help="Timeout for each paired LAMMPS benchmark run",
     )
+    parser.add_argument(
+        "--ablation-mode",
+        choices=ABLATION_MODE_CHOICES,
+        default=ABLATION_MODE_PAIRED,
+        help=(
+            "Use paired for publishable gates, or run only one benchmark "
+            "case for quick ablation timing"
+        ),
+    )
     args = parser.parse_args(argv)
     config = ExperimentConfig(
         lammps_command=args.lammps_command,
@@ -711,6 +766,7 @@ def _parse_args(argv: list[str] | None) -> ExperimentConfig:
         min_trace_metadata_fraction_percent=args.min_trace_metadata_fraction_percent,
         binary_timeout_seconds=args.binary_timeout_seconds,
         benchmark_timeout_seconds=args.benchmark_timeout_seconds,
+        ablation_mode=args.ablation_mode,
     )
     try:
         validate_config(config)

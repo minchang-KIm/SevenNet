@@ -97,6 +97,19 @@ REQUIRED_FILE_SNIPPETS = {
         "VALIDATION_REPORT_SCHEMA_VERSION",
         "test_isodelta_sync_gate.py",
     ),
+    "tools/run_isodelta_lammps_benchmark.py": (
+        "ABLATION_MODE_CHOICES",
+        "--ablation-mode",
+        "benchmark_cases_for_ablation_mode",
+        '"benchmark_cases": [case.name for case in benchmark_cases]',
+    ),
+    "tools/run_isodelta_experiment.py": (
+        "ABLATION_MODE_CHOICES",
+        "--ablation-mode",
+        "ablation-benchmark",
+        "should_run_publishable_pair_gates",
+        "min_speedup requires paired ablation_mode",
+    ),
     "tools/run_isodelta_sync_gate.py": (
         "SYNC_REPORT_SCHEMA_VERSION",
         "PUSH_AUTH_ENVIRONMENT",
@@ -124,6 +137,9 @@ REQUIRED_FILE_SNIPPETS = {
         "repeat_timing.csv",
         '`summary["commands"]`',
         "source timing evidence",
+        "--ablation-mode baseline-disabled",
+        "--ablation-mode isodelta-enabled",
+        "one-sided ablation",
         "normal suite run also reopens the completed",
         "bundle verification failure returns a nonzero exit code",
         "`download_progress`",
@@ -160,6 +176,15 @@ REQUIRED_FILE_SNIPPETS = {
         "test_run_suite_verifies_output_bundle_after_writing",
         "test_write_slurm_script_rejects_collect_only_pipeline_launcher",
         "test_readiness_check_accepts_strict_three_model_paired_manifest",
+    ),
+    "tests/unit_tests/test_isodelta_benchmark_parser.py": (
+        "test_ablation_mode_selects_one_benchmark_case",
+        "test_ablation_only_summary_has_no_speedup_claim",
+        "test_validate_benchmark_options_rejects_unknown_ablation_mode",
+    ),
+    "tests/unit_tests/test_isodelta_experiment_runner.py": (
+        "test_build_experiment_commands_supports_one_sided_ablation",
+        "test_validate_config_rejects_speedup_gate_for_one_sided_ablation",
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (
         "IsoDeltaSyncGateTest",

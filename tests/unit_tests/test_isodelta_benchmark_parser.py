@@ -226,6 +226,59 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
         self.assertEqual(enabled_summary["mean_loop_time_seconds"], 6.0)
         self.assertEqual(summary["speedup_vs_disabled_cache"], 2.0)
 
+    def test_ablation_mode_selects_one_benchmark_case(self) -> None:
+        """One-sided ablation runs should avoid launching the other mode."""
+        baseline_cases = isodelta_benchmark.benchmark_cases_for_ablation_mode(
+            isodelta_benchmark.ABLATION_MODE_BASELINE_ONLY
+        )
+        enabled_cases = isodelta_benchmark.benchmark_cases_for_ablation_mode(
+            isodelta_benchmark.ABLATION_MODE_ENABLED_ONLY
+        )
+        paired_cases = isodelta_benchmark.benchmark_cases_for_ablation_mode(
+            isodelta_benchmark.ABLATION_MODE_PAIRED
+        )
+
+        self.assertEqual(
+            [case.name for case in baseline_cases],
+            [isodelta_benchmark.BASELINE_CASE],
+        )
+        self.assertEqual(
+            [case.name for case in enabled_cases],
+            [isodelta_benchmark.ISODELTA_CASE],
+        )
+        self.assertEqual(
+            [case.name for case in paired_cases],
+            [isodelta_benchmark.BASELINE_CASE, isodelta_benchmark.ISODELTA_CASE],
+        )
+
+    def test_ablation_only_summary_has_no_speedup_claim(self) -> None:
+        """A one-sided run should write timing evidence without a speedup ratio."""
+        result = isodelta_benchmark.BenchmarkResult(
+            case=isodelta_benchmark.ABLATION_MODE_ENABLED_ONLY,
+            repeat_index=0,
+            returncode=0,
+            loop_time_seconds=7.0,
+            cache_summary={"hit_rate_percent": 90.0},
+            final_thermo_observables={"Step": 100.0, "PotEng": -19.999},
+            stdout_path="enabled.out",
+            stderr_path="enabled.err",
+        )
+        summary = isodelta_benchmark._summarize([result])
+
+        self.assertIsNone(summary["speedup_vs_disabled_cache"])
+        self.assertEqual(
+            summary["cases"][isodelta_benchmark.ISODELTA_CASE][
+                "mean_loop_time_seconds"
+            ],
+            7.0,
+        )
+        self.assertEqual(
+            summary["cases"][isodelta_benchmark.BASELINE_CASE][
+                "valid_loop_time_count"
+            ],
+            0,
+        )
+
     def test_build_command_appends_input_flag(self) -> None:
         """The runner should build commands without shell-specific quoting."""
         command = isodelta_benchmark._build_command("mpiexec -n 2 lmp", Path("in.test"))
@@ -252,6 +305,16 @@ class IsoDeltaBenchmarkParserTest(unittest.TestCase):
                 "   ",
                 1,
                 isodelta_benchmark.DEFAULT_RUN_TIMEOUT_SECONDS,
+            )
+
+    def test_validate_benchmark_options_rejects_unknown_ablation_mode(self) -> None:
+        """A typo in ablation mode should fail before launching LAMMPS."""
+        with self.assertRaisesRegex(ValueError, "ablation_mode"):
+            isodelta_benchmark.validate_benchmark_options(
+                "lmp",
+                1,
+                isodelta_benchmark.DEFAULT_RUN_TIMEOUT_SECONDS,
+                "enabled",
             )
 
     def test_run_case_records_timeout_as_failed_result(self) -> None:

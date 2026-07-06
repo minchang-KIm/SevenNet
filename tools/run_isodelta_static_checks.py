@@ -539,7 +539,7 @@ def main() -> None:
         and "collect_run_provenance" in benchmark
         and "git_commit" in benchmark
         and "case_environment_overrides" in benchmark
-        and '"provenance": collect_run_provenance()' in benchmark,
+        and '"provenance": collect_run_provenance(args.ablation_mode, benchmark_cases)' in benchmark,
         "benchmark runner must include report provenance metadata",
     )
     _require(
@@ -565,6 +565,13 @@ def main() -> None:
         "benchmark runner must bound each LAMMPS benchmark run",
     )
     _require(
+        "ABLATION_MODE_CHOICES" in benchmark
+        and "--ablation-mode" in benchmark
+        and "benchmark_cases_for_ablation_mode" in benchmark
+        and '"benchmark_cases": [case.name for case in benchmark_cases]' in benchmark,
+        "benchmark runner must expose one-sided ablation runtime options",
+    )
+    _require(
         "check_isodelta_build_prereqs.py" in experiment
         and "check_isodelta_lammps_binary.py" in experiment
         and "run_isodelta_lammps_benchmark.py" in experiment
@@ -584,6 +591,14 @@ def main() -> None:
         and "bundle_evidence.json" in experiment
         and "isodelta_experiment_report.json" in experiment,
         "experiment driver must connect all runtime validation stages",
+    )
+    _require(
+        "ABLATION_MODE_CHOICES" in experiment
+        and "--ablation-mode" in experiment
+        and "ablation-benchmark" in experiment
+        and "should_run_publishable_pair_gates" in experiment
+        and "min_speedup requires paired ablation_mode" in experiment,
+        "experiment driver must expose ablation mode without weakening paired gates",
     )
     _require(
         "validate_config" in experiment
@@ -699,6 +714,13 @@ def main() -> None:
         and "SEVENN_ISODELTA_HALO_DISABLE=1" in doc
         and "no disable flag" in doc,
         "IsoDelta-Halo guide must document case runtime env provenance",
+    )
+    _require(
+        "--ablation-mode baseline-disabled" in doc
+        and "--ablation-mode isodelta-enabled" in doc
+        and "--ablation-mode paired" in doc
+        and "one-sided ablation" in doc,
+        "IsoDelta-Halo guide must document ablation runtime options",
     )
     _require(
         "run_timeout_seconds" in doc

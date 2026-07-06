@@ -71,6 +71,38 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIn("--min-enabled-cache-hits", commands[3].argv)
         self.assertIn("2", commands[3].argv)
         self.assertIn(str(config.benchmark_report_path()), commands[3].argv)
+        self.assertIn("--ablation-mode", commands[2].argv)
+        self.assertIn(isodelta_experiment.ABLATION_MODE_PAIRED, commands[2].argv)
+
+    def test_build_experiment_commands_supports_one_sided_ablation(self) -> None:
+        """One-sided ablation should run raw timing without publishable gates."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            output_dir=Path("out"),
+            ablation_mode=isodelta_experiment.ABLATION_MODE_ENABLED_ONLY,
+        )
+        commands = isodelta_experiment.build_experiment_commands(config)
+
+        self.assertEqual(
+            [command.name for command in commands],
+            ["prerequisites", "binary-smoke", "ablation-benchmark"],
+        )
+        self.assertIn("--ablation-mode", commands[-1].argv)
+        self.assertIn(isodelta_experiment.ABLATION_MODE_ENABLED_ONLY, commands[-1].argv)
+        self.assertNotIn("report-gate", [command.name for command in commands])
+
+    def test_validate_config_rejects_speedup_gate_for_one_sided_ablation(self) -> None:
+        """Speedup thresholds need both baseline and enabled timings."""
+        config = isodelta_experiment.ExperimentConfig(
+            lammps_command="lmp",
+            input_path=Path("in.sevenn"),
+            ablation_mode=isodelta_experiment.ABLATION_MODE_BASELINE_ONLY,
+            min_speedup=1.1,
+        )
+
+        with self.assertRaisesRegex(ValueError, "paired ablation_mode"):
+            isodelta_experiment.validate_config(config)
 
     def test_build_experiment_commands_can_append_bundle_gate(self) -> None:
         """Trace evidence options should add a final evidence-bundle gate."""
