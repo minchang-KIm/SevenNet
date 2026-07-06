@@ -375,7 +375,10 @@ def main() -> None:
         and "command_failure_count" in sync_gate
         and "VALIDATION_REPORT_COMMAND_REQUIRED_FIELDS" in sync_gate
         and "command_missing_field_count" in sync_gate
+        and "_validation_command_record_has_valid_shape" in sync_gate
+        and "command_invalid_field_count" in sync_gate
         and "validation report commands are missing required fields" in sync_gate
+        and "validation report commands have invalid field values" in sync_gate
         and "validation report commands include nonzero returncodes" in sync_gate
         and "STATUS_DIRTY_WORKTREE" in sync_gate
         and "WORKTREE_STATUS_KEY" in sync_gate
@@ -414,6 +417,8 @@ def main() -> None:
         and "hashlib.sha256(b\"bundle\").hexdigest()" in sync_gate_test
         and "test_run_sync_classifies_noninteractive_auth_push_failure" in sync_gate_test
         and "test_run_sync_rejects_incomplete_validation_command_record" in sync_gate_test
+        and "test_run_sync_rejects_invalid_validation_command_record_values"
+        in sync_gate_test
         and "test_isodelta_sync_gate.py" in validation_runner,
         "sync gate must validate before recording git push attempts",
     )
@@ -1446,6 +1451,7 @@ def main() -> None:
         and "`validation_report_invalid`" in doc
         and "expected schema version" in doc
         and "required validation command fields" in doc
+        and "valid types and values" in doc
         and "zero failed validation command return codes" in doc
         and "`worktree_status`" in doc
         and "`--require-clean-worktree`" in doc

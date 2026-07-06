@@ -45,12 +45,15 @@ REMOTE_REF_VERIFICATION_KEY = "remote_ref_verification"
 REMOTE_REF_VERIFY_COMMAND_NAME = "remote_ref_verify"
 VALIDATION_REPORT_FINGERPRINT_KEY = "validation_report_fingerprint"
 VALIDATION_REPORT_SUMMARY_KEY = "validation_report_summary"
+VALIDATION_REPORT_COMMAND_FIELD = "command"
+VALIDATION_REPORT_COMMAND_RETURNCODE_FIELD = "returncode"
+VALIDATION_REPORT_COMMAND_ELAPSED_SECONDS_FIELD = "elapsed_seconds"
+VALIDATION_REPORT_COMMAND_TEXT_FIELDS = ("stdout_tail", "stderr_tail")
 VALIDATION_REPORT_COMMAND_REQUIRED_FIELDS = (
-    "command",
-    "returncode",
-    "elapsed_seconds",
-    "stdout_tail",
-    "stderr_tail",
+    VALIDATION_REPORT_COMMAND_FIELD,
+    VALIDATION_REPORT_COMMAND_RETURNCODE_FIELD,
+    VALIDATION_REPORT_COMMAND_ELAPSED_SECONDS_FIELD,
+    *VALIDATION_REPORT_COMMAND_TEXT_FIELDS,
 )
 WORKTREE_STATUS_KEY = "worktree_status"
 PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
@@ -238,6 +241,36 @@ def _bundle_file_fingerprint(bundle_path: Path) -> dict[str, Any]:
     return _file_fingerprint(bundle_path)
 
 
+def _validation_command_record_has_valid_shape(command_record: Any) -> bool:
+    """Return whether a validation command record is replayable JSON evidence."""
+    if not isinstance(command_record, dict):
+        return False
+    command = command_record.get(VALIDATION_REPORT_COMMAND_FIELD)
+    if (
+        not isinstance(command, list)
+        or not command
+        or any(
+            not isinstance(command_token, str) or not command_token
+            for command_token in command
+        )
+    ):
+        return False
+    returncode = command_record.get(VALIDATION_REPORT_COMMAND_RETURNCODE_FIELD)
+    if not isinstance(returncode, int) or isinstance(returncode, bool):
+        return False
+    elapsed_seconds = command_record.get(VALIDATION_REPORT_COMMAND_ELAPSED_SECONDS_FIELD)
+    if (
+        not isinstance(elapsed_seconds, (int, float))
+        or isinstance(elapsed_seconds, bool)
+        or elapsed_seconds < 0
+    ):
+        return False
+    return all(
+        isinstance(command_record.get(text_field), str)
+        for text_field in VALIDATION_REPORT_COMMAND_TEXT_FIELDS
+    )
+
+
 def _validation_report_summary(
     validation_report_path: Path,
     *,
@@ -255,6 +288,7 @@ def _validation_report_summary(
         "command_count": None,
         "command_failure_count": None,
         "command_missing_field_count": None,
+        "command_invalid_field_count": None,
         "detail": None,
     }
     try:
@@ -276,7 +310,8 @@ def _validation_report_summary(
             1
             for command_record in commands
             if not isinstance(command_record, dict)
-            or command_record.get("returncode") != SUCCESS_RETURN_CODE
+            or command_record.get(VALIDATION_REPORT_COMMAND_RETURNCODE_FIELD)
+            != SUCCESS_RETURN_CODE
         )
         if isinstance(commands, list)
         else None
@@ -294,6 +329,15 @@ def _validation_report_summary(
         if isinstance(commands, list)
         else None
     )
+    command_invalid_field_count = (
+        sum(
+            1
+            for command_record in commands
+            if not _validation_command_record_has_valid_shape(command_record)
+        )
+        if isinstance(commands, list)
+        else None
+    )
     summary.update(
         {
             "schema_version": schema_version,
@@ -303,6 +347,7 @@ def _validation_report_summary(
             "command_count": command_count,
             "command_failure_count": command_failure_count,
             "command_missing_field_count": command_missing_field_count,
+            "command_invalid_field_count": command_invalid_field_count,
         }
     )
     if schema_version != EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION:
@@ -325,6 +370,9 @@ def _validation_report_summary(
         return summary
     if command_missing_field_count != 0:
         summary["detail"] = "validation report commands are missing required fields"
+        return summary
+    if command_invalid_field_count != 0:
+        summary["detail"] = "validation report commands have invalid field values"
         return summary
     if command_failure_count != 0:
         summary["detail"] = "validation report commands include nonzero returncodes"

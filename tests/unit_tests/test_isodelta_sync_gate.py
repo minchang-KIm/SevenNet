@@ -29,6 +29,8 @@ INTENTIONAL_PUSH_FAILURE_CODE = 128
 VALIDATION_REPORT_COMMAND_COUNT = 1
 VALIDATION_REPORT_ELAPSED_SECONDS = 0.0
 MISSING_VALIDATION_COMMAND_FIELD_COUNT = 1
+INVALID_VALIDATION_COMMAND_FIELD_COUNT = 1
+INVALID_VALIDATION_REPORT_ELAPSED_SECONDS = -1.0
 REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 SYNC_GATE_SCRIPT = REPO_ROOT / "tools" / "run_isodelta_sync_gate.py"
 SPEC = importlib.util.spec_from_file_location("isodelta_sync_gate", SYNC_GATE_SCRIPT)
@@ -46,6 +48,7 @@ def _validation_report_command(
     status: str | None = None,
     command_returncode: int = sync_gate.SUCCESS_RETURN_CODE,
     include_command_required_fields: bool = True,
+    command_record_updates: dict[str, object] | None = None,
 ) -> tuple[str, ...]:
     """Return a tiny command that writes the validation report under test."""
     report_status = status or sync_gate.VALIDATION_REPORT_PASSED_STATUS
@@ -61,6 +64,8 @@ def _validation_report_command(
                 "stderr_tail": "",
             }
         )
+    if command_record_updates is not None:
+        command_record.update(command_record_updates)
     report_payload = {
         "validation_report_schema_version": (
             sync_gate.EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION
@@ -106,6 +111,7 @@ def _passed_validation_report_summary(
         "command_count": VALIDATION_REPORT_COMMAND_COUNT,
         "command_failure_count": 0,
         "command_missing_field_count": 0,
+        "command_invalid_field_count": 0,
         "detail": None,
     }
 
@@ -548,6 +554,59 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertEqual(
             validation_summary["detail"],
             "validation report commands are missing required fields",
+        )
+
+    def test_run_sync_rejects_invalid_validation_command_record_values(self) -> None:
+        """A passed validation report must use typed command record fields."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): "feature-sha",
+            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.__getitem__
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            command_record_updates={
+                                sync_gate.VALIDATION_REPORT_COMMAND_ELAPSED_SECONDS_FIELD: (
+                                    INVALID_VALIDATION_REPORT_ELAPSED_SECONDS
+                                )
+                            },
+                        ),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            validation_summary = report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_REPORT_INVALID)
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
+        self.assertEqual(
+            validation_summary["command_invalid_field_count"],
+            INVALID_VALIDATION_COMMAND_FIELD_COUNT,
+        )
+        self.assertEqual(
+            validation_summary["detail"],
+            "validation report commands have invalid field values",
         )
 
     def test_run_sync_rejects_missing_validation_report(self) -> None:
