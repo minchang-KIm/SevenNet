@@ -1163,14 +1163,24 @@ def main() -> None:
         and "one-sided ablation suite" in cluster_suite
         and "PIPELINE_REPORT_PASSED_STATUS_ERROR" in cluster_suite
         and "pipeline report status must be 'passed'" in cluster_suite
+        and "PIPELINE_DRY_RUN_PASSED_ERROR" in cluster_suite
+        and "PIPELINE_SUITE_REQUIRED_MODELS_ERROR" in cluster_suite
+        and "PIPELINE_REQUIRED_MODE_KEYS" in cluster_suite
         and "REQUIRED_PIPELINE_STAGE_NAMES" in cluster_suite
         and "PIPELINE_REQUIRED_STAGES_ERROR" in cluster_suite
         and "PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR" in cluster_suite
+        and "_as_json_bool" in cluster_suite
+        and "_require_pipeline_report_modes" in cluster_suite
+        and "_require_pipeline_suite_metadata" in cluster_suite
         and "_require_pipeline_success_stages" in cluster_suite
         and "_resolve_present_fingerprint_path" in cluster_suite
         and "# CLI runtime overrides: ablation_mode=isodelta-enabled." in cluster_suite_test
         and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_dry_run_passed_mode"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_requires_final_paper_suite_models"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_shallow_passed_report"
         in cluster_suite_test
@@ -1215,6 +1225,10 @@ def main() -> None:
         and "non-skipped stage" in doc
         and "present report files" in doc
         and "skipped artifact-preparation" in doc
+        and "pipeline `modes` as booleans" in doc
+        and "`dry_run = true`" in doc
+        and "SevenNet/MACE/NequIP required-model scope" in doc
+        and "well-formed manifest fingerprint" in doc
         and "changing only" in doc
         and "stage report fingerprints" in doc
         and "final bundle verification counts" in doc

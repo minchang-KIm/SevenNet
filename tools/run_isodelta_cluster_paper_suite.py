@@ -92,6 +92,21 @@ PIPELINE_REQUIRED_STAGES_ERROR = (
 PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR = (
     "output_bundle_verification.status must be 'passed' for a passed pipeline report"
 )
+PIPELINE_DRY_RUN_PASSED_ERROR = "passed pipeline report must record dry_run=false"
+PIPELINE_SUITE_GPU_ERROR = (
+    f"pipeline suite expected_gpus must be at least {DEFAULT_EXPECTED_GPU_COUNT}"
+)
+PIPELINE_SUITE_REQUIRED_MODELS_ERROR = (
+    "pipeline suite required_models must include SevenNet, MACE, and NequIP"
+)
+PIPELINE_REQUIRED_MODE_KEYS = (
+    "dry_run",
+    "skip_downloads",
+    "skip_gpu_check",
+    "allow_gpu_mismatch",
+    "keep_going",
+    "reuse_passed",
+)
 PIPELINE_STAGE_STATUS_READY = "ready"
 PIPELINE_STAGE_READINESS = "readiness"
 PIPELINE_STAGE_PREPARE_ARTIFACTS = "prepare_artifacts"
@@ -497,6 +512,12 @@ def _as_json_string(value: Any, field_name: str) -> str:
     _require(isinstance(value, str), f"{field_name} must be a string")
     _require(bool(value.strip()), f"{field_name} must not be empty")
     return value.strip()
+
+
+def _as_json_bool(value: Any, field_name: str) -> bool:
+    """Return a JSON boolean without accepting numeric aliases."""
+    _require(isinstance(value, bool), f"{field_name} must be boolean")
+    return value
 
 
 def _as_json_number(value: Any, field_name: str) -> float:
@@ -4169,6 +4190,58 @@ def _require_pipeline_success_stages(
     return stage_names
 
 
+def _require_pipeline_report_modes(pipeline_payload: dict[str, Any]) -> dict[str, bool]:
+    """Verify execution-mode flags stored in a passed pipeline report."""
+    raw_modes = _as_json_object(pipeline_payload.get("modes"), "modes")
+    modes = {
+        mode_key: _as_json_bool(raw_modes.get(mode_key), f"modes.{mode_key}")
+        for mode_key in PIPELINE_REQUIRED_MODE_KEYS
+    }
+    _require(not modes["dry_run"], PIPELINE_DRY_RUN_PASSED_ERROR)
+    return modes
+
+
+def _require_pipeline_suite_metadata(
+    pipeline_payload: dict[str, Any],
+) -> tuple[dict[str, Any], Path]:
+    """Verify suite metadata needed to interpret a passed pipeline report."""
+    suite_record = _as_json_object(pipeline_payload.get("suite"), "suite")
+    _as_json_string(suite_record.get("name"), "suite.name")
+    _as_json_string(suite_record.get("manifest_path"), "suite.manifest_path")
+    manifest = _as_json_object(suite_record.get("manifest"), "suite.manifest")
+    _as_json_string(manifest.get("path"), "suite.manifest.path")
+    manifest_digest = _as_json_string(manifest.get("sha256"), "suite.manifest.sha256")
+    _require(
+        SHA256_HEX_PATTERN.fullmatch(manifest_digest) is not None,
+        "suite.manifest.sha256 must be a 64-character hexadecimal SHA-256 digest",
+    )
+    manifest_size = _as_json_nonnegative_int(
+        manifest.get("size_bytes"),
+        "suite.manifest.size_bytes",
+    )
+    _require(manifest_size > 0, "suite.manifest.size_bytes must be positive")
+    original_output_dir = Path(
+        _as_json_string(suite_record.get("output_dir"), "suite.output_dir")
+    )
+    expected_gpus = _as_json_nonnegative_int(
+        suite_record.get("expected_gpus"),
+        "suite.expected_gpus",
+    )
+    _require(expected_gpus >= DEFAULT_EXPECTED_GPU_COUNT, PIPELINE_SUITE_GPU_ERROR)
+    required_models = _as_string_tuple(
+        suite_record.get("required_models"),
+        "suite.required_models",
+    )
+    missing_models = [
+        model_name
+        for model_name in FINAL_PAPER_REQUIRED_MODELS
+        if model_name not in required_models
+    ]
+    _require(not missing_models, PIPELINE_SUITE_REQUIRED_MODELS_ERROR)
+    _as_json_object(suite_record.get("runtime_overrides"), "suite.runtime_overrides")
+    return suite_record, original_output_dir
+
+
 def _require_pipeline_bundle_verification(
     pipeline_payload: dict[str, Any],
     *,
@@ -4239,8 +4312,10 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         pipeline_status == PIPELINE_STATUS_PASSED,
         f"{PIPELINE_REPORT_PASSED_STATUS_ERROR}; observed {pipeline_status!r}",
     )
-    suite_record = _as_json_object(pipeline_payload.get("suite"), "suite")
-    original_output_dir = Path(_as_json_string(suite_record.get("output_dir"), "suite.output_dir"))
+    _require_pipeline_report_modes(pipeline_payload)
+    _suite_record, original_output_dir = _require_pipeline_suite_metadata(
+        pipeline_payload
+    )
     expected_stage_names = _require_pipeline_success_stages(pipeline_payload)
     verified_stage_report_count = _require_pipeline_stage_report_fingerprints(
         pipeline_payload,

@@ -500,7 +500,10 @@ fingerprints, and a passed `output_bundle_verification` object, so changing only
 the top-level status field cannot turn an incomplete run into publication
 evidence. Non-skipped stage fingerprints must point to present report files;
 an absent-file fingerprint is accepted only for a skipped artifact-preparation
-stage.
+stage. The verifier also checks pipeline `modes` as booleans, rejects
+`dry_run = true` for a passed report, and requires suite metadata to keep
+`expected_gpus >= 8`, the SevenNet/MACE/NequIP required-model scope, and a
+well-formed manifest fingerprint.
 
 On a SLURM cluster, generate a commented submission script from the same
 manifest:
