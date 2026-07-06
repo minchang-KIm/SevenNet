@@ -133,6 +133,21 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         """Runtime toggles should expose fair baseline and profiling experiments."""
         self.assertIn("SEVENN_ISODELTA_HALO_DISABLE", self.cpp)
         self.assertIn("SEVENN_ISODELTA_HALO_PROFILE", self.cpp)
+        self.assertIn("iso_delta_halo_env_flag_is_enabled", self.cpp)
+        self.assertIn('kIsoDeltaHaloEnvFlagValueZero = "0"', self.cpp)
+        self.assertIn('kIsoDeltaHaloEnvFlagValueFalse = "false"', self.cpp)
+        self.assertIn('kIsoDeltaHaloEnvFlagValueNo = "no"', self.cpp)
+        self.assertIn('kIsoDeltaHaloEnvFlagValueOff = "off"', self.cpp)
+        self.assertIn(
+            "!iso_delta_halo_env_flag_is_enabled(kIsoDeltaHaloDisableEnv)",
+            self.cpp,
+        )
+        self.assertIn(
+            "iso_delta_halo_env_flag_is_enabled(kIsoDeltaHaloProfileEnv)",
+            self.cpp,
+        )
+        self.assertNotIn("std::getenv(kIsoDeltaHaloDisableEnv) == nullptr", self.cpp)
+        self.assertNotIn("std::getenv(kIsoDeltaHaloProfileEnv) != nullptr", self.cpp)
         self.assertNotIn("static constexpr const char *", self.header)
         self.assertIn("kIsoDeltaHaloPercentScale", self.cpp)
         self.assertIn("kBytesPerMebibyte", self.cpp)

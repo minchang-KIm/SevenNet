@@ -49,6 +49,9 @@
 
 #include "pair_e3gnn_parallel.h"
 #include <cassert>
+#include <cctype>
+#include <cstdlib>
+#include <string>
 
 #ifdef OMPI_MPI_H
 #include "mpi-ext.h" //This should be included after mpi.h which is included in pair.h
@@ -67,6 +70,11 @@ namespace {
 // data-member definitions while still naming every experiment-facing literal.
 constexpr const char *kIsoDeltaHaloDisableEnv = "SEVENN_ISODELTA_HALO_DISABLE";
 constexpr const char *kIsoDeltaHaloProfileEnv = "SEVENN_ISODELTA_HALO_PROFILE";
+constexpr const char *kIsoDeltaHaloEnvFlagValueEmpty = "";
+constexpr const char *kIsoDeltaHaloEnvFlagValueZero = "0";
+constexpr const char *kIsoDeltaHaloEnvFlagValueFalse = "false";
+constexpr const char *kIsoDeltaHaloEnvFlagValueNo = "no";
+constexpr const char *kIsoDeltaHaloEnvFlagValueOff = "off";
 constexpr const char *kIsoDeltaHaloCommBrickRequiredError =
     "IsoDelta-Halo e3gnn/parallel requires LAMMPS CommBrick communication";
 constexpr double kIsoDeltaHaloPercentScale = 100.0;
@@ -97,6 +105,32 @@ bool index_tensor_matches_vector(const torch::Tensor &index_tensor,
   return index_tensor.defined() && index_tensor.dim() == kIndexTensorRank &&
          index_tensor.size(kIndexTensorLengthDimension) ==
              static_cast<long long>(index_map.size());
+}
+
+std::string normalize_iso_delta_halo_env_flag_value(const char *value) {
+  std::string normalized_value;
+  if (value == nullptr) {
+    return normalized_value;
+  }
+  for (const char character : std::string(value)) {
+    normalized_value.push_back(
+        static_cast<char>(std::tolower(static_cast<unsigned char>(character))));
+  }
+  return normalized_value;
+}
+
+bool iso_delta_halo_env_flag_is_enabled(const char *env_name) {
+  const char *value = std::getenv(env_name);
+  if (value == nullptr) {
+    return false;
+  }
+  const std::string normalized_value =
+      normalize_iso_delta_halo_env_flag_value(value);
+  return normalized_value != kIsoDeltaHaloEnvFlagValueEmpty &&
+         normalized_value != kIsoDeltaHaloEnvFlagValueZero &&
+         normalized_value != kIsoDeltaHaloEnvFlagValueFalse &&
+         normalized_value != kIsoDeltaHaloEnvFlagValueNo &&
+         normalized_value != kIsoDeltaHaloEnvFlagValueOff;
 }
 } // namespace
 
@@ -133,8 +167,10 @@ PairE3GNNParallel::PairE3GNNParallel(LAMMPS *lmp) : Pair(lmp) {
 
   const char *print_flag = std::getenv("SEVENN_PRINT_INFO");
   const char *print_both_flag = std::getenv("SEVENN_PRINT_BOTH_INFO");
-  iso_delta_halo_enabled = std::getenv(kIsoDeltaHaloDisableEnv) == nullptr;
-  iso_delta_halo_profile = std::getenv(kIsoDeltaHaloProfileEnv) != nullptr;
+  iso_delta_halo_enabled =
+      !iso_delta_halo_env_flag_is_enabled(kIsoDeltaHaloDisableEnv);
+  iso_delta_halo_profile =
+      iso_delta_halo_env_flag_is_enabled(kIsoDeltaHaloProfileEnv);
   if (print_flag) {
     world_rank = comm->me;
     std::cout << "process rank: " << world_rank << " initialized" << std::endl;

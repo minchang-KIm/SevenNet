@@ -231,6 +231,20 @@ def main() -> None:
         "cache profiling environment variable is not named in the cpp file",
     )
     _require(
+        "iso_delta_halo_env_flag_is_enabled" in cpp
+        and 'kIsoDeltaHaloEnvFlagValueZero = "0"' in cpp
+        and 'kIsoDeltaHaloEnvFlagValueFalse = "false"' in cpp
+        and 'kIsoDeltaHaloEnvFlagValueNo = "no"' in cpp
+        and 'kIsoDeltaHaloEnvFlagValueOff = "off"' in cpp
+        and "!iso_delta_halo_env_flag_is_enabled(kIsoDeltaHaloDisableEnv)"
+        in cpp
+        and "iso_delta_halo_env_flag_is_enabled(kIsoDeltaHaloProfileEnv)"
+        in cpp
+        and "std::getenv(kIsoDeltaHaloDisableEnv) == nullptr" not in cpp
+        and "std::getenv(kIsoDeltaHaloProfileEnv) != nullptr" not in cpp,
+        "cache runtime flags must parse explicit false values",
+    )
+    _require(
         "static constexpr const char *" not in header,
         "header must not require out-of-class string pointer definitions",
     )
@@ -1342,6 +1356,16 @@ def main() -> None:
         "SEVENN_ISODELTA_HALO_DISABLE" in doc
         and "SEVENN_ISODELTA_HALO_PROFILE" in doc,
         "IsoDelta-Halo guide must document runtime controls",
+    )
+    _require(
+        "boolean-style parsing" in doc
+        and "`0`" in doc
+        and "`false`" in doc
+        and "`no`" in doc
+        and "`off`" in doc
+        and "`SEVENN_ISODELTA_HALO_DISABLE=0` keeps the cache enabled" in doc
+        and "`SEVENN_ISODELTA_HALO_PROFILE=0` keeps profiling off" in doc,
+        "IsoDelta-Halo guide must document explicit false runtime controls",
     )
     _require(
         "IsoDelta-Halo lightweight validation" in doc

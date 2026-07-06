@@ -128,6 +128,12 @@ export SEVENN_PRINT_INFO=1
 export SEVENN_ISODELTA_HALO_PROFILE=1
 ```
 
+Both IsoDelta-Halo flags use boolean-style parsing. Unset, empty, `0`,
+`false`, `no`, and `off` values mean off, case-insensitively; any other set
+value means on. For example:
+`SEVENN_ISODELTA_HALO_DISABLE=0` keeps the cache enabled, and
+`SEVENN_ISODELTA_HALO_PROFILE=0` keeps profiling off.
+
 Disable the cache for a fair baseline run:
 
 ```bash
