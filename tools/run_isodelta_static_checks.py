@@ -416,6 +416,8 @@ def main() -> None:
         and "VALIDATION_REPORT_FINGERPRINT_KEY" in sync_gate_test
         and "VALIDATION_REPORT_SUMMARY_KEY" in sync_gate_test
         and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate_test
+        and "SYNC_COMMAND_REQUIRED_FIELDS" in sync_gate_test
+        and "assert_sync_command_record_shape" in sync_gate_test
         and "test_run_sync_can_write_bundle_after_push_failure" in sync_gate_test
         and "PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME" in sync_gate_test
         and "hashlib.sha256(b\"bundle\").hexdigest()" in sync_gate_test

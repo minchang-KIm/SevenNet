@@ -24,6 +24,7 @@ PUSH_COMMAND_INDEX = 1
 REMOTE_REF_VERIFY_COMMAND_INDEX = 2
 COMMAND_COUNT_AFTER_VALIDATION_FAILURE = 1
 COMMAND_COUNT_AFTER_DIRTY_WORKTREE = 0
+MIN_SYNC_COMMAND_ELAPSED_SECONDS = 0.0
 INTENTIONAL_VALIDATION_FAILURE_CODE = 3
 INTENTIONAL_PUSH_FAILURE_CODE = 128
 VALIDATION_REPORT_COMMAND_COUNT = 1
@@ -31,6 +32,16 @@ VALIDATION_REPORT_ELAPSED_SECONDS = 0.0
 MISSING_VALIDATION_COMMAND_FIELD_COUNT = 1
 INVALID_VALIDATION_COMMAND_FIELD_COUNT = 1
 INVALID_VALIDATION_REPORT_ELAPSED_SECONDS = -1.0
+SYNC_COMMAND_REQUIRED_FIELDS = frozenset(
+    {
+        "name",
+        "command",
+        "returncode",
+        "elapsed_seconds",
+        "stdout_tail",
+        "stderr_tail",
+    }
+)
 REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 SYNC_GATE_SCRIPT = REPO_ROOT / "tools" / "run_isodelta_sync_gate.py"
 SPEC = importlib.util.spec_from_file_location("isodelta_sync_gate", SYNC_GATE_SCRIPT)
@@ -119,6 +130,33 @@ def _passed_validation_report_summary(
 class IsoDeltaSyncGateTest(unittest.TestCase):
     """Check that validation and push outcomes are reported correctly."""
 
+    def assert_sync_command_record_shape(
+        self,
+        command_record: dict[str, object],
+    ) -> None:
+        """Assert that a sync report command record is replayable evidence."""
+        self.assertTrue(SYNC_COMMAND_REQUIRED_FIELDS.issubset(command_record))
+        self.assertIsInstance(command_record["name"], str)
+        self.assertTrue(command_record["name"])
+        command = command_record["command"]
+        self.assertIsInstance(command, list)
+        self.assertTrue(command)
+        self.assertTrue(
+            all(
+                isinstance(command_token, str) and command_token
+                for command_token in command
+            )
+        )
+        returncode = command_record["returncode"]
+        self.assertIsInstance(returncode, int)
+        self.assertNotIsInstance(returncode, bool)
+        elapsed_seconds = command_record["elapsed_seconds"]
+        self.assertIsInstance(elapsed_seconds, (int, float))
+        self.assertNotIsInstance(elapsed_seconds, bool)
+        self.assertGreaterEqual(elapsed_seconds, MIN_SYNC_COMMAND_ELAPSED_SECONDS)
+        self.assertIsInstance(command_record["stdout_tail"], str)
+        self.assertIsInstance(command_record["stderr_tail"], str)
+
     def test_validation_command_enforces_target_branch(self) -> None:
         """The sync gate should validate the same branch it intends to push."""
         command = sync_gate._validation_command(
@@ -183,6 +221,8 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             [record["name"] for record in report["commands"]],
             ["validation", "push", sync_gate.REMOTE_REF_VERIFY_COMMAND_NAME],
         )
+        for command_record in report["commands"]:
+            self.assert_sync_command_record_shape(command_record)
         self.assertIn("pushed", report["commands"][PUSH_COMMAND_INDEX]["stdout_tail"])
         self.assertIn(
             "refs/heads/feature",

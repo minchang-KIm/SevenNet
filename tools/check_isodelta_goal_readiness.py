@@ -355,6 +355,8 @@ REQUIRED_FILE_SNIPPETS = {
         "VALIDATION_REPORT_FINGERPRINT_KEY",
         "VALIDATION_REPORT_SUMMARY_KEY",
         "REMOTE_REF_VERIFY_COMMAND_NAME",
+        "SYNC_COMMAND_REQUIRED_FIELDS",
+        "assert_sync_command_record_shape",
         "test_run_sync_can_write_bundle_after_push_failure",
         "PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME",
         "hashlib.sha256(b\"bundle\").hexdigest()",
