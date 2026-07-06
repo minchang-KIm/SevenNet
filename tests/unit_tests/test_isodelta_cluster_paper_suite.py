@@ -1445,6 +1445,61 @@ ablation_mode = "baseline-disabled"
         self.assertEqual(overridden.cases[0].ablation_mode, "isodelta-enabled")
         self.assertEqual(overridden.cases[1].ablation_mode, "isodelta-enabled")
         self.assertEqual(overridden.cases[2].ablation_mode, "paired")
+        self.assertEqual(
+            overridden.runtime_overrides["ablation_mode"],
+            "isodelta-enabled",
+        )
+
+    def test_cli_ablation_override_is_recorded_in_run_plan(self) -> None:
+        """Run plans should show when CLI options override the manifest mode."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            output_dir = root / "paper_outputs"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "override-plan-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["MACE"]
+
+[[cases]]
+name = "mace"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "run baseline"
+enabled_command = "run enabled"
+ablation_mode = "paired"
+""",
+                encoding="utf-8",
+            )
+            args = isodelta_cluster_suite.parse_args(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--ablation-mode-override",
+                    "baseline-disabled",
+                ]
+            )
+            config = isodelta_cluster_suite._apply_cli_overrides(
+                isodelta_cluster_suite.load_manifest(manifest_path),
+                args,
+            )
+            plan = isodelta_cluster_suite.build_run_plan(
+                config,
+                collect_only=False,
+                skip_downloads=True,
+                skip_gpu_check=True,
+            )
+
+        self.assertEqual(
+            plan["suite"]["runtime_overrides"],
+            {"ablation_mode": "baseline-disabled"},
+        )
+        self.assertEqual(
+            plan["cases"][0]["thresholds"]["ablation_mode"],
+            "baseline-disabled",
+        )
 
     def test_cli_ablation_override_requires_runtime_timing_case(self) -> None:
         """A suite with only trace evidence should reject ablation overrides."""

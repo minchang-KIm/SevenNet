@@ -1057,8 +1057,10 @@ def main() -> None:
         and "ABLATION_OVERRIDE_CASE_KINDS" in cluster_suite
         and "--ablation-mode-override" in cluster_suite
         and "_apply_ablation_mode_override" in cluster_suite
+        and "runtime_overrides" in cluster_suite
         and "_has_one_sided_ablation_case" in cluster_suite
         and "one-sided ablation suite" in cluster_suite
+        and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
         and "TIMING_MODES_KEY" in cluster_suite
         and "_external_timing_modes_for_ablation" in cluster_suite
         and "_validate_one_sided_benchmark_report" in cluster_suite
@@ -1096,6 +1098,7 @@ def main() -> None:
         and "speedup_by_case.svg" in doc
         and "`ablation_mode = \"paired\"`" in doc
         and "`--ablation-mode-override`" in doc
+        and "`suite.runtime_overrides`" in doc
         and "one-sided SevenNet" in doc
         and "external_pair ablation" in doc
         and "SHA-256" in doc

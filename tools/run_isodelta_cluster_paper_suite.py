@@ -362,6 +362,7 @@ class SuiteConfig:
     require_artifact_sha256: bool = DEFAULT_REQUIRE_ARTIFACT_SHA256
     artifacts: tuple[ArtifactConfig, ...] = ()
     cases: tuple[CaseConfig, ...] = ()
+    runtime_overrides: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -640,7 +641,13 @@ def _apply_ablation_mode_override(
         "--ablation-mode-override requires at least one sevennet_lammps or "
         "external_pair case",
     )
-    return replace(config, cases=tuple(overridden_cases))
+    runtime_overrides = dict(config.runtime_overrides)
+    runtime_overrides["ablation_mode"] = ablation_mode_override
+    return replace(
+        config,
+        cases=tuple(overridden_cases),
+        runtime_overrides=runtime_overrides,
+    )
 
 
 def _validate_percent(value: float, field_name: str) -> None:
@@ -1301,6 +1308,7 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
             "final_paper_required_models": list(FINAL_PAPER_REQUIRED_MODELS),
+            "runtime_overrides": dict(config.runtime_overrides),
         },
         "checks": checks,
     }
@@ -1752,6 +1760,7 @@ def prepare_artifacts(config: SuiteConfig, *, dry_run: bool = False) -> dict[str
             "manifest": manifest_record(config),
             "output_dir": str(config.output_dir),
             "require_artifact_sha256": config.require_artifact_sha256,
+            "runtime_overrides": dict(config.runtime_overrides),
         },
         "missing_required_artifacts": missing_required,
         "artifacts": records,
@@ -1996,6 +2005,7 @@ def run_preflight_only(
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
+            "runtime_overrides": dict(config.runtime_overrides),
         },
         "gpu_check": gpu_record,
         "downloads": download_records,
@@ -2098,6 +2108,7 @@ def _write_pipeline_report(
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
+            "runtime_overrides": dict(config.runtime_overrides),
         },
         "stages": stages,
         STAGE_REPORT_FINGERPRINTS_KEY: _pipeline_stage_report_fingerprints(stages),
@@ -4248,6 +4259,7 @@ def build_run_plan(
             "min_trace_count": config.min_trace_count,
             "min_distinct_trace_models": config.min_distinct_trace_models,
             "require_artifact_sha256": config.require_artifact_sha256,
+            "runtime_overrides": dict(config.runtime_overrides),
         },
         "modes": {
             "collect_only": collect_only,
@@ -6090,6 +6102,7 @@ def write_paper_outputs(
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
             "require_artifact_sha256": config.require_artifact_sha256,
+            "runtime_overrides": dict(config.runtime_overrides),
         },
         "gpu_check": gpu_record,
         "suite_evidence": suite_evidence,
@@ -6586,6 +6599,7 @@ def _apply_cli_overrides(config: SuiteConfig, args: argparse.Namespace) -> Suite
         require_artifact_sha256=config.require_artifact_sha256,
         artifacts=config.artifacts,
         cases=config.cases,
+        runtime_overrides=dict(config.runtime_overrides),
     )
     return _apply_ablation_mode_override(
         overridden_config,

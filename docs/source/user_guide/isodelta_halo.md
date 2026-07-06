@@ -374,7 +374,10 @@ use `--ablation-mode-override` to pass
 `--ablation-mode-override isodelta-enabled` at execution time. The override is a
 runtime convenience for `sevennet_lammps` and `external_pair` cases; `trace_only`
 cases remain unchanged because they do not launch disabled/enabled timing
-commands.
+commands. The generated plan, preflight report, pipeline report, and final
+summary keep the original manifest fingerprint and also record the effective
+CLI change in `suite.runtime_overrides`, so reviewers can distinguish the
+archived TOML from the actual ablation mode used for that run.
 Required artifacts must already exist or be downloadable; if `--skip-downloads`
 is active and a required artifact is missing, the suite fails before launching
 any case. Optional artifacts with `required = false` may be absent, but the
