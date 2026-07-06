@@ -191,8 +191,12 @@ the expected schema version, required validation command fields,
 `status = "passed"` for the same expected branch and current HEAD commit, and
 zero failed validation command return codes, the gate reports
 `validation_report_invalid` and does not push. The required command fields
-must use valid types and values. The report also stores `worktree_status`, a
-parsed `git status --short` snapshot with entry count,
+must use valid types and values. The report also stores `sync_command_summary`,
+which counts sync command records, failed return codes, missing fields, and
+invalid field values for fast audit. If the target branch cannot be determined,
+the report records a replayable `push_branch_precondition` command instead of
+an empty push command. The report also stores `worktree_status`, a parsed
+`git status --short` snapshot with entry count,
 per-entry index/worktree status, paths, and a clean flag. For final paper
 syncs, add `--require-clean-worktree` to fail with `dirty_worktree` before
 validation or push when tracked or untracked files are present. It also stores

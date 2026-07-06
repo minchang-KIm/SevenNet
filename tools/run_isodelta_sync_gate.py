@@ -43,8 +43,11 @@ STATUS_PUSH_FAILED = "push_failed"
 STATUS_REMOTE_VERIFICATION_FAILED = "remote_verification_failed"
 REMOTE_REF_VERIFICATION_KEY = "remote_ref_verification"
 REMOTE_REF_VERIFY_COMMAND_NAME = "remote_ref_verify"
+CURRENT_BRANCH_COMMAND = ("git", "branch", "--show-current")
 VALIDATION_REPORT_FINGERPRINT_KEY = "validation_report_fingerprint"
 VALIDATION_REPORT_SUMMARY_KEY = "validation_report_summary"
+SYNC_COMMAND_SUMMARY_KEY = "sync_command_summary"
+SYNC_COMMAND_NAME_FIELD = "name"
 VALIDATION_REPORT_COMMAND_FIELD = "command"
 VALIDATION_REPORT_COMMAND_RETURNCODE_FIELD = "returncode"
 VALIDATION_REPORT_COMMAND_ELAPSED_SECONDS_FIELD = "elapsed_seconds"
@@ -55,8 +58,13 @@ VALIDATION_REPORT_COMMAND_REQUIRED_FIELDS = (
     VALIDATION_REPORT_COMMAND_ELAPSED_SECONDS_FIELD,
     *VALIDATION_REPORT_COMMAND_TEXT_FIELDS,
 )
+SYNC_COMMAND_REQUIRED_FIELDS = (
+    SYNC_COMMAND_NAME_FIELD,
+    *VALIDATION_REPORT_COMMAND_REQUIRED_FIELDS,
+)
 WORKTREE_STATUS_KEY = "worktree_status"
 PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
+PUSH_BRANCH_PRECONDITION_COMMAND_NAME = "push_branch_precondition"
 PUSH_FAILURE_BUNDLE_COMMAND_NAME = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME = "push_failure_bundle_verify"
 PUSH_FAILURE_BUNDLE_STATUS_CREATED = "created"
@@ -142,7 +150,7 @@ def _metadata_command(command: tuple[str, ...]) -> str | None:
 
 def _current_branch() -> str | None:
     """Return the currently checked-out branch name for the default push target."""
-    return _metadata_command(("git", "branch", "--show-current"))
+    return _metadata_command(CURRENT_BRANCH_COMMAND)
 
 
 def _parse_status_short(status_short: str | None) -> list[dict[str, str]]:
@@ -269,6 +277,56 @@ def _validation_command_record_has_valid_shape(command_record: Any) -> bool:
         isinstance(command_record.get(text_field), str)
         for text_field in VALIDATION_REPORT_COMMAND_TEXT_FIELDS
     )
+
+
+def _sync_command_record_has_valid_shape(command_record: Any) -> bool:
+    """Return whether a sync command record has a replayable evidence shape."""
+    return (
+        isinstance(command_record, dict)
+        and isinstance(command_record.get(SYNC_COMMAND_NAME_FIELD), str)
+        and bool(command_record.get(SYNC_COMMAND_NAME_FIELD))
+        and _validation_command_record_has_valid_shape(command_record)
+    )
+
+
+def _sync_command_summary(command_records: list[dict[str, Any]]) -> dict[str, int]:
+    """Summarize command record health for quick sync report audits."""
+    return {
+        "command_count": len(command_records),
+        "command_failure_count": sum(
+            1
+            for command_record in command_records
+            if not isinstance(command_record, dict)
+            or command_record.get(VALIDATION_REPORT_COMMAND_RETURNCODE_FIELD)
+            != SUCCESS_RETURN_CODE
+        ),
+        "command_missing_field_count": sum(
+            1
+            for command_record in command_records
+            if not isinstance(command_record, dict)
+            or any(
+                required_field not in command_record
+                for required_field in SYNC_COMMAND_REQUIRED_FIELDS
+            )
+        ),
+        "command_invalid_field_count": sum(
+            1
+            for command_record in command_records
+            if not _sync_command_record_has_valid_shape(command_record)
+        ),
+    }
+
+
+def _branch_precondition_failure_record(name: str, detail: str) -> dict[str, Any]:
+    """Record a replayable branch-discovery precondition failure."""
+    record = _run_command(CURRENT_BRANCH_COMMAND)
+    if record["returncode"] == SUCCESS_RETURN_CODE:
+        record["returncode"] = FAILURE_RETURN_CODE
+    stderr_tail = str(record["stderr_tail"])
+    record["stderr_tail"] = _tail(
+        "\n".join(part for part in (stderr_tail, detail) if part)
+    )
+    return {"name": name, **record}
 
 
 def _validation_report_summary(
@@ -481,14 +539,10 @@ def _write_push_failure_bundle(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Create a portable git bundle for a branch that could not be pushed."""
     if branch is None:
-        skipped_record = {
-            "name": PUSH_FAILURE_BUNDLE_COMMAND_NAME,
-            "command": [],
-            "returncode": FAILURE_RETURN_CODE,
-            "elapsed_seconds": 0.0,
-            "stdout_tail": "",
-            "stderr_tail": "could not determine branch for git bundle",
-        }
+        skipped_record = _branch_precondition_failure_record(
+            PUSH_FAILURE_BUNDLE_COMMAND_NAME,
+            "could not determine branch for git bundle",
+        )
         skipped_report = {
             "path": str(bundle_path),
             "status": PUSH_FAILURE_BUNDLE_STATUS_SKIPPED,
@@ -620,14 +674,10 @@ def run_sync(
                     status = STATUS_REMOTE_VERIFICATION_FAILED
         else:
             status = STATUS_PUSH_FAILED
-            push_record = {
-                "name": "push",
-                "command": [],
-                "returncode": FAILURE_RETURN_CODE,
-                "elapsed_seconds": 0.0,
-                "stdout_tail": "",
-                "stderr_tail": "could not determine current branch",
-            }
+            push_record = _branch_precondition_failure_record(
+                PUSH_BRANCH_PRECONDITION_COMMAND_NAME,
+                "could not determine current branch",
+            )
             command_records.append(push_record)
 
     push_failure_bundle_report: dict[str, Any] | None = None
@@ -654,6 +704,7 @@ def run_sync(
         "git_status_short": _metadata_command(("git", "status", "--short")),
         "git_provenance": _sync_git_provenance(remote, resolved_branch),
         "commands": command_records,
+        SYNC_COMMAND_SUMMARY_KEY: _sync_command_summary(command_records),
         REMOTE_REF_VERIFICATION_KEY: remote_ref_verification_report,
         "push_failure": _classify_push_failure(push_record),
         PUSH_FAILURE_BUNDLE_KEY: push_failure_bundle_report,

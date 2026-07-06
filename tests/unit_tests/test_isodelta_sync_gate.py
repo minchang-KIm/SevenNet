@@ -22,8 +22,13 @@ REPO_ROOT_PARENT_DEPTH = 2
 VALIDATION_COMMAND_INDEX = 0
 PUSH_COMMAND_INDEX = 1
 REMOTE_REF_VERIFY_COMMAND_INDEX = 2
+BRANCH_PRECONDITION_COMMAND_INDEX = 1
+BRANCH_PRECONDITION_BUNDLE_COMMAND_INDEX = 2
 COMMAND_COUNT_AFTER_VALIDATION_FAILURE = 1
 COMMAND_COUNT_AFTER_DIRTY_WORKTREE = 0
+COMMAND_COUNT_AFTER_BRANCH_PRECONDITION_FAILURE = 3
+COMMAND_FAILURE_COUNT_AFTER_BRANCH_PRECONDITION_FAILURE = 2
+SUCCESSFUL_SYNC_COMMAND_COUNT = 3
 MIN_SYNC_COMMAND_ELAPSED_SECONDS = 0.0
 INTENTIONAL_VALIDATION_FAILURE_CODE = 3
 INTENTIONAL_PUSH_FAILURE_CODE = 128
@@ -54,7 +59,7 @@ SPEC.loader.exec_module(sync_gate)
 def _validation_report_command(
     validation_report_path: Path,
     *,
-    expected_branch: str = "feature",
+    expected_branch: str | None = "feature",
     git_commit: str = "feature-sha",
     status: str | None = None,
     command_returncode: int = sync_gate.SUCCESS_RETURN_CODE,
@@ -124,6 +129,20 @@ def _passed_validation_report_summary(
         "command_missing_field_count": 0,
         "command_invalid_field_count": 0,
         "detail": None,
+    }
+
+
+def _sync_command_summary(
+    *,
+    command_count: int,
+    command_failure_count: int = 0,
+) -> dict[str, int]:
+    """Return the expected sync command summary for test reports."""
+    return {
+        "command_count": command_count,
+        "command_failure_count": command_failure_count,
+        "command_missing_field_count": 0,
+        "command_invalid_field_count": 0,
     }
 
 
@@ -223,6 +242,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         )
         for command_record in report["commands"]:
             self.assert_sync_command_record_shape(command_record)
+        self.assertEqual(
+            report[sync_gate.SYNC_COMMAND_SUMMARY_KEY],
+            _sync_command_summary(command_count=SUCCESSFUL_SYNC_COMMAND_COUNT),
+        )
         self.assertIn("pushed", report["commands"][PUSH_COMMAND_INDEX]["stdout_tail"])
         self.assertIn(
             "refs/heads/feature",
@@ -257,6 +280,76 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             },
         )
         self.assertIsNone(report["push_failure"])
+
+    def test_run_sync_records_replayable_branch_precondition_failure(self) -> None:
+        """A missing target branch should still produce replayable command evidence."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): None,
+            ("git", "rev-parse", "HEAD"): "feature-sha",
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            bundle_path = root / "branchless.bundle"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch=None,
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        push_failure_bundle_path=bundle_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            expected_branch=None,
+                        ),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_PUSH_FAILED)
+        self.assertEqual(
+            [record["name"] for record in report["commands"]],
+            [
+                "validation",
+                sync_gate.PUSH_BRANCH_PRECONDITION_COMMAND_NAME,
+                sync_gate.PUSH_FAILURE_BUNDLE_COMMAND_NAME,
+            ],
+        )
+        for command_record in report["commands"]:
+            self.assert_sync_command_record_shape(command_record)
+        self.assertEqual(
+            report[sync_gate.SYNC_COMMAND_SUMMARY_KEY],
+            _sync_command_summary(
+                command_count=COMMAND_COUNT_AFTER_BRANCH_PRECONDITION_FAILURE,
+                command_failure_count=(
+                    COMMAND_FAILURE_COUNT_AFTER_BRANCH_PRECONDITION_FAILURE
+                ),
+            ),
+        )
+        self.assertIn(
+            "could not determine current branch",
+            report["commands"][BRANCH_PRECONDITION_COMMAND_INDEX]["stderr_tail"],
+        )
+        self.assertEqual(
+            report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["status"],
+            sync_gate.PUSH_FAILURE_BUNDLE_STATUS_SKIPPED,
+        )
+        self.assertIn(
+            "could not determine branch for git bundle",
+            report["commands"][BRANCH_PRECONDITION_BUNDLE_COMMAND_INDEX]["stderr_tail"],
+        )
 
     def test_run_sync_records_git_provenance_for_push_target(self) -> None:
         """Sync reports should identify the local and remote refs being synced."""

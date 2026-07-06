@@ -373,6 +373,10 @@ def main() -> None:
         and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate
         and "VALIDATION_REPORT_FINGERPRINT_KEY" in sync_gate
         and "VALIDATION_REPORT_SUMMARY_KEY" in sync_gate
+        and "SYNC_COMMAND_SUMMARY_KEY" in sync_gate
+        and "_sync_command_summary" in sync_gate
+        and "PUSH_BRANCH_PRECONDITION_COMMAND_NAME" in sync_gate
+        and "_branch_precondition_failure_record" in sync_gate
         and "STATUS_VALIDATION_REPORT_MISSING" in sync_gate
         and "STATUS_VALIDATION_REPORT_INVALID" in sync_gate
         and "_validation_report_summary" in sync_gate
@@ -418,6 +422,8 @@ def main() -> None:
         and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate_test
         and "SYNC_COMMAND_REQUIRED_FIELDS" in sync_gate_test
         and "assert_sync_command_record_shape" in sync_gate_test
+        and "test_run_sync_records_replayable_branch_precondition_failure"
+        in sync_gate_test
         and "test_run_sync_can_write_bundle_after_push_failure" in sync_gate_test
         and "PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME" in sync_gate_test
         and "hashlib.sha256(b\"bundle\").hexdigest()" in sync_gate_test
@@ -1453,6 +1459,8 @@ def main() -> None:
         and "`isodelta_sync_report.json`" in doc
         and "`validation_report_fingerprint`" in doc
         and "`validation_report_summary`" in doc
+        and "`sync_command_summary`" in doc
+        and "`push_branch_precondition`" in doc
         and "`validation_report_missing`" in doc
         and "`validation_report_invalid`" in doc
         and "expected schema version" in doc
