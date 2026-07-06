@@ -1166,6 +1166,8 @@ def main() -> None:
         and "PIPELINE_DRY_RUN_PASSED_ERROR" in cluster_suite
         and "PIPELINE_GPU_CHECK_SKIPPED_ERROR" in cluster_suite
         and "PIPELINE_GPU_MISMATCH_ALLOWED_ERROR" in cluster_suite
+        and "PIPELINE_PREFLIGHT_GPU_CHECK_REQUIRED_ERROR" in cluster_suite
+        and "PIPELINE_PREFLIGHT_GPU_COUNT_ERROR" in cluster_suite
         and "PIPELINE_SUITE_REQUIRED_MODELS_ERROR" in cluster_suite
         and "PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
         and "PIPELINE_ONE_SIDED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
@@ -1176,6 +1178,7 @@ def main() -> None:
         and "PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR" in cluster_suite
         and "_as_json_bool" in cluster_suite
         and "_require_pipeline_report_modes" in cluster_suite
+        and "_require_pipeline_preflight_gpu_check" in cluster_suite
         and "_require_pipeline_runtime_overrides" in cluster_suite
         and "_require_pipeline_suite_metadata" in cluster_suite
         and "_require_pipeline_success_stages" in cluster_suite
@@ -1189,6 +1192,8 @@ def main() -> None:
         and "test_verify_pipeline_report_rejects_skipped_gpu_check_mode"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_allowed_gpu_mismatch_mode"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_preflight_skipped_gpu_check"
         in cluster_suite_test
         and "test_verify_pipeline_report_requires_final_paper_suite_models"
         in cluster_suite_test
@@ -1248,6 +1253,9 @@ def main() -> None:
         and "Runtime overrides are limited to known keys" in doc
         and "`ablation_mode = \"paired\"`" in doc
         and "one-sided ablation override" in doc
+        and "reopens the fingerprinted preflight report" in doc
+        and "checks `gpu_check`" in doc
+        and "requested GPU count was actually detected" in doc
         and "changing only" in doc
         and "stage report fingerprints" in doc
         and "final bundle verification counts" in doc

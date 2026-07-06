@@ -99,6 +99,15 @@ PIPELINE_GPU_CHECK_SKIPPED_ERROR = (
 PIPELINE_GPU_MISMATCH_ALLOWED_ERROR = (
     "passed pipeline report must record allow_gpu_mismatch=false"
 )
+PIPELINE_PREFLIGHT_GPU_CHECK_REQUIRED_ERROR = (
+    "passed pipeline preflight report must record a completed GPU check"
+)
+PIPELINE_PREFLIGHT_GPU_MISMATCH_ERROR = (
+    "passed pipeline preflight report must not allow GPU mismatch"
+)
+PIPELINE_PREFLIGHT_GPU_COUNT_ERROR = (
+    "passed pipeline preflight report must detect the suite expected GPU count"
+)
 PIPELINE_SUITE_GPU_ERROR = (
     f"pipeline suite expected_gpus must be at least {DEFAULT_EXPECTED_GPU_COUNT}"
 )
@@ -4108,7 +4117,7 @@ def _require_pipeline_stage_report_fingerprints(
     pipeline_report_path: Path,
     original_output_dir: Path,
     expected_stage_names: tuple[str, ...],
-) -> int:
+) -> tuple[int, dict[str, Path]]:
     """Verify the stage report fingerprints embedded in a pipeline report."""
     stage_fingerprints = pipeline_payload.get(STAGE_REPORT_FINGERPRINTS_KEY)
     _require(
@@ -4123,6 +4132,7 @@ def _require_pipeline_stage_report_fingerprints(
     _require(isinstance(raw_stages, list), "stages must be a JSON array")
     bundle_root = _pipeline_report_output_dir(pipeline_report_path, original_output_dir)
     verified_count = 0
+    stage_report_paths: dict[str, Path] = {}
     for index, raw_record in enumerate(stage_fingerprints):
         record = _as_json_object(raw_record, f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}]")
         stage_name = _as_json_string(
@@ -4152,12 +4162,13 @@ def _require_pipeline_stage_report_fingerprints(
         )
         report_label = f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].report"
         if fingerprint_required:
-            _resolve_present_fingerprint_path(
+            resolved_report_path = _resolve_present_fingerprint_path(
                 report_record,
                 report_label,
                 bundle_root=bundle_root,
                 original_output_dir=original_output_dir,
             )
+            stage_report_paths[stage_name] = resolved_report_path
         else:
             _require_fingerprint_match(
                 report_record,
@@ -4166,7 +4177,7 @@ def _require_pipeline_stage_report_fingerprints(
                 original_output_dir=original_output_dir,
             )
         verified_count += 1
-    return verified_count
+    return verified_count, stage_report_paths
 
 
 def _require_pipeline_success_stages(
@@ -4239,6 +4250,95 @@ def _require_pipeline_runtime_overrides(
             PIPELINE_ONE_SIDED_RUNTIME_OVERRIDE_ERROR,
         )
     return runtime_overrides
+
+
+def _require_pipeline_preflight_gpu_check(
+    stage_report_paths: dict[str, Path],
+    suite_record: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify the preflight stage proved the requested GPU allocation."""
+    preflight_report_path = stage_report_paths.get(PIPELINE_STAGE_PREFLIGHT)
+    _require(
+        preflight_report_path is not None,
+        "passed pipeline report must fingerprint a present preflight report",
+    )
+    preflight_payload = _as_json_object(
+        json.loads(preflight_report_path.read_text(encoding="utf-8")),
+        "preflight_report",
+    )
+    preflight_schema_version = _as_json_string(
+        preflight_payload.get("preflight_report_schema_version"),
+        "preflight_report_schema_version",
+    )
+    _require(
+        preflight_schema_version == PREFLIGHT_REPORT_SCHEMA_VERSION,
+        f"preflight_report_schema_version must be {PREFLIGHT_REPORT_SCHEMA_VERSION!r}",
+    )
+    preflight_status = _as_json_string(
+        preflight_payload.get("status"),
+        "preflight_report.status",
+    )
+    _require(
+        preflight_status == PREFLIGHT_STATUS_PASSED,
+        "passed pipeline preflight report status must be 'passed'",
+    )
+    _require(
+        not _as_json_bool(
+            preflight_payload.get("skip_gpu_check"),
+            "preflight_report.skip_gpu_check",
+        ),
+        PIPELINE_PREFLIGHT_GPU_CHECK_REQUIRED_ERROR,
+    )
+    _require(
+        not _as_json_bool(
+            preflight_payload.get("allow_gpu_mismatch"),
+            "preflight_report.allow_gpu_mismatch",
+        ),
+        PIPELINE_PREFLIGHT_GPU_MISMATCH_ERROR,
+    )
+    gpu_check = _as_json_object(
+        preflight_payload.get("gpu_check"),
+        "preflight_report.gpu_check",
+    )
+    _require(
+        not _as_json_bool(
+            gpu_check.get("skipped"),
+            "preflight_report.gpu_check.skipped",
+        ),
+        PIPELINE_PREFLIGHT_GPU_CHECK_REQUIRED_ERROR,
+    )
+    _require(
+        not _as_json_bool(
+            gpu_check.get("allow_mismatch"),
+            "preflight_report.gpu_check.allow_mismatch",
+        ),
+        PIPELINE_PREFLIGHT_GPU_MISMATCH_ERROR,
+    )
+    expected_gpus = _as_json_nonnegative_int(
+        suite_record.get("expected_gpus"),
+        "suite.expected_gpus",
+    )
+    preflight_expected_gpus = _as_json_nonnegative_int(
+        gpu_check.get("expected_gpus"),
+        "preflight_report.gpu_check.expected_gpus",
+    )
+    _require(
+        preflight_expected_gpus == expected_gpus,
+        PIPELINE_PREFLIGHT_GPU_COUNT_ERROR,
+    )
+    detected_gpus = _as_json_nonnegative_int(
+        gpu_check.get("detected_gpus"),
+        "preflight_report.gpu_check.detected_gpus",
+    )
+    _require(
+        detected_gpus >= expected_gpus,
+        PIPELINE_PREFLIGHT_GPU_COUNT_ERROR,
+    )
+    _as_json_string(
+        gpu_check.get("detector"),
+        "preflight_report.gpu_check.detector",
+    )
+    return gpu_check
 
 
 def _require_pipeline_suite_metadata(
@@ -4355,15 +4455,22 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         f"{PIPELINE_REPORT_PASSED_STATUS_ERROR}; observed {pipeline_status!r}",
     )
     _require_pipeline_report_modes(pipeline_payload)
-    _suite_record, original_output_dir = _require_pipeline_suite_metadata(
+    suite_record, original_output_dir = _require_pipeline_suite_metadata(
         pipeline_payload
     )
     expected_stage_names = _require_pipeline_success_stages(pipeline_payload)
-    verified_stage_report_count = _require_pipeline_stage_report_fingerprints(
+    (
+        verified_stage_report_count,
+        stage_report_paths,
+    ) = _require_pipeline_stage_report_fingerprints(
         pipeline_payload,
         pipeline_report_path=pipeline_report_path,
         original_output_dir=original_output_dir,
         expected_stage_names=expected_stage_names,
+    )
+    preflight_gpu_check = _require_pipeline_preflight_gpu_check(
+        stage_report_paths,
+        suite_record,
     )
     bundle_verification = _require_pipeline_bundle_verification(
         pipeline_payload,
@@ -4380,6 +4487,7 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "pipeline_report": str(pipeline_report_path),
         "pipeline_status": pipeline_status,
         "verified_stage_report_count": verified_stage_report_count,
+        "preflight_gpu_check": preflight_gpu_check,
         OUTPUT_BUNDLE_VERIFICATION_KEY: bundle_verification,
     }
 

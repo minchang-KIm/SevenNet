@@ -506,7 +506,9 @@ passed report, and requires suite metadata to keep `expected_gpus >= 8`, the
 SevenNet/MACE/NequIP required-model scope, and a well-formed manifest fingerprint.
 Runtime overrides are limited to known keys, and a passed publication report may
 only record `ablation_mode = "paired"`; a one-sided ablation override must stay
-in the ablation-only path instead of being accepted as final paper evidence.
+in the ablation-only path instead of being accepted as final paper evidence. It
+also reopens the fingerprinted preflight report and checks `gpu_check` so the
+archive proves the requested GPU count was actually detected.
 
 On a SLURM cluster, generate a commented submission script from the same
 manifest:
