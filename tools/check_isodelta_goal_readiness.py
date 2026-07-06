@@ -133,6 +133,9 @@ REQUIRED_FILE_SNIPPETS = {
         "PUSH_AUTH_ENVIRONMENT",
         "--expected-branch",
         "STATUS_PUSH_FAILED",
+        "PUSH_FAILURE_REASON_AUTH_PROMPT_DISABLED",
+        "_classify_push_failure",
+        '"push_failure": _classify_push_failure(push_record)',
     ),
     "tools/check_isodelta_goal_readiness.py": (
         "ISODELTA_PYTHON_GLOB_PATTERNS",
@@ -178,6 +181,8 @@ REQUIRED_FILE_SNIPPETS = {
         "human-facing path index points to a different file",
         '`--verify-pipeline-report "$PIPELINE_OUTPUT"`',
         "run_isodelta_sync_gate.py",
+        "`push_failure` object",
+        "`auth-prompt-disabled`",
     ),
     "tests/unit_tests/test_isodelta_cluster_paper_suite.py": (
         "test_prepare_artifacts_downloads_and_writes_audit_report",
@@ -231,6 +236,7 @@ REQUIRED_FILE_SNIPPETS = {
     "tests/unit_tests/test_isodelta_sync_gate.py": (
         "IsoDeltaSyncGateTest",
         "test_validation_command_enforces_target_branch",
+        "test_run_sync_classifies_noninteractive_auth_push_failure",
         "STATUS_VALIDATION_FAILED",
     ),
     "tests/unit_tests/test_isodelta_validation_runner.py": (

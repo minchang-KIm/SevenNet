@@ -341,7 +341,11 @@ def main() -> None:
         and "run_sync" in sync_gate
         and "--expected-branch" in sync_gate
         and "STATUS_PUSH_FAILED" in sync_gate
+        and "PUSH_FAILURE_REASON_AUTH_PROMPT_DISABLED" in sync_gate
+        and "_classify_push_failure" in sync_gate
+        and '"push_failure": _classify_push_failure(push_record)' in sync_gate
         and "test_validation_command_enforces_target_branch" in sync_gate_test
+        and "test_run_sync_classifies_noninteractive_auth_push_failure" in sync_gate_test
         and "test_isodelta_sync_gate.py" in validation_runner,
         "sync gate must validate before recording git push attempts",
     )

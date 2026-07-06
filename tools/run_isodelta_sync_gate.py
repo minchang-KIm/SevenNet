@@ -33,6 +33,34 @@ STATUS_SYNCED = "synced"
 STATUS_VALIDATED = "validated"
 STATUS_VALIDATION_FAILED = "validation_failed"
 STATUS_PUSH_FAILED = "push_failed"
+PUSH_FAILURE_REASON_AUTH_PROMPT_DISABLED = "auth-prompt-disabled"
+PUSH_FAILURE_REASON_NETWORK_UNREACHABLE = "network-unreachable"
+PUSH_FAILURE_REASON_UNKNOWN = "unknown"
+AUTH_PROMPT_DISABLED_MARKERS = (
+    "Cannot prompt because user interactivity has been disabled",
+    "could not read Username for",
+    "terminal prompts disabled",
+)
+NETWORK_UNREACHABLE_MARKERS = (
+    "Could not connect to server",
+    "Failed to connect to",
+    "Could not resolve host",
+)
+PUSH_FAILURE_SUGGESTED_ACTIONS = {
+    PUSH_FAILURE_REASON_AUTH_PROMPT_DISABLED: (
+        "Authenticate the Git HTTPS remote outside the non-interactive sync gate "
+        "or switch the remote to an already-authenticated SSH URL, then rerun "
+        "run_isodelta_sync_gate.py."
+    ),
+    PUSH_FAILURE_REASON_NETWORK_UNREACHABLE: (
+        "Run the sync gate from a network that can reach the Git remote, then "
+        "rerun run_isodelta_sync_gate.py."
+    ),
+    PUSH_FAILURE_REASON_UNKNOWN: (
+        "Inspect commands[-1].stderr_tail and rerun run_isodelta_sync_gate.py "
+        "after resolving the reported git push error."
+    ),
+}
 PUSH_AUTH_ENVIRONMENT = {
     "GIT_TERMINAL_PROMPT": "0",
     "GCM_INTERACTIVE": "never",
@@ -108,6 +136,28 @@ def _push_command(remote: str, branch: str) -> tuple[str, ...]:
     return ("git", "push", "-u", remote, branch)
 
 
+def _classify_push_failure(push_record: dict[str, Any] | None) -> dict[str, str] | None:
+    """Classify a failed push so sync reports are actionable without logs open."""
+    if push_record is None:
+        return None
+    if push_record.get("returncode") == SUCCESS_RETURN_CODE:
+        return None
+    stderr_tail = str(push_record.get("stderr_tail", ""))
+    stdout_tail = str(push_record.get("stdout_tail", ""))
+    combined_output = f"{stderr_tail}\n{stdout_tail}"
+    if any(marker in combined_output for marker in AUTH_PROMPT_DISABLED_MARKERS):
+        reason = PUSH_FAILURE_REASON_AUTH_PROMPT_DISABLED
+    elif any(marker in combined_output for marker in NETWORK_UNREACHABLE_MARKERS):
+        reason = PUSH_FAILURE_REASON_NETWORK_UNREACHABLE
+    else:
+        reason = PUSH_FAILURE_REASON_UNKNOWN
+    return {
+        "reason": reason,
+        "detail": _tail(combined_output.strip()),
+        "suggested_action": PUSH_FAILURE_SUGGESTED_ACTIONS[reason],
+    }
+
+
 def _write_report(report_path: Path, payload: dict[str, Any]) -> None:
     """Persist the sync report so failed pushes are still auditable."""
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,6 +219,7 @@ def run_sync(
         "git_commit": _metadata_command(("git", "rev-parse", "HEAD")),
         "git_status_short": _metadata_command(("git", "status", "--short")),
         "commands": command_records,
+        "push_failure": _classify_push_failure(push_record),
     }
     _write_report(report_path, payload)
     print(json.dumps({"sync_report": str(report_path), "status": status}, indent=2))

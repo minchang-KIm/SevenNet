@@ -173,11 +173,14 @@ python tools/run_isodelta_sync_gate.py \
 The sync gate runs `run_isodelta_validation.py` first and only attempts
 non-interactive `git push -u` when validation passes. It writes
 `isodelta_sync_report.json` with the validation command record, push command
-record, Git status, target remote/branch, and the push stderr tail. This makes
-credential or network failures explicit instead of losing the evidence after a
-failed sync. It also forwards the same target branch to the goal-readiness
-audit as `--expected-branch`, so the gate cannot validate one checkout branch
-and push another by mistake.
+record, Git status, target remote/branch, the push stderr tail, and a
+`push_failure` object when the push fails. That object classifies common
+failures as `auth-prompt-disabled`, `network-unreachable`, or `unknown`, and
+adds a `suggested_action` so a non-interactive GitHub credential failure is
+actionable from the report itself. This makes credential or network failures
+explicit instead of losing the evidence after a failed sync. It also forwards
+the same target branch to the goal-readiness audit as `--expected-branch`, so
+the gate cannot validate one checkout branch and push another by mistake.
 
 For a local completion-readiness audit, generate
 `isodelta_goal_readiness_report.json` as a source-tree report:
