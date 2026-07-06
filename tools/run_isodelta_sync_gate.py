@@ -9,6 +9,7 @@ network state prevents the push from succeeding.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -29,6 +30,7 @@ DEFAULT_REMOTE = "fork"
 SUCCESS_RETURN_CODE = 0
 FAILURE_RETURN_CODE = 1
 COMMAND_OUTPUT_TAIL_CHARS = 4000
+BUNDLE_HASH_READ_CHUNK_BYTES = 1024 * 1024
 STATUS_SYNCED = "synced"
 STATUS_VALIDATED = "validated"
 STATUS_VALIDATION_FAILED = "validation_failed"
@@ -146,6 +148,19 @@ def _bundle_command(bundle_path: Path, branch: str) -> tuple[str, ...]:
     return ("git", "bundle", "create", str(bundle_path), branch)
 
 
+def _bundle_file_fingerprint(bundle_path: Path) -> dict[str, Any]:
+    """Return a SHA-256 fingerprint for a generated git bundle."""
+    digest = hashlib.sha256()
+    with bundle_path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(BUNDLE_HASH_READ_CHUNK_BYTES), b""):
+            digest.update(chunk)
+    return {
+        "path": str(bundle_path),
+        "sha256": digest.hexdigest(),
+        "size_bytes": bundle_path.stat().st_size,
+    }
+
+
 def _sync_git_provenance(remote: str, branch: str | None) -> dict[str, str | None]:
     """Collect local and remote refs that define one sync attempt."""
     remote_tracking_ref = f"refs/remotes/{remote}/{branch}" if branch else None
@@ -212,16 +227,25 @@ def _write_push_failure_bundle(
     bundle_path.parent.mkdir(parents=True, exist_ok=True)
     record = _run_command(bundle_command or _bundle_command(bundle_path, branch))
     named_record = {"name": PUSH_FAILURE_BUNDLE_COMMAND_NAME, **record}
+    fingerprint = (
+        _bundle_file_fingerprint(bundle_path)
+        if record["returncode"] == SUCCESS_RETURN_CODE and bundle_path.exists()
+        else None
+    )
     bundle_status = (
         PUSH_FAILURE_BUNDLE_STATUS_CREATED
-        if record["returncode"] == SUCCESS_RETURN_CODE
+        if fingerprint
         else PUSH_FAILURE_BUNDLE_STATUS_FAILED
     )
-    return named_record, {
+    report = {
         "path": str(bundle_path),
         "status": bundle_status,
         "returncode": record["returncode"],
+        "fingerprint": fingerprint,
     }
+    if record["returncode"] == SUCCESS_RETURN_CODE and fingerprint is None:
+        report["detail"] = "bundle command succeeded but output file is missing"
+    return named_record, report
 
 
 def _write_report(report_path: Path, payload: dict[str, Any]) -> None:

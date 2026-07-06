@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import contextlib
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -256,6 +257,14 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertEqual(
             report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["path"],
             str(bundle_path),
+        )
+        self.assertEqual(
+            report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["fingerprint"],
+            {
+                "path": str(bundle_path),
+                "sha256": hashlib.sha256(b"bundle").hexdigest(),
+                "size_bytes": len(b"bundle"),
+            },
         )
 
 
