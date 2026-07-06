@@ -157,6 +157,8 @@ REQUIRED_PAPER_ARTIFACT_NAMES = (
     "correlation_csv",
     "command_timing_csv",
     "command_timing_markdown",
+    "repeat_timing_csv",
+    "repeat_timing_markdown",
     "speedup_svg",
     "hit_rate_svg",
     "trace_svg",
@@ -173,6 +175,18 @@ PAPER_COMMAND_TIMING_COLUMNS = (
     "stderr_path",
     "cwd",
 )
+PAPER_REPEAT_TIMING_COLUMNS = (
+    "case",
+    "model",
+    "kind",
+    "source",
+    "mode",
+    "repeat_index",
+    "elapsed_seconds",
+    "returncode",
+)
+BENCHMARK_TIMING_SOURCE = "benchmark_report"
+EXTERNAL_TIMING_SOURCE = "external_timing_report"
 PAPER_SVG_ARTIFACT_NAMES = ("speedup_svg", "hit_rate_svg", "trace_svg")
 SPEEDUP_SVG_EMPTY_MESSAGE = "No measured speedup values"
 HIT_RATE_SCATTER_TITLE = "Cache hit rate vs measured speedup"
@@ -3227,6 +3241,254 @@ def _summary_command_rows(summary_payload: dict[str, Any]) -> list[dict[str, Any
     return rows
 
 
+def _benchmark_repeat_timing_rows(
+    case_name: str,
+    model: str,
+    kind: str,
+    report: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return raw per-repeat rows from a SevenNet paired benchmark report."""
+    if report is None:
+        return []
+    raw_results = report.get("results")
+    _require(
+        isinstance(raw_results, list),
+        f"{case_name}.benchmark_report.results must be a JSON array",
+    )
+    rows: list[dict[str, Any]] = []
+    for index, raw_result in enumerate(raw_results):
+        result = _as_json_object(
+            raw_result,
+            f"{case_name}.benchmark_report.results[{index}]",
+        )
+        mode = _as_json_string(
+            result.get("case"),
+            f"{case_name}.benchmark_report.results[{index}].case",
+        )
+        if mode not in (BASELINE_CASE_NAME, ISODELTA_CASE_NAME):
+            continue
+        rows.append(
+            {
+                "case": case_name,
+                "model": model,
+                "kind": kind,
+                "source": BENCHMARK_TIMING_SOURCE,
+                "mode": mode,
+                "repeat_index": _as_json_nonnegative_int(
+                    result.get("repeat_index"),
+                    f"{case_name}.benchmark_report.results[{index}].repeat_index",
+                ),
+                "elapsed_seconds": _as_json_optional_nonnegative_number(
+                    result.get("loop_time_seconds"),
+                    f"{case_name}.benchmark_report.results[{index}].loop_time_seconds",
+                ),
+                "returncode": _as_json_nonnegative_int(
+                    result.get("returncode"),
+                    f"{case_name}.benchmark_report.results[{index}].returncode",
+                ),
+            }
+        )
+    return rows
+
+
+def _external_repeat_timing_rows(
+    case_name: str,
+    model: str,
+    kind: str,
+    report: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return raw disabled/enabled timing samples from an external timing report."""
+    if report is None:
+        return []
+    observed_case_name = _as_json_string(
+        report.get(CASE_NAME_KEY),
+        f"{case_name}.external_timing_report.{CASE_NAME_KEY}",
+    )
+    observed_model = _as_json_string(
+        report.get(MODEL_KEY),
+        f"{case_name}.external_timing_report.{MODEL_KEY}",
+    )
+    _require(
+        observed_case_name == case_name,
+        f"{case_name}.external_timing_report.{CASE_NAME_KEY} must match summary case",
+    )
+    _require(
+        observed_model == model,
+        f"{case_name}.external_timing_report.{MODEL_KEY} must match summary model",
+    )
+    rows: list[dict[str, Any]] = []
+    for mode, timing_key in (
+        (EXTERNAL_DISABLED_COMMAND_LABEL, BASELINE_TIMES_SECONDS_KEY),
+        (EXTERNAL_ENABLED_COMMAND_LABEL, ENABLED_TIMES_SECONDS_KEY),
+    ):
+        timing_values = _as_json_positive_number_list(
+            report.get(timing_key),
+            f"{case_name}.external_timing_report.{timing_key}",
+        )
+        for repeat_index, elapsed_seconds in enumerate(timing_values):
+            rows.append(
+                {
+                    "case": case_name,
+                    "model": model,
+                    "kind": kind,
+                    "source": EXTERNAL_TIMING_SOURCE,
+                    "mode": mode,
+                    "repeat_index": repeat_index,
+                    "elapsed_seconds": elapsed_seconds,
+                    "returncode": SUCCESS_RETURN_CODE,
+                }
+            )
+    return rows
+
+
+def _repeat_timing_rows_from_sources(
+    case_name: str,
+    model: str,
+    kind: str,
+    *,
+    benchmark_payload: dict[str, Any] | None,
+    external_payload: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return paper-table timing rows from the source evidence for one case."""
+    return (
+        _benchmark_repeat_timing_rows(case_name, model, kind, benchmark_payload)
+        + _external_repeat_timing_rows(case_name, model, kind, external_payload)
+    )
+
+
+def _load_fingerprinted_json_payload(
+    case_evidence: dict[str, Any],
+    case_name: str,
+    field_name: str,
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> dict[str, Any] | None:
+    """Load one source evidence JSON object through its verified fingerprint record."""
+    raw_record = case_evidence.get(field_name)
+    if raw_record is None:
+        return None
+    record = _as_json_object(
+        raw_record,
+        f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{field_name}",
+    )
+    evidence_path = _resolve_present_fingerprint_path(
+        record,
+        f"{case_name}.{field_name}",
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
+    return _as_json_object(
+        json.loads(evidence_path.read_text(encoding="utf-8")),
+        f"{case_name}.{field_name}",
+    )
+
+
+def _repeat_timing_rows_from_summary(
+    summary_payload: dict[str, Any],
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> list[dict[str, Any]]:
+    """Recompute repeat timing rows from summary-protected source evidence."""
+    cases_by_name = _summary_cases_by_name(summary_payload)
+    raw_evidence_records = _as_json_object(
+        summary_payload.get(EVIDENCE_FINGERPRINTS_KEY),
+        EVIDENCE_FINGERPRINTS_KEY,
+    )
+    rows: list[dict[str, Any]] = []
+    for case_name, case_record in cases_by_name.items():
+        case_evidence = _as_json_object(
+            raw_evidence_records.get(case_name),
+            f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}",
+        )
+        model = _as_json_string(case_record.get("model"), f"cases.{case_name}.model")
+        kind = _as_json_string(case_record.get("kind"), f"cases.{case_name}.kind")
+        benchmark_payload = _load_fingerprinted_json_payload(
+            case_evidence,
+            case_name,
+            "benchmark_report",
+            bundle_root=bundle_root,
+            original_output_dir=original_output_dir,
+        )
+        external_payload = _load_fingerprinted_json_payload(
+            case_evidence,
+            case_name,
+            "external_timing_report",
+            bundle_root=bundle_root,
+            original_output_dir=original_output_dir,
+        )
+        rows.extend(
+            _repeat_timing_rows_from_sources(
+                case_name,
+                model,
+                kind,
+                benchmark_payload=benchmark_payload,
+                external_payload=external_payload,
+            )
+        )
+    return rows
+
+
+def _require_repeat_timing_csv(
+    path: Path,
+    expected_rows: list[dict[str, Any]],
+) -> None:
+    """Verify that repeat timing CSV rows match source timing evidence."""
+    fieldnames, rows = _read_csv_rows(path, "repeat_timing.csv")
+    _require_columns(fieldnames, PAPER_REPEAT_TIMING_COLUMNS, "repeat_timing.csv")
+    _require(
+        len(rows) == len(expected_rows),
+        "repeat_timing.csv: row count must match source timing evidence",
+    )
+    for index, expected_row in enumerate(expected_rows):
+        csv_row = rows[index]
+        for column_name in PAPER_REPEAT_TIMING_COLUMNS:
+            expected_value = _format_csv_value(expected_row.get(column_name))
+            actual_value = csv_row.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                f"repeat_timing.csv[{index}].{column_name} must match source timing evidence",
+            )
+
+
+def _require_repeat_timing_markdown(
+    path: Path,
+    expected_rows: list[dict[str, Any]],
+) -> None:
+    """Verify that repeat timing Markdown rows match source timing evidence."""
+    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    _require(
+        len(lines) == len(expected_rows) + 2,
+        "repeat_timing.md: row count must match source timing evidence plus header",
+    )
+    header = _markdown_cells(lines[0])
+    separator = _markdown_cells(lines[1])
+    _require_columns(tuple(header), PAPER_REPEAT_TIMING_COLUMNS, "repeat_timing.md")
+    _require(
+        len(separator) == len(header),
+        "repeat_timing.md: separator width must match header",
+    )
+    _require(
+        all(cell == "---" for cell in separator),
+        "repeat_timing.md: separator row must contain markdown column markers",
+    )
+    for index, expected_row in enumerate(expected_rows):
+        cells = _markdown_cells(lines[index + 2])
+        _require(
+            len(cells) == len(header),
+            f"repeat_timing.md[{index}]: row width must match header",
+        )
+        row = dict(zip(header, cells, strict=True))
+        for column_name in PAPER_REPEAT_TIMING_COLUMNS:
+            expected_value = _format_table_value(expected_row.get(column_name))
+            actual_value = row.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                f"repeat_timing.md[{index}].{column_name} must match source timing evidence",
+            )
+
+
 def _require_command_timing_csv(
     path: Path,
     summary_payload: dict[str, Any],
@@ -3386,9 +3648,17 @@ def _require_manifest_snapshot(path: Path) -> None:
 def _require_paper_artifact_semantics(
     summary_payload: dict[str, Any],
     resolved_artifact_paths: dict[str, Path],
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
 ) -> int:
     """Verify that required paper artifacts are not only hashed but readable."""
     cases_by_name = _summary_cases_by_name(summary_payload)
+    repeat_timing_rows = _repeat_timing_rows_from_summary(
+        summary_payload,
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
     missing_artifacts = [
         name for name in REQUIRED_PAPER_ARTIFACT_NAMES if name not in resolved_artifact_paths
     ]
@@ -3410,6 +3680,14 @@ def _require_paper_artifact_semantics(
     _require_command_timing_markdown(
         resolved_artifact_paths["command_timing_markdown"],
         summary_payload,
+    )
+    _require_repeat_timing_csv(
+        resolved_artifact_paths["repeat_timing_csv"],
+        repeat_timing_rows,
+    )
+    _require_repeat_timing_markdown(
+        resolved_artifact_paths["repeat_timing_markdown"],
+        repeat_timing_rows,
     )
     _require_speedup_svg_semantics(resolved_artifact_paths["speedup_svg"], cases_by_name)
     _require_scatter_svg_semantics(
@@ -3531,6 +3809,8 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     verified_paper_artifact_semantic_count = _require_paper_artifact_semantics(
         summary_payload,
         resolved_artifact_paths,
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
     )
 
     verified_log_count = 0
@@ -5169,6 +5449,30 @@ def _command_timing_rows(command_records: list[CommandRecord]) -> list[dict[str,
     ]
 
 
+def _repeat_timing_rows(case_summaries: list[CaseSummary]) -> list[dict[str, Any]]:
+    """Return raw repeat timing rows from validated benchmark/external evidence."""
+    rows: list[dict[str, Any]] = []
+    for summary in case_summaries:
+        benchmark_payload = _load_json_if_exists(
+            Path(summary.benchmark_report) if summary.benchmark_report is not None else None
+        )
+        external_payload = _load_json_if_exists(
+            Path(summary.external_timing_report)
+            if summary.external_timing_report is not None
+            else None
+        )
+        rows.extend(
+            _repeat_timing_rows_from_sources(
+                summary.case_name,
+                summary.model,
+                summary.kind,
+                benchmark_payload=benchmark_payload,
+                external_payload=external_payload,
+            )
+        )
+    return rows
+
+
 def write_csv(
     path: Path,
     rows: list[dict[str, Any]],
@@ -5425,11 +5729,14 @@ def write_paper_outputs(
     summary_rows = _summary_rows(case_summaries)
     correlation_rows = build_correlation_rows(case_summaries)
     command_timing_rows = _command_timing_rows(command_records)
+    repeat_timing_rows = _repeat_timing_rows(case_summaries)
     case_summary_csv = tables_dir / "case_summary.csv"
     case_summary_md = tables_dir / "case_summary.md"
     correlation_csv = tables_dir / "correlation.csv"
     command_timing_csv = tables_dir / "command_timing.csv"
     command_timing_md = tables_dir / "command_timing.md"
+    repeat_timing_csv = tables_dir / "repeat_timing.csv"
+    repeat_timing_md = tables_dir / "repeat_timing.md"
     write_csv(case_summary_csv, summary_rows)
     write_markdown_table(case_summary_md, summary_rows)
     write_csv(correlation_csv, correlation_rows)
@@ -5442,6 +5749,16 @@ def write_paper_outputs(
         command_timing_md,
         command_timing_rows,
         fieldnames=PAPER_COMMAND_TIMING_COLUMNS,
+    )
+    write_csv(
+        repeat_timing_csv,
+        repeat_timing_rows,
+        fieldnames=PAPER_REPEAT_TIMING_COLUMNS,
+    )
+    write_markdown_table(
+        repeat_timing_md,
+        repeat_timing_rows,
+        fieldnames=PAPER_REPEAT_TIMING_COLUMNS,
     )
     speedup_svg = figures_dir / "speedup_by_case.svg"
     hit_rate_svg = figures_dir / "hit_rate_vs_speedup.svg"
@@ -5475,6 +5792,8 @@ def write_paper_outputs(
         "correlation_csv": correlation_csv,
         "command_timing_csv": command_timing_csv,
         "command_timing_markdown": command_timing_md,
+        "repeat_timing_csv": repeat_timing_csv,
+        "repeat_timing_markdown": repeat_timing_md,
         "speedup_svg": speedup_svg,
         "hit_rate_svg": hit_rate_svg,
         "trace_svg": trace_svg,
@@ -5532,6 +5851,8 @@ def write_paper_outputs(
         "correlation_csv": str(correlation_csv),
         "command_timing_csv": str(command_timing_csv),
         "command_timing_markdown": str(command_timing_md),
+        "repeat_timing_csv": str(repeat_timing_csv),
+        "repeat_timing_markdown": str(repeat_timing_md),
         "speedup_svg": str(speedup_svg),
         "hit_rate_svg": str(hit_rate_svg),
         "trace_svg": str(trace_svg),

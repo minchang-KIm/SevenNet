@@ -516,6 +516,8 @@ After successful collection, the suite writes:
 - `tables/correlation.csv`
 - `tables/command_timing.csv`
 - `tables/command_timing.md`
+- `tables/repeat_timing.csv`
+- `tables/repeat_timing.md`
 - `figures/speedup_by_case.svg`
 - `figures/hit_rate_vs_speedup.svg`
 - `figures/trace_metadata_fraction_vs_speedup.svg`
@@ -561,6 +563,12 @@ records used to build the paper tables. The generated `command_timing.csv` and
 `command_timing.md` tables mirror those command records with command name,
 return code, elapsed seconds, stdout/stderr paths, and working directory so
 repeat-level timing provenance is inspectable without opening the JSON first.
+The generated `repeat_timing.csv` and `repeat_timing.md` tables mirror the raw
+per-repeat source timing evidence itself: SevenNet rows come from benchmark
+`results[*].loop_time_seconds`, while external MACE/NequIP rows come from
+`baseline_times_seconds` and `enabled_times_seconds` in the external timing
+report. This gives the paper appendix the disabled/enabled timing samples
+behind the means, confidence intervals, speedup bounds, and correlation tables.
 Each command record also stores the
 working directory and a focused `tracked_env` snapshot for cache mode, CUDA,
 SLURM, and CPU thread variables. That makes a disabled/enabled MACE, NequIP, or
@@ -583,7 +591,10 @@ It also performs semantic paper-artifact checks after the SHA-256 pass:
 summary case and the same cell values as `summary["cases"]`.
 `correlation.csv` must contain the configured metric-pair rows and the same values as
 `summary["correlations"]`, and `command_timing.csv`/`command_timing.md` must
-contain the same command rows as `summary["commands"]`. Each SVG figure must parse as an SVG document with
+contain the same command rows as `summary["commands"]`.
+`repeat_timing.csv`/`repeat_timing.md` must match the raw source timing evidence
+protected by `evidence_fingerprints`, so changing a benchmark report or external
+timing report without regenerating the repeat table is rejected. Each SVG figure must parse as an SVG document with
 width, height, and viewBox; the speedup chart must include every measured-speedup
 case label from `summary["cases"]`, and scatter plots must contain the same
 number of plotted points as the summary data pairs they visualize.

@@ -912,6 +912,8 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_command_timing_value_drift"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_repeat_timing_value_drift"
+        in cluster_suite_test
         and "test_run_suite_verifies_output_bundle_after_writing" in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
@@ -964,6 +966,11 @@ def main() -> None:
         and "_command_timing_rows" in cluster_suite
         and "_require_command_timing_csv" in cluster_suite
         and "_require_command_timing_markdown" in cluster_suite
+        and "PAPER_REPEAT_TIMING_COLUMNS" in cluster_suite
+        and "_repeat_timing_rows" in cluster_suite
+        and "_repeat_timing_rows_from_summary" in cluster_suite
+        and "_require_repeat_timing_csv" in cluster_suite
+        and "_require_repeat_timing_markdown" in cluster_suite
         and "_require_paper_artifact_semantics" in cluster_suite
         and "verified_paper_artifact_semantic_count" in cluster_suite
         and "_require_svg_document" in cluster_suite
@@ -995,6 +1002,8 @@ def main() -> None:
         and "correlation.csv" in cluster_suite
         and "command_timing.csv" in cluster_suite
         and "command_timing.md" in cluster_suite
+        and "repeat_timing.csv" in cluster_suite
+        and "repeat_timing.md" in cluster_suite
         and "speedup_by_case.svg" in cluster_suite
         and "write_template" in cluster_suite
         and "required_models = [\"SevenNet\", \"MACE\", \"NequIP\"]" in cluster_suite,
@@ -1025,6 +1034,7 @@ def main() -> None:
         and "case_summary.csv" in doc
         and "correlation.csv" in doc
         and "command_timing.csv" in doc
+        and "repeat_timing.csv" in doc
         and "speedup_by_case.svg" in doc
         and "SHA-256" in doc
         and "`--collect-only`" in doc,
@@ -1161,6 +1171,8 @@ def main() -> None:
         and "`summary[\"correlations\"]`" in doc
         and "`command_timing.csv`/`command_timing.md` must" in doc
         and "`summary[\"commands\"]`" in doc
+        and "`repeat_timing.csv`/`repeat_timing.md` must" in doc
+        and "source timing evidence" in doc
         and "Each SVG figure must parse as an SVG document" in doc
         and "speedup chart must include every measured-speedup" in doc
         and "scatter plots must contain the same" in doc

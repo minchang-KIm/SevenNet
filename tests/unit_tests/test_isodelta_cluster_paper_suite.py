@@ -343,6 +343,24 @@ def _external_timing_report_for_case(
     }
 
 
+def _repeat_timing_rows_from_test_evidence(
+    case_record: dict[str, object],
+    *,
+    benchmark_report: dict[str, object] | None = None,
+    external_timing_report: dict[str, object] | None = None,
+) -> tuple[dict[str, object], ...]:
+    """Build repeat timing artifact rows from test benchmark/external evidence."""
+    return tuple(
+        isodelta_cluster_suite._repeat_timing_rows_from_sources(
+            str(case_record["case_name"]),
+            str(case_record["model"]),
+            str(case_record["kind"]),
+            benchmark_payload=benchmark_report,
+            external_payload=external_timing_report,
+        )
+    )
+
+
 def _minimal_svg(title: str) -> str:
     """Return a tiny SVG figure that still exercises XML-based validation."""
     return (
@@ -392,6 +410,7 @@ def _write_required_paper_artifacts(
     case_names: tuple[str, ...] = ("case",),
     case_records: tuple[dict[str, object], ...] | None = None,
     command_records: tuple[dict[str, object], ...] = (),
+    repeat_timing_rows: tuple[dict[str, object], ...] = (),
 ) -> dict[str, dict[str, object]]:
     """Create the required paper artifacts that bundle verification expects."""
     if case_records is None:
@@ -407,6 +426,8 @@ def _write_required_paper_artifacts(
     correlation_csv = tables_dir / "correlation.csv"
     command_timing_csv = tables_dir / "command_timing.csv"
     command_timing_markdown = tables_dir / "command_timing.md"
+    repeat_timing_csv = tables_dir / "repeat_timing.csv"
+    repeat_timing_markdown = tables_dir / "repeat_timing.md"
     speedup_svg = figures_dir / "speedup_by_case.svg"
     hit_rate_svg = figures_dir / "hit_rate_vs_speedup.svg"
     trace_svg = figures_dir / "trace_metadata_fraction_vs_speedup.svg"
@@ -464,6 +485,16 @@ def _write_required_paper_artifacts(
         command_rows,
         fieldnames=isodelta_cluster_suite.PAPER_COMMAND_TIMING_COLUMNS,
     )
+    isodelta_cluster_suite.write_csv(
+        repeat_timing_csv,
+        list(repeat_timing_rows),
+        fieldnames=isodelta_cluster_suite.PAPER_REPEAT_TIMING_COLUMNS,
+    )
+    isodelta_cluster_suite.write_markdown_table(
+        repeat_timing_markdown,
+        list(repeat_timing_rows),
+        fieldnames=isodelta_cluster_suite.PAPER_REPEAT_TIMING_COLUMNS,
+    )
     speedup_svg.write_text(
         isodelta_cluster_suite._empty_svg(
             isodelta_cluster_suite.SPEEDUP_SVG_EMPTY_MESSAGE
@@ -489,6 +520,8 @@ def _write_required_paper_artifacts(
         "correlation_csv": correlation_csv,
         "command_timing_csv": command_timing_csv,
         "command_timing_markdown": command_timing_markdown,
+        "repeat_timing_csv": repeat_timing_csv,
+        "repeat_timing_markdown": repeat_timing_markdown,
         "speedup_svg": speedup_svg,
         "hit_rate_svg": hit_rate_svg,
         "trace_svg": trace_svg,
@@ -724,6 +757,10 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             artifact_fingerprints = _write_required_paper_artifacts(
                 output_dir,
                 case_records=(nequip_case_record,),
+                repeat_timing_rows=_repeat_timing_rows_from_test_evidence(
+                    nequip_case_record,
+                    external_timing_report=timing_report,
+                ),
             )
             summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary_path.write_text(
@@ -1078,6 +1115,74 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 r"command_timing\.csv\[0\]\.elapsed_seconds must match summary commands",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_repeat_timing_value_drift(self) -> None:
+        """The repeat timing table should match benchmark/external source evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            benchmark_path = output_dir / "cases" / "case" / "benchmark_report.json"
+            benchmark_path.parent.mkdir(parents=True)
+            benchmark_report = _benchmark_report()
+            benchmark_path.write_text(json.dumps(benchmark_report), encoding="utf-8")
+            case_record = _summary_case_record(
+                "case",
+                model="SevenNet",
+                kind="sevennet_lammps",
+            )
+            repeat_rows = _repeat_timing_rows_from_test_evidence(
+                case_record,
+                benchmark_report=benchmark_report,
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=(case_record,),
+                repeat_timing_rows=repeat_rows,
+            )
+            repeat_timing_csv = output_dir / "tables" / "repeat_timing.csv"
+            drifted_rows = [dict(row) for row in repeat_rows]
+            drifted_rows[0]["elapsed_seconds"] = BASELINE_LOOP_TIME_SECONDS + 1.0
+            isodelta_cluster_suite.write_csv(
+                repeat_timing_csv,
+                drifted_rows,
+                fieldnames=isodelta_cluster_suite.PAPER_REPEAT_TIMING_COLUMNS,
+            )
+            artifact_fingerprints["repeat_timing_csv"] = (
+                isodelta_cluster_suite.generated_artifact_record(repeat_timing_csv)
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [case_record],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": (
+                                    isodelta_cluster_suite.generated_artifact_record(
+                                        benchmark_path
+                                    )
+                                ),
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                r"repeat_timing\.csv\[0\]\.elapsed_seconds must match source timing evidence",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -2739,6 +2844,8 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             environment_snapshot = output_dir / "environment_snapshot.json"
             case_summary_csv = output_dir / "tables" / "case_summary.csv"
             correlation_csv = output_dir / "tables" / "correlation.csv"
+            repeat_timing_csv = output_dir / "tables" / "repeat_timing.csv"
+            repeat_timing_markdown = output_dir / "tables" / "repeat_timing.md"
             speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
             manifest_snapshot = output_dir / "isodelta_cluster_suite_manifest.toml"
 
@@ -2747,13 +2854,17 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             environment_snapshot_exists = environment_snapshot.exists()
             case_summary_exists = case_summary_csv.exists()
             correlation_exists = correlation_csv.exists()
+            repeat_timing_exists = repeat_timing_csv.exists()
+            repeat_timing_markdown_exists = repeat_timing_markdown.exists()
             speedup_svg_exists = speedup_svg.exists()
             manifest_snapshot_exists = manifest_snapshot.exists()
             case_summary_text = case_summary_csv.read_text(encoding="utf-8")
+            repeat_timing_text = repeat_timing_csv.read_text(encoding="utf-8")
             speedup_svg_text = speedup_svg.read_text(encoding="utf-8")
             manifest_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
             environment_digest = hashlib.sha256(environment_snapshot.read_bytes()).hexdigest()
             case_summary_digest = hashlib.sha256(case_summary_csv.read_bytes()).hexdigest()
+            repeat_timing_digest = hashlib.sha256(repeat_timing_csv.read_bytes()).hexdigest()
             manifest_snapshot_digest = hashlib.sha256(manifest_snapshot.read_bytes()).hexdigest()
             preflight_digest = hashlib.sha256(preflight_report_path.read_bytes()).hexdigest()
             plan_digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
@@ -2762,6 +2873,7 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             nequip_timing_digest = hashlib.sha256(nequip_timing_path.read_bytes()).hexdigest()
             environment_size = environment_snapshot.stat().st_size
             case_summary_size = case_summary_csv.stat().st_size
+            repeat_timing_size = repeat_timing_csv.stat().st_size
             manifest_snapshot_size = manifest_snapshot.stat().st_size
             preflight_size = preflight_report_path.stat().st_size
             plan_size = plan_path.stat().st_size
@@ -2792,6 +2904,8 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertTrue(environment_snapshot_exists)
         self.assertTrue(case_summary_exists)
         self.assertTrue(correlation_exists)
+        self.assertTrue(repeat_timing_exists)
+        self.assertTrue(repeat_timing_markdown_exists)
         self.assertTrue(speedup_svg_exists)
         self.assertTrue(manifest_snapshot_exists)
         self.assertEqual(
@@ -2814,6 +2928,11 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertIn("enabled_sample_stddev_seconds", case_summary_text)
         self.assertIn("baseline_mean_95ci_half_width_seconds", case_summary_text)
         self.assertIn("speedup_95ci_lower_bound", case_summary_text)
+        self.assertIn("baseline-disabled", repeat_timing_text)
+        self.assertIn("isodelta-enabled", repeat_timing_text)
+        self.assertIn("external_timing_report", repeat_timing_text)
+        self.assertIn("disabled", repeat_timing_text)
+        self.assertIn("enabled", repeat_timing_text)
         self.assertEqual(nequip_case["baseline_timing_count"], 2)
         self.assertAlmostEqual(
             nequip_case["baseline_mean_95ci_half_width_seconds"],
@@ -2867,6 +2986,14 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertEqual(
             summary["artifact_fingerprints"]["case_summary_csv"]["size_bytes"],
             case_summary_size,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["repeat_timing_csv"]["sha256"],
+            repeat_timing_digest,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["repeat_timing_csv"]["size_bytes"],
+            repeat_timing_size,
         )
         self.assertEqual(
             summary["artifact_fingerprints"]["manifest_snapshot"]["sha256"],
