@@ -1179,7 +1179,12 @@ def main() -> None:
         and "PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS" in cluster_suite
         and "PAPER_ARTIFACT_COMMENTS" in cluster_suite
         and "GENERATED_ARTIFACT_COMMENT_KEY" in cluster_suite
+        and "READINESS_REPORT_COMMENT" in cluster_suite
+        and "ARTIFACT_PREPARATION_REPORT_COMMENT" in cluster_suite
+        and "PREFLIGHT_REPORT_COMMENT" in cluster_suite
+        and "PIPELINE_REPORT_COMMENT" in cluster_suite
         and "RUN_PLAN_REPORT_COMMENT" in cluster_suite
+        and "_require_report_comment" in cluster_suite
         and "PIPELINE_READINESS_CHECKS_ERROR" in cluster_suite
         and "PIPELINE_SUITE_REQUIRED_MODELS_ERROR" in cluster_suite
         and "PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
@@ -1204,6 +1209,8 @@ def main() -> None:
         and "_resolve_present_fingerprint_path" in cluster_suite
         and "# CLI runtime overrides: ablation_mode=isodelta-enabled." in cluster_suite_test
         and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
+        and "uncommented_pipeline_report_error" in cluster_suite_test
+        and "PREFLIGHT_REPORT_COMMENT" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_dry_run_passed_mode"
@@ -1565,6 +1572,11 @@ def main() -> None:
         and "run_isodelta_sync_gate.py" in doc
         and "`isodelta_sync_report.json`" in doc
         and "`report_comment`" in doc
+        and "`readiness_report.json`" in doc
+        and "`artifact_preparation_report.json`" in doc
+        and "`preflight_report.json`" in doc
+        and "`pipeline_report.json`" in doc
+        and "stage reports" in doc
         and "`validation_report_fingerprint`" in doc
         and "`validation_report_summary`" in doc
         and "validation report `report_comment`" in doc

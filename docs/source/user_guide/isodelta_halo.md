@@ -423,10 +423,11 @@ use `--ablation-mode-override` to pass
 `--ablation-mode-override isodelta-enabled` at execution time. The override is a
 runtime convenience for `sevennet_lammps` and `external_pair` cases; `trace_only`
 cases remain unchanged because they do not launch disabled/enabled timing
-commands. The generated plan, preflight report, pipeline report, and final
-summary keep the original manifest fingerprint and also record the effective
-CLI change in `suite.runtime_overrides`, so reviewers can distinguish the
-archived TOML from the actual ablation mode used for that run.
+commands. The generated readiness report, artifact-preparation report, plan,
+preflight report, pipeline report, and final summary keep the original
+manifest fingerprint and also record the effective CLI change in
+`suite.runtime_overrides`, so reviewers can distinguish the archived TOML from
+the actual ablation mode used for that run.
 Required artifacts must already exist or be downloadable; if `--skip-downloads`
 is active and a required artifact is missing, the suite fails before launching
 any case. Optional artifacts with `required = false` may be absent, but the
@@ -641,9 +642,14 @@ After successful collection, the suite writes:
 Generated paper artifacts are self-describing. CSV tables start with a
 `# IsoDelta-Halo ...` comment, Markdown tables start with an HTML comment, SVG
 figures include a `<desc>` element, and JSON artifacts carry an
-`artifact_comment` or `report_comment` field. These comments are part of the
-evidence contract, not decoration: they tell a reviewer what the file means
-before the numbers are interpreted.
+`artifact_comment` or `report_comment` field. The stage JSON reports
+(`readiness_report.json`, `artifact_preparation_report.json`,
+`preflight_report.json`, `isodelta_cluster_paper_plan.json`, and
+`pipeline_report.json`) must also keep their `report_comment`; the pipeline
+verifier rejects a passed publication report when any required stage report no
+longer describes its evidence purpose. These comments are part of the evidence
+contract, not decoration: they tell a reviewer what the file means before the
+numbers are interpreted.
 
 Use `--collect-only` to regenerate tables, correlations, and figures from
 existing benchmark reports, external timing reports, and trace evidence without
@@ -724,8 +730,8 @@ Each SVG figure must parse as an SVG document with width, height, viewBox, and t
 the speedup chart must include every measured-speedup case label from
 `summary["cases"]`, and scatter plots must contain the same number of plotted
 points as the summary data pairs they visualize.
-`environment_snapshot.json` must carry the expected snapshot schema and `artifact_comment`, and the manifest
-snapshot must contain both the generated-file comment and the `[suite]` table.
+`environment_snapshot.json` must carry the expected snapshot schema and `artifact_comment`, stage reports
+must carry the expected `report_comment`, and the manifest snapshot must contain both the generated-file comment and the `[suite]` table.
 This catches a corrupted table or graph even when the summary JSON was
 regenerated with a matching hash.
 For `external_pair` cases, `--verify-output-bundle` also reopens the archived

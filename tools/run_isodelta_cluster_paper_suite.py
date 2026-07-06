@@ -315,6 +315,22 @@ SUMMARY_REPORT_COMMENT = (
     "IsoDelta-Halo paper bundle summary linking cases, commands, tables, "
     "figures, fingerprints, and provenance."
 )
+READINESS_REPORT_COMMENT = (
+    "IsoDelta-Halo final-paper readiness report checking model scope, GPU "
+    "requirements, artifact integrity, case pairing, and uncertainty gates."
+)
+ARTIFACT_PREPARATION_REPORT_COMMENT = (
+    "IsoDelta-Halo artifact preparation report recording downloaded or reused "
+    "inputs, SHA-256 checks, and post-prepare file evidence."
+)
+PREFLIGHT_REPORT_COMMENT = (
+    "IsoDelta-Halo preflight report recording artifact availability, GPU "
+    "detection, model import checks, command logs, and environment evidence."
+)
+PIPELINE_REPORT_COMMENT = (
+    "IsoDelta-Halo pipeline report linking readiness, artifact preparation, "
+    "preflight, run-plan, suite execution, and bundle-verification evidence."
+)
 RUN_PLAN_REPORT_COMMENT = (
     "IsoDelta-Halo execution plan written before cluster jobs so paper runs "
     "can be audited before GPU time is used."
@@ -668,6 +684,23 @@ def _as_json_string(value: Any, field_name: str) -> str:
     _require(isinstance(value, str), f"{field_name} must be a string")
     _require(bool(value.strip()), f"{field_name} must not be empty")
     return value.strip()
+
+
+def _require_report_comment(
+    payload: dict[str, Any],
+    label: str,
+    expected_comment: str,
+) -> str:
+    """Verify that a generated JSON report explains its evidence purpose."""
+    report_comment = _as_json_string(
+        payload.get(GENERATED_REPORT_COMMENT_KEY),
+        f"{label}.{GENERATED_REPORT_COMMENT_KEY}",
+    )
+    _require(
+        report_comment == expected_comment,
+        f"{label} must describe its generated report purpose",
+    )
+    return report_comment
 
 
 def _as_json_bool(value: Any, field_name: str) -> bool:
@@ -1545,6 +1578,7 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
     ready = all(check["passed"] for check in checks)
     return {
         "readiness_schema_version": READINESS_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: READINESS_REPORT_COMMENT,
         "status": "ready" if ready else "failed",
         "suite": {
             "name": config.name,
@@ -1998,6 +2032,7 @@ def prepare_artifacts(config: SuiteConfig, *, dry_run: bool = False) -> dict[str
     report_path = config.output_dir / ARTIFACT_PREPARATION_REPORT_NAME
     payload = {
         "artifact_preparation_schema_version": ARTIFACT_PREPARATION_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: ARTIFACT_PREPARATION_REPORT_COMMENT,
         "status": status,
         "dry_run": dry_run,
         "report_path": str(report_path),
@@ -2239,6 +2274,7 @@ def run_preflight_only(
     )
     payload = {
         "preflight_report_schema_version": PREFLIGHT_REPORT_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: PREFLIGHT_REPORT_COMMENT,
         "status": _preflight_status_from_failures(dry_run=dry_run, failures=failures),
         "dry_run": dry_run,
         "skip_downloads": skip_downloads,
@@ -2338,6 +2374,7 @@ def _write_pipeline_report(
     """Write the top-level paper pipeline report."""
     payload = {
         "pipeline_report_schema_version": PIPELINE_REPORT_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: PIPELINE_REPORT_COMMENT,
         "status": _pipeline_status(dry_run=dry_run, failed=failed),
         "report_path": str(report_path),
         "provenance": collect_run_provenance(),
@@ -4505,6 +4542,11 @@ def _require_pipeline_readiness_report(
         schema_version == READINESS_SCHEMA_VERSION,
         f"readiness_report.readiness_schema_version must be {READINESS_SCHEMA_VERSION!r}",
     )
+    _require_report_comment(
+        readiness_payload,
+        "readiness_report",
+        READINESS_REPORT_COMMENT,
+    )
     readiness_status = _as_json_string(
         readiness_payload.get("status"),
         "readiness_report.status",
@@ -4617,6 +4659,11 @@ def _require_pipeline_artifact_preparation_report(
             "artifact_preparation_report.artifact_preparation_schema_version "
             f"must be {ARTIFACT_PREPARATION_SCHEMA_VERSION!r}"
         ),
+    )
+    _require_report_comment(
+        artifact_payload,
+        "artifact_preparation_report",
+        ARTIFACT_PREPARATION_REPORT_COMMENT,
     )
     status = _as_json_string(
         artifact_payload.get("status"),
@@ -4960,6 +5007,11 @@ def _require_pipeline_preflight_gpu_check(
         preflight_schema_version == PREFLIGHT_REPORT_SCHEMA_VERSION,
         f"preflight_report_schema_version must be {PREFLIGHT_REPORT_SCHEMA_VERSION!r}",
     )
+    _require_report_comment(
+        preflight_payload,
+        "preflight_report",
+        PREFLIGHT_REPORT_COMMENT,
+    )
     preflight_status = _as_json_string(
         preflight_payload.get("status"),
         "preflight_report.status",
@@ -5179,6 +5231,11 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         bundle_verification is not None
         and bundle_verification.get("status") == PIPELINE_STATUS_PASSED,
         PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR,
+    )
+    _require_report_comment(
+        pipeline_payload,
+        "pipeline_report",
+        PIPELINE_REPORT_COMMENT,
     )
     return {
         "status": "passed",

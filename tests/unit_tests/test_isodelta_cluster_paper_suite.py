@@ -659,6 +659,9 @@ def _pipeline_preflight_report(
         "preflight_report_schema_version": (
             isodelta_cluster_suite.PREFLIGHT_REPORT_SCHEMA_VERSION
         ),
+        isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_cluster_suite.PREFLIGHT_REPORT_COMMENT
+        ),
         "status": isodelta_cluster_suite.PREFLIGHT_STATUS_PASSED,
         "skip_gpu_check": skip_gpu_check,
         "allow_gpu_mismatch": allow_gpu_mismatch,
@@ -683,6 +686,9 @@ def _pipeline_readiness_report(
     """Return readiness evidence for pipeline-report semantic verification."""
     return {
         "readiness_schema_version": isodelta_cluster_suite.READINESS_SCHEMA_VERSION,
+        isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_cluster_suite.READINESS_REPORT_COMMENT
+        ),
         "status": status,
         "suite": {
             "expected_gpus": expected_gpus,
@@ -710,6 +716,9 @@ def _pipeline_artifact_preparation_report(
     return {
         "artifact_preparation_schema_version": (
             isodelta_cluster_suite.ARTIFACT_PREPARATION_SCHEMA_VERSION
+        ),
+        isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_cluster_suite.ARTIFACT_PREPARATION_REPORT_COMMENT
         ),
         "status": isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
         "dry_run": dry_run,
@@ -2758,6 +2767,10 @@ artifacts = ["dataset"]
             report["preflight_report_schema_version"],
             isodelta_cluster_suite.PREFLIGHT_REPORT_SCHEMA_VERSION,
         )
+        self.assertEqual(
+            report[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.PREFLIGHT_REPORT_COMMENT,
+        )
         self.assertTrue(report["downloads"][0]["downloaded"])
         self.assertEqual(
             report["case_preflights"][0]["status"],
@@ -2964,6 +2977,31 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 ["--verify-pipeline-report", str(pipeline_report_path)]
             )
             readiness_report_path = output_dir / isodelta_cluster_suite.READINESS_REPORT_NAME
+            artifact_report_path = (
+                output_dir / isodelta_cluster_suite.ARTIFACT_PREPARATION_REPORT_NAME
+            )
+            preflight_report_path = output_dir / isodelta_cluster_suite.PREFLIGHT_REPORT_NAME
+            readiness_report = json.loads(readiness_report_path.read_text(encoding="utf-8"))
+            artifact_report = json.loads(artifact_report_path.read_text(encoding="utf-8"))
+            preflight_report = json.loads(preflight_report_path.read_text(encoding="utf-8"))
+            uncommented_pipeline_report = dict(pipeline_report)
+            uncommented_pipeline_report.pop(
+                isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY
+            )
+            pipeline_report_path.write_text(
+                json.dumps(uncommented_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                uncommented_pipeline_report_error = str(exc)
+            else:
+                uncommented_pipeline_report_error = ""
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             readiness_report_path.write_text(
                 readiness_report_path.read_text(encoding="utf-8") + "\n",
                 encoding="utf-8",
@@ -2978,6 +3016,22 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertEqual(exit_code, 0)
         self.assertEqual(pipeline_cli_exit_code, 0)
         self.assertEqual(pipeline_report["status"], isodelta_cluster_suite.PIPELINE_STATUS_PASSED)
+        self.assertEqual(
+            pipeline_report[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.PIPELINE_REPORT_COMMENT,
+        )
+        self.assertEqual(
+            readiness_report[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.READINESS_REPORT_COMMENT,
+        )
+        self.assertEqual(
+            artifact_report[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.ARTIFACT_PREPARATION_REPORT_COMMENT,
+        )
+        self.assertEqual(
+            preflight_report[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.PREFLIGHT_REPORT_COMMENT,
+        )
         self.assertEqual(
             stage_names,
             [
@@ -3035,6 +3089,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn("preflight_environment_snapshot", summary["artifact_fingerprints"])
         self.assertIn("run_plan", summary["artifact_fingerprints"])
         self.assertNotIn("pipeline_report", summary["artifact_fingerprints"])
+        self.assertIn("pipeline_report.report_comment", uncommented_pipeline_report_error)
         self.assertIn("SHA-256 mismatch", mutated_stage_report_error)
 
     def test_pipeline_stops_when_readiness_fails(self) -> None:
