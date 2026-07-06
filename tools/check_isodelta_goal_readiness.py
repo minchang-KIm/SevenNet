@@ -159,9 +159,14 @@ REQUIRED_FILE_SNIPPETS = {
         "ABLATION_MODE_CHOICES",
         "--ablation-mode",
         "benchmark_cases_for_ablation_mode",
+        "BENCHMARK_REPORT_COMMENT",
+        "GENERATED_REPORT_COMMENT_KEY",
         '"benchmark_cases": [case.name for case in benchmark_cases]',
     ),
     "tools/check_isodelta_benchmark_report.py": (
+        "BENCHMARK_REPORT_COMMENT",
+        "GENERATED_REPORT_COMMENT_KEY",
+        "_check_report_comment",
         "REQUIRED_CASE_ENVIRONMENT_OVERRIDES",
         "ENV_FLAG_FALSE_VALUES",
         "env_flag_is_enabled",
@@ -285,6 +290,7 @@ REQUIRED_FILE_SNIPPETS = {
         "bundle verification failure returns a nonzero exit code",
         "`git_provenance` fields",
         "`report_comment`",
+        "The checker also requires `report_comment`",
         "`readiness_report.json`",
         "`artifact_preparation_report.json`",
         "`preflight_report.json`",
@@ -419,6 +425,8 @@ REQUIRED_FILE_SNIPPETS = {
     ),
     "tests/unit_tests/test_isodelta_benchmark_report_check.py": (
         "test_validate_report_accepts_false_disable_env_in_enabled_case",
+        "test_validate_report_rejects_missing_report_comment",
+        "test_validate_report_rejects_wrong_report_comment",
     ),
     "tests/unit_tests/test_isodelta_benchmark_parser.py": (
         "test_ablation_mode_selects_one_benchmark_case",

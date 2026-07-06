@@ -682,8 +682,10 @@ def main() -> None:
         "ABLATION_MODE_CHOICES" in benchmark
         and "--ablation-mode" in benchmark
         and "benchmark_cases_for_ablation_mode" in benchmark
+        and "BENCHMARK_REPORT_COMMENT" in benchmark
+        and "GENERATED_REPORT_COMMENT_KEY" in benchmark
         and '"benchmark_cases": [case.name for case in benchmark_cases]' in benchmark,
-        "benchmark runner must expose one-sided ablation runtime options",
+        "benchmark runner must expose ablation options and self-describing reports",
     )
     _require(
         "check_isodelta_build_prereqs.py" in experiment
@@ -812,6 +814,15 @@ def main() -> None:
         "benchmark report checker must require miss breakdown coverage",
     )
     _require(
+        "BENCHMARK_REPORT_COMMENT" in report_check
+        and "GENERATED_REPORT_COMMENT_KEY" in report_check
+        and "_check_report_comment" in report_check
+        and "report_comment" in benchmark_report_test
+        and "test_validate_report_rejects_missing_report_comment" in benchmark_report_test
+        and "test_validate_report_rejects_wrong_report_comment" in benchmark_report_test,
+        "benchmark report checker must require self-describing JSON evidence",
+    )
+    _require(
         "final_thermo_delta_vs_disabled_cache" in doc
         and "final_thermo_observables" in doc,
         "IsoDelta-Halo guide must document final thermo consistency fields",
@@ -819,11 +830,13 @@ def main() -> None:
     _require(
         "provenance.report_schema_version" in doc
         and "provenance.git_commit" in doc
+        and "`report_comment`" in doc
         and "case_environment_overrides" in doc,
         "IsoDelta-Halo guide must document report provenance fields",
     )
     _require(
         "report checker requires `provenance.report_schema_version`" in doc
+        and "The checker also requires `report_comment`" in doc
         and "provenance.git_branch" in doc
         and "provenance.git_dirty" in doc,
         "IsoDelta-Halo guide must document provenance validation",

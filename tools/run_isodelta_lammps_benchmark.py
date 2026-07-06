@@ -26,6 +26,11 @@ from typing import Any
 REPO_ROOT_PARENT_DEPTH = 1
 REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+BENCHMARK_REPORT_COMMENT = (
+    "IsoDelta-Halo paired LAMMPS benchmark report recording disabled-cache "
+    "baseline and enabled-cache timing, thermo, cache-summary, and provenance evidence."
+)
 DEFAULT_OUTPUT_DIR = Path("isodelta_benchmark_runs")
 DEFAULT_REPEAT_COUNT = 3
 DEFAULT_RUN_TIMEOUT_SECONDS = 3600.0
@@ -527,6 +532,7 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     report = {
+        GENERATED_REPORT_COMMENT_KEY: BENCHMARK_REPORT_COMMENT,
         "provenance": collect_run_provenance(args.ablation_mode, benchmark_cases),
         "ablation_mode": args.ablation_mode,
         "benchmark_cases": [case.name for case in benchmark_cases],

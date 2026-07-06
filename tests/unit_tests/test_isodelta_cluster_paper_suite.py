@@ -99,6 +99,9 @@ def _disabled_cache_summary() -> dict[str, float]:
 def _benchmark_report() -> dict[str, object]:
     """Create a small passing paired benchmark report."""
     return {
+        isodelta_cluster_suite.benchmark_check.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_cluster_suite.benchmark_check.BENCHMARK_REPORT_COMMENT
+        ),
         "provenance": {
             "report_schema_version": "isodelta-benchmark-report-v1",
             "git_commit": "0123456789abcdef",

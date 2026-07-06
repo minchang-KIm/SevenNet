@@ -121,6 +121,9 @@ def _disabled_cache_summary(attempts: float = MIN_ENABLED_ATTEMPTS) -> dict[str,
 def _benchmark_report() -> dict[str, object]:
     """Create a benchmark report that proves correctness and speedup."""
     return {
+        isodelta_evidence_bundle.benchmark_check.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_evidence_bundle.benchmark_check.BENCHMARK_REPORT_COMMENT
+        ),
         "provenance": {
             "report_schema_version": EXPECTED_REPORT_SCHEMA_VERSION,
             "git_commit": "0123456789abcdef",

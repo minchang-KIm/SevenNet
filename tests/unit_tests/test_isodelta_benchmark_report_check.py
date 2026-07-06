@@ -105,6 +105,9 @@ def _disabled_cache_summary(attempts: float) -> dict[str, float]:
 def _valid_report() -> dict[str, object]:
     """Create a small benchmark report with passing correctness evidence."""
     return {
+        isodelta_report_check.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_report_check.BENCHMARK_REPORT_COMMENT
+        ),
         "provenance": {
             "report_schema_version": EXPECTED_REPORT_SCHEMA_VERSION,
             "git_commit": EXPECTED_GIT_COMMIT,
@@ -222,6 +225,10 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
             evidence["report_schema_version"],
             EXPECTED_REPORT_SCHEMA_VERSION,
         )
+        self.assertEqual(
+            evidence[isodelta_report_check.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_report_check.BENCHMARK_REPORT_COMMENT,
+        )
         self.assertEqual(evidence["git_commit"], EXPECTED_GIT_COMMIT)
         self.assertEqual(evidence["git_branch"], EXPECTED_GIT_BRANCH)
         self.assertFalse(evidence["git_dirty"])
@@ -253,6 +260,34 @@ class IsoDeltaBenchmarkReportCheckTest(unittest.TestCase):
             ISODELTA_MEAN_LOOP_TIME_SECONDS,
         )
         self.assertEqual(evidence["timing_speedup_residual"], 0.0)
+
+    def test_validate_report_rejects_missing_report_comment(self) -> None:
+        """Benchmark JSON should explain what source evidence it contains."""
+        report = _valid_report()
+        del report[isodelta_report_check.GENERATED_REPORT_COMMENT_KEY]
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "report_comment",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
+
+    def test_validate_report_rejects_wrong_report_comment(self) -> None:
+        """The benchmark report comment should not be a generic JSON label."""
+        report = _valid_report()
+        report[isodelta_report_check.GENERATED_REPORT_COMMENT_KEY] = "generic report"
+
+        with self.assertRaisesRegex(
+            isodelta_report_check.ReportCheckError,
+            "benchmark evidence",
+        ):
+            isodelta_report_check.validate_report(
+                report,
+                isodelta_report_check.ReportThresholds(),
+            )
 
     def test_validate_report_rejects_missing_run_timeout(self) -> None:
         """Paper evidence should record the timeout used for each run."""

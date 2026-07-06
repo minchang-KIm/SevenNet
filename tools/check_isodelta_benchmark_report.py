@@ -20,6 +20,11 @@ from typing import Any
 PROVENANCE_KEY = "provenance"
 REPORT_SCHEMA_VERSION_KEY = "report_schema_version"
 EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+BENCHMARK_REPORT_COMMENT = (
+    "IsoDelta-Halo paired LAMMPS benchmark report recording disabled-cache "
+    "baseline and enabled-cache timing, thermo, cache-summary, and provenance evidence."
+)
 GIT_COMMIT_KEY = "git_commit"
 GIT_BRANCH_KEY = "git_branch"
 GIT_DIRTY_KEY = "git_dirty"
@@ -257,6 +262,19 @@ def _is_close(
 def _summary(report: dict[str, Any]) -> dict[str, Any]:
     """Return the report summary object."""
     return _as_mapping(report.get(SUMMARY_KEY), SUMMARY_KEY)
+
+
+def _check_report_comment(report: dict[str, Any]) -> str:
+    """Require the generated benchmark report to describe its evidence purpose."""
+    report_comment = _as_nonempty_string(
+        report.get(GENERATED_REPORT_COMMENT_KEY),
+        GENERATED_REPORT_COMMENT_KEY,
+    )
+    _require(
+        report_comment == BENCHMARK_REPORT_COMMENT,
+        f"{GENERATED_REPORT_COMMENT_KEY} must describe benchmark evidence",
+    )
+    return report_comment
 
 
 def _results(report: dict[str, Any]) -> list[Any]:
@@ -819,6 +837,7 @@ def validate_report(
 ) -> dict[str, Any]:
     """Validate one report and return a compact evidence summary."""
     validate_thresholds(thresholds)
+    report_comment = _check_report_comment(report)
     provenance_evidence = _check_provenance(report)
     summary = _summary(report)
     run_timeout_seconds = _check_run_timeout(report)
@@ -842,6 +861,7 @@ def validate_report(
     )
     return {
         "status": "passed",
+        GENERATED_REPORT_COMMENT_KEY: report_comment,
         "thresholds": asdict(thresholds),
         **provenance_evidence,
         "successful_run_count": successful_run_count,

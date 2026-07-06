@@ -795,6 +795,7 @@ unbounded experiment.
 
 The runner writes `isodelta_benchmark_report.json`. Important fields are:
 
+- `report_comment`
 - `provenance.report_schema_version`
 - `provenance.git_commit`
 - `provenance.git_dirty`
@@ -846,6 +847,9 @@ target simulation. `--min-speedup`, `--min-hit-rate-percent`,
 `--min-enabled-cache-attempts`, and `--min-enabled-cache-hits` are effect gates:
 use them when making a performance claim, and archive the command with the
 benchmark report so the acceptance rule is reproducible.
+The checker also requires `report_comment`, so a copied benchmark JSON still
+describes that it contains disabled-cache baseline and enabled-cache timing,
+thermo, cache-summary, and provenance evidence.
 The checker also requires every enabled run to include all IsoDelta-Halo miss
 reason counters, which keeps failed reuse diagnosable instead of reducing the
 experiment to a single speedup number.
