@@ -75,6 +75,53 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertIn("pushed", report["commands"][PUSH_COMMAND_INDEX]["stdout_tail"])
         self.assertIsNone(report["push_failure"])
 
+    def test_run_sync_records_git_provenance_for_push_target(self) -> None:
+        """Sync reports should identify the local and remote refs being synced."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        expected_remote_ref = "refs/remotes/origin/feature"
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): "head-sha",
+            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", expected_remote_ref): "remote-feature-sha",
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=(sys.executable, "-c", "print('valid')"),
+                        push_command=(sys.executable, "-c", "print('pushed')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.SUCCESS_RETURN_CODE)
+        self.assertEqual(
+            report["git_provenance"],
+            {
+                "current_branch": "feature",
+                "head_commit": "head-sha",
+                "target_branch_commit": "feature-sha",
+                "remote_url": "https://example.invalid/repo.git",
+                "remote_tracking_ref": expected_remote_ref,
+                "remote_tracking_commit": "remote-feature-sha",
+            },
+        )
+
     def test_run_sync_skips_push_after_validation_failure(self) -> None:
         """A failing validation command should prevent the push command."""
         original_root = sync_gate.REPO_ROOT

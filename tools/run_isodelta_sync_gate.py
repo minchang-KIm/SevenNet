@@ -136,6 +136,25 @@ def _push_command(remote: str, branch: str) -> tuple[str, ...]:
     return ("git", "push", "-u", remote, branch)
 
 
+def _sync_git_provenance(remote: str, branch: str | None) -> dict[str, str | None]:
+    """Collect local and remote refs that define one sync attempt."""
+    remote_tracking_ref = f"refs/remotes/{remote}/{branch}" if branch else None
+    return {
+        "current_branch": _current_branch(),
+        "head_commit": _metadata_command(("git", "rev-parse", "HEAD")),
+        "target_branch_commit": (
+            _metadata_command(("git", "rev-parse", branch)) if branch else None
+        ),
+        "remote_url": _metadata_command(("git", "remote", "get-url", remote)),
+        "remote_tracking_ref": remote_tracking_ref,
+        "remote_tracking_commit": (
+            _metadata_command(("git", "rev-parse", "--verify", remote_tracking_ref))
+            if remote_tracking_ref
+            else None
+        ),
+    }
+
+
 def _classify_push_failure(push_record: dict[str, Any] | None) -> dict[str, str] | None:
     """Classify a failed push so sync reports are actionable without logs open."""
     if push_record is None:
@@ -218,6 +237,7 @@ def run_sync(
         "validation_report_path": str(validation_report_path),
         "git_commit": _metadata_command(("git", "rev-parse", "HEAD")),
         "git_status_short": _metadata_command(("git", "status", "--short")),
+        "git_provenance": _sync_git_provenance(remote, resolved_branch),
         "commands": command_records,
         "push_failure": _classify_push_failure(push_record),
     }
