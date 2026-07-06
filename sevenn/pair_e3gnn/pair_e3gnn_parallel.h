@@ -124,6 +124,7 @@ private:
   bool comm_list_tags_match_cache() const;
   void store_comm_list_tag_signature();
   void record_comm_cache_miss(CommCacheMissReason);
+  static bool comm_cache_miss_reason_is_valid(CommCacheMissReason);
   static const char *comm_cache_miss_reason_name(CommCacheMissReason);
   void print_comm_cache_summary() const;
 

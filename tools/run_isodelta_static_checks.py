@@ -252,8 +252,13 @@ def main() -> None:
         "profiling memory labels must match MiB calculations",
     )
     _require(
-        "comm_cache_attempts++" in cpp and "comm_cache_hits++" in cpp,
-        "cache hit/attempt counters are missing",
+        "comm_cache_attempts++" in cpp
+        and "comm_cache_hits++" in cpp
+        and "comm_cache_miss_reason_is_valid" in combined
+        and "reason_index >= 0" in cpp
+        and "reason_index < kCommCacheMissReasonCount" in cpp
+        and "if (!comm_cache_miss_reason_is_valid(reason))" in cpp,
+        "cache counters or miss-reason bounds guard are missing",
     )
     _require(
         "print_comm_cache_summary" in combined and "hit_rate_percent" in cpp,

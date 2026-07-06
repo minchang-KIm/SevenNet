@@ -145,6 +145,10 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("comm_cache_attempts++", self.cpp)
         self.assertIn("comm_cache_hits++", self.cpp)
         self.assertIn("record_comm_cache_miss", self.combined)
+        self.assertIn("comm_cache_miss_reason_is_valid", self.combined)
+        self.assertIn("reason_index >= 0", self.cpp)
+        self.assertIn("reason_index < kCommCacheMissReasonCount", self.cpp)
+        self.assertIn("if (!comm_cache_miss_reason_is_valid(reason))", self.cpp)
         self.assertIn("hit_rate_percent", self.cpp)
 
     def test_cached_index_tensors_own_their_memory(self) -> None:

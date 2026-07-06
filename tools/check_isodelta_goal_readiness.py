@@ -39,6 +39,7 @@ REQUIRED_FILE_SNIPPETS = {
         "IsoDelta-Halo",
         "SEVENN_ISODELTA_HALO_DISABLE",
         "SEVENN_ISODELTA_HALO_PROFILE",
+        "comm_cache_miss_reason_is_valid",
     ),
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.h": (
         "IsoDelta",

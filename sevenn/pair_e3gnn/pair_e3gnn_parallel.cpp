@@ -758,8 +758,17 @@ void PairE3GNNParallel::notify_proc_ids(
 }
 
 void PairE3GNNParallel::record_comm_cache_miss(CommCacheMissReason reason) {
+  if (!comm_cache_miss_reason_is_valid(reason)) {
+    return;
+  }
   const size_t reason_index = static_cast<size_t>(reason);
   comm_cache_misses[reason_index]++;
+}
+
+bool PairE3GNNParallel::comm_cache_miss_reason_is_valid(
+    CommCacheMissReason reason) {
+  const int reason_index = static_cast<int>(reason);
+  return reason_index >= 0 && reason_index < kCommCacheMissReasonCount;
 }
 
 const char *PairE3GNNParallel::comm_cache_miss_reason_name(
