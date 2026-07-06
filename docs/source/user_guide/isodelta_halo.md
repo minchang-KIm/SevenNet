@@ -181,7 +181,11 @@ The sync gate runs `run_isodelta_validation.py` first and only attempts
 non-interactive `git push -u` when validation passes. It writes
 `isodelta_sync_report.json` with the validation command record, push command
 record, `git ls-remote --heads` remote-ref verification record, Git status,
-target remote/branch, the push stderr tail, and
+target remote/branch, the push stderr tail, and a
+`validation_report_fingerprint` object with the validation report SHA-256
+digest and byte size. If the validation command exits successfully but the
+validation report file is missing, the sync gate reports
+`validation_report_missing` and does not push. The report also stores
 `git_provenance` fields for the current branch, validated HEAD commit, local
 target branch commit, remote URL, and locally known remote-tracking commit. It
 also writes `remote_ref_verification` and only reports `synced` when the remote

@@ -30,14 +30,17 @@ DEFAULT_REMOTE = "fork"
 SUCCESS_RETURN_CODE = 0
 FAILURE_RETURN_CODE = 1
 COMMAND_OUTPUT_TAIL_CHARS = 4000
-BUNDLE_HASH_READ_CHUNK_BYTES = 1024 * 1024
+AUDIT_FILE_HASH_READ_CHUNK_BYTES = 1024 * 1024
+BUNDLE_HASH_READ_CHUNK_BYTES = AUDIT_FILE_HASH_READ_CHUNK_BYTES
 STATUS_SYNCED = "synced"
 STATUS_VALIDATED = "validated"
 STATUS_VALIDATION_FAILED = "validation_failed"
+STATUS_VALIDATION_REPORT_MISSING = "validation_report_missing"
 STATUS_PUSH_FAILED = "push_failed"
 STATUS_REMOTE_VERIFICATION_FAILED = "remote_verification_failed"
 REMOTE_REF_VERIFICATION_KEY = "remote_ref_verification"
 REMOTE_REF_VERIFY_COMMAND_NAME = "remote_ref_verify"
+VALIDATION_REPORT_FINGERPRINT_KEY = "validation_report_fingerprint"
 PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_COMMAND_NAME = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME = "push_failure_bundle_verify"
@@ -162,17 +165,22 @@ def _bundle_verify_command(bundle_path: Path) -> tuple[str, ...]:
     return ("git", "bundle", "verify", str(bundle_path))
 
 
-def _bundle_file_fingerprint(bundle_path: Path) -> dict[str, Any]:
-    """Return a SHA-256 fingerprint for a generated git bundle."""
+def _file_fingerprint(path: Path) -> dict[str, Any]:
+    """Return a SHA-256 fingerprint for an audit artifact."""
     digest = hashlib.sha256()
-    with bundle_path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(BUNDLE_HASH_READ_CHUNK_BYTES), b""):
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(AUDIT_FILE_HASH_READ_CHUNK_BYTES), b""):
             digest.update(chunk)
     return {
-        "path": str(bundle_path),
+        "path": str(path),
         "sha256": digest.hexdigest(),
-        "size_bytes": bundle_path.stat().st_size,
+        "size_bytes": path.stat().st_size,
     }
+
+
+def _bundle_file_fingerprint(bundle_path: Path) -> dict[str, Any]:
+    """Return a SHA-256 fingerprint for a generated git bundle."""
+    return _file_fingerprint(bundle_path)
 
 
 def _sync_git_provenance(remote: str, branch: str | None) -> dict[str, str | None]:
@@ -353,11 +361,18 @@ def run_sync(
         validation_command or _validation_command(validation_report_path, resolved_branch)
     )
     command_records.append({"name": "validation", **validation_record})
+    validation_report_fingerprint = (
+        _file_fingerprint(validation_report_path)
+        if validation_report_path.exists()
+        else None
+    )
     push_record: dict[str, Any] | None = None
     remote_ref_verification_report: dict[str, Any] | None = None
     status = STATUS_VALIDATION_FAILED
     if validation_record["returncode"] == SUCCESS_RETURN_CODE:
-        if skip_push:
+        if validation_report_fingerprint is None:
+            status = STATUS_VALIDATION_REPORT_MISSING
+        elif skip_push:
             status = STATUS_VALIDATED
         elif resolved_branch:
             push_record = _run_command(
@@ -413,6 +428,7 @@ def run_sync(
         "remote": remote,
         "branch": resolved_branch,
         "validation_report_path": str(validation_report_path),
+        VALIDATION_REPORT_FINGERPRINT_KEY: validation_report_fingerprint,
         "git_commit": _metadata_command(("git", "rev-parse", "HEAD")),
         "git_status_short": _metadata_command(("git", "status", "--short")),
         "git_provenance": _sync_git_provenance(remote, resolved_branch),

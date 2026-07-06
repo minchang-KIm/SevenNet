@@ -366,6 +366,9 @@ def main() -> None:
         and "STATUS_REMOTE_VERIFICATION_FAILED" in sync_gate
         and "REMOTE_REF_VERIFICATION_KEY" in sync_gate
         and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate
+        and "VALIDATION_REPORT_FINGERPRINT_KEY" in sync_gate
+        and "STATUS_VALIDATION_REPORT_MISSING" in sync_gate
+        and "_file_fingerprint" in sync_gate
         and "_remote_ref_verify_command" in sync_gate
         and "_verify_remote_ref" in sync_gate
         and "--push-failure-bundle" in sync_gate
@@ -384,6 +387,8 @@ def main() -> None:
         and "test_validation_command_enforces_target_branch" in sync_gate_test
         and "test_run_sync_records_git_provenance_for_push_target" in sync_gate_test
         and "test_run_sync_fails_when_remote_ref_does_not_match" in sync_gate_test
+        and "test_run_sync_rejects_missing_validation_report" in sync_gate_test
+        and "VALIDATION_REPORT_FINGERPRINT_KEY" in sync_gate_test
         and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate_test
         and "test_run_sync_can_write_bundle_after_push_failure" in sync_gate_test
         and "PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME" in sync_gate_test
@@ -1415,6 +1420,8 @@ def main() -> None:
         and "completion-readiness audit" in doc
         and "run_isodelta_sync_gate.py" in doc
         and "`isodelta_sync_report.json`" in doc
+        and "`validation_report_fingerprint`" in doc
+        and "`validation_report_missing`" in doc
         and "`git_provenance` fields" in doc
         and "`git ls-remote --heads`" in doc
         and "`remote_ref_verification`" in doc
