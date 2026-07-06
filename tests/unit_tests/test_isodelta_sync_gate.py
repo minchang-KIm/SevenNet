@@ -238,6 +238,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                             ),
                         ),
                         bundle_command=(sys.executable, "-c", bundle_script),
+                        bundle_verify_command=(sys.executable, "-c", "print('verified')"),
                     )
             finally:
                 sync_gate.REPO_ROOT = original_root
@@ -248,7 +249,12 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertTrue(bundle_exists)
         self.assertEqual(
             [record["name"] for record in report["commands"]],
-            ["validation", "push", sync_gate.PUSH_FAILURE_BUNDLE_COMMAND_NAME],
+            [
+                "validation",
+                "push",
+                sync_gate.PUSH_FAILURE_BUNDLE_COMMAND_NAME,
+                sync_gate.PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME,
+            ],
         )
         self.assertEqual(
             report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["status"],
@@ -257,6 +263,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertEqual(
             report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["path"],
             str(bundle_path),
+        )
+        self.assertEqual(
+            report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["verify_returncode"],
+            sync_gate.SUCCESS_RETURN_CODE,
         )
         self.assertEqual(
             report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["fingerprint"],

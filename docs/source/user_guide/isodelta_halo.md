@@ -187,7 +187,8 @@ When the cluster login node cannot authenticate to GitHub, add
 the `--push-failure-bundle` option with a path such as
 `isodelta_push_failure.bundle`; after validation passes and push fails, the gate
 writes a portable `git bundle` for the validated branch and records the bundle
-command, SHA-256 digest, and byte size under `push_failure_bundle`.
+creation command, `git bundle verify` `verify_returncode`, SHA-256 digest,
+and byte size under `push_failure_bundle`.
 
 For a local completion-readiness audit, generate
 `isodelta_goal_readiness_report.json` as a source-tree report:

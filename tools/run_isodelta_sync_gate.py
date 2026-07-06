@@ -37,6 +37,7 @@ STATUS_VALIDATION_FAILED = "validation_failed"
 STATUS_PUSH_FAILED = "push_failed"
 PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_COMMAND_NAME = "push_failure_bundle"
+PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME = "push_failure_bundle_verify"
 PUSH_FAILURE_BUNDLE_STATUS_CREATED = "created"
 PUSH_FAILURE_BUNDLE_STATUS_FAILED = "failed"
 PUSH_FAILURE_BUNDLE_STATUS_SKIPPED = "skipped"
@@ -148,6 +149,11 @@ def _bundle_command(bundle_path: Path, branch: str) -> tuple[str, ...]:
     return ("git", "bundle", "create", str(bundle_path), branch)
 
 
+def _bundle_verify_command(bundle_path: Path) -> tuple[str, ...]:
+    """Build a git command that verifies a generated bundle is readable."""
+    return ("git", "bundle", "verify", str(bundle_path))
+
+
 def _bundle_file_fingerprint(bundle_path: Path) -> dict[str, Any]:
     """Return a SHA-256 fingerprint for a generated git bundle."""
     digest = hashlib.sha256()
@@ -207,7 +213,8 @@ def _write_push_failure_bundle(
     bundle_path: Path,
     branch: str | None,
     bundle_command: tuple[str, ...] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
+    bundle_verify_command: tuple[str, ...] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Create a portable git bundle for a branch that could not be pushed."""
     if branch is None:
         skipped_record = {
@@ -223,7 +230,7 @@ def _write_push_failure_bundle(
             "status": PUSH_FAILURE_BUNDLE_STATUS_SKIPPED,
             "returncode": FAILURE_RETURN_CODE,
         }
-        return skipped_record, skipped_report
+        return [skipped_record], skipped_report
     bundle_path.parent.mkdir(parents=True, exist_ok=True)
     record = _run_command(bundle_command or _bundle_command(bundle_path, branch))
     named_record = {"name": PUSH_FAILURE_BUNDLE_COMMAND_NAME, **record}
@@ -232,20 +239,33 @@ def _write_push_failure_bundle(
         if record["returncode"] == SUCCESS_RETURN_CODE and bundle_path.exists()
         else None
     )
+    verify_record: dict[str, Any] | None = None
+    if fingerprint:
+        verify_record = {
+            "name": PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME,
+            **_run_command(bundle_verify_command or _bundle_verify_command(bundle_path)),
+        }
+    verify_returncode = (
+        verify_record["returncode"] if verify_record is not None else FAILURE_RETURN_CODE
+    )
     bundle_status = (
         PUSH_FAILURE_BUNDLE_STATUS_CREATED
-        if fingerprint
+        if fingerprint and verify_returncode == SUCCESS_RETURN_CODE
         else PUSH_FAILURE_BUNDLE_STATUS_FAILED
     )
     report = {
         "path": str(bundle_path),
         "status": bundle_status,
         "returncode": record["returncode"],
+        "verify_returncode": verify_returncode,
         "fingerprint": fingerprint,
     }
     if record["returncode"] == SUCCESS_RETURN_CODE and fingerprint is None:
         report["detail"] = "bundle command succeeded but output file is missing"
-    return named_record, report
+    command_records = [named_record]
+    if verify_record is not None:
+        command_records.append(verify_record)
+    return command_records, report
 
 
 def _write_report(report_path: Path, payload: dict[str, Any]) -> None:
@@ -265,6 +285,7 @@ def run_sync(
     validation_command: tuple[str, ...] | None = None,
     push_command: tuple[str, ...] | None = None,
     bundle_command: tuple[str, ...] | None = None,
+    bundle_verify_command: tuple[str, ...] | None = None,
 ) -> int:
     """Run validation, then optionally push, and write one sync evidence report."""
     resolved_branch = branch or _current_branch()
@@ -303,12 +324,13 @@ def run_sync(
 
     push_failure_bundle_report: dict[str, Any] | None = None
     if status == STATUS_PUSH_FAILED and push_failure_bundle_path is not None:
-        bundle_record, push_failure_bundle_report = _write_push_failure_bundle(
+        bundle_records, push_failure_bundle_report = _write_push_failure_bundle(
             bundle_path=push_failure_bundle_path,
             branch=resolved_branch,
             bundle_command=bundle_command,
+            bundle_verify_command=bundle_verify_command,
         )
-        command_records.append(bundle_record)
+        command_records.extend(bundle_records)
 
     payload = {
         "sync_report_schema_version": SYNC_REPORT_SCHEMA_VERSION,
