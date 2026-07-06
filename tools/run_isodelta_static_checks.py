@@ -945,6 +945,7 @@ def main() -> None:
         and "FINAL_PAPER_REQUIRED_MODELS" in cluster_suite
         and "FINAL_PAPER_PAIRED_CASE_KINDS" in cluster_suite
         and "FINAL_PAPER_MIN_REPEAT_COUNT" in cluster_suite
+        and "FINAL_PAPER_READINESS_CHECK_NAMES" in cluster_suite
         and "UNRESOLVED_TEMPLATE_MARKERS" in cluster_suite
         and "READINESS_SCHEMA_VERSION" in cluster_suite
         and "ARTIFACT_PREPARATION_SCHEMA_VERSION" in cluster_suite
@@ -1168,6 +1169,7 @@ def main() -> None:
         and "PIPELINE_GPU_MISMATCH_ALLOWED_ERROR" in cluster_suite
         and "PIPELINE_PREFLIGHT_GPU_CHECK_REQUIRED_ERROR" in cluster_suite
         and "PIPELINE_PREFLIGHT_GPU_COUNT_ERROR" in cluster_suite
+        and "PIPELINE_READINESS_CHECKS_ERROR" in cluster_suite
         and "PIPELINE_SUITE_REQUIRED_MODELS_ERROR" in cluster_suite
         and "PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
         and "PIPELINE_ONE_SIDED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
@@ -1178,6 +1180,7 @@ def main() -> None:
         and "PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR" in cluster_suite
         and "_as_json_bool" in cluster_suite
         and "_require_pipeline_report_modes" in cluster_suite
+        and "_require_pipeline_readiness_report" in cluster_suite
         and "_require_pipeline_preflight_gpu_check" in cluster_suite
         and "_require_pipeline_runtime_overrides" in cluster_suite
         and "_require_pipeline_suite_metadata" in cluster_suite
@@ -1192,6 +1195,8 @@ def main() -> None:
         and "test_verify_pipeline_report_rejects_skipped_gpu_check_mode"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_allowed_gpu_mismatch_mode"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_failed_readiness_check"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_preflight_skipped_gpu_check"
         in cluster_suite_test
@@ -1253,6 +1258,9 @@ def main() -> None:
         and "Runtime overrides are limited to known keys" in doc
         and "`ablation_mode = \"paired\"`" in doc
         and "one-sided ablation override" in doc
+        and "reopens the fingerprinted readiness report" in doc
+        and "every final-paper readiness check" in doc
+        and "present and passed" in doc
         and "reopens the fingerprinted preflight report" in doc
         and "checks `gpu_check`" in doc
         and "requested GPU count was actually detected" in doc

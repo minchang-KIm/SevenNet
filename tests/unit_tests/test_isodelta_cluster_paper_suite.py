@@ -621,6 +621,34 @@ def _pipeline_preflight_report(
     }
 
 
+def _pipeline_readiness_report(
+    *,
+    status: str = isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
+    failed_check: str | None = None,
+    expected_gpus: int = isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
+    required_models: tuple[str, ...] = isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+    runtime_overrides: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Return readiness evidence for pipeline-report semantic verification."""
+    return {
+        "readiness_schema_version": isodelta_cluster_suite.READINESS_SCHEMA_VERSION,
+        "status": status,
+        "suite": {
+            "expected_gpus": expected_gpus,
+            "required_models": list(required_models),
+            "runtime_overrides": {} if runtime_overrides is None else runtime_overrides,
+        },
+        "checks": [
+            {
+                "name": check_name,
+                "passed": check_name != failed_check,
+                "detail": "unit-test readiness fixture",
+            }
+            for check_name in isodelta_cluster_suite.FINAL_PAPER_READINESS_CHECK_NAMES
+        ],
+    }
+
+
 class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
     """Check manifest validation and paper artifact generation."""
 
@@ -2746,6 +2774,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             pipeline_report_verification["preflight_gpu_check"]["detected_gpus"],
             isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
         )
+        self.assertEqual(
+            pipeline_report_verification["readiness_report"]["verified_check_count"],
+            len(isodelta_cluster_suite.FINAL_PAPER_READINESS_CHECK_NAMES),
+        )
         self.assertEqual(pipeline_verification["status"], "passed")
         self.assertEqual(
             pipeline_verification["verified_artifact_index_count"],
@@ -3441,6 +3473,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ]
             for report_path in set(report_paths):
                 report_path.write_text("{}", encoding="utf-8")
+            report_paths[0].write_text(
+                json.dumps(_pipeline_readiness_report()),
+                encoding="utf-8",
+            )
             report_paths[2].write_text(
                 json.dumps(
                     _pipeline_preflight_report(
@@ -3499,6 +3535,81 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ):
                 isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
 
+    def test_verify_pipeline_report_rejects_failed_readiness_check(self) -> None:
+        """A top-level ready stage should still prove every readiness check."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            output_dir.mkdir()
+            pipeline_report_path = root / "pipeline_report.json"
+            report_paths = [
+                output_dir / "readiness.json",
+                output_dir / "artifacts.json",
+                output_dir / "preflight.json",
+                output_dir / "plan.json",
+                output_dir / "summary.json",
+                output_dir / "summary.json",
+            ]
+            for report_path in set(report_paths):
+                report_path.write_text("{}", encoding="utf-8")
+            report_paths[0].write_text(
+                json.dumps(
+                    _pipeline_readiness_report(failed_check="artifact_sha256_gate")
+                ),
+                encoding="utf-8",
+            )
+            report_paths[2].write_text(
+                json.dumps(_pipeline_preflight_report()),
+                encoding="utf-8",
+            )
+            stage_names = isodelta_cluster_suite.REQUIRED_PIPELINE_STAGE_NAMES
+            stage_statuses = _pipeline_success_stage_statuses()
+            stages = [
+                {
+                    "name": stage_name,
+                    "status": stage_status,
+                    "report_path": str(report_path),
+                    "detail": None,
+                }
+                for stage_name, stage_status, report_path in zip(
+                    stage_names,
+                    stage_statuses,
+                    report_paths,
+                )
+            ]
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "modes": _pipeline_report_modes(),
+                        "suite": _pipeline_suite_record(root, output_dir),
+                        "stages": stages,
+                        isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY: [
+                            {
+                                "name": stage["name"],
+                                "report": isodelta_cluster_suite.generated_artifact_record(
+                                    Path(str(stage["report_path"]))
+                                ),
+                            }
+                            for stage in stages
+                        ],
+                        isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY: {
+                            "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(isodelta_cluster_suite.PIPELINE_READINESS_CHECKS_ERROR),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
     def test_verify_pipeline_report_requires_passed_bundle_verification(self) -> None:
         """A passed pipeline report should include final bundle verification."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -3516,6 +3627,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ]
             for report_path in set(report_paths):
                 report_path.write_text("{}", encoding="utf-8")
+            report_paths[0].write_text(
+                json.dumps(_pipeline_readiness_report()),
+                encoding="utf-8",
+            )
             report_paths[2].write_text(
                 json.dumps(_pipeline_preflight_report()),
                 encoding="utf-8",

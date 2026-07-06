@@ -65,6 +65,22 @@ FINAL_PAPER_REQUIRED_MODELS = DEFAULT_REQUIRED_MODELS
 FINAL_PAPER_PAIRED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair"))
 ABLATION_OVERRIDE_CASE_KINDS = FINAL_PAPER_PAIRED_CASE_KINDS
 FINAL_PAPER_MIN_REPEAT_COUNT = DEFAULT_REPEAT_COUNT
+FINAL_PAPER_READINESS_CHECK_NAMES = (
+    "manifest_schema",
+    "foundation_models_required",
+    "paired_enabled_disabled_cases",
+    "sevennet_final_paper_ablation_mode",
+    "external_pair_final_paper_ablation_mode",
+    "expected_gpu_count",
+    "artifact_sha256_gate",
+    "required_artifacts_declared",
+    "required_artifacts_materializable",
+    "artifact_template_markers_removed",
+    "paired_case_preflights",
+    "paired_case_repeats",
+    "paired_case_uncertainty_gate",
+    "external_pair_mode_controls",
+)
 UNRESOLVED_TEMPLATE_MARKERS = ("example.org", "replace-with-real")
 DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 600.0
 DEFAULT_SLURM_JOB_NAME = "isodelta-halo-paper-suite"
@@ -91,6 +107,18 @@ PIPELINE_REQUIRED_STAGES_ERROR = (
 )
 PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR = (
     "output_bundle_verification.status must be 'passed' for a passed pipeline report"
+)
+PIPELINE_READINESS_REPORT_REQUIRED_ERROR = (
+    "passed pipeline report must fingerprint a present readiness report"
+)
+PIPELINE_READINESS_STATUS_ERROR = (
+    "passed pipeline readiness report status must be 'ready'"
+)
+PIPELINE_READINESS_CHECKS_ERROR = (
+    "passed pipeline readiness report must pass every final-paper readiness check"
+)
+PIPELINE_READINESS_SUITE_ERROR = (
+    "passed pipeline readiness report suite metadata must match the pipeline suite"
 )
 PIPELINE_DRY_RUN_PASSED_ERROR = "passed pipeline report must record dry_run=false"
 PIPELINE_GPU_CHECK_SKIPPED_ERROR = (
@@ -4252,6 +4280,106 @@ def _require_pipeline_runtime_overrides(
     return runtime_overrides
 
 
+def _require_pipeline_readiness_report(
+    stage_report_paths: dict[str, Path],
+    suite_record: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify that the readiness stage passed every final-paper guard."""
+    readiness_report_path = stage_report_paths.get(PIPELINE_STAGE_READINESS)
+    _require(
+        readiness_report_path is not None,
+        PIPELINE_READINESS_REPORT_REQUIRED_ERROR,
+    )
+    readiness_payload = _as_json_object(
+        json.loads(readiness_report_path.read_text(encoding="utf-8")),
+        "readiness_report",
+    )
+    schema_version = _as_json_string(
+        readiness_payload.get("readiness_schema_version"),
+        "readiness_report.readiness_schema_version",
+    )
+    _require(
+        schema_version == READINESS_SCHEMA_VERSION,
+        f"readiness_report.readiness_schema_version must be {READINESS_SCHEMA_VERSION!r}",
+    )
+    readiness_status = _as_json_string(
+        readiness_payload.get("status"),
+        "readiness_report.status",
+    )
+    _require(
+        readiness_status == PIPELINE_STAGE_STATUS_READY,
+        PIPELINE_READINESS_STATUS_ERROR,
+    )
+    readiness_suite = _as_json_object(
+        readiness_payload.get("suite"),
+        "readiness_report.suite",
+    )
+    expected_gpus = _as_json_nonnegative_int(
+        suite_record.get("expected_gpus"),
+        "suite.expected_gpus",
+    )
+    readiness_expected_gpus = _as_json_nonnegative_int(
+        readiness_suite.get("expected_gpus"),
+        "readiness_report.suite.expected_gpus",
+    )
+    _require(
+        readiness_expected_gpus == expected_gpus,
+        PIPELINE_READINESS_SUITE_ERROR,
+    )
+    required_models = _as_string_tuple(
+        suite_record.get("required_models"),
+        "suite.required_models",
+    )
+    readiness_required_models = _as_string_tuple(
+        readiness_suite.get("required_models"),
+        "readiness_report.suite.required_models",
+    )
+    _require(
+        readiness_required_models == required_models,
+        PIPELINE_READINESS_SUITE_ERROR,
+    )
+    runtime_overrides = _as_json_object(
+        suite_record.get("runtime_overrides"),
+        "suite.runtime_overrides",
+    )
+    readiness_runtime_overrides = _as_json_object(
+        readiness_suite.get("runtime_overrides"),
+        "readiness_report.suite.runtime_overrides",
+    )
+    _require(
+        readiness_runtime_overrides == runtime_overrides,
+        PIPELINE_READINESS_SUITE_ERROR,
+    )
+    raw_checks = readiness_payload.get("checks")
+    _require(isinstance(raw_checks, list), "readiness_report.checks must be a JSON array")
+    checks_by_name: dict[str, bool] = {}
+    for index, raw_check in enumerate(raw_checks):
+        check = _as_json_object(raw_check, f"readiness_report.checks[{index}]")
+        check_name = _as_json_string(
+            check.get("name"),
+            f"readiness_report.checks[{index}].name",
+        )
+        _require(
+            check_name not in checks_by_name,
+            "readiness_report.checks names must be unique",
+        )
+        checks_by_name[check_name] = _as_json_bool(
+            check.get("passed"),
+            f"readiness_report.checks[{index}].passed",
+        )
+    missing_or_failed_checks = [
+        check_name
+        for check_name in FINAL_PAPER_READINESS_CHECK_NAMES
+        if checks_by_name.get(check_name) is not True
+    ]
+    _require(not missing_or_failed_checks, PIPELINE_READINESS_CHECKS_ERROR)
+    return {
+        "status": readiness_status,
+        "readiness_report": str(readiness_report_path),
+        "verified_check_count": len(FINAL_PAPER_READINESS_CHECK_NAMES),
+    }
+
+
 def _require_pipeline_preflight_gpu_check(
     stage_report_paths: dict[str, Path],
     suite_record: dict[str, Any],
@@ -4468,6 +4596,10 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         original_output_dir=original_output_dir,
         expected_stage_names=expected_stage_names,
     )
+    readiness_report = _require_pipeline_readiness_report(
+        stage_report_paths,
+        suite_record,
+    )
     preflight_gpu_check = _require_pipeline_preflight_gpu_check(
         stage_report_paths,
         suite_record,
@@ -4487,6 +4619,7 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "pipeline_report": str(pipeline_report_path),
         "pipeline_status": pipeline_status,
         "verified_stage_report_count": verified_stage_report_count,
+        "readiness_report": readiness_report,
         "preflight_gpu_check": preflight_gpu_check,
         OUTPUT_BUNDLE_VERIFICATION_KEY: bundle_verification,
     }
