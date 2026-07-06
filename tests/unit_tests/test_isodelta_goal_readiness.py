@@ -86,6 +86,55 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
         self.assertEqual(report["status"], goal_readiness.STATUS_FAILED)
         self.assertFalse(all(record["passed"] for record in report["checks"]))
 
+    def test_goal_readiness_accepts_isodelta_python_headers(self) -> None:
+        """Every IsoDelta Python file with an explanatory header should pass."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            tool_path = root / "tools" / "run_isodelta_example.py"
+            test_path = root / "tests" / "unit_tests" / "test_isodelta_example.py"
+            tool_path.parent.mkdir(parents=True)
+            test_path.parent.mkdir(parents=True)
+            tool_path.write_text('"""Example tool header."""\nVALUE = 1\n', encoding="utf-8")
+            test_path.write_text('"""Example test header."""\nVALUE = 1\n', encoding="utf-8")
+
+            report = goal_readiness.build_goal_readiness_report(
+                root=root,
+                required_file_snippets={},
+                comment_prefix_requirements={},
+            )
+
+        self.assertEqual(report["status"], goal_readiness.STATUS_PASSED)
+        header_checks = [
+            record
+            for record in report["checks"]
+            if record["name"].startswith("isodelta_python_header:")
+        ]
+        self.assertEqual(len(header_checks), 2)
+        self.assertTrue(all(record["passed"] for record in header_checks))
+
+    def test_goal_readiness_rejects_isodelta_python_without_header(self) -> None:
+        """A new IsoDelta Python file must not skip its file-level comment."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            tool_path = root / "tools" / "run_isodelta_missing_header.py"
+            tool_path.parent.mkdir(parents=True)
+            tool_path.write_text("VALUE = 1\n", encoding="utf-8")
+
+            report = goal_readiness.build_goal_readiness_report(
+                root=root,
+                required_file_snippets={},
+                comment_prefix_requirements={},
+            )
+
+        self.assertEqual(report["status"], goal_readiness.STATUS_FAILED)
+        failed_checks = [
+            record["name"] for record in report["checks"] if not record["passed"]
+        ]
+        self.assertIn(
+            "isodelta_python_header:tools/run_isodelta_missing_header.py",
+            failed_checks,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

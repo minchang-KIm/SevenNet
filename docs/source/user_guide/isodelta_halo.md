@@ -188,9 +188,12 @@ python tools/check_isodelta_goal_readiness.py \
 
 This audit checks that the runtime cache files, cluster paper-suite script,
 validation runner, sync gate, CI workflow, tests, and this guide all contain the
-required IsoDelta-Halo feature markers and explanatory file headers. It records
-the current Git branch, commit, and status but does not treat unrelated local
-workspace files as proof that the implementation itself is missing.
+required IsoDelta-Halo feature markers and explanatory file headers. It also
+scans every `tools/*isodelta*.py` script and
+`tests/unit_tests/test_isodelta*.py` test so a newly generated IsoDelta helper
+cannot enter the workflow without a file-level comment. It records the current
+Git branch, commit, and status but does not treat unrelated local workspace
+files as proof that the implementation itself is missing.
 
 This does not replace a full LAMMPS/LibTorch build. It is a fast local guard so
 the implementation does not drift while runtime environments are being prepared.

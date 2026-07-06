@@ -33,6 +33,7 @@ WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "isodelta-halo.yml"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
 DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
 CLUSTER_SUITE_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_cluster_paper_suite.py"
+GOAL_READINESS_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_goal_readiness.py"
 
 
 def _read(path: Path) -> str:
@@ -69,6 +70,7 @@ def main() -> None:
     doc = _read(DOC_PATH)
     doc_index = _read(DOC_INDEX_PATH)
     cluster_suite_test = _read(CLUSTER_SUITE_TEST_PATH)
+    goal_readiness_test = _read(GOAL_READINESS_TEST_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
 
     _require(
@@ -333,11 +335,15 @@ def main() -> None:
         "GOAL_READINESS_SCHEMA_VERSION" in goal_readiness
         and "REQUIRED_FILE_SNIPPETS" in goal_readiness
         and "COMMENT_PREFIX_REQUIREMENTS" in goal_readiness
+        and "ISODELTA_PYTHON_GLOB_PATTERNS" in goal_readiness
+        and "_audit_isodelta_python_headers" in goal_readiness
         and "build_goal_readiness_report" in goal_readiness
         and "default=None" in goal_readiness
         and '"goal_readiness_report": str(args.report_path) if args.report_path is not None else None'
         in goal_readiness
         and "test_isodelta_goal_readiness.py" in validation_runner
+        and "test_goal_readiness_rejects_isodelta_python_without_header"
+        in goal_readiness_test
         and "check_isodelta_goal_readiness.py" in validation_runner,
         "goal readiness audit must be part of the lightweight validation gate",
     )
@@ -1280,6 +1286,8 @@ def main() -> None:
         and "`isodelta_validation_report.json`" in doc
         and "check_isodelta_goal_readiness.py" in doc
         and "`isodelta_goal_readiness_report.json`" in doc
+        and "`tools/*isodelta*.py`" in doc
+        and "`tests/unit_tests/test_isodelta*.py`" in doc
         and "completion-readiness audit" in doc
         and "run_isodelta_sync_gate.py" in doc
         and "`isodelta_sync_report.json`" in doc

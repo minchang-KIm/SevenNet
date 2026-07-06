@@ -29,6 +29,11 @@ STATUS_PASSED = "passed"
 STATUS_FAILED = "failed"
 STATUS_NOT_ENFORCED = "not_enforced"
 EXPECTED_BRANCH = "isodelta-halo-runtime"
+PYTHON_HEADER_PREFIX = '"""'
+ISODELTA_PYTHON_GLOB_PATTERNS = (
+    "tools/*isodelta*.py",
+    "tests/unit_tests/test_isodelta*.py",
+)
 REQUIRED_FILE_SNIPPETS = {
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.cpp": (
         "IsoDelta-Halo",
@@ -121,6 +126,10 @@ REQUIRED_FILE_SNIPPETS = {
         "PUSH_AUTH_ENVIRONMENT",
         "STATUS_PUSH_FAILED",
     ),
+    "tools/check_isodelta_goal_readiness.py": (
+        "ISODELTA_PYTHON_GLOB_PATTERNS",
+        "_audit_isodelta_python_headers",
+    ),
     ".github/workflows/isodelta-halo.yml": (
         "--report-path isodelta_validation_report.json",
         "actions/upload-artifact@v4",
@@ -149,6 +158,8 @@ REQUIRED_FILE_SNIPPETS = {
         "--ablation-mode baseline-disabled",
         "--ablation-mode isodelta-enabled",
         "one-sided ablation",
+        "`tools/*isodelta*.py`",
+        "`tests/unit_tests/test_isodelta*.py`",
         "normal suite run also reopens the completed",
         "bundle verification failure returns a nonzero exit code",
         "`download_progress`",
@@ -206,6 +217,10 @@ REQUIRED_FILE_SNIPPETS = {
     "tests/unit_tests/test_isodelta_sync_gate.py": (
         "IsoDeltaSyncGateTest",
         "STATUS_VALIDATION_FAILED",
+    ),
+    "tests/unit_tests/test_isodelta_goal_readiness.py": (
+        "test_goal_readiness_accepts_isodelta_python_headers",
+        "test_goal_readiness_rejects_isodelta_python_without_header",
     ),
 }
 COMMENT_PREFIX_REQUIREMENTS = {
@@ -292,16 +307,49 @@ def _audit_comment_prefixes(
     return records
 
 
+def _audit_isodelta_python_headers(
+    root: Path,
+    glob_patterns: tuple[str, ...] = ISODELTA_PYTHON_GLOB_PATTERNS,
+) -> list[dict[str, Any]]:
+    """Require every IsoDelta Python tool or test to start with a file comment."""
+    records: list[dict[str, Any]] = []
+    seen_paths: set[Path] = set()
+    for glob_pattern in glob_patterns:
+        for path in sorted(root.glob(glob_pattern)):
+            if not path.is_file() or path in seen_paths:
+                continue
+            seen_paths.add(path)
+            relative_path = path.relative_to(root).as_posix()
+            stripped_text = _read_text(path).lstrip()
+            records.append(
+                _check_record(
+                    f"isodelta_python_header:{relative_path}",
+                    stripped_text.startswith(PYTHON_HEADER_PREFIX),
+                    f"expected prefix {PYTHON_HEADER_PREFIX!r}",
+                )
+            )
+    return records
+
+
 def build_goal_readiness_report(
     *,
     root: Path = REPO_ROOT,
     expected_branch: str | None = None,
     required_file_snippets: dict[str, tuple[str, ...]] | None = None,
     comment_prefix_requirements: dict[str, str] | None = None,
+    isodelta_python_glob_patterns: tuple[str, ...] = ISODELTA_PYTHON_GLOB_PATTERNS,
 ) -> dict[str, Any]:
     """Build a report proving local source readiness for the active goal."""
-    snippet_requirements = required_file_snippets or REQUIRED_FILE_SNIPPETS
-    prefix_requirements = comment_prefix_requirements or COMMENT_PREFIX_REQUIREMENTS
+    snippet_requirements = (
+        REQUIRED_FILE_SNIPPETS
+        if required_file_snippets is None
+        else required_file_snippets
+    )
+    prefix_requirements = (
+        COMMENT_PREFIX_REQUIREMENTS
+        if comment_prefix_requirements is None
+        else comment_prefix_requirements
+    )
     branch = _git_metadata(root, ("git", "branch", "--show-current"))
     checks = []
     if expected_branch is None:
@@ -316,6 +364,7 @@ def build_goal_readiness_report(
         )
     checks.extend(_audit_required_snippets(root, snippet_requirements))
     checks.extend(_audit_comment_prefixes(root, prefix_requirements))
+    checks.extend(_audit_isodelta_python_headers(root, isodelta_python_glob_patterns))
     status = STATUS_PASSED if all(record["passed"] for record in checks) else STATUS_FAILED
     return {
         "goal_readiness_schema_version": GOAL_READINESS_SCHEMA_VERSION,
