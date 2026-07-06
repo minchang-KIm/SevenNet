@@ -1239,6 +1239,117 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
         self.assertIn('preflight_command = \'python -c "import mace"\'', template)
         self.assertIn('disabled_env = { SEVENN_ISODELTA_HALO_DISABLE = "1" }', template)
         self.assertIn("enabled_env = {}", template)
+        self.assertIn('ablation_mode = "paired"', template)
+
+    def test_sevennet_manifest_ablation_mode_reaches_experiment_driver(self) -> None:
+        """A suite case should pass one-sided ablation mode to SevenNet runs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            output_dir = root / "paper_outputs"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "ablation-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-ablation"
+model = "SevenNet"
+kind = "sevennet_lammps"
+lammps_command = "lmp"
+input = "inputs/in.sevennet"
+ablation_mode = "isodelta-enabled"
+min_speedup = 1.2
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+            benchmark_report, bundle_evidence, trace_paths, records = (
+                isodelta_cluster_suite.run_sevennet_case(
+                    config,
+                    config.cases[0],
+                    dry_run=True,
+                )
+            )
+
+        self.assertEqual(config.cases[0].ablation_mode, "isodelta-enabled")
+        self.assertIsNotNone(benchmark_report)
+        self.assertIsNone(bundle_evidence)
+        self.assertEqual(trace_paths, ())
+        self.assertEqual(len(records), 1)
+        command = records[0].command
+        self.assertIsInstance(command, list)
+        self.assertIn("--ablation-mode", command)
+        self.assertIn("isodelta-enabled", command)
+        self.assertNotIn("--min-speedup", command)
+
+    def test_one_sided_sevennet_benchmark_report_validates_as_raw_ablation(self) -> None:
+        """Suite validation should accept one-sided timing without speedup claims."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "benchmark.json"
+            payload = _benchmark_report()
+            payload["ablation_mode"] = "isodelta-enabled"
+            payload["benchmark_cases"] = ["isodelta-enabled"]
+            payload["summary"]["speedup_vs_disabled_cache"] = None
+            payload["results"] = [
+                result
+                for result in payload["results"]
+                if result["case"] == "isodelta-enabled"
+            ]
+            report_path.write_text(json.dumps(payload), encoding="utf-8")
+            case = isodelta_cluster_suite.CaseConfig(
+                name="sevennet-ablation",
+                model="SevenNet",
+                kind="sevennet_lammps",
+                ablation_mode="isodelta-enabled",
+            )
+
+            isodelta_cluster_suite.validate_case_outputs(
+                case,
+                report_path,
+                None,
+                (),
+                None,
+                dry_run=False,
+            )
+
+    def test_one_sided_sevennet_benchmark_rejects_speedup_claim(self) -> None:
+        """One-sided raw timing should never be accepted as paired speedup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "benchmark.json"
+            payload = _benchmark_report()
+            payload["ablation_mode"] = "baseline-disabled"
+            payload["benchmark_cases"] = ["baseline-disabled"]
+            payload["results"] = [
+                result
+                for result in payload["results"]
+                if result["case"] == "baseline-disabled"
+            ]
+            report_path.write_text(json.dumps(payload), encoding="utf-8")
+            case = isodelta_cluster_suite.CaseConfig(
+                name="sevennet-ablation",
+                model="SevenNet",
+                kind="sevennet_lammps",
+                ablation_mode="baseline-disabled",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "must not claim speedup",
+            ):
+                isodelta_cluster_suite.validate_case_outputs(
+                    case,
+                    report_path,
+                    None,
+                    (),
+                    None,
+                    dry_run=False,
+                )
 
     def test_write_slurm_script_creates_commented_preflight_first_launcher(self) -> None:
         """The SLURM wrapper should submit reproducible preflight evidence first."""
@@ -2520,6 +2631,73 @@ artifacts = ["dataset"]
         self.assertEqual(report["status"], "ready")
         self.assertTrue(all(check["passed"] for check in report["checks"]))
         self.assertEqual(exit_code, 0)
+
+    def test_readiness_check_rejects_one_sided_sevennet_ablation(self) -> None:
+        """Final paper readiness must not accept one-sided SevenNet timings."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_path = root / "source-data.bin"
+            source_path.write_bytes(b"strict cluster input")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "one-sided-ready-suite"
+output_dir = "{(root / "paper_outputs").as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet", "MACE", "NequIP"]
+require_artifact_sha256 = true
+repeat_count = 3
+min_speedup_95ci_lower_bound = 1.0
+
+[[artifacts]]
+name = "dataset"
+path = "{(root / "downloaded.bin").as_posix()}"
+url = "{source_path.as_uri()}"
+sha256 = "{digest}"
+required_by = ["SevenNet", "MACE", "NequIP"]
+
+[[cases]]
+name = "sevennet-ablation"
+model = "SevenNet"
+kind = "sevennet_lammps"
+preflight_command = 'python -c "import sevenn"'
+lammps_command = "mpiexec -n 8 lmp"
+input = "inputs/in.sevennet"
+ablation_mode = "isodelta-enabled"
+artifacts = ["dataset"]
+
+[[cases]]
+name = "mace-ready"
+model = "MACE"
+kind = "external_pair"
+preflight_command = 'python -c "import mace"'
+disabled_command = "python run_mace.py --mode baseline"
+enabled_command = "python run_mace.py --mode isodelta"
+artifacts = ["dataset"]
+
+[[cases]]
+name = "nequip-ready"
+model = "NequIP"
+kind = "external_pair"
+preflight_command = 'python -c "import nequip"'
+disabled_command = "python run_nequip.py --mode baseline"
+enabled_command = "python run_nequip.py --mode isodelta"
+artifacts = ["dataset"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+            report = isodelta_cluster_suite.build_readiness_report(config)
+            failed_checks = {
+                check["name"] for check in report["checks"] if not check["passed"]
+            }
+
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("paired_enabled_disabled_cases", failed_checks)
+        self.assertIn("sevennet_final_paper_ablation_mode", failed_checks)
 
     def test_readiness_check_rejects_unedited_template_manifest(self) -> None:
         """A generated template must be filled in before paper execution."""

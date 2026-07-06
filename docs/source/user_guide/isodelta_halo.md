@@ -353,6 +353,13 @@ controls in the run plan, generated timing report, and summary
 manifest is rejected because the "applied" run would actually be cache-off too.
 These external_pair mode controls are part of the paper audit trail, not only a
 runtime convenience.
+For `sevennet_lammps` cases, the manifest can set `ablation_mode = "paired"`,
+`"baseline-disabled"`, or `"isodelta-enabled"`. Keep
+`ablation_mode = "paired"` for final paper timing because only paired runs
+produce speedup and final-thermo delta evidence. A one-sided SevenNet ablation
+is useful for quick smoke timing inside the cluster suite, but the readiness
+gate treats it as ablation-only evidence rather than a publishable
+disabled/enabled comparison.
 Required artifacts must already exist or be downloadable; if `--skip-downloads`
 is active and a required artifact is missing, the suite fails before launching
 any case. Optional artifacts with `required = false` may be absent, but the
@@ -468,7 +475,7 @@ python tools/run_isodelta_cluster_paper_suite.py \
   --readiness-check
 ```
 
-The `--readiness-check` mode fails if the manifest is still in template form, requests fewer than 8 GPUs, omits SevenNet/MACE/NequIP, uses `trace_only` instead of paired enabled/disabled cases for the required model families, leaves required artifacts without SHA-256 protection, omits case preflight commands, or lacks `min_speedup_95ci_lower_bound` gates for paired timing claims. The JSON output lists every passed and failed readiness item so the cluster job is not submitted until the paper claim is auditable.
+The `--readiness-check` mode fails if the manifest is still in template form, requests fewer than 8 GPUs, omits SevenNet/MACE/NequIP, uses `trace_only` instead of paired enabled/disabled cases for the required model families, uses one-sided SevenNet ablation for a final-paper timing case, leaves required artifacts without SHA-256 protection, omits case preflight commands, or lacks `min_speedup_95ci_lower_bound` gates for paired timing claims. The JSON output lists every passed and failed readiness item so the cluster job is not submitted until the paper claim is auditable.
 
 Run the complete suite on the cluster:
 
@@ -480,8 +487,10 @@ python tools/run_isodelta_cluster_paper_suite.py \
 The runner checks the visible GPU count against `expected_gpus = 8`, downloads
 missing artifacts, prints terminal progress as `[suite] [stage/total] ...`,
 then executes each case. A `sevennet_lammps` case calls
-`run_isodelta_experiment.py` and therefore runs the disabled/enabled LAMMPS
-benchmark plus report gates. An `external_pair` case is for MACE, NequIP, or
+`run_isodelta_experiment.py` and passes the manifest `ablation_mode`; the
+default `paired` mode runs the disabled/enabled LAMMPS benchmark plus report
+gates, while one-sided modes record raw timing without speedup claims. An
+`external_pair` case is for MACE, NequIP, or
 another runtime whose disabled and enabled commands are supplied in the
 manifest. A `trace_only` case validates portable MLIP trace evidence when a
 model has applicability evidence but no paired runtime benchmark yet.

@@ -1028,6 +1028,9 @@ def main() -> None:
         and "repeat_timing.md" in cluster_suite
         and "speedup_by_case.svg" in cluster_suite
         and "write_template" in cluster_suite
+        and "ABLATION_MODE_CHOICES" in cluster_suite
+        and "_validate_one_sided_benchmark_report" in cluster_suite
+        and "sevennet_final_paper_ablation_mode" in cluster_suite
         and "required_models = [\"SevenNet\", \"MACE\", \"NequIP\"]" in cluster_suite,
         "cluster paper suite must orchestrate 8-GPU multi-model paper artifacts",
     )
@@ -1058,6 +1061,8 @@ def main() -> None:
         and "command_timing.csv" in doc
         and "repeat_timing.csv" in doc
         and "speedup_by_case.svg" in doc
+        and "`ablation_mode = \"paired\"`" in doc
+        and "one-sided SevenNet ablation" in doc
         and "SHA-256" in doc
         and "`--collect-only`" in doc,
         "IsoDelta-Halo guide must document the cluster paper suite",

@@ -255,6 +255,19 @@ COMMAND_ENV_SNAPSHOT_KEYS = (
 )
 BASELINE_CASE_NAME = "baseline-disabled"
 ISODELTA_CASE_NAME = "isodelta-enabled"
+ABLATION_MODE_PAIRED = "paired"
+ABLATION_MODE_BASELINE_ONLY = BASELINE_CASE_NAME
+ABLATION_MODE_ENABLED_ONLY = ISODELTA_CASE_NAME
+ABLATION_MODE_CHOICES = (
+    ABLATION_MODE_PAIRED,
+    ABLATION_MODE_BASELINE_ONLY,
+    ABLATION_MODE_ENABLED_ONLY,
+)
+ABLATION_MODE_BENCHMARK_CASES = {
+    ABLATION_MODE_PAIRED: (BASELINE_CASE_NAME, ISODELTA_CASE_NAME),
+    ABLATION_MODE_BASELINE_ONLY: (BASELINE_CASE_NAME,),
+    ABLATION_MODE_ENABLED_ONLY: (ISODELTA_CASE_NAME,),
+}
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 SAFE_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -305,6 +318,7 @@ class CaseConfig:
     command_timeout_seconds: float = DEFAULT_COMMAND_TIMEOUT_SECONDS
     binary_timeout_seconds: float = DEFAULT_BINARY_TIMEOUT_SECONDS
     benchmark_timeout_seconds: float = DEFAULT_BENCHMARK_TIMEOUT_SECONDS
+    ablation_mode: str = ABLATION_MODE_PAIRED
     max_abs_thermo_delta: float = DEFAULT_MAX_ABS_THERMO_DELTA
     min_paired_thermo_count: int = DEFAULT_MIN_PAIRED_THERMO_COUNT
     min_speedup: float | None = DEFAULT_MIN_SPEEDUP
@@ -565,6 +579,18 @@ def _safe_name(value: str) -> str:
     return safe_value.strip("._") or "case"
 
 
+def _uses_paired_ablation_mode(case: CaseConfig) -> bool:
+    """Return whether a SevenNet case generates paired paper timing evidence."""
+    return case.ablation_mode == ABLATION_MODE_PAIRED
+
+
+def _is_final_paper_paired_case(case: CaseConfig) -> bool:
+    """Return whether one case can count toward final enabled/disabled timing."""
+    if case.kind == "sevennet_lammps":
+        return _uses_paired_ablation_mode(case)
+    return case.kind == "external_pair"
+
+
 def _validate_percent(value: float, field_name: str) -> None:
     """Require percentages to stay within their physical range."""
     _require(
@@ -576,6 +602,11 @@ def _validate_percent(value: float, field_name: str) -> None:
 def _validate_case_thresholds(case: CaseConfig) -> None:
     """Reject case gates that cannot support a paper claim."""
     _require(case.repeat_count >= MIN_REQUIRED_CASE_COUNT, f"{case.name}: repeat_count must be at least one")
+    _require(
+        case.ablation_mode in ABLATION_MODE_CHOICES,
+        f"{case.name}: ablation_mode must be one of "
+        + MODEL_NAME_JOINER.join(ABLATION_MODE_CHOICES),
+    )
     _require(
         case.preflight_timeout_seconds > MIN_POSITIVE_VALUE,
         f"{case.name}: preflight_timeout_seconds must be positive",
@@ -814,6 +845,10 @@ def load_manifest(manifest_path: Path) -> SuiteConfig:
                     f"cases[{index}].benchmark_timeout_seconds",
                     default_benchmark_timeout_seconds,
                 ),
+                ablation_mode=_as_string(
+                    case.get("ablation_mode", ABLATION_MODE_PAIRED),
+                    f"cases[{index}].ablation_mode",
+                ),
                 max_abs_thermo_delta=_as_float(
                     case.get("max_abs_thermo_delta"),
                     f"cases[{index}].max_abs_thermo_delta",
@@ -970,6 +1005,10 @@ def validate_suite_config(config: SuiteConfig) -> None:
             _require(bool(case.lammps_command), f"{case.name}: lammps_command is required")
             _require(case.input_path is not None, f"{case.name}: input is required")
         elif case.kind == "external_pair":
+            _require(
+                case.ablation_mode == ABLATION_MODE_PAIRED,
+                f"{case.name}: ablation_mode is only supported for sevennet_lammps cases",
+            )
             _require(bool(case.disabled_command), f"{case.name}: disabled_command is required")
             _require(bool(case.enabled_command), f"{case.name}: enabled_command is required")
             mode_control_errors = _external_pair_mode_control_errors(case)
@@ -979,6 +1018,10 @@ def validate_suite_config(config: SuiteConfig) -> None:
                 + MODEL_NAME_JOINER.join(mode_control_errors),
             )
         elif case.kind == "trace_only":
+            _require(
+                case.ablation_mode == ABLATION_MODE_PAIRED,
+                f"{case.name}: ablation_mode is only supported for sevennet_lammps cases",
+            )
             _require(
                 bool(case.trace_command) or case.trace_input is not None or bool(case.trace_evidence_paths),
                 f"{case.name}: trace_command, trace_input, or trace_evidence is required",
@@ -1038,7 +1081,7 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
         case
         for case in config.cases
         if case.model in FINAL_PAPER_REQUIRED_MODELS
-        and case.kind in FINAL_PAPER_PAIRED_CASE_KINDS
+        and _is_final_paper_paired_case(case)
     ]
     paired_models = {case.model for case in paired_cases}
     missing_paired_models = [
@@ -1051,6 +1094,21 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
             "missing paired cases: " + MODEL_NAME_JOINER.join(missing_paired_models)
             if missing_paired_models
             else "all required models have paired enabled/disabled cases",
+        )
+    )
+    one_sided_ablation_cases = [
+        case.name
+        for case in config.cases
+        if case.kind == "sevennet_lammps" and not _uses_paired_ablation_mode(case)
+    ]
+    checks.append(
+        _readiness_record(
+            "sevennet_final_paper_ablation_mode",
+            not one_sided_ablation_cases,
+            "one-sided SevenNet cases are ablation-only: "
+            + MODEL_NAME_JOINER.join(one_sided_ablation_cases)
+            if one_sided_ablation_cases
+            else "SevenNet final-paper cases use paired ablation_mode",
         )
     )
 
@@ -2442,7 +2500,12 @@ def _planned_bundle_evidence(
     collect_only: bool,
 ) -> Path | None:
     """Return the bundle evidence path expected for one planned case."""
-    if collect_only or case.kind != "sevennet_lammps" or not trace_paths:
+    if (
+        collect_only
+        or case.kind != "sevennet_lammps"
+        or not trace_paths
+        or not _uses_paired_ablation_mode(case)
+    ):
         return case.bundle_evidence
     return _case_output_dir(config, case) / "experiment" / BUNDLE_EVIDENCE_NAME
 
@@ -4088,6 +4151,7 @@ def build_run_plan(
                     ),
                 },
                 "thresholds": {
+                    "ablation_mode": case.ablation_mode,
                     "repeat_count": case.repeat_count,
                     "preflight_timeout_seconds": case.preflight_timeout_seconds,
                     "min_speedup": case.min_speedup,
@@ -4229,6 +4293,7 @@ def case_mode_control_record(case: CaseConfig) -> dict[str, Any]:
         return {
             "kind": case.kind,
             "paired_mode_source": str(EXPERIMENT_DRIVER_PATH),
+            "ablation_mode": case.ablation_mode,
             "disabled_case": BASELINE_CASE_NAME,
             "enabled_case": ISODELTA_CASE_NAME,
             "disabled_env": {SEVENNET_DISABLE_ENV: ENV_FLAG_ENABLED},
@@ -4350,6 +4415,8 @@ def run_sevennet_case(
         str(case.binary_timeout_seconds),
         "--benchmark-timeout-seconds",
         str(case.benchmark_timeout_seconds),
+        "--ablation-mode",
+        case.ablation_mode,
         "--max-abs-thermo-delta",
         str(case.max_abs_thermo_delta),
         "--min-paired-thermo-count",
@@ -4365,9 +4432,9 @@ def run_sevennet_case(
         argv.extend(["--work-dir", str(case.work_dir)])
     if case.lammps_root is not None:
         argv.extend(["--lammps-root", str(case.lammps_root)])
-    if case.min_speedup is not None:
+    if _uses_paired_ablation_mode(case) and case.min_speedup is not None:
         argv.extend(["--min-speedup", str(case.min_speedup)])
-    if trace_paths:
+    if _uses_paired_ablation_mode(case) and trace_paths:
         argv.extend(["--min-trace-count", str(max(DEFAULT_MIN_TRACE_COUNT, len(trace_paths)))])
         argv.extend(["--min-distinct-trace-models", str(max(DEFAULT_MIN_DISTINCT_TRACE_MODELS, len(case.required_trace_models) or 1))])
         argv.extend(["--min-trace-hit-rate-percent", str(case.min_trace_hit_rate_percent)])
@@ -4391,7 +4458,11 @@ def run_sevennet_case(
     )
     command_records = trace_records + [record]
     benchmark_report = experiment_dir / "benchmark" / BENCHMARK_REPORT_NAME
-    bundle_evidence = experiment_dir / BUNDLE_EVIDENCE_NAME if trace_paths else None
+    bundle_evidence = (
+        experiment_dir / BUNDLE_EVIDENCE_NAME
+        if _uses_paired_ablation_mode(case) and trace_paths
+        else None
+    )
     return benchmark_report, bundle_evidence, trace_paths, command_records
 
 
@@ -4903,6 +4974,65 @@ def _benchmark_thresholds(case: CaseConfig) -> Any:
     )
 
 
+def _validate_one_sided_benchmark_report(
+    report: dict[str, Any],
+    case: CaseConfig,
+) -> None:
+    """Validate raw one-sided SevenNet timing without claiming a speedup."""
+    expected_cases = ABLATION_MODE_BENCHMARK_CASES[case.ablation_mode]
+    observed_ablation_mode = _as_json_string(
+        report.get("ablation_mode"),
+        f"{case.name}: ablation_mode",
+    )
+    _require(
+        observed_ablation_mode == case.ablation_mode,
+        f"{case.name}: benchmark ablation_mode must match manifest",
+    )
+    raw_benchmark_cases = report.get("benchmark_cases")
+    _require(
+        isinstance(raw_benchmark_cases, list),
+        f"{case.name}: benchmark_cases must be a JSON array",
+    )
+    benchmark_cases = tuple(
+        _as_json_string(item, f"{case.name}: benchmark_cases[{index}]")
+        for index, item in enumerate(raw_benchmark_cases)
+    )
+    _require(
+        benchmark_cases == expected_cases,
+        f"{case.name}: benchmark_cases must match ablation_mode",
+    )
+    summary = _as_json_object(report.get("summary"), f"{case.name}: summary")
+    _require(
+        summary.get("speedup_vs_disabled_cache") is None,
+        f"{case.name}: one-sided ablation report must not claim speedup",
+    )
+    results = report.get("results")
+    _require(isinstance(results, list), f"{case.name}: results must be a JSON array")
+    _require(bool(results), f"{case.name}: one-sided ablation report must include results")
+    observed_cases: list[str] = []
+    for index, result in enumerate(results):
+        result_record = _as_json_object(result, f"{case.name}: results[{index}]")
+        observed_cases.append(
+            _as_json_string(result_record.get("case"), f"{case.name}: results[{index}].case")
+        )
+    unexpected_cases = sorted(
+        {case_name for case_name in observed_cases if case_name not in expected_cases}
+    )
+    missing_cases = [
+        case_name for case_name in expected_cases if case_name not in observed_cases
+    ]
+    _require(
+        not unexpected_cases,
+        f"{case.name}: unexpected benchmark result cases: "
+        + MODEL_NAME_JOINER.join(unexpected_cases),
+    )
+    _require(
+        not missing_cases,
+        f"{case.name}: missing benchmark result cases: "
+        + MODEL_NAME_JOINER.join(missing_cases),
+    )
+
+
 def _trace_thresholds(case: CaseConfig) -> Any:
     """Build trace thresholds from one case config."""
     return trace_check.TraceThresholds(
@@ -4926,10 +5056,14 @@ def validate_case_outputs(
         return
     if benchmark_report is not None:
         _require(benchmark_report.exists(), f"{case.name}: missing benchmark report {benchmark_report}")
-        benchmark_check.validate_report(
-            benchmark_check.load_report(benchmark_report),
-            _benchmark_thresholds(case),
-        )
+        benchmark_payload = benchmark_check.load_report(benchmark_report)
+        if case.kind == "sevennet_lammps" and not _uses_paired_ablation_mode(case):
+            _validate_one_sided_benchmark_report(benchmark_payload, case)
+        else:
+            benchmark_check.validate_report(
+                benchmark_payload,
+                _benchmark_thresholds(case),
+            )
     for trace_path in trace_evidence_paths:
         _require(trace_path.exists(), f"{case.name}: missing trace evidence {trace_path}")
         trace_payload = json.loads(trace_path.read_text(encoding="utf-8"))
@@ -6090,6 +6224,9 @@ lammps_command = "mpiexec -n 8 lmp"
 input = "inputs/in.sevennet"
 work_dir = "inputs"
 lammps_root = "../lammps"
+# Use "baseline-disabled" or "isodelta-enabled" only for quick ablation timing;
+# final paper readiness requires the default paired mode.
+ablation_mode = "paired"
 repeat_count = 5
 min_speedup = 1.05
 min_hit_rate_percent = 50.0
