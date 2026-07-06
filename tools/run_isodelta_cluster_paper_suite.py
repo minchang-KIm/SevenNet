@@ -572,9 +572,18 @@ def _as_env_mapping(value: Any, field_name: str) -> dict[str, str]:
         return {}
     mapping = _as_mapping(value, field_name)
     return {
-        _as_string(key, f"{field_name}.key"): _as_string(raw_value, f"{field_name}.{key}")
+        _as_string(key, f"{field_name}.key"): _as_env_value(
+            raw_value,
+            f"{field_name}.{key}",
+        )
         for key, raw_value in mapping.items()
     }
+
+
+def _as_env_value(value: Any, field_name: str) -> str:
+    """Return a manifest environment value, allowing explicit empty strings."""
+    _require(isinstance(value, str), f"{field_name} must be a string")
+    return value.strip()
 
 
 def env_flag_is_enabled(value: str | None) -> bool:

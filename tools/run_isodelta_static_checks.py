@@ -971,6 +971,7 @@ def main() -> None:
         and "MODE_CONTROLS_KEY" in cluster_suite
         and "case_mode_control_record" in cluster_suite
         and "ENV_FLAG_FALSE_VALUES" in cluster_suite
+        and "_as_env_value" in cluster_suite
         and "env_flag_is_enabled" in cluster_suite
         and "_validate_external_timing_mode_controls" in cluster_suite
         and "external_pair_mode_controls" in cluster_suite
@@ -988,6 +989,8 @@ def main() -> None:
         and "Re-open the finished pipeline report" in cluster_suite_test
         and "test_manifest_validation_rejects_enabled_external_pair_disable_env" in cluster_suite_test
         and "test_manifest_validation_accepts_false_enabled_disable_env"
+        in cluster_suite_test
+        and "test_manifest_validation_accepts_empty_enabled_disable_env"
         in cluster_suite_test
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
         and "test_external_timing_report_requires_repeat_command_records" in cluster_suite_test
@@ -1216,8 +1219,10 @@ def main() -> None:
         and "`case_mode_controls`" in doc
         and "external_pair mode controls" in doc
         and "truthy value" in doc
+        and "empty string" in doc
         and "cache-enabled evidence" in doc
-        and "matching the C++ runtime parser" in doc,
+        and "matching the C++" in doc
+        and "runtime parser" in doc,
         "IsoDelta-Halo guide must document external-pair mode controls",
     )
     _require(

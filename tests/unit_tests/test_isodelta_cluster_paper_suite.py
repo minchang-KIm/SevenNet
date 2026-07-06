@@ -2118,6 +2118,38 @@ enabled_env = { SEVENN_ISODELTA_HALO_DISABLE = " off " }
             "off",
         )
 
+    def test_manifest_validation_accepts_empty_enabled_disable_env(self) -> None:
+        """An empty disable flag should also mean cache-enabled at runtime."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "empty-mode-controls"
+required_models = ["NequIP"]
+
+[[cases]]
+name = "nequip-pair"
+model = "NequIP"
+kind = "external_pair"
+disabled_command = "python run_nequip.py --mode baseline"
+enabled_command = "python run_nequip.py --mode isodelta"
+enabled_env = { SEVENN_ISODELTA_HALO_DISABLE = "" }
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+        isodelta_cluster_suite.validate_suite_config(config)
+        mode_controls = isodelta_cluster_suite.case_mode_control_record(
+            config.cases[0]
+        )
+        self.assertFalse(mode_controls["enabled_cache_disabled"])
+        self.assertEqual(
+            mode_controls["enabled_env"][isodelta_cluster_suite.SEVENNET_DISABLE_ENV],
+            "",
+        )
+
     def test_download_artifact_copies_file_url_and_checks_sha256(self) -> None:
         """Artifact downloads should verify immutable paper inputs."""
         with tempfile.TemporaryDirectory() as tmpdir:
