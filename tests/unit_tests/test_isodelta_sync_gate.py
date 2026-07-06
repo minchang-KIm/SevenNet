@@ -42,15 +42,18 @@ def _validation_report_command(
     expected_branch: str = "feature",
     git_commit: str = "feature-sha",
     status: str | None = None,
+    command_returncode: int = sync_gate.SUCCESS_RETURN_CODE,
 ) -> tuple[str, ...]:
     """Return a tiny command that writes the validation report under test."""
     report_status = status or sync_gate.VALIDATION_REPORT_PASSED_STATUS
     report_payload = {
-        "validation_report_schema_version": "isodelta-lightweight-validation-report-v1",
+        "validation_report_schema_version": (
+            sync_gate.EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION
+        ),
         "status": report_status,
         "expected_branch": expected_branch,
         "git_commit": git_commit,
-        "commands": [{"command": ["test"], "returncode": 0}],
+        "commands": [{"command": ["test"], "returncode": command_returncode}],
     }
     report_text = json.dumps(report_payload, indent=2)
     script = (
@@ -81,11 +84,12 @@ def _passed_validation_report_summary(
     return {
         "path": str(validation_report_path),
         "valid": True,
-        "schema_version": "isodelta-lightweight-validation-report-v1",
+        "schema_version": sync_gate.EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION,
         "status": sync_gate.VALIDATION_REPORT_PASSED_STATUS,
         "expected_branch": "feature",
         "git_commit": git_commit,
         "command_count": VALIDATION_REPORT_COMMAND_COUNT,
+        "command_failure_count": 0,
         "detail": None,
     }
 
@@ -431,6 +435,54 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertEqual(
             report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
             "validation report status is not passed",
+        )
+
+    def test_run_sync_rejects_failed_validation_report_command(self) -> None:
+        """A passed validation report must not hide failed command records."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): "feature-sha",
+            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            command_returncode=sync_gate.FAILURE_RETURN_CODE,
+                        ),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_REPORT_INVALID)
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["command_failure_count"],
+            1,
+        )
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
+            "validation report commands include nonzero returncodes",
         )
 
     def test_run_sync_rejects_missing_validation_report(self) -> None:

@@ -187,7 +187,8 @@ digest and byte size. If the validation command exits successfully but the
 validation report file is missing, the sync gate reports
 `validation_report_missing` and does not push. It also parses the validation
 report JSON into `validation_report_summary`; if that summary does not show
-`status = "passed"` for the same expected branch and current HEAD commit, the
+the expected schema version, `status = "passed"` for the same expected branch
+and current HEAD commit, and zero failed validation command return codes, the
 gate reports `validation_report_invalid` and does not push. The report also stores
 `worktree_status`, a parsed `git status --short` snapshot with entry count,
 per-entry index/worktree status, paths, and a clean flag. For final paper

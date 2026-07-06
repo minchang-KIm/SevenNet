@@ -24,6 +24,7 @@ REPO_ROOT_PARENT_DEPTH = 1
 REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 VALIDATION_RUNNER_PATH = REPO_ROOT / "tools" / "run_isodelta_validation.py"
 SYNC_REPORT_SCHEMA_VERSION = "isodelta-sync-gate-report-v1"
+EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION = "isodelta-lightweight-validation-report-v1"
 DEFAULT_SYNC_REPORT_PATH = Path("isodelta_sync_report.json")
 DEFAULT_VALIDATION_REPORT_PATH = Path("isodelta_validation_report.json")
 DEFAULT_REMOTE = "fork"
@@ -245,6 +246,7 @@ def _validation_report_summary(
         "expected_branch": None,
         "git_commit": None,
         "command_count": None,
+        "command_failure_count": None,
         "detail": None,
     }
     try:
@@ -261,6 +263,16 @@ def _validation_report_summary(
     git_commit = payload.get("git_commit")
     commands = payload.get("commands")
     command_count = len(commands) if isinstance(commands, list) else None
+    command_failure_count = (
+        sum(
+            1
+            for command_record in commands
+            if not isinstance(command_record, dict)
+            or command_record.get("returncode") != SUCCESS_RETURN_CODE
+        )
+        if isinstance(commands, list)
+        else None
+    )
     summary.update(
         {
             "schema_version": schema_version,
@@ -268,8 +280,12 @@ def _validation_report_summary(
             "expected_branch": recorded_expected_branch,
             "git_commit": git_commit,
             "command_count": command_count,
+            "command_failure_count": command_failure_count,
         }
     )
+    if schema_version != EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION:
+        summary["detail"] = "validation report schema_version does not match expected version"
+        return summary
     if status != VALIDATION_REPORT_PASSED_STATUS:
         summary["detail"] = "validation report status is not passed"
         return summary
@@ -281,6 +297,12 @@ def _validation_report_summary(
         return summary
     if command_count is None:
         summary["detail"] = "validation report commands must be a JSON array"
+        return summary
+    if command_count < 1:
+        summary["detail"] = "validation report commands must not be empty"
+        return summary
+    if command_failure_count != 0:
+        summary["detail"] = "validation report commands include nonzero returncodes"
         return summary
     summary["valid"] = True
     return summary
