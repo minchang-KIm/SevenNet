@@ -173,16 +173,19 @@ python tools/run_isodelta_sync_gate.py \
 The sync gate runs `run_isodelta_validation.py` first and only attempts
 non-interactive `git push -u` when validation passes. It writes
 `isodelta_sync_report.json` with the validation command record, push command
-record, Git status, target remote/branch, the push stderr tail, and
+record, `git ls-remote --heads` remote-ref verification record, Git status,
+target remote/branch, the push stderr tail, and
 `git_provenance` fields for the current branch, validated HEAD commit, local
 target branch commit, remote URL, and locally known remote-tracking commit. It
-also writes a `push_failure` object when the push fails. That object classifies common
-failures as `auth-prompt-disabled`, `network-unreachable`, or `unknown`, and
-adds a `suggested_action` so a non-interactive GitHub credential failure is
-actionable from the report itself. This makes credential or network failures
-explicit instead of losing the evidence after a failed sync. It also forwards
-the same target branch to the goal-readiness audit as `--expected-branch`, so
-the gate cannot validate one checkout branch and push another by mistake.
+also writes `remote_ref_verification` and only reports `synced` when the remote
+branch resolves to the same commit that was pushed. A mismatch is reported as
+`remote_verification_failed`. The report writes a `push_failure` object when
+the push fails. That object classifies common failures as `auth-prompt-disabled`,
+`network-unreachable`, or `unknown`, and adds a `suggested_action` so a
+non-interactive GitHub credential failure is actionable from the report itself.
+This makes credential or network failures explicit instead of losing the
+evidence after a failed sync. It also forwards the same target branch to the
+goal-readiness audit as `--expected-branch`, so the gate must validate one checkout branch before pushing that same branch and cannot mix targets by mistake.
 When the cluster login node cannot authenticate to GitHub, add
 the `--push-failure-bundle` option with a path such as
 `isodelta_push_failure.bundle`; after validation passes and push fails, the gate

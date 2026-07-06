@@ -342,6 +342,11 @@ def main() -> None:
         and "--expected-branch" in sync_gate
         and "_sync_git_provenance" in sync_gate
         and "git_provenance" in sync_gate
+        and "STATUS_REMOTE_VERIFICATION_FAILED" in sync_gate
+        and "REMOTE_REF_VERIFICATION_KEY" in sync_gate
+        and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate
+        and "_remote_ref_verify_command" in sync_gate
+        and "_verify_remote_ref" in sync_gate
         and "--push-failure-bundle" in sync_gate
         and "_write_push_failure_bundle" in sync_gate
         and "PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME" in sync_gate
@@ -357,6 +362,8 @@ def main() -> None:
         and '"push_failure": _classify_push_failure(push_record)' in sync_gate
         and "test_validation_command_enforces_target_branch" in sync_gate_test
         and "test_run_sync_records_git_provenance_for_push_target" in sync_gate_test
+        and "test_run_sync_fails_when_remote_ref_does_not_match" in sync_gate_test
+        and "REMOTE_REF_VERIFY_COMMAND_NAME" in sync_gate_test
         and "test_run_sync_can_write_bundle_after_push_failure" in sync_gate_test
         and "PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME" in sync_gate_test
         and "hashlib.sha256(b\"bundle\").hexdigest()" in sync_gate_test
@@ -1344,6 +1351,9 @@ def main() -> None:
         and "run_isodelta_sync_gate.py" in doc
         and "`isodelta_sync_report.json`" in doc
         and "`git_provenance` fields" in doc
+        and "`git ls-remote --heads`" in doc
+        and "`remote_ref_verification`" in doc
+        and "`remote_verification_failed`" in doc
         and "`--push-failure-bundle`" in doc
         and "`push_failure_bundle`" in doc
         and "`git bundle verify` `verify_returncode`" in doc

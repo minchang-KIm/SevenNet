@@ -35,6 +35,9 @@ STATUS_SYNCED = "synced"
 STATUS_VALIDATED = "validated"
 STATUS_VALIDATION_FAILED = "validation_failed"
 STATUS_PUSH_FAILED = "push_failed"
+STATUS_REMOTE_VERIFICATION_FAILED = "remote_verification_failed"
+REMOTE_REF_VERIFICATION_KEY = "remote_ref_verification"
+REMOTE_REF_VERIFY_COMMAND_NAME = "remote_ref_verify"
 PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_COMMAND_NAME = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME = "push_failure_bundle_verify"
@@ -144,6 +147,11 @@ def _push_command(remote: str, branch: str) -> tuple[str, ...]:
     return ("git", "push", "-u", remote, branch)
 
 
+def _remote_ref_verify_command(remote: str, branch: str) -> tuple[str, ...]:
+    """Build the command that reads the pushed branch from the remote."""
+    return ("git", "ls-remote", "--heads", remote, branch)
+
+
 def _bundle_command(bundle_path: Path, branch: str) -> tuple[str, ...]:
     """Build a git bundle command for a validated branch after push failure."""
     return ("git", "bundle", "create", str(bundle_path), branch)
@@ -206,6 +214,56 @@ def _classify_push_failure(push_record: dict[str, Any] | None) -> dict[str, str]
         "detail": _tail(combined_output.strip()),
         "suggested_action": PUSH_FAILURE_SUGGESTED_ACTIONS[reason],
     }
+
+
+def _parse_remote_head_commit(ls_remote_stdout: str, branch: str) -> str | None:
+    """Extract one branch commit from a git ls-remote --heads response."""
+    expected_ref = f"refs/heads/{branch}"
+    for raw_line in ls_remote_stdout.splitlines():
+        fields = raw_line.split()
+        if len(fields) != 2:
+            continue
+        commit, ref_name = fields
+        if ref_name == expected_ref:
+            return commit
+    return None
+
+
+def _verify_remote_ref(
+    *,
+    remote: str,
+    branch: str,
+    expected_commit: str | None,
+    remote_ref_verify_command: tuple[str, ...] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Verify that the remote branch points at the commit that was pushed."""
+    record = _run_command(
+        remote_ref_verify_command or _remote_ref_verify_command(remote, branch),
+        env_overrides=PUSH_AUTH_ENVIRONMENT,
+    )
+    named_record = {"name": REMOTE_REF_VERIFY_COMMAND_NAME, **record}
+    observed_commit = (
+        _parse_remote_head_commit(str(record["stdout_tail"]), branch)
+        if record["returncode"] == SUCCESS_RETURN_CODE
+        else None
+    )
+    verified = (
+        record["returncode"] == SUCCESS_RETURN_CODE
+        and expected_commit is not None
+        and observed_commit == expected_commit
+    )
+    report = {
+        "remote_ref": f"refs/heads/{branch}",
+        "expected_commit": expected_commit,
+        "observed_commit": observed_commit,
+        "returncode": record["returncode"],
+        "verified": verified,
+    }
+    if record["returncode"] == SUCCESS_RETURN_CODE and observed_commit is None:
+        report["detail"] = "remote branch was not present in git ls-remote output"
+    elif record["returncode"] == SUCCESS_RETURN_CODE and not verified:
+        report["detail"] = "remote branch commit does not match the pushed branch"
+    return named_record, report
 
 
 def _write_push_failure_bundle(
@@ -284,6 +342,7 @@ def run_sync(
     push_failure_bundle_path: Path | None = None,
     validation_command: tuple[str, ...] | None = None,
     push_command: tuple[str, ...] | None = None,
+    remote_ref_verify_command: tuple[str, ...] | None = None,
     bundle_command: tuple[str, ...] | None = None,
     bundle_verify_command: tuple[str, ...] | None = None,
 ) -> int:
@@ -295,6 +354,7 @@ def run_sync(
     )
     command_records.append({"name": "validation", **validation_record})
     push_record: dict[str, Any] | None = None
+    remote_ref_verification_report: dict[str, Any] | None = None
     status = STATUS_VALIDATION_FAILED
     if validation_record["returncode"] == SUCCESS_RETURN_CODE:
         if skip_push:
@@ -310,6 +370,20 @@ def run_sync(
                 if push_record["returncode"] == SUCCESS_RETURN_CODE
                 else STATUS_PUSH_FAILED
             )
+            if status == STATUS_SYNCED:
+                expected_commit = _metadata_command(("git", "rev-parse", resolved_branch))
+                (
+                    remote_ref_record,
+                    remote_ref_verification_report,
+                ) = _verify_remote_ref(
+                    remote=remote,
+                    branch=resolved_branch,
+                    expected_commit=expected_commit,
+                    remote_ref_verify_command=remote_ref_verify_command,
+                )
+                command_records.append(remote_ref_record)
+                if not remote_ref_verification_report["verified"]:
+                    status = STATUS_REMOTE_VERIFICATION_FAILED
         else:
             status = STATUS_PUSH_FAILED
             push_record = {
@@ -343,6 +417,7 @@ def run_sync(
         "git_status_short": _metadata_command(("git", "status", "--short")),
         "git_provenance": _sync_git_provenance(remote, resolved_branch),
         "commands": command_records,
+        REMOTE_REF_VERIFICATION_KEY: remote_ref_verification_report,
         "push_failure": _classify_push_failure(push_record),
         PUSH_FAILURE_BUNDLE_KEY: push_failure_bundle_report,
     }
