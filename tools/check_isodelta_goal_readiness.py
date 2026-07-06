@@ -129,6 +129,9 @@ REQUIRED_FILE_SNIPPETS = {
     "tools/run_isodelta_validation.py": (
         "VALIDATION_REPORT_SCHEMA_VERSION",
         "--expected-branch",
+        "elapsed_seconds",
+        "stdout_tail",
+        "stderr_tail",
         "test_isodelta_sync_gate.py",
     ),
     "tools/run_isodelta_lammps_benchmark.py": (
@@ -361,6 +364,8 @@ REQUIRED_FILE_SNIPPETS = {
     "tests/unit_tests/test_isodelta_validation_runner.py": (
         "test_expected_branch_reaches_goal_readiness_command",
         "test_expected_branch_does_not_reach_py_compile",
+        "VALIDATION_COMMAND_REQUIRED_FIELDS",
+        "test_run_validation_writes_sync_gate_compatible_command_record",
         "codex/isodelta-halo-runtime",
     ),
     "tests/unit_tests/test_isodelta_goal_readiness.py": (

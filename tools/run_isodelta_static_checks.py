@@ -348,10 +348,14 @@ def main() -> None:
         and "--report-path" in validation_runner
         and "--expected-branch" in validation_runner
         and "_validation_commands" in validation_runner
+        and "elapsed_seconds" in validation_runner
         and "stdout_tail" in validation_runner
         and "stderr_tail" in validation_runner
         and "git_status_short" in validation_runner
+        and "VALIDATION_COMMAND_REQUIRED_FIELDS" in validation_runner_test
         and "test_expected_branch_reaches_goal_readiness_command" in validation_runner_test
+        and "test_run_validation_writes_sync_gate_compatible_command_record"
+        in validation_runner_test
         and "test_isodelta_validation_runner.py" in validation_runner,
         "validation runner must emit auditable sync reports",
     )
