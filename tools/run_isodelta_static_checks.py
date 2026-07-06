@@ -1173,6 +1173,9 @@ def main() -> None:
         and "PIPELINE_PLAN_MODES_ERROR" in cluster_suite
         and "PIPELINE_PLAN_CASES_ERROR" in cluster_suite
         and "PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS" in cluster_suite
+        and "PAPER_ARTIFACT_COMMENTS" in cluster_suite
+        and "GENERATED_ARTIFACT_COMMENT_KEY" in cluster_suite
+        and "RUN_PLAN_REPORT_COMMENT" in cluster_suite
         and "PIPELINE_READINESS_CHECKS_ERROR" in cluster_suite
         and "PIPELINE_SUITE_REQUIRED_MODELS_ERROR" in cluster_suite
         and "PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
@@ -1187,6 +1190,9 @@ def main() -> None:
         and "_require_pipeline_readiness_report" in cluster_suite
         and "_require_pipeline_artifact_preparation_report" in cluster_suite
         and "_require_pipeline_plan_report" in cluster_suite
+        and "_require_csv_artifact_comment" in cluster_suite
+        and "_require_markdown_artifact_comment" in cluster_suite
+        and "_svg_desc_content" in cluster_suite
         and "_require_pipeline_preflight_gpu_check" in cluster_suite
         and "_require_pipeline_runtime_overrides" in cluster_suite
         and "_require_pipeline_suite_metadata" in cluster_suite
@@ -1207,6 +1213,8 @@ def main() -> None:
         and "test_verify_pipeline_report_rejects_failed_artifact_preparation"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_gpu_skipped_run_plan"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_missing_generated_file_comment"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_preflight_skipped_gpu_check"
         in cluster_suite_test
@@ -1279,6 +1287,10 @@ def main() -> None:
         and "final-paper execution modes" in doc
         and "checks `gpu_check_planned`" in doc
         and "required model case plans" in doc
+        and "Generated paper artifacts are self-describing" in doc
+        and "`artifact_comment` or `report_comment`" in doc
+        and "Every generated table must keep its explanatory comment" in doc
+        and "expected `<desc>` description" in doc
         and "reopens the fingerprinted preflight report" in doc
         and "checks `gpu_check`" in doc
         and "requested GPU count was actually detected" in doc

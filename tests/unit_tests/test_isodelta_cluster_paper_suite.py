@@ -375,11 +375,12 @@ def _repeat_timing_rows_from_test_evidence(
     )
 
 
-def _minimal_svg(title: str) -> str:
+def _minimal_svg(title: str, *, description: str) -> str:
     """Return a tiny SVG figure that still exercises XML-based validation."""
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" '
         'viewBox="0 0 960 540">'
+        f"<desc>{description}</desc>"
         f'<text x="20" y="40">{title}</text>'
         "</svg>\n"
     )
@@ -448,6 +449,11 @@ def _write_required_paper_artifacts(
     environment_snapshot.write_text(
         json.dumps(
             {
+                isodelta_cluster_suite.GENERATED_ARTIFACT_COMMENT_KEY: (
+                    isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                        "environment_snapshot"
+                    ]
+                ),
                 "snapshot_schema_version": (
                     isodelta_cluster_suite.ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION
                 )
@@ -455,7 +461,14 @@ def _write_required_paper_artifacts(
         ),
         encoding="utf-8",
     )
-    manifest_snapshot.write_text('[suite]\nname = "test-suite"\n', encoding="utf-8")
+    manifest_snapshot.write_text(
+        (
+            "# "
+            + isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS["manifest_snapshot"]
+            + '\n[suite]\nname = "test-suite"\n'
+        ),
+        encoding="utf-8",
+    )
     case_rows = [
         {
             "case": record["case_name"],
@@ -486,44 +499,79 @@ def _write_required_paper_artifacts(
         }
         for record in command_records
     ]
-    isodelta_cluster_suite.write_csv(case_summary_csv, case_rows)
-    isodelta_cluster_suite.write_markdown_table(case_summary_markdown, case_rows)
-    isodelta_cluster_suite.write_csv(correlation_csv, correlation_rows)
+    isodelta_cluster_suite.write_csv(
+        case_summary_csv,
+        case_rows,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS["case_summary_csv"],
+    )
+    isodelta_cluster_suite.write_markdown_table(
+        case_summary_markdown,
+        case_rows,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+            "case_summary_markdown"
+        ],
+    )
+    isodelta_cluster_suite.write_csv(
+        correlation_csv,
+        correlation_rows,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS["correlation_csv"],
+    )
     isodelta_cluster_suite.write_csv(
         command_timing_csv,
         command_rows,
         fieldnames=isodelta_cluster_suite.PAPER_COMMAND_TIMING_COLUMNS,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+            "command_timing_csv"
+        ],
     )
     isodelta_cluster_suite.write_markdown_table(
         command_timing_markdown,
         command_rows,
         fieldnames=isodelta_cluster_suite.PAPER_COMMAND_TIMING_COLUMNS,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+            "command_timing_markdown"
+        ],
     )
     isodelta_cluster_suite.write_csv(
         repeat_timing_csv,
         list(repeat_timing_rows),
         fieldnames=isodelta_cluster_suite.PAPER_REPEAT_TIMING_COLUMNS,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+            "repeat_timing_csv"
+        ],
     )
     isodelta_cluster_suite.write_markdown_table(
         repeat_timing_markdown,
         list(repeat_timing_rows),
         fieldnames=isodelta_cluster_suite.PAPER_REPEAT_TIMING_COLUMNS,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+            "repeat_timing_markdown"
+        ],
     )
     speedup_svg.write_text(
         isodelta_cluster_suite._empty_svg(
-            isodelta_cluster_suite.SPEEDUP_SVG_EMPTY_MESSAGE
+            isodelta_cluster_suite.SPEEDUP_SVG_EMPTY_MESSAGE,
+            description=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                "speedup_svg"
+            ],
         ),
         encoding="utf-8",
     )
     hit_rate_svg.write_text(
         isodelta_cluster_suite._empty_svg(
-            f"No paired values for {isodelta_cluster_suite.HIT_RATE_SCATTER_TITLE}"
+            f"No paired values for {isodelta_cluster_suite.HIT_RATE_SCATTER_TITLE}",
+            description=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                "hit_rate_svg"
+            ],
         ),
         encoding="utf-8",
     )
     trace_svg.write_text(
         isodelta_cluster_suite._empty_svg(
-            f"No paired values for {isodelta_cluster_suite.TRACE_METADATA_SCATTER_TITLE}"
+            f"No paired values for {isodelta_cluster_suite.TRACE_METADATA_SCATTER_TITLE}",
+            description=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                "trace_svg"
+            ],
         ),
         encoding="utf-8",
     )
@@ -698,6 +746,9 @@ def _pipeline_plan_report(
     }
     return {
         "plan_schema_version": isodelta_cluster_suite.SUITE_SCHEMA_VERSION,
+        isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_cluster_suite.RUN_PLAN_REPORT_COMMENT
+        ),
         "suite": {
             "manifest": suite_record["manifest"],
             "expected_gpus": suite_record["expected_gpus"],
@@ -1103,13 +1154,26 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 case_records=(case_record,),
             )
             speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
-            speedup_svg.write_text(_minimal_svg("case"), encoding="utf-8")
+            speedup_svg.write_text(
+                _minimal_svg(
+                    "case",
+                    description=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                        "speedup_svg"
+                    ],
+                ),
+                encoding="utf-8",
+            )
             artifact_fingerprints["speedup_svg"] = (
                 isodelta_cluster_suite.generated_artifact_record(speedup_svg)
             )
             hit_rate_svg = output_dir / "figures" / "hit_rate_vs_speedup.svg"
             hit_rate_svg.write_text(
-                _minimal_svg(isodelta_cluster_suite.HIT_RATE_SCATTER_TITLE),
+                _minimal_svg(
+                    isodelta_cluster_suite.HIT_RATE_SCATTER_TITLE,
+                    description=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                        "hit_rate_svg"
+                    ],
+                ),
                 encoding="utf-8",
             )
             artifact_fingerprints["hit_rate_svg"] = (
@@ -1146,6 +1210,53 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
+    def test_verify_output_bundle_rejects_missing_generated_file_comment(self) -> None:
+        """Paper bundle tables should keep their generated-file explanation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            case_summary_csv = output_dir / "tables" / "case_summary.csv"
+            uncommented_lines = case_summary_csv.read_text(
+                encoding="utf-8"
+            ).splitlines()[1:]
+            case_summary_csv.write_text(
+                "\n".join(uncommented_lines) + "\n",
+                encoding="utf-8",
+            )
+            artifact_fingerprints["case_summary_csv"] = (
+                isodelta_cluster_suite.generated_artifact_record(case_summary_csv)
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "case_summary.csv: missing generated file comment",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
     def test_verify_output_bundle_rejects_case_summary_value_drift(self) -> None:
         """The main paper table should not drift from summary JSON case values."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1153,7 +1264,14 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             artifact_fingerprints = _write_required_paper_artifacts(output_dir)
             case_summary_csv = output_dir / "tables" / "case_summary.csv"
             case_summary_csv.write_text(
-                "case,model,kind,status\ncase,MACE,trace_only,passed\n",
+                (
+                    isodelta_cluster_suite._csv_comment_line(
+                        isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                            "case_summary_csv"
+                        ]
+                    )
+                    + "case,model,kind,status\ncase,MACE,trace_only,passed\n"
+                ),
                 encoding="utf-8",
             )
             artifact_fingerprints["case_summary_csv"] = (
@@ -1199,7 +1317,13 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             drifted_rows = _summary_correlations(1)
             drifted_rows[0] = dict(drifted_rows[0])
             drifted_rows[0]["n"] = 2
-            isodelta_cluster_suite.write_csv(correlation_csv, drifted_rows)
+            isodelta_cluster_suite.write_csv(
+                correlation_csv,
+                drifted_rows,
+                comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                    "correlation_csv"
+                ],
+            )
             artifact_fingerprints["correlation_csv"] = (
                 isodelta_cluster_suite.generated_artifact_record(correlation_csv)
             )
@@ -1268,7 +1392,12 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             command_timing_csv = output_dir / "tables" / "command_timing.csv"
             command_timing_csv.write_text(
                 (
-                    "name,returncode,elapsed_seconds,stdout_path,stderr_path,cwd\n"
+                    isodelta_cluster_suite._csv_comment_line(
+                        isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                            "command_timing_csv"
+                        ]
+                    )
+                    + "name,returncode,elapsed_seconds,stdout_path,stderr_path,cwd\n"
                     f"case,0,2.0,{stdout_path},{stderr_path},{output_dir}\n"
                 ),
                 encoding="utf-8",
@@ -1347,6 +1476,9 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 repeat_timing_csv,
                 drifted_rows,
                 fieldnames=isodelta_cluster_suite.PAPER_REPEAT_TIMING_COLUMNS,
+                comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                    "repeat_timing_csv"
+                ],
             )
             artifact_fingerprints["repeat_timing_csv"] = (
                 isodelta_cluster_suite.generated_artifact_record(repeat_timing_csv)
@@ -4512,6 +4644,7 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             case_summary_text = case_summary_csv.read_text(encoding="utf-8")
             repeat_timing_text = repeat_timing_csv.read_text(encoding="utf-8")
             speedup_svg_text = speedup_svg.read_text(encoding="utf-8")
+            manifest_snapshot_text = manifest_snapshot.read_text(encoding="utf-8")
             manifest_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
             environment_digest = hashlib.sha256(environment_snapshot.read_bytes()).hexdigest()
             case_summary_digest = hashlib.sha256(case_summary_csv.read_bytes()).hexdigest()
@@ -4563,6 +4696,18 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             summary["suite"]["manifest"]["sha256"],
             manifest_digest,
         )
+        self.assertEqual(
+            summary[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.SUMMARY_REPORT_COMMENT,
+        )
+        self.assertEqual(
+            environment_payload[
+                isodelta_cluster_suite.GENERATED_ARTIFACT_COMMENT_KEY
+            ],
+            isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                "environment_snapshot"
+            ],
+        )
         self.assertEqual(len(summary["cases"]), 3)
         self.assertEqual(summary["suite_evidence"]["distinct_trace_model_count"], 3)
         self.assertTrue(nequip_mode_controls["disabled_cache_disabled"])
@@ -4583,11 +4728,29 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertIn("enabled_sample_stddev_seconds", case_summary_text)
         self.assertIn("baseline_mean_95ci_half_width_seconds", case_summary_text)
         self.assertIn("speedup_95ci_lower_bound", case_summary_text)
+        self.assertTrue(
+            case_summary_text.startswith(
+                isodelta_cluster_suite._csv_comment_line(
+                    isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                        "case_summary_csv"
+                    ]
+                )
+            )
+        )
         self.assertIn("baseline-disabled", repeat_timing_text)
         self.assertIn("isodelta-enabled", repeat_timing_text)
         self.assertIn("external_timing_report", repeat_timing_text)
         self.assertIn("disabled", repeat_timing_text)
         self.assertIn("enabled", repeat_timing_text)
+        self.assertTrue(
+            repeat_timing_text.startswith(
+                isodelta_cluster_suite._csv_comment_line(
+                    isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                        "repeat_timing_csv"
+                    ]
+                )
+            )
+        )
         self.assertEqual(nequip_case["baseline_timing_count"], 2)
         self.assertAlmostEqual(
             nequip_case["baseline_mean_95ci_half_width_seconds"],
@@ -4620,6 +4783,18 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             ),
         )
         self.assertIn("<svg", speedup_svg_text)
+        self.assertIn(
+            f"<desc>{isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS['speedup_svg']}</desc>",
+            speedup_svg_text,
+        )
+        self.assertTrue(
+            manifest_snapshot_text.startswith(
+                "# "
+                + isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                    "manifest_snapshot"
+                ]
+            )
+        )
         self.assertEqual(
             environment_payload["snapshot_schema_version"],
             isodelta_cluster_suite.ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION,

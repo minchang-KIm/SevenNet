@@ -635,6 +635,13 @@ After successful collection, the suite writes:
 - `figures/trace_metadata_fraction_vs_speedup.svg`
 - `isodelta_cluster_suite_manifest.toml`
 
+Generated paper artifacts are self-describing. CSV tables start with a
+`# IsoDelta-Halo ...` comment, Markdown tables start with an HTML comment, SVG
+figures include a `<desc>` element, and JSON artifacts carry an
+`artifact_comment` or `report_comment` field. These comments are part of the
+evidence contract, not decoration: they tell a reviewer what the file means
+before the numbers are interpreted.
+
 Use `--collect-only` to regenerate tables, correlations, and figures from
 existing benchmark reports, external timing reports, and trace evidence without
 rerunning the cluster jobs. Use `--skip-gpu-check` only for local dry runs or
@@ -708,13 +715,16 @@ summary case and the same cell values as `summary["cases"]`.
 contain the same command rows as `summary["commands"]`.
 `repeat_timing.csv`/`repeat_timing.md` must match the raw source timing evidence
 protected by `evidence_fingerprints`, so changing a benchmark report or external
-timing report without regenerating the repeat table is rejected. Each SVG figure must parse as an SVG document with
-width, height, and viewBox; the speedup chart must include every measured-speedup
-case label from `summary["cases"]`, and scatter plots must contain the same
-number of plotted points as the summary data pairs they visualize.
-`environment_snapshot.json` must carry the expected snapshot schema, and the
-manifest snapshot must contain the `[suite]` table. This catches a corrupted
-table or graph even when the summary JSON was regenerated with a matching hash.
+timing report without regenerating the repeat table is rejected.
+Every generated table must keep its explanatory comment.
+Each SVG figure must parse as an SVG document with width, height, viewBox, and the expected `<desc>` description;
+the speedup chart must include every measured-speedup case label from
+`summary["cases"]`, and scatter plots must contain the same number of plotted
+points as the summary data pairs they visualize.
+`environment_snapshot.json` must carry the expected snapshot schema and `artifact_comment`, and the manifest
+snapshot must contain both the generated-file comment and the `[suite]` table.
+This catches a corrupted table or graph even when the summary JSON was
+regenerated with a matching hash.
 For `external_pair` cases, `--verify-output-bundle` also reopens the archived
 external timing report and rechecks its nested `command_log_fingerprints`, so
 MACE/NequIP stdout/stderr logs cannot drift silently after collection.

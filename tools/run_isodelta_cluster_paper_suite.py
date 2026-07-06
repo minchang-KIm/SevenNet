@@ -303,6 +303,69 @@ REQUIRED_PAPER_ARTIFACT_NAMES = (
     "trace_svg",
     "manifest_snapshot",
 )
+GENERATED_ARTIFACT_COMMENT_KEY = "artifact_comment"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+CSV_COMMENT_PREFIX = "# "
+MARKDOWN_COMMENT_PREFIX = "<!-- "
+MARKDOWN_COMMENT_SUFFIX = " -->"
+MANIFEST_SNAPSHOT_COMMENT = (
+    "IsoDelta-Halo archived manifest snapshot for paper artifact review."
+)
+SUMMARY_REPORT_COMMENT = (
+    "IsoDelta-Halo paper bundle summary linking cases, commands, tables, "
+    "figures, fingerprints, and provenance."
+)
+RUN_PLAN_REPORT_COMMENT = (
+    "IsoDelta-Halo execution plan written before cluster jobs so paper runs "
+    "can be audited before GPU time is used."
+)
+PAPER_ARTIFACT_COMMENTS = {
+    "environment_snapshot": (
+        "IsoDelta-Halo environment snapshot: software, GPU, git, and selected "
+        "environment context for reproducing the paper run."
+    ),
+    "case_summary_csv": (
+        "IsoDelta-Halo paper table: one row per case with model, status, "
+        "timing, cache, trace, and confidence-interval metrics."
+    ),
+    "case_summary_markdown": (
+        "IsoDelta-Halo paper table in Markdown for quick review of case-level "
+        "timing, cache, trace, and confidence-interval metrics."
+    ),
+    "correlation_csv": (
+        "IsoDelta-Halo appendix table: Pearson and Spearman correlations "
+        "between cache, trace, and speedup metrics."
+    ),
+    "command_timing_csv": (
+        "IsoDelta-Halo command audit table: elapsed time, return code, "
+        "working directory, and log path for each executed command."
+    ),
+    "command_timing_markdown": (
+        "IsoDelta-Halo command audit table in Markdown for reviewing command "
+        "timing and log provenance."
+    ),
+    "repeat_timing_csv": (
+        "IsoDelta-Halo repeat-level timing table: per-repeat baseline and "
+        "enabled measurements used to compute paper statistics."
+    ),
+    "repeat_timing_markdown": (
+        "IsoDelta-Halo repeat-level timing table in Markdown for checking "
+        "per-repeat baseline and enabled measurements."
+    ),
+    "speedup_svg": (
+        "IsoDelta-Halo generated figure: measured speedup by case relative to "
+        "the disabled-cache baseline."
+    ),
+    "hit_rate_svg": (
+        "IsoDelta-Halo generated figure: cache hit rate plotted against "
+        "measured speedup."
+    ),
+    "trace_svg": (
+        "IsoDelta-Halo generated figure: trace-estimated metadata fraction "
+        "plotted against estimated speedup."
+    ),
+    "manifest_snapshot": MANIFEST_SNAPSHOT_COMMENT,
+}
 PAPER_CASE_SUMMARY_COLUMNS = ("case", "model", "kind", "status")
 PAPER_CASE_SUMMARY_FIELD_MAP = {"case": "case_name"}
 PAPER_CORRELATION_COLUMNS = ("x_metric", "y_metric", "n", "pearson", "spearman")
@@ -1571,6 +1634,9 @@ def collect_environment_snapshot(
     """Collect reproducibility context that should travel with paper outputs."""
     return {
         "snapshot_schema_version": ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION,
+        GENERATED_ARTIFACT_COMMENT_KEY: PAPER_ARTIFACT_COMMENTS[
+            "environment_snapshot"
+        ],
         "suite_name": config.name,
         "manifest_path": str(config.manifest_path),
         "output_dir": str(config.output_dir),
@@ -3315,13 +3381,65 @@ def _require_external_timing_reports_from_summary(
 def _read_csv_rows(path: Path, label: str) -> tuple[tuple[str, ...], list[dict[str, str]]]:
     """Read a generated CSV artifact with schema-oriented validation errors."""
     with path.open(newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
+        csv_lines = [line for line in handle if not line.startswith(CSV_COMMENT_PREFIX)]
+        reader = csv.DictReader(csv_lines)
         fieldnames = tuple(reader.fieldnames or ())
         _require(fieldnames, f"{label}: missing CSV header")
         rows = list(reader)
     for index, row in enumerate(rows):
         _require(None not in row, f"{label}: row {index} has more cells than headers")
     return fieldnames, rows
+
+
+def _require_csv_artifact_comment(path: Path, label: str, artifact_name: str) -> None:
+    """Require the generated CSV file to start with its explanatory comment."""
+    expected_comment = _csv_comment_line(PAPER_ARTIFACT_COMMENTS[artifact_name]).rstrip(
+        "\n"
+    )
+    lines = path.read_text(encoding="utf-8").splitlines()
+    _require(bool(lines), f"{label}: file must not be empty")
+    first_line = lines[0]
+    _require(first_line == expected_comment, f"{label}: missing generated file comment")
+
+
+def _require_markdown_artifact_comment(
+    path: Path,
+    label: str,
+    artifact_name: str,
+) -> None:
+    """Require the generated Markdown file to start with its explanatory comment."""
+    expected_comment = _markdown_comment_line(
+        PAPER_ARTIFACT_COMMENTS[artifact_name]
+    ).rstrip("\n")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    _require(bool(lines), f"{label}: file must not be empty")
+    first_line = lines[0]
+    _require(first_line == expected_comment, f"{label}: missing generated file comment")
+
+
+def _markdown_table_lines(path: Path) -> list[str]:
+    """Return non-comment Markdown table lines from a generated table."""
+    return [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith(MARKDOWN_COMMENT_PREFIX)
+    ]
+
+
+def _require_json_artifact_comment(
+    payload: dict[str, Any],
+    label: str,
+    artifact_name: str,
+) -> None:
+    """Require JSON artifacts to carry a machine-readable comment field."""
+    observed_comment = _as_json_string(
+        payload.get(GENERATED_ARTIFACT_COMMENT_KEY),
+        f"{label}.{GENERATED_ARTIFACT_COMMENT_KEY}",
+    )
+    _require(
+        observed_comment == PAPER_ARTIFACT_COMMENTS[artifact_name],
+        f"{label}: generated file comment must match artifact purpose",
+    )
 
 
 def _require_columns(
@@ -3423,6 +3541,14 @@ def _svg_element_count(root: Any, element_name: str) -> int:
     return sum(1 for element in root.iter() if _svg_local_name(element) == element_name)
 
 
+def _svg_desc_content(root: Any) -> str:
+    """Return the generated SVG description text."""
+    for element in root:
+        if _svg_local_name(element) == "desc":
+            return "".join(element.itertext()).strip()
+    return ""
+
+
 def _markdown_cells(line: str) -> list[str]:
     """Split one GitHub-flavored markdown table row into trimmed cells."""
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
@@ -3430,6 +3556,7 @@ def _markdown_cells(line: str) -> list[str]:
 
 def _require_case_summary_csv(path: Path, cases_by_name: dict[str, dict[str, Any]]) -> None:
     """Verify that the main CSV table has one row per summary case."""
+    _require_csv_artifact_comment(path, "case_summary.csv", "case_summary_csv")
     fieldnames, rows = _read_csv_rows(path, "case_summary.csv")
     _require_columns(fieldnames, PAPER_CASE_SUMMARY_COLUMNS, "case_summary.csv")
     expected_case_names = set(cases_by_name)
@@ -3462,7 +3589,12 @@ def _require_case_summary_markdown(
     cases_by_name: dict[str, dict[str, Any]],
 ) -> None:
     """Verify that the markdown table is readable and aligned with summary cases."""
-    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    _require_markdown_artifact_comment(
+        path,
+        "case_summary.md",
+        "case_summary_markdown",
+    )
+    lines = _markdown_table_lines(path)
     expected_case_names = set(cases_by_name)
     _require(
         len(lines) == len(expected_case_names) + 2,
@@ -3511,6 +3643,7 @@ def _require_case_summary_markdown(
 
 def _require_correlation_csv(path: Path, summary_payload: dict[str, Any]) -> None:
     """Verify that the correlation table matches summary JSON correlation rows."""
+    _require_csv_artifact_comment(path, "correlation.csv", "correlation_csv")
     fieldnames, rows = _read_csv_rows(path, "correlation.csv")
     _require_columns(fieldnames, PAPER_CORRELATION_COLUMNS, "correlation.csv")
     summary_correlations = _summary_correlations_by_metric_pair(summary_payload)
@@ -3758,6 +3891,7 @@ def _require_repeat_timing_csv(
     expected_rows: list[dict[str, Any]],
 ) -> None:
     """Verify that repeat timing CSV rows match source timing evidence."""
+    _require_csv_artifact_comment(path, "repeat_timing.csv", "repeat_timing_csv")
     fieldnames, rows = _read_csv_rows(path, "repeat_timing.csv")
     _require_columns(fieldnames, PAPER_REPEAT_TIMING_COLUMNS, "repeat_timing.csv")
     _require(
@@ -3780,7 +3914,12 @@ def _require_repeat_timing_markdown(
     expected_rows: list[dict[str, Any]],
 ) -> None:
     """Verify that repeat timing Markdown rows match source timing evidence."""
-    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    _require_markdown_artifact_comment(
+        path,
+        "repeat_timing.md",
+        "repeat_timing_markdown",
+    )
+    lines = _markdown_table_lines(path)
     _require(
         len(lines) == len(expected_rows) + 2,
         "repeat_timing.md: row count must match source timing evidence plus header",
@@ -3817,6 +3956,7 @@ def _require_command_timing_csv(
     summary_payload: dict[str, Any],
 ) -> None:
     """Verify that the command timing CSV matches summary command records."""
+    _require_csv_artifact_comment(path, "command_timing.csv", "command_timing_csv")
     fieldnames, rows = _read_csv_rows(path, "command_timing.csv")
     _require_columns(fieldnames, PAPER_COMMAND_TIMING_COLUMNS, "command_timing.csv")
     summary_rows = _summary_command_rows(summary_payload)
@@ -3840,7 +3980,12 @@ def _require_command_timing_markdown(
     summary_payload: dict[str, Any],
 ) -> None:
     """Verify that the command timing Markdown table matches summary commands."""
-    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    _require_markdown_artifact_comment(
+        path,
+        "command_timing.md",
+        "command_timing_markdown",
+    )
+    lines = _markdown_table_lines(path)
     summary_rows = _summary_command_rows(summary_payload)
     _require(
         len(lines) == len(summary_rows) + 2,
@@ -3884,6 +4029,10 @@ def _require_svg_document(path: Path, label: str) -> Any:
     _require(root.attrib.get("width") is not None, f"{label}: missing width")
     _require(root.attrib.get("height") is not None, f"{label}: missing height")
     _require(root.attrib.get("viewBox") is not None, f"{label}: missing viewBox")
+    _require(
+        _svg_desc_content(root) == PAPER_ARTIFACT_COMMENTS[label],
+        f"{label}: missing generated file description",
+    )
     return root
 
 
@@ -3951,6 +4100,11 @@ def _require_environment_snapshot(path: Path) -> None:
         json.loads(path.read_text(encoding="utf-8")),
         "environment_snapshot",
     )
+    _require_json_artifact_comment(
+        payload,
+        "environment_snapshot",
+        "environment_snapshot",
+    )
     schema_version = _as_json_string(
         payload.get("snapshot_schema_version"),
         "environment_snapshot.snapshot_schema_version",
@@ -3965,6 +4119,12 @@ def _require_manifest_snapshot(path: Path) -> None:
     """Verify that the archived manifest snapshot is not an empty placeholder."""
     manifest_text = path.read_text(encoding="utf-8")
     _require(bool(manifest_text.strip()), "manifest_snapshot: file must not be empty")
+    expected_comment = f"# {PAPER_ARTIFACT_COMMENTS['manifest_snapshot']}"
+    first_line = manifest_text.splitlines()[0]
+    _require(
+        first_line == expected_comment,
+        "manifest_snapshot: missing generated file comment",
+    )
     _require("[suite]" in manifest_text, "manifest_snapshot: missing [suite] table")
 
 
@@ -4602,6 +4762,14 @@ def _require_pipeline_plan_report(
         schema_version == SUITE_SCHEMA_VERSION,
         f"run_plan.plan_schema_version must be {SUITE_SCHEMA_VERSION!r}",
     )
+    report_comment = _as_json_string(
+        plan_payload.get(GENERATED_REPORT_COMMENT_KEY),
+        f"run_plan.{GENERATED_REPORT_COMMENT_KEY}",
+    )
+    _require(
+        report_comment == RUN_PLAN_REPORT_COMMENT,
+        "run_plan must describe its generated report purpose",
+    )
     plan_suite = _as_json_object(plan_payload.get("suite"), "run_plan.suite")
     expected_gpus = _as_json_nonnegative_int(
         suite_record.get("expected_gpus"),
@@ -5029,7 +5197,11 @@ def write_manifest_snapshot(config: SuiteConfig) -> Path:
     """Copy the manifest into the output bundle for archival review."""
     snapshot_path = config.output_dir / MANIFEST_SNAPSHOT_NAME
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(config.manifest_path, snapshot_path)
+    snapshot_text = config.manifest_path.read_text(encoding="utf-8")
+    snapshot_path.write_text(
+        f"# {MANIFEST_SNAPSHOT_COMMENT}\n{snapshot_text}",
+        encoding="utf-8",
+    )
     return snapshot_path
 
 
@@ -5152,6 +5324,7 @@ def build_run_plan(
 
     return {
         "plan_schema_version": SUITE_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: RUN_PLAN_REPORT_COMMENT,
         "provenance": collect_run_provenance(),
         "suite": {
             "name": config.name,
@@ -6674,14 +6847,17 @@ def write_csv(
     rows: list[dict[str, Any]],
     *,
     fieldnames: tuple[str, ...] | None = None,
+    comment: str | None = None,
 ) -> None:
     """Write rows to CSV with stable column order."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows and fieldnames is None:
-        path.write_text("", encoding="utf-8")
+        path.write_text(_csv_comment_line(comment) if comment else "", encoding="utf-8")
         return
     resolved_fieldnames = list(fieldnames) if fieldnames is not None else list(rows[0].keys())
     with path.open("w", newline="", encoding="utf-8") as handle:
+        if comment:
+            handle.write(_csv_comment_line(comment))
         writer = csv.DictWriter(handle, fieldnames=resolved_fieldnames)
         writer.writeheader()
         writer.writerows(rows)
@@ -6692,20 +6868,42 @@ def write_markdown_table(
     rows: list[dict[str, Any]],
     *,
     fieldnames: tuple[str, ...] | None = None,
+    comment: str | None = None,
 ) -> None:
     """Write rows to a compact GitHub-flavored markdown table."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows and fieldnames is None:
-        path.write_text("| empty |\n| --- |\n", encoding="utf-8")
+        path.write_text(
+            (_markdown_comment_line(comment) if comment else "")
+            + "| empty |\n| --- |\n",
+            encoding="utf-8",
+        )
         return
     headers = list(fieldnames) if fieldnames is not None else list(rows[0].keys())
-    lines = [
-        "| " + " | ".join(headers) + " |",
-        "| " + " | ".join("---" for _ in headers) + " |",
-    ]
+    lines = []
+    if comment:
+        lines.append(_markdown_comment_line(comment).rstrip("\n"))
+    lines.extend(
+        [
+            "| " + " | ".join(headers) + " |",
+            "| " + " | ".join("---" for _ in headers) + " |",
+        ]
+    )
     for row in rows:
         lines.append("| " + " | ".join(_format_table_value(row[header]) for header in headers) + " |")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _csv_comment_line(comment: str | None) -> str:
+    """Return the comment line used at the top of generated CSV artifacts."""
+    return "" if comment is None else f"{CSV_COMMENT_PREFIX}{comment}\n"
+
+
+def _markdown_comment_line(comment: str | None) -> str:
+    """Return the HTML comment line used at the top of Markdown artifacts."""
+    return "" if comment is None else (
+        f"{MARKDOWN_COMMENT_PREFIX}{comment}{MARKDOWN_COMMENT_SUFFIX}\n"
+    )
 
 
 def _pearson(xs: list[float], ys: list[float]) -> float | None:
@@ -6797,7 +6995,13 @@ def write_speedup_svg(path: Path, case_summaries: list[CaseSummary]) -> None:
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     if not points:
-        path.write_text(_empty_svg(SPEEDUP_SVG_EMPTY_MESSAGE), encoding="utf-8")
+        path.write_text(
+            _empty_svg(
+                SPEEDUP_SVG_EMPTY_MESSAGE,
+                description=PAPER_ARTIFACT_COMMENTS["speedup_svg"],
+            ),
+            encoding="utf-8",
+        )
         return
     plot_width = SVG_WIDTH - SVG_MARGIN_LEFT - SVG_MARGIN_RIGHT
     plot_height = SVG_HEIGHT - SVG_MARGIN_TOP - SVG_MARGIN_BOTTOM
@@ -6823,7 +7027,13 @@ def write_speedup_svg(path: Path, case_summaries: list[CaseSummary]) -> None:
             f'{x_pos + bar_width / 2.0:.2f} {SVG_HEIGHT - 30})">{_svg_escape(label)}</text>'
         )
     axis = _svg_axes("Speedup vs disabled cache", "case", "speedup")
-    path.write_text(_svg_document(axis + "\n".join(bars)), encoding="utf-8")
+    path.write_text(
+        _svg_document(
+            axis + "\n".join(bars),
+            description=PAPER_ARTIFACT_COMMENTS["speedup_svg"],
+        ),
+        encoding="utf-8",
+    )
 
 
 def write_scatter_svg(
@@ -6835,6 +7045,7 @@ def write_scatter_svg(
     title: str,
     x_label: str,
     y_label: str,
+    description: str,
 ) -> None:
     """Write a dependency-free scatter plot for correlation inspection."""
     points = []
@@ -6845,7 +7056,10 @@ def write_scatter_svg(
             points.append((summary.case_name, float(x_value), float(y_value)))
     path.parent.mkdir(parents=True, exist_ok=True)
     if not points:
-        path.write_text(_empty_svg(f"No paired values for {title}"), encoding="utf-8")
+        path.write_text(
+            _empty_svg(f"No paired values for {title}", description=description),
+            encoding="utf-8",
+        )
         return
     plot_width = SVG_WIDTH - SVG_MARGIN_LEFT - SVG_MARGIN_RIGHT
     plot_height = SVG_HEIGHT - SVG_MARGIN_TOP - SVG_MARGIN_BOTTOM
@@ -6864,7 +7078,10 @@ def write_scatter_svg(
             f'<text x="{x_pos + 8:.2f}" y="{y_pos - 8:.2f}" font-size="12">{_svg_escape(label)}</text>'
         )
     axis = _svg_axes(title, x_label, y_label)
-    path.write_text(_svg_document(axis + "\n".join(circles)), encoding="utf-8")
+    path.write_text(
+        _svg_document(axis + "\n".join(circles), description=description),
+        encoding="utf-8",
+    )
 
 
 def _expanded_range(min_value: float, max_value: float) -> tuple[float, float]:
@@ -6893,21 +7110,23 @@ def _svg_axes(title: str, x_label: str, y_label: str) -> str:
     )
 
 
-def _svg_document(body: str) -> str:
+def _svg_document(body: str, *, description: str) -> str:
     """Wrap SVG body content in a complete document."""
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{SVG_WIDTH}" '
         f'height="{SVG_HEIGHT}" viewBox="0 0 {SVG_WIDTH} {SVG_HEIGHT}">'
+        f"<desc>{_svg_escape(description)}</desc>"
         '<rect width="100%" height="100%" fill="#ffffff"/>'
         f"{body}</svg>\n"
     )
 
 
-def _empty_svg(message: str) -> str:
+def _empty_svg(message: str, *, description: str) -> str:
     """Return an SVG placeholder when a metric is unavailable."""
     return _svg_document(
         f'<text x="{SVG_WIDTH / 2:.2f}" y="{SVG_HEIGHT / 2:.2f}" text-anchor="middle" '
-        f'font-size="20">{_svg_escape(message)}</text>'
+        f'font-size="20">{_svg_escape(message)}</text>',
+        description=description,
     )
 
 
@@ -6933,28 +7152,44 @@ def write_paper_outputs(
     command_timing_md = tables_dir / "command_timing.md"
     repeat_timing_csv = tables_dir / "repeat_timing.csv"
     repeat_timing_md = tables_dir / "repeat_timing.md"
-    write_csv(case_summary_csv, summary_rows)
-    write_markdown_table(case_summary_md, summary_rows)
-    write_csv(correlation_csv, correlation_rows)
+    write_csv(
+        case_summary_csv,
+        summary_rows,
+        comment=PAPER_ARTIFACT_COMMENTS["case_summary_csv"],
+    )
+    write_markdown_table(
+        case_summary_md,
+        summary_rows,
+        comment=PAPER_ARTIFACT_COMMENTS["case_summary_markdown"],
+    )
+    write_csv(
+        correlation_csv,
+        correlation_rows,
+        comment=PAPER_ARTIFACT_COMMENTS["correlation_csv"],
+    )
     write_csv(
         command_timing_csv,
         command_timing_rows,
         fieldnames=PAPER_COMMAND_TIMING_COLUMNS,
+        comment=PAPER_ARTIFACT_COMMENTS["command_timing_csv"],
     )
     write_markdown_table(
         command_timing_md,
         command_timing_rows,
         fieldnames=PAPER_COMMAND_TIMING_COLUMNS,
+        comment=PAPER_ARTIFACT_COMMENTS["command_timing_markdown"],
     )
     write_csv(
         repeat_timing_csv,
         repeat_timing_rows,
         fieldnames=PAPER_REPEAT_TIMING_COLUMNS,
+        comment=PAPER_ARTIFACT_COMMENTS["repeat_timing_csv"],
     )
     write_markdown_table(
         repeat_timing_md,
         repeat_timing_rows,
         fieldnames=PAPER_REPEAT_TIMING_COLUMNS,
+        comment=PAPER_ARTIFACT_COMMENTS["repeat_timing_markdown"],
     )
     speedup_svg = figures_dir / "speedup_by_case.svg"
     hit_rate_svg = figures_dir / "hit_rate_vs_speedup.svg"
@@ -6968,6 +7203,7 @@ def write_paper_outputs(
         title=HIT_RATE_SCATTER_TITLE,
         x_label="cache hit rate (%)",
         y_label="measured speedup",
+        description=PAPER_ARTIFACT_COMMENTS["hit_rate_svg"],
     )
     write_scatter_svg(
         trace_svg,
@@ -6977,6 +7213,7 @@ def write_paper_outputs(
         title=TRACE_METADATA_SCATTER_TITLE,
         x_label="metadata build fraction (%)",
         y_label="trace estimated speedup",
+        description=PAPER_ARTIFACT_COMMENTS["trace_svg"],
     )
     summary_path = config.output_dir / SUMMARY_REPORT_NAME
     manifest_snapshot_path = write_manifest_snapshot(config)
@@ -7010,6 +7247,7 @@ def write_paper_outputs(
         }
     )
     payload = {
+        GENERATED_REPORT_COMMENT_KEY: SUMMARY_REPORT_COMMENT,
         "provenance": collect_run_provenance(),
         "suite": {
             "name": config.name,
