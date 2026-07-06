@@ -1661,6 +1661,129 @@ min_speedup = 1.2
                 dry_run=False,
             )
 
+    def test_validate_case_outputs_accepts_commented_bundle_evidence(self) -> None:
+        """Existing bundle evidence should identify itself before revalidation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            benchmark_path = root / "benchmark.json"
+            trace_path = root / "mace_trace_evidence.json"
+            bundle_path = root / "bundle_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+            case = isodelta_cluster_suite.CaseConfig(
+                name="sevennet-paper",
+                model="SevenNet",
+                kind="sevennet_lammps",
+                required_trace_models=("MACE",),
+            )
+            bundle_path.write_text(
+                json.dumps(
+                    isodelta_cluster_suite.bundle_check.validate_bundle(
+                        benchmark_report=benchmark_path,
+                        trace_evidence_paths=[trace_path],
+                        required_models=list(case.required_trace_models),
+                        thresholds=isodelta_cluster_suite.bundle_check.BundleThresholds(
+                            max_abs_thermo_delta=case.max_abs_thermo_delta,
+                            min_paired_thermo_count=case.min_paired_thermo_count,
+                            min_speedup=case.min_speedup,
+                            min_hit_rate_percent=case.min_hit_rate_percent,
+                            min_enabled_cache_attempts=(
+                                case.min_enabled_cache_attempts
+                            ),
+                            min_enabled_cache_hits=case.min_enabled_cache_hits,
+                            min_trace_hit_rate_percent=(
+                                case.min_trace_hit_rate_percent
+                            ),
+                            min_trace_estimated_speedup=(
+                                case.min_trace_estimated_speedup
+                            ),
+                            min_trace_metadata_fraction_percent=(
+                                case.min_trace_metadata_fraction_percent
+                            ),
+                        ),
+                    )
+                ),
+                encoding="utf-8",
+            )
+
+            isodelta_cluster_suite.validate_case_outputs(
+                case,
+                benchmark_path,
+                bundle_path,
+                (trace_path,),
+                None,
+                dry_run=False,
+            )
+
+    def test_validate_case_outputs_rejects_uncommented_bundle_evidence(self) -> None:
+        """Archived bundle evidence should not pass as anonymous JSON."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            benchmark_path = root / "benchmark.json"
+            trace_path = root / "mace_trace_evidence.json"
+            bundle_path = root / "bundle_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+            bundle_path.write_text(json.dumps({}), encoding="utf-8")
+            case = isodelta_cluster_suite.CaseConfig(
+                name="sevennet-paper",
+                model="SevenNet",
+                kind="sevennet_lammps",
+                required_trace_models=("MACE",),
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "bundle_evidence.report_comment",
+            ):
+                isodelta_cluster_suite.validate_case_outputs(
+                    case,
+                    benchmark_path,
+                    bundle_path,
+                    (trace_path,),
+                    None,
+                    dry_run=False,
+                )
+
+    def test_validate_case_outputs_rejects_wrong_bundle_comment(self) -> None:
+        """Bundle evidence comments should describe the exact report purpose."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            benchmark_path = root / "benchmark.json"
+            trace_path = root / "mace_trace_evidence.json"
+            bundle_path = root / "bundle_evidence.json"
+            benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
+            trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+            bundle_path.write_text(
+                json.dumps(
+                    {
+                        isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
+                            "wrong evidence purpose"
+                        )
+                    }
+                ),
+                encoding="utf-8",
+            )
+            case = isodelta_cluster_suite.CaseConfig(
+                name="sevennet-paper",
+                model="SevenNet",
+                kind="sevennet_lammps",
+                required_trace_models=("MACE",),
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "generated report purpose",
+            ):
+                isodelta_cluster_suite.validate_case_outputs(
+                    case,
+                    benchmark_path,
+                    bundle_path,
+                    (trace_path,),
+                    None,
+                    dry_run=False,
+                )
+
     def test_one_sided_sevennet_benchmark_rejects_speedup_claim(self) -> None:
         """One-sided raw timing should never be accepted as paired speedup."""
         with tempfile.TemporaryDirectory() as tmpdir:

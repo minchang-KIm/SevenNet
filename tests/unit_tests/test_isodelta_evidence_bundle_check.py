@@ -58,6 +58,7 @@ ZERO_SAMPLE_STDDEV_LOOP_TIME_SECONDS = 0.0
 EXPECTED_RESULT_COUNT = 4
 EXPECTED_REPORT_SCHEMA_VERSION = "isodelta-benchmark-report-v1"
 EXPECTED_BUNDLE_SCHEMA_VERSION = "isodelta-evidence-bundle-v1"
+EXPECTED_BUNDLE_REPORT_COMMENT = isodelta_evidence_bundle.BUNDLE_REPORT_COMMENT
 MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY = 2
 ZERO_CACHE_COUNT = 0.0
 ZERO_HIT_RATE_PERCENT = 0.0
@@ -295,6 +296,7 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
             expected_trace_sha256 = _sha256_file(trace_path)
 
         self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(evidence["report_comment"], EXPECTED_BUNDLE_REPORT_COMMENT)
         self.assertEqual(
             evidence["bundle_schema_version"],
             EXPECTED_BUNDLE_SCHEMA_VERSION,
@@ -642,6 +644,7 @@ class IsoDeltaEvidenceBundleCheckTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             written = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertEqual(written["status"], "passed")
+            self.assertEqual(written["report_comment"], EXPECTED_BUNDLE_REPORT_COMMENT)
             self.assertEqual(
                 written["bundle_schema_version"],
                 EXPECTED_BUNDLE_SCHEMA_VERSION,

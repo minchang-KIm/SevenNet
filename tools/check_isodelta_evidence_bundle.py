@@ -27,6 +27,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
 BUNDLE_SCHEMA_VERSION = "isodelta-evidence-bundle-v1"
+BUNDLE_REPORT_COMMENT = (
+    "IsoDelta-Halo evidence bundle report linking SevenNet benchmark "
+    "evidence, portable MLIP trace evidence, artifact fingerprints, and "
+    "run provenance for manuscript review."
+)
 DEFAULT_MIN_TRACE_COUNT = 1
 DEFAULT_MIN_DISTINCT_TRACE_MODELS = 1
 MIN_COUNT_VALUE = 0
@@ -39,6 +44,7 @@ MIN_POSITIVE_SPEEDUP = 0.0
 MODEL_KEY = "model"
 STATUS_KEY = "status"
 PASSED_STATUS = "passed"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
 BUNDLE_SCHEMA_VERSION_KEY = "bundle_schema_version"
 PROVENANCE_KEY = "provenance"
 ARTIFACTS_KEY = "artifacts"
@@ -357,6 +363,7 @@ def validate_bundle(
         thresholds.min_distinct_trace_models,
     )
     return {
+        GENERATED_REPORT_COMMENT_KEY: BUNDLE_REPORT_COMMENT,
         STATUS_KEY: PASSED_STATUS,
         BUNDLE_SCHEMA_VERSION_KEY: BUNDLE_SCHEMA_VERSION,
         PROVENANCE_KEY: collect_run_provenance(),

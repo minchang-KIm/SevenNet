@@ -36,6 +36,9 @@ CLUSTER_SUITE_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_cl
 BENCHMARK_REPORT_TEST_PATH = (
     REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_benchmark_report_check.py"
 )
+EVIDENCE_BUNDLE_TEST_PATH = (
+    REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_evidence_bundle_check.py"
+)
 GOAL_READINESS_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_goal_readiness.py"
 SYNC_GATE_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_sync_gate.py"
 VALIDATION_RUNNER_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_validation_runner.py"
@@ -76,6 +79,7 @@ def main() -> None:
     doc_index = _read(DOC_INDEX_PATH)
     cluster_suite_test = _read(CLUSTER_SUITE_TEST_PATH)
     benchmark_report_test = _read(BENCHMARK_REPORT_TEST_PATH)
+    evidence_bundle_test = _read(EVIDENCE_BUNDLE_TEST_PATH)
     goal_readiness_test = _read(GOAL_READINESS_TEST_PATH)
     sync_gate_test = _read(SYNC_GATE_TEST_PATH)
     validation_runner_test = _read(VALIDATION_RUNNER_TEST_PATH)
@@ -531,6 +535,9 @@ def main() -> None:
         and "_artifact_record" in evidence_bundle_check
         and "collect_run_provenance" in evidence_bundle_check
         and "BUNDLE_SCHEMA_VERSION" in evidence_bundle_check
+        and "BUNDLE_REPORT_COMMENT" in evidence_bundle_check
+        and "GENERATED_REPORT_COMMENT_KEY" in evidence_bundle_check
+        and "GENERATED_REPORT_COMMENT_KEY: BUNDLE_REPORT_COMMENT" in evidence_bundle_check
         and "BUNDLE_SCHEMA_VERSION_KEY" in evidence_bundle_check
         and "PROVENANCE_KEY" in evidence_bundle_check
         and "git_dirty" in evidence_bundle_check
@@ -550,6 +557,16 @@ def main() -> None:
         and "--require-trace-model" in evidence_bundle_check
         and "min_trace_estimated_speedup" in evidence_bundle_check,
         "evidence bundle checker must gate benchmark and trace evidence together",
+    )
+    _require(
+        "EXPECTED_BUNDLE_REPORT_COMMENT" in evidence_bundle_test
+        and 'evidence["report_comment"]' in evidence_bundle_test
+        and 'written["report_comment"]' in evidence_bundle_test
+        and "test_validate_case_outputs_rejects_uncommented_bundle_evidence" in cluster_suite_test
+        and "test_validate_case_outputs_rejects_wrong_bundle_comment" in cluster_suite_test
+        and "bundle_check.BUNDLE_REPORT_COMMENT" in cluster_suite
+        and "_require_report_comment(" in cluster_suite,
+        "evidence bundle outputs must keep self-describing report comments",
     )
     _require(
         "check_isodelta_mlip_trace.py" in doc
@@ -627,6 +644,7 @@ def main() -> None:
     _require(
         "`bundle_schema_version`" in doc
         and "`provenance` object" in doc
+        and "`report_comment` is missing" in doc
         and "Git, Python, and platform" in doc,
         "IsoDelta-Halo guide must document bundle evidence provenance",
     )

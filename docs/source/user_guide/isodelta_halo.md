@@ -929,11 +929,13 @@ or empty required model labels, so `min_trace_count` cannot be satisfied by
 reusing the same artifact. Set `--min-distinct-trace-models` above one when the
 claim needs multi-model portability evidence; this separate gate rejects two
 trace files from the same MLIP label as insufficient for a cross-model claim.
-The resulting `bundle_evidence.json` records the path, SHA-256 digest, and byte
-size for the benchmark report and every trace evidence file. It also includes
-`bundle_schema_version` and a `provenance` object with Git, Python, and platform
-metadata for the bundle checker run, so archive it beside raw LAMMPS logs,
-trace JSON, and plotting scripts.
+The resulting `bundle_evidence.json` records a top-level `report_comment`, the
+path, SHA-256 digest, and byte size for the benchmark report and every trace evidence file.
+It also includes `bundle_schema_version` and a `provenance` object with Git, Python, and platform
+metadata for the bundle checker run, so archive it beside raw LAMMPS logs, trace
+JSON, and plotting scripts. The cluster suite reopens an existing bundle
+evidence file and rejects it when the `report_comment` is missing or does not
+describe the bundle evidence purpose.
 
 ## Expected Evidence For A Paper
 

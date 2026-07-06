@@ -6362,7 +6362,23 @@ def validate_case_outputs(
         trace_check.validate_trace_evidence(trace_payload, _trace_thresholds(case))
     if bundle_evidence is not None:
         _require(bundle_evidence.exists(), f"{case.name}: missing bundle evidence {bundle_evidence}")
-        json.loads(bundle_evidence.read_text(encoding="utf-8"))
+        bundle_payload = _as_json_object(
+            json.loads(bundle_evidence.read_text(encoding="utf-8")),
+            f"{case.name}: bundle_evidence",
+        )
+        _require_report_comment(
+            bundle_payload,
+            f"{case.name}: bundle_evidence",
+            bundle_check.BUNDLE_REPORT_COMMENT,
+        )
+        bundle_schema_version = _as_json_string(
+            bundle_payload.get(bundle_check.BUNDLE_SCHEMA_VERSION_KEY),
+            f"{case.name}: bundle_evidence.{bundle_check.BUNDLE_SCHEMA_VERSION_KEY}",
+        )
+        _require(
+            bundle_schema_version == bundle_check.BUNDLE_SCHEMA_VERSION,
+            f"{case.name}: bundle_evidence has unexpected schema version",
+        )
         if benchmark_report is not None and trace_evidence_paths:
             bundle_check.validate_bundle(
                 benchmark_report=benchmark_report,
