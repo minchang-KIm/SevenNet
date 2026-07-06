@@ -1625,6 +1625,7 @@ trace_evidence = ["trace.json"]
         self.assertEqual(exit_code, 0)
         self.assertTrue(script.startswith("#!/usr/bin/env bash"))
         self.assertIn("# IsoDelta-Halo cluster paper suite launcher.", script)
+        self.assertIn("# CLI runtime overrides: none.", script)
         self.assertIn("#SBATCH --job-name=paper_suite", script)
         self.assertIn("#SBATCH --gres=gpu:8", script)
         self.assertIn("#SBATCH --cpus-per-task=12", script)
@@ -1716,6 +1717,10 @@ enabled_command = "run enabled"
         self.assertEqual(exit_code, 0)
         self.assertIn(
             "COMMON_ARGS+=(--ablation-mode-override isodelta-enabled)",
+            script,
+        )
+        self.assertIn(
+            "# CLI runtime overrides: ablation_mode=isodelta-enabled.",
             script,
         )
         self.assertIn("one-sided ablation suite", script)

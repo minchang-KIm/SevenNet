@@ -6429,6 +6429,16 @@ def _append_bash_array_args(lines: list[str], *values: str | Path) -> None:
     lines.append(f"COMMON_ARGS+=({quoted_values})")
 
 
+def _runtime_override_comment(config: SuiteConfig) -> str:
+    """Return one readable provenance comment for generated launch scripts."""
+    if not config.runtime_overrides:
+        return "# CLI runtime overrides: none."
+    assignments = ", ".join(
+        f"{key}={value}" for key, value in sorted(config.runtime_overrides.items())
+    )
+    return f"# CLI runtime overrides: {assignments}."
+
+
 def write_slurm_script(
     path: Path,
     config: SuiteConfig,
@@ -6462,6 +6472,7 @@ def write_slurm_script(
         "# IsoDelta-Halo cluster paper suite launcher.",
         "# Submit with: sbatch <this-file>",
         "# The script writes pre-run evidence first, then runs the full pipeline.",
+        _runtime_override_comment(config),
         f"#SBATCH --job-name={slurm_job_name}",
         f"#SBATCH --gres=gpu:{config.expected_gpus}",
         "#SBATCH --ntasks=1",

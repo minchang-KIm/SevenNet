@@ -469,6 +469,9 @@ cluster module systems can select the intended environment without editing the
 recorded experiment command. `--collect-only` is not accepted when generating
 this SLURM launcher because the launcher is reserved for the full 8-GPU
 pipeline; use the direct `--collect-only` command after jobs finish.
+The generated header also includes a `CLI runtime overrides` comment, so the
+standalone `sbatch` file records whether it used the manifest as-is or applied
+an execution-time ablation override.
 If the launcher is generated with `--ablation-mode-override baseline-disabled`
 or `--ablation-mode-override isodelta-enabled`, it runs the one-sided ablation suite
 and reopens the result with `--verify-output-bundle` instead of using the
