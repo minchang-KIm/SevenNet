@@ -183,6 +183,11 @@ actionable from the report itself. This makes credential or network failures
 explicit instead of losing the evidence after a failed sync. It also forwards
 the same target branch to the goal-readiness audit as `--expected-branch`, so
 the gate cannot validate one checkout branch and push another by mistake.
+When the cluster login node cannot authenticate to GitHub, add
+the `--push-failure-bundle` option with a path such as
+`isodelta_push_failure.bundle`; after validation passes and push fails, the gate
+writes a portable `git bundle` for the validated branch and records the bundle
+command under `push_failure_bundle`.
 
 For a local completion-readiness audit, generate
 `isodelta_goal_readiness_report.json` as a source-tree report:

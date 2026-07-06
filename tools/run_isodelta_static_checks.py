@@ -342,12 +342,16 @@ def main() -> None:
         and "--expected-branch" in sync_gate
         and "_sync_git_provenance" in sync_gate
         and "git_provenance" in sync_gate
+        and "--push-failure-bundle" in sync_gate
+        and "_write_push_failure_bundle" in sync_gate
+        and "PUSH_FAILURE_BUNDLE_KEY" in sync_gate
         and "STATUS_PUSH_FAILED" in sync_gate
         and "PUSH_FAILURE_REASON_AUTH_PROMPT_DISABLED" in sync_gate
         and "_classify_push_failure" in sync_gate
         and '"push_failure": _classify_push_failure(push_record)' in sync_gate
         and "test_validation_command_enforces_target_branch" in sync_gate_test
         and "test_run_sync_records_git_provenance_for_push_target" in sync_gate_test
+        and "test_run_sync_can_write_bundle_after_push_failure" in sync_gate_test
         and "test_run_sync_classifies_noninteractive_auth_push_failure" in sync_gate_test
         and "test_isodelta_sync_gate.py" in validation_runner,
         "sync gate must validate before recording git push attempts",
@@ -1332,6 +1336,8 @@ def main() -> None:
         and "run_isodelta_sync_gate.py" in doc
         and "`isodelta_sync_report.json`" in doc
         and "`git_provenance` fields" in doc
+        and "`--push-failure-bundle`" in doc
+        and "`push_failure_bundle`" in doc
         and "non-interactive `git push -u`" in doc
         and "uploads the same JSON validation report" in doc,
         "IsoDelta-Halo guide must document the CI validation workflow",

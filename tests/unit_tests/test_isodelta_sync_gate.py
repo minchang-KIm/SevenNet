@@ -205,6 +205,59 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             report["push_failure"]["suggested_action"],
         )
 
+    def test_run_sync_can_write_bundle_after_push_failure(self) -> None:
+        """A failed push can still produce a portable bundle for handoff."""
+        original_root = sync_gate.REPO_ROOT
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            bundle_path = root / "failed_push.bundle"
+            bundle_script = (
+                "from pathlib import Path; "
+                f"Path({str(bundle_path)!r}).write_text('bundle', encoding='utf-8')"
+            )
+            sync_gate.REPO_ROOT = root
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        push_failure_bundle_path=bundle_path,
+                        validation_command=(sys.executable, "-c", "print('valid')"),
+                        push_command=(
+                            sys.executable,
+                            "-c",
+                            (
+                                "import sys; "
+                                "print('fatal: Could not resolve host', file=sys.stderr); "
+                                f"sys.exit({INTENTIONAL_PUSH_FAILURE_CODE})"
+                            ),
+                        ),
+                        bundle_command=(sys.executable, "-c", bundle_script),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+            bundle_exists = bundle_path.exists()
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertTrue(bundle_exists)
+        self.assertEqual(
+            [record["name"] for record in report["commands"]],
+            ["validation", "push", sync_gate.PUSH_FAILURE_BUNDLE_COMMAND_NAME],
+        )
+        self.assertEqual(
+            report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["status"],
+            sync_gate.PUSH_FAILURE_BUNDLE_STATUS_CREATED,
+        )
+        self.assertEqual(
+            report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["path"],
+            str(bundle_path),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

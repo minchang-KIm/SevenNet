@@ -33,6 +33,11 @@ STATUS_SYNCED = "synced"
 STATUS_VALIDATED = "validated"
 STATUS_VALIDATION_FAILED = "validation_failed"
 STATUS_PUSH_FAILED = "push_failed"
+PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
+PUSH_FAILURE_BUNDLE_COMMAND_NAME = "push_failure_bundle"
+PUSH_FAILURE_BUNDLE_STATUS_CREATED = "created"
+PUSH_FAILURE_BUNDLE_STATUS_FAILED = "failed"
+PUSH_FAILURE_BUNDLE_STATUS_SKIPPED = "skipped"
 PUSH_FAILURE_REASON_AUTH_PROMPT_DISABLED = "auth-prompt-disabled"
 PUSH_FAILURE_REASON_NETWORK_UNREACHABLE = "network-unreachable"
 PUSH_FAILURE_REASON_UNKNOWN = "unknown"
@@ -136,6 +141,11 @@ def _push_command(remote: str, branch: str) -> tuple[str, ...]:
     return ("git", "push", "-u", remote, branch)
 
 
+def _bundle_command(bundle_path: Path, branch: str) -> tuple[str, ...]:
+    """Build a git bundle command for a validated branch after push failure."""
+    return ("git", "bundle", "create", str(bundle_path), branch)
+
+
 def _sync_git_provenance(remote: str, branch: str | None) -> dict[str, str | None]:
     """Collect local and remote refs that define one sync attempt."""
     remote_tracking_ref = f"refs/remotes/{remote}/{branch}" if branch else None
@@ -177,6 +187,43 @@ def _classify_push_failure(push_record: dict[str, Any] | None) -> dict[str, str]
     }
 
 
+def _write_push_failure_bundle(
+    *,
+    bundle_path: Path,
+    branch: str | None,
+    bundle_command: tuple[str, ...] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Create a portable git bundle for a branch that could not be pushed."""
+    if branch is None:
+        skipped_record = {
+            "name": PUSH_FAILURE_BUNDLE_COMMAND_NAME,
+            "command": [],
+            "returncode": FAILURE_RETURN_CODE,
+            "elapsed_seconds": 0.0,
+            "stdout_tail": "",
+            "stderr_tail": "could not determine branch for git bundle",
+        }
+        skipped_report = {
+            "path": str(bundle_path),
+            "status": PUSH_FAILURE_BUNDLE_STATUS_SKIPPED,
+            "returncode": FAILURE_RETURN_CODE,
+        }
+        return skipped_record, skipped_report
+    bundle_path.parent.mkdir(parents=True, exist_ok=True)
+    record = _run_command(bundle_command or _bundle_command(bundle_path, branch))
+    named_record = {"name": PUSH_FAILURE_BUNDLE_COMMAND_NAME, **record}
+    bundle_status = (
+        PUSH_FAILURE_BUNDLE_STATUS_CREATED
+        if record["returncode"] == SUCCESS_RETURN_CODE
+        else PUSH_FAILURE_BUNDLE_STATUS_FAILED
+    )
+    return named_record, {
+        "path": str(bundle_path),
+        "status": bundle_status,
+        "returncode": record["returncode"],
+    }
+
+
 def _write_report(report_path: Path, payload: dict[str, Any]) -> None:
     """Persist the sync report so failed pushes are still auditable."""
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -190,8 +237,10 @@ def run_sync(
     report_path: Path,
     validation_report_path: Path,
     skip_push: bool = False,
+    push_failure_bundle_path: Path | None = None,
     validation_command: tuple[str, ...] | None = None,
     push_command: tuple[str, ...] | None = None,
+    bundle_command: tuple[str, ...] | None = None,
 ) -> int:
     """Run validation, then optionally push, and write one sync evidence report."""
     resolved_branch = branch or _current_branch()
@@ -228,6 +277,15 @@ def run_sync(
             }
             command_records.append(push_record)
 
+    push_failure_bundle_report: dict[str, Any] | None = None
+    if status == STATUS_PUSH_FAILED and push_failure_bundle_path is not None:
+        bundle_record, push_failure_bundle_report = _write_push_failure_bundle(
+            bundle_path=push_failure_bundle_path,
+            branch=resolved_branch,
+            bundle_command=bundle_command,
+        )
+        command_records.append(bundle_record)
+
     payload = {
         "sync_report_schema_version": SYNC_REPORT_SCHEMA_VERSION,
         "status": status,
@@ -240,6 +298,7 @@ def run_sync(
         "git_provenance": _sync_git_provenance(remote, resolved_branch),
         "commands": command_records,
         "push_failure": _classify_push_failure(push_record),
+        PUSH_FAILURE_BUNDLE_KEY: push_failure_bundle_report,
     }
     _write_report(report_path, payload)
     print(json.dumps({"sync_report": str(report_path), "status": status}, indent=2))
@@ -264,6 +323,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="JSON report path passed to run_isodelta_validation.py",
     )
     parser.add_argument("--skip-push", action="store_true", help="Validate and report without attempting git push")
+    parser.add_argument(
+        "--push-failure-bundle",
+        type=Path,
+        help="Create a git bundle for the validated branch when git push fails",
+    )
     return parser.parse_args(argv)
 
 
@@ -276,6 +340,7 @@ def main(argv: list[str] | None = None) -> int:
         report_path=args.report_path,
         validation_report_path=args.validation_report_path,
         skip_push=args.skip_push,
+        push_failure_bundle_path=args.push_failure_bundle,
     )
 
 
