@@ -93,6 +93,12 @@ PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR = (
     "output_bundle_verification.status must be 'passed' for a passed pipeline report"
 )
 PIPELINE_DRY_RUN_PASSED_ERROR = "passed pipeline report must record dry_run=false"
+PIPELINE_GPU_CHECK_SKIPPED_ERROR = (
+    "passed pipeline report must record skip_gpu_check=false"
+)
+PIPELINE_GPU_MISMATCH_ALLOWED_ERROR = (
+    "passed pipeline report must record allow_gpu_mismatch=false"
+)
 PIPELINE_SUITE_GPU_ERROR = (
     f"pipeline suite expected_gpus must be at least {DEFAULT_EXPECTED_GPU_COUNT}"
 )
@@ -4205,6 +4211,11 @@ def _require_pipeline_report_modes(pipeline_payload: dict[str, Any]) -> dict[str
         for mode_key in PIPELINE_REQUIRED_MODE_KEYS
     }
     _require(not modes["dry_run"], PIPELINE_DRY_RUN_PASSED_ERROR)
+    _require(not modes["skip_gpu_check"], PIPELINE_GPU_CHECK_SKIPPED_ERROR)
+    _require(
+        not modes["allow_gpu_mismatch"],
+        PIPELINE_GPU_MISMATCH_ALLOWED_ERROR,
+    )
     return modes
 
 

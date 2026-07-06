@@ -559,7 +559,7 @@ def _pipeline_report_modes(**overrides: bool) -> dict[str, bool]:
     modes = {
         "dry_run": False,
         "skip_downloads": False,
-        "skip_gpu_check": True,
+        "skip_gpu_check": False,
         "allow_gpu_mismatch": False,
         "keep_going": False,
         "reuse_passed": False,
@@ -2648,17 +2648,24 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                     encoding="utf-8",
                 )
 
-            exit_code = isodelta_cluster_suite.main(
-                [
-                    "--manifest",
-                    str(manifest_path),
-                    "--pipeline",
-                    "--pipeline-report",
-                    str(pipeline_report_path),
-                    "--skip-gpu-check",
-                    "--reuse-passed",
-                ]
+            original_detect_gpu_count = isodelta_cluster_suite.detect_gpu_count
+            isodelta_cluster_suite.detect_gpu_count = lambda: (
+                isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
+                "unit-test",
             )
+            try:
+                exit_code = isodelta_cluster_suite.main(
+                    [
+                        "--manifest",
+                        str(manifest_path),
+                        "--pipeline",
+                        "--pipeline-report",
+                        str(pipeline_report_path),
+                        "--reuse-passed",
+                    ]
+                )
+            finally:
+                isodelta_cluster_suite.detect_gpu_count = original_detect_gpu_count
             pipeline_report = json.loads(pipeline_report_path.read_text(encoding="utf-8"))
             summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -3081,6 +3088,54 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 re.escape(isodelta_cluster_suite.PIPELINE_DRY_RUN_PASSED_ERROR),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
+    def test_verify_pipeline_report_rejects_skipped_gpu_check_mode(self) -> None:
+        """Final-paper pipeline evidence should prove the requested GPUs were checked."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pipeline_report_path = Path(tmpdir) / "pipeline_report.json"
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "modes": _pipeline_report_modes(skip_gpu_check=True),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(isodelta_cluster_suite.PIPELINE_GPU_CHECK_SKIPPED_ERROR),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
+    def test_verify_pipeline_report_rejects_allowed_gpu_mismatch_mode(self) -> None:
+        """Final-paper pipeline evidence should not allow an undersized GPU job."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pipeline_report_path = Path(tmpdir) / "pipeline_report.json"
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "modes": _pipeline_report_modes(allow_gpu_mismatch=True),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(
+                    isodelta_cluster_suite.PIPELINE_GPU_MISMATCH_ALLOWED_ERROR
+                ),
             ):
                 isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
 

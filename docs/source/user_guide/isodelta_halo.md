@@ -501,12 +501,12 @@ the top-level status field cannot turn an incomplete run into publication
 evidence. Non-skipped stage fingerprints must point to present report files;
 an absent-file fingerprint is accepted only for a skipped artifact-preparation
 stage. The verifier also checks pipeline `modes` as booleans, rejects
-`dry_run = true` for a passed report, and requires suite metadata to keep
-`expected_gpus >= 8`, the SevenNet/MACE/NequIP required-model scope, and a
-well-formed manifest fingerprint. Runtime overrides are limited to known keys,
-and a passed publication report may only record `ablation_mode = "paired"`; a
-one-sided ablation override must stay in the ablation-only path instead of being
-accepted as final paper evidence.
+`dry_run = true`, `skip_gpu_check = true`, or `allow_gpu_mismatch = true` for a
+passed report, and requires suite metadata to keep `expected_gpus >= 8`, the
+SevenNet/MACE/NequIP required-model scope, and a well-formed manifest fingerprint.
+Runtime overrides are limited to known keys, and a passed publication report may
+only record `ablation_mode = "paired"`; a one-sided ablation override must stay
+in the ablation-only path instead of being accepted as final paper evidence.
 
 On a SLURM cluster, generate a commented submission script from the same
 manifest:

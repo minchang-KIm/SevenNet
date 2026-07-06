@@ -1164,6 +1164,8 @@ def main() -> None:
         and "PIPELINE_REPORT_PASSED_STATUS_ERROR" in cluster_suite
         and "pipeline report status must be 'passed'" in cluster_suite
         and "PIPELINE_DRY_RUN_PASSED_ERROR" in cluster_suite
+        and "PIPELINE_GPU_CHECK_SKIPPED_ERROR" in cluster_suite
+        and "PIPELINE_GPU_MISMATCH_ALLOWED_ERROR" in cluster_suite
         and "PIPELINE_SUITE_REQUIRED_MODELS_ERROR" in cluster_suite
         and "PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
         and "PIPELINE_ONE_SIDED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
@@ -1183,6 +1185,10 @@ def main() -> None:
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_dry_run_passed_mode"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_skipped_gpu_check_mode"
+        in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_allowed_gpu_mismatch_mode"
         in cluster_suite_test
         and "test_verify_pipeline_report_requires_final_paper_suite_models"
         in cluster_suite_test
@@ -1235,6 +1241,8 @@ def main() -> None:
         and "skipped artifact-preparation" in doc
         and "pipeline `modes` as booleans" in doc
         and "`dry_run = true`" in doc
+        and "`skip_gpu_check = true`" in doc
+        and "`allow_gpu_mismatch = true`" in doc
         and "SevenNet/MACE/NequIP required-model scope" in doc
         and "well-formed manifest fingerprint" in doc
         and "Runtime overrides are limited to known keys" in doc
