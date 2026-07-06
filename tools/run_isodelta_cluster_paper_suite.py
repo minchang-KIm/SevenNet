@@ -83,6 +83,9 @@ PREFLIGHT_NO_COMMAND_REASON = "no preflight_command"
 PIPELINE_STATUS_PASSED = "passed"
 PIPELINE_STATUS_FAILED = "failed"
 PIPELINE_STATUS_PLANNED = "planned"
+PIPELINE_REPORT_PASSED_STATUS_ERROR = (
+    "pipeline report status must be 'passed' before publication verification"
+)
 SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_only"))
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
 BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
@@ -4133,6 +4136,10 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         f"pipeline_report_schema_version must be {PIPELINE_REPORT_SCHEMA_VERSION!r}",
     )
     pipeline_status = _as_json_string(pipeline_payload.get("status"), "status")
+    _require(
+        pipeline_status == PIPELINE_STATUS_PASSED,
+        f"{PIPELINE_REPORT_PASSED_STATUS_ERROR}; observed {pipeline_status!r}",
+    )
     suite_record = _as_json_object(pipeline_payload.get("suite"), "suite")
     original_output_dir = Path(_as_json_string(suite_record.get("output_dir"), "suite.output_dir"))
     verified_stage_report_count = _require_pipeline_stage_report_fingerprints(

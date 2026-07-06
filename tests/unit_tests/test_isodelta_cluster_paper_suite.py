@@ -2991,6 +2991,35 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn("SHA-256 mismatch", pipeline_verification["detail"])
         self.assertEqual(len(stage_fingerprints), len(stage_names))
 
+    def test_verify_pipeline_report_rejects_failed_pipeline_status(self) -> None:
+        """The publication verifier should not pass a failed pipeline report."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pipeline_report_path = Path(tmpdir) / "pipeline_report.json"
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_FAILED,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(
+                    isodelta_cluster_suite.PIPELINE_REPORT_PASSED_STATUS_ERROR
+                ),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            with contextlib.redirect_stderr(io.StringIO()):
+                cli_exit_code = isodelta_cluster_suite.main(
+                    ["--verify-pipeline-report", str(pipeline_report_path)]
+                )
+
+        self.assertEqual(cli_exit_code, 1)
+
     def test_readiness_check_accepts_strict_three_model_paired_manifest(self) -> None:
         """A final paper manifest should prove strict input and model coverage."""
         with tempfile.TemporaryDirectory() as tmpdir:

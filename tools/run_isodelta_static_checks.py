@@ -1161,8 +1161,12 @@ def main() -> None:
         and "runtime_overrides" in cluster_suite
         and "_has_one_sided_ablation_case" in cluster_suite
         and "one-sided ablation suite" in cluster_suite
+        and "PIPELINE_REPORT_PASSED_STATUS_ERROR" in cluster_suite
+        and "pipeline report status must be 'passed'" in cluster_suite
         and "# CLI runtime overrides: ablation_mode=isodelta-enabled." in cluster_suite_test
         and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
+        and "test_verify_pipeline_report_rejects_failed_pipeline_status"
+        in cluster_suite_test
         and "TIMING_MODES_KEY" in cluster_suite
         and "_external_timing_modes_for_ablation" in cluster_suite
         and "_external_pair_command_requirement_errors" in cluster_suite
@@ -1192,6 +1196,8 @@ def main() -> None:
         and "`--pipeline`" in doc
         and "`pipeline_report.json`" in doc
         and "`--verify-pipeline-report`" in doc
+        and "publication-success gate" in doc
+        and "failed or planned `pipeline_report.json` exits" in doc
         and "stage report fingerprints" in doc
         and "final bundle verification counts" in doc
         and "`artifact_preparation_report.json`" in doc
