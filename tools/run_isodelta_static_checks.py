@@ -1050,6 +1050,11 @@ def main() -> None:
         and "speedup_by_case.svg" in cluster_suite
         and "write_template" in cluster_suite
         and "ABLATION_MODE_CHOICES" in cluster_suite
+        and "ABLATION_OVERRIDE_CASE_KINDS" in cluster_suite
+        and "--ablation-mode-override" in cluster_suite
+        and "_apply_ablation_mode_override" in cluster_suite
+        and "_has_one_sided_ablation_case" in cluster_suite
+        and "one-sided ablation suite" in cluster_suite
         and "TIMING_MODES_KEY" in cluster_suite
         and "_external_timing_modes_for_ablation" in cluster_suite
         and "_validate_one_sided_benchmark_report" in cluster_suite
@@ -1086,6 +1091,7 @@ def main() -> None:
         and "repeat_timing.csv" in doc
         and "speedup_by_case.svg" in doc
         and "`ablation_mode = \"paired\"`" in doc
+        and "`--ablation-mode-override`" in doc
         and "one-sided SevenNet" in doc
         and "external_pair ablation" in doc
         and "SHA-256" in doc
@@ -1108,6 +1114,8 @@ def main() -> None:
         and "`--pipeline` path" in doc
         and "`--pipeline-report`" in doc
         and "`--verify-pipeline-report \"$PIPELINE_OUTPUT\"`" in doc
+        and "one-sided ablation suite" in doc
+        and "`--verify-output-bundle`" in doc
         and "stage fingerprints and final bundle verification" in doc
         and "`--collect-only` is not accepted" in doc
         and "PYTHON_BIN" in doc

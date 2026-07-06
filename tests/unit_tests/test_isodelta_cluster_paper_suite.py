@@ -1404,6 +1404,78 @@ ablation_mode = "baseline-disabled"
         self.assertIn("mace-ablation:disabled:0", command_names)
         self.assertNotIn("mace-ablation:enabled:0", command_names)
 
+    def test_cli_ablation_override_updates_runtime_timing_cases(self) -> None:
+        """A CLI override should switch SevenNet and external-pair smoke runs."""
+        config = isodelta_cluster_suite.SuiteConfig(
+            name="override-suite",
+            manifest_path=Path("suite.toml"),
+            output_dir=Path("outputs"),
+            cases=(
+                isodelta_cluster_suite.CaseConfig(
+                    name="sevennet",
+                    model="SevenNet",
+                    kind="sevennet_lammps",
+                    ablation_mode="paired",
+                ),
+                isodelta_cluster_suite.CaseConfig(
+                    name="mace",
+                    model="MACE",
+                    kind="external_pair",
+                    ablation_mode="paired",
+                ),
+                isodelta_cluster_suite.CaseConfig(
+                    name="trace",
+                    model="NequIP",
+                    kind="trace_only",
+                    ablation_mode="paired",
+                ),
+            ),
+        )
+        args = isodelta_cluster_suite.parse_args(
+            [
+                "--manifest",
+                "suite.toml",
+                "--ablation-mode-override",
+                "isodelta-enabled",
+            ]
+        )
+
+        overridden = isodelta_cluster_suite._apply_cli_overrides(config, args)
+
+        self.assertEqual(overridden.cases[0].ablation_mode, "isodelta-enabled")
+        self.assertEqual(overridden.cases[1].ablation_mode, "isodelta-enabled")
+        self.assertEqual(overridden.cases[2].ablation_mode, "paired")
+
+    def test_cli_ablation_override_requires_runtime_timing_case(self) -> None:
+        """A suite with only trace evidence should reject ablation overrides."""
+        config = isodelta_cluster_suite.SuiteConfig(
+            name="trace-suite",
+            manifest_path=Path("suite.toml"),
+            output_dir=Path("outputs"),
+            cases=(
+                isodelta_cluster_suite.CaseConfig(
+                    name="trace",
+                    model="SevenNet",
+                    kind="trace_only",
+                    ablation_mode="paired",
+                ),
+            ),
+        )
+        args = isodelta_cluster_suite.parse_args(
+            [
+                "--manifest",
+                "suite.toml",
+                "--ablation-mode-override",
+                "baseline-disabled",
+            ]
+        )
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "sevennet_lammps or external_pair",
+        ):
+            isodelta_cluster_suite._apply_cli_overrides(config, args)
+
     def test_external_pair_one_sided_timing_validates_without_speedup(self) -> None:
         """External one-sided timing reports should validate as raw ablation evidence."""
         case = isodelta_cluster_suite.CaseConfig(
@@ -1548,6 +1620,53 @@ trace_evidence = ["trace.json"]
 
         self.assertEqual(exit_code, 1)
         self.assertFalse(script_exists)
+
+    def test_write_slurm_script_uses_ablation_override_without_pipeline(self) -> None:
+        """One-sided ablation launchers should skip the final-paper pipeline gate."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            output_dir = root / "paper_outputs"
+            slurm_path = root / "run_ablation.sbatch"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "slurm-ablation-suite"
+output_dir = "{output_dir.as_posix()}"
+expected_gpus = 8
+required_models = ["MACE"]
+
+[[cases]]
+name = "mace-ablation"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "run baseline"
+enabled_command = "run enabled"
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-script",
+                    str(slurm_path),
+                    "--ablation-mode-override",
+                    "isodelta-enabled",
+                ]
+            )
+            script = slurm_path.read_text(encoding="utf-8")
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn(
+            "COMMON_ARGS+=(--ablation-mode-override isodelta-enabled)",
+            script,
+        )
+        self.assertIn("one-sided ablation suite", script)
+        self.assertIn("--verify-output-bundle", script)
+        self.assertNotIn("--pipeline --pipeline-report", script)
+        self.assertNotIn("--verify-pipeline-report", script)
 
     def test_reuse_passed_skips_existing_valid_case_outputs(self) -> None:
         """Validated outputs should be reusable after an interrupted cluster run."""

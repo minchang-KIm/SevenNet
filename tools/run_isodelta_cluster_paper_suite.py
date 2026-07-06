@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata as importlib_metadata
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import csv
 import hashlib
 import importlib.util
@@ -63,6 +63,7 @@ DEFAULT_REQUIRED_MODELS = ("SevenNet", "MACE", "NequIP")
 DEFAULT_REQUIRE_ARTIFACT_SHA256 = False
 FINAL_PAPER_REQUIRED_MODELS = DEFAULT_REQUIRED_MODELS
 FINAL_PAPER_PAIRED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair"))
+ABLATION_OVERRIDE_CASE_KINDS = FINAL_PAPER_PAIRED_CASE_KINDS
 FINAL_PAPER_MIN_REPEAT_COUNT = DEFAULT_REPEAT_COUNT
 UNRESOLVED_TEMPLATE_MARKERS = ("example.org", "replace-with-real")
 DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 600.0
@@ -600,9 +601,46 @@ def _is_final_paper_paired_case(case: CaseConfig) -> bool:
     return False
 
 
+def _has_one_sided_ablation_case(config: SuiteConfig) -> bool:
+    """Return whether the suite contains ablation-only timing cases."""
+    return any(
+        case.kind in ABLATION_OVERRIDE_CASE_KINDS
+        and not _uses_paired_ablation_mode(case)
+        for case in config.cases
+    )
+
+
 def _external_timing_modes_for_ablation(case: CaseConfig) -> tuple[str, ...]:
     """Return the external command modes requested by one ablation setting."""
     return ABLATION_MODE_EXTERNAL_TIMING_MODES[case.ablation_mode]
+
+
+def _apply_ablation_mode_override(
+    config: SuiteConfig,
+    ablation_mode_override: str | None,
+) -> SuiteConfig:
+    """Return a suite with runtime-timing cases forced to one ablation mode."""
+    if ablation_mode_override is None:
+        return config
+    _require(
+        ablation_mode_override in ABLATION_MODE_CHOICES,
+        "--ablation-mode-override must be one of "
+        + MODEL_NAME_JOINER.join(ABLATION_MODE_CHOICES),
+    )
+    overridden_cases: list[CaseConfig] = []
+    overridden_case_count = 0
+    for case in config.cases:
+        if case.kind in ABLATION_OVERRIDE_CASE_KINDS:
+            overridden_cases.append(replace(case, ablation_mode=ablation_mode_override))
+            overridden_case_count += 1
+        else:
+            overridden_cases.append(case)
+    _require(
+        overridden_case_count > 0,
+        "--ablation-mode-override requires at least one sevennet_lammps or "
+        "external_pair case",
+    )
+    return replace(config, cases=tuple(overridden_cases))
 
 
 def _validate_percent(value: float, field_name: str) -> None:
@@ -6382,6 +6420,7 @@ def write_slurm_script(
     path: Path,
     config: SuiteConfig,
     *,
+    ablation_mode_override: str | None = None,
     collect_only: bool = False,
     dry_run: bool = False,
     skip_downloads: bool = False,
@@ -6402,6 +6441,7 @@ def write_slurm_script(
         "--write-slurm-script cannot be combined with --collect-only because the launcher runs --pipeline",
     )
 
+    has_one_sided_ablation = _has_one_sided_ablation_case(config)
     plan_path = config.output_dir / PLAN_REPORT_NAME
     slurm_job_name = _safe_name(job_name)
     lines = [
@@ -6436,6 +6476,8 @@ def write_slurm_script(
     ]
     _append_bash_array_args(lines, "--output-dir", config.output_dir)
     _append_bash_array_args(lines, "--expected-gpus", str(config.expected_gpus))
+    if ablation_mode_override is not None:
+        _append_bash_array_args(lines, "--ablation-mode-override", ablation_mode_override)
     if collect_only:
         _append_bash_array_args(lines, "--collect-only")
     if dry_run:
@@ -6459,14 +6501,30 @@ def write_slurm_script(
             "# Generate the auditable plan JSON before launching model runs.",
             '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}" --plan-only --plan-output "$PLAN_OUTPUT"',
             "",
-            "# Run the full paper pipeline: readiness, prepare, preflight, plan, suite, and bundle verify.",
-            '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}" --pipeline --pipeline-report "$PIPELINE_OUTPUT"',
-            "",
-            "# Re-open the finished pipeline report before allowing the SLURM job to succeed.",
-            '"$PYTHON_BIN" "$SUITE_RUNNER" --verify-pipeline-report "$PIPELINE_OUTPUT"',
-            "",
         ]
     )
+    if has_one_sided_ablation:
+        lines.extend(
+            [
+                "# Run the one-sided ablation suite; final-paper --pipeline is reserved for paired mode.",
+                '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}"',
+                "",
+                "# Re-open the finished output bundle before allowing the SLURM job to succeed.",
+                f'"$PYTHON_BIN" "$SUITE_RUNNER" --verify-output-bundle {_bash_quote(config.output_dir)}',
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "# Run the full paper pipeline: readiness, prepare, preflight, plan, suite, and bundle verify.",
+                '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}" --pipeline --pipeline-report "$PIPELINE_OUTPUT"',
+                "",
+                "# Re-open the finished pipeline report before allowing the SLURM job to succeed.",
+                '"$PYTHON_BIN" "$SUITE_RUNNER" --verify-pipeline-report "$PIPELINE_OUTPUT"',
+                "",
+            ]
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -6489,6 +6547,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--plan-output", type=Path, help="Path for --plan-only JSON output")
     parser.add_argument("--output-dir", type=Path, help="Override suite.output_dir")
     parser.add_argument("--expected-gpus", type=int, help="Override suite.expected_gpus")
+    parser.add_argument(
+        "--ablation-mode-override",
+        choices=ABLATION_MODE_CHOICES,
+        help=(
+            "Temporarily override ablation_mode for sevennet_lammps and "
+            "external_pair cases"
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true", help="Validate and print planned outputs without executing commands")
     parser.add_argument("--collect-only", action="store_true", help="Only collect and validate existing reports")
     parser.add_argument("--skip-downloads", action="store_true", help="Do not download missing artifacts")
@@ -6509,7 +6575,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def _apply_cli_overrides(config: SuiteConfig, args: argparse.Namespace) -> SuiteConfig:
     """Return a config with CLI output/GPU overrides applied."""
-    return SuiteConfig(
+    overridden_config = SuiteConfig(
         name=config.name,
         manifest_path=config.manifest_path,
         output_dir=args.output_dir.resolve() if args.output_dir is not None else config.output_dir,
@@ -6520,6 +6586,10 @@ def _apply_cli_overrides(config: SuiteConfig, args: argparse.Namespace) -> Suite
         require_artifact_sha256=config.require_artifact_sha256,
         artifacts=config.artifacts,
         cases=config.cases,
+    )
+    return _apply_ablation_mode_override(
+        overridden_config,
+        args.ablation_mode_override,
     )
 
 
@@ -6613,6 +6683,7 @@ def main(argv: list[str] | None = None) -> int:
             write_slurm_script(
                 args.write_slurm_script,
                 config,
+                ablation_mode_override=args.ablation_mode_override,
                 collect_only=args.collect_only,
                 dry_run=args.dry_run,
                 skip_downloads=args.skip_downloads,

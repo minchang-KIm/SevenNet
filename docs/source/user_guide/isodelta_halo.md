@@ -365,6 +365,13 @@ produce speedup and final-thermo delta evidence. A one-sided SevenNet or
 external_pair ablation is useful for quick smoke timing inside the cluster
 suite, but the readiness gate treats it as ablation-only evidence rather than a
 publishable disabled/enabled comparison.
+For temporary sweeps, keep the TOML manifest at `ablation_mode = "paired"` and
+use `--ablation-mode-override` to pass
+`--ablation-mode-override baseline-disabled` or
+`--ablation-mode-override isodelta-enabled` at execution time. The override is a
+runtime convenience for `sevennet_lammps` and `external_pair` cases; `trace_only`
+cases remain unchanged because they do not launch disabled/enabled timing
+commands.
 Required artifacts must already exist or be downloadable; if `--skip-downloads`
 is active and a required artifact is missing, the suite fails before launching
 any case. Optional artifacts with `required = false` may be absent, but the
@@ -456,6 +463,11 @@ cluster module systems can select the intended environment without editing the
 recorded experiment command. `--collect-only` is not accepted when generating
 this SLURM launcher because the launcher is reserved for the full 8-GPU
 pipeline; use the direct `--collect-only` command after jobs finish.
+If the launcher is generated with `--ablation-mode-override baseline-disabled`
+or `--ablation-mode-override isodelta-enabled`, it runs the one-sided ablation suite
+and reopens the result with `--verify-output-bundle` instead of using the
+final-paper `--pipeline` path. That keeps quick ablation timing usable on the
+cluster without weakening the paired readiness gate used for paper numbers.
 
 Before submitting a long job, write a preflight plan:
 
