@@ -108,13 +108,29 @@ bool index_tensor_matches_vector(const torch::Tensor &index_tensor,
 }
 
 std::string normalize_iso_delta_halo_env_flag_value(const char *value) {
-  std::string normalized_value;
   if (value == nullptr) {
-    return normalized_value;
+    return std::string();
   }
-  for (const char character : std::string(value)) {
+  const std::string raw_value(value);
+  auto begin = raw_value.begin();
+  auto end = raw_value.end();
+  while (begin != end &&
+         std::isspace(static_cast<unsigned char>(*begin)) != 0) {
+    ++begin;
+  }
+  while (end != begin) {
+    auto last_character = end;
+    --last_character;
+    if (std::isspace(static_cast<unsigned char>(*last_character)) == 0) {
+      break;
+    }
+    end = last_character;
+  }
+
+  std::string normalized_value;
+  for (auto character = begin; character != end; ++character) {
     normalized_value.push_back(
-        static_cast<char>(std::tolower(static_cast<unsigned char>(character))));
+        static_cast<char>(std::tolower(static_cast<unsigned char>(*character))));
   }
   return normalized_value;
 }

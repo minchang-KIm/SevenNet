@@ -232,6 +232,9 @@ def main() -> None:
     )
     _require(
         "iso_delta_halo_env_flag_is_enabled" in cpp
+        and "normalize_iso_delta_halo_env_flag_value" in cpp
+        and "std::isspace(static_cast<unsigned char>(*begin))" in cpp
+        and "std::isspace(static_cast<unsigned char>(*last_character))" in cpp
         and 'kIsoDeltaHaloEnvFlagValueZero = "0"' in cpp
         and 'kIsoDeltaHaloEnvFlagValueFalse = "false"' in cpp
         and 'kIsoDeltaHaloEnvFlagValueNo = "no"' in cpp
@@ -1359,11 +1362,16 @@ def main() -> None:
     )
     _require(
         "boolean-style parsing" in doc
+        and "Surrounding" in doc
+        and "whitespace is ignored before parsing" in doc
         and "`0`" in doc
         and "`false`" in doc
         and "`no`" in doc
         and "`off`" in doc
-        and "`SEVENN_ISODELTA_HALO_DISABLE=0` keeps the cache enabled" in doc
+        and "`SEVENN_ISODELTA_HALO_DISABLE=0`" in doc
+        and "keeps the cache enabled" in doc
+        and '`SEVENN_ISODELTA_HALO_DISABLE=" off "` keeps the cache enabled'
+        in doc
         and "`SEVENN_ISODELTA_HALO_PROFILE=0` keeps profiling off" in doc,
         "IsoDelta-Halo guide must document explicit false runtime controls",
     )
