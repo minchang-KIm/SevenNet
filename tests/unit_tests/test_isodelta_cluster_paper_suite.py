@@ -253,8 +253,15 @@ def _external_timing_report_for_case(
             ISODELTA_LOOP_TIME_SECONDS - 1.0,
             ISODELTA_LOOP_TIME_SECONDS + 1.0,
         ]
-    baseline_mean = sum(baseline_times) / len(baseline_times)
-    enabled_mean = sum(enabled_times) / len(enabled_times)
+    baseline_mean = isodelta_cluster_suite._mean(baseline_times)
+    enabled_mean = isodelta_cluster_suite._mean(enabled_times)
+    speedup = (
+        baseline_mean / enabled_mean
+        if baseline_mean is not None
+        and enabled_mean is not None
+        and enabled_mean > isodelta_cluster_suite.MIN_POSITIVE_VALUE
+        else None
+    )
     baseline_variance = isodelta_cluster_suite._sample_variance(baseline_times)
     enabled_variance = isodelta_cluster_suite._sample_variance(enabled_times)
     baseline_stddev = isodelta_cluster_suite._sample_stddev(baseline_times)
@@ -325,6 +332,10 @@ def _external_timing_report_for_case(
         "schema_version": "isodelta-external-pair-timing-v1",
         "case_name": case.name,
         "model": case.model,
+        "ablation_mode": case.ablation_mode,
+        "timing_modes": list(
+            isodelta_cluster_suite._external_timing_modes_for_ablation(case)
+        ),
         "repeat_count": case.repeat_count,
         "disabled_success_count": len(baseline_times),
         "enabled_success_count": len(enabled_times),
@@ -336,7 +347,7 @@ def _external_timing_report_for_case(
         "enabled_sample_variance_seconds": enabled_variance,
         "baseline_sample_stddev_seconds": baseline_stddev,
         "enabled_sample_stddev_seconds": enabled_stddev,
-        "speedup_vs_disabled_cache": baseline_mean / enabled_mean,
+        "speedup_vs_disabled_cache": speedup,
         "mode_controls": isodelta_cluster_suite.case_mode_control_record(case),
         "commands": command_records,
         "command_log_fingerprints": command_log_fingerprints,
@@ -1350,6 +1361,99 @@ min_speedup = 1.2
                     None,
                     dry_run=False,
                 )
+
+    def test_external_pair_ablation_mode_runs_one_command_side(self) -> None:
+        """External MACE/NequIP cases should support one-sided timing smoke runs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            output_dir = root / "paper_outputs"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "external-ablation-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["MACE"]
+
+[[cases]]
+name = "mace-ablation"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "run baseline"
+enabled_command = "run enabled"
+ablation_mode = "baseline-disabled"
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            (
+                _benchmark_report_path,
+                _bundle_evidence,
+                _trace_paths,
+                timing_report_path,
+                records,
+            ) = isodelta_cluster_suite.run_external_pair_case(
+                config,
+                config.cases[0],
+                dry_run=True,
+            )
+
+        command_names = [record.name for record in records]
+        self.assertIsNotNone(timing_report_path)
+        self.assertEqual(config.cases[0].ablation_mode, "baseline-disabled")
+        self.assertIn("mace-ablation:disabled:0", command_names)
+        self.assertNotIn("mace-ablation:enabled:0", command_names)
+
+    def test_external_pair_one_sided_timing_validates_without_speedup(self) -> None:
+        """External one-sided timing reports should validate as raw ablation evidence."""
+        case = isodelta_cluster_suite.CaseConfig(
+            name="mace-existing",
+            model="MACE",
+            kind="external_pair",
+            disabled_command="run baseline",
+            enabled_command="run enabled",
+            repeat_count=2,
+            ablation_mode="isodelta-enabled",
+        )
+        report = _external_timing_report_for_case(
+            case,
+            baseline_times=[],
+            enabled_times=[ISODELTA_LOOP_TIME_SECONDS - 0.5, ISODELTA_LOOP_TIME_SECONDS + 0.5],
+        )
+
+        verification = isodelta_cluster_suite.validate_external_timing_report(
+            report,
+            case,
+        )
+
+        self.assertEqual(verification["ablation_mode"], "isodelta-enabled")
+        self.assertEqual(verification["disabled_success_count"], 0)
+        self.assertEqual(verification["enabled_success_count"], 2)
+        self.assertIsNone(verification["speedup_vs_disabled_cache"])
+
+    def test_external_pair_one_sided_timing_rejects_speedup_claim(self) -> None:
+        """External one-sided reports should fail if they claim paired speedup."""
+        case = isodelta_cluster_suite.CaseConfig(
+            name="mace-existing",
+            model="MACE",
+            kind="external_pair",
+            disabled_command="run baseline",
+            enabled_command="run enabled",
+            repeat_count=2,
+            ablation_mode="baseline-disabled",
+        )
+        report = _external_timing_report_for_case(
+            case,
+            baseline_times=[BASELINE_LOOP_TIME_SECONDS - 0.5, BASELINE_LOOP_TIME_SECONDS + 0.5],
+            enabled_times=[],
+        )
+        report["speedup_vs_disabled_cache"] = EXPECTED_SPEEDUP
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "must be null for one-sided ablation",
+        ):
+            isodelta_cluster_suite.validate_external_timing_report(report, case)
 
     def test_write_slurm_script_creates_commented_preflight_first_launcher(self) -> None:
         """The SLURM wrapper should submit reproducible preflight evidence first."""
@@ -2698,6 +2802,73 @@ artifacts = ["dataset"]
         self.assertEqual(report["status"], "failed")
         self.assertIn("paired_enabled_disabled_cases", failed_checks)
         self.assertIn("sevennet_final_paper_ablation_mode", failed_checks)
+
+    def test_readiness_check_rejects_one_sided_external_pair_ablation(self) -> None:
+        """Final paper readiness must not accept one-sided MACE/NequIP timings."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_path = root / "source-data.bin"
+            source_path.write_bytes(b"strict cluster input")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "external-one-sided-ready-suite"
+output_dir = "{(root / "paper_outputs").as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet", "MACE", "NequIP"]
+require_artifact_sha256 = true
+repeat_count = 3
+min_speedup_95ci_lower_bound = 1.0
+
+[[artifacts]]
+name = "dataset"
+path = "{(root / "downloaded.bin").as_posix()}"
+url = "{source_path.as_uri()}"
+sha256 = "{digest}"
+required_by = ["SevenNet", "MACE", "NequIP"]
+
+[[cases]]
+name = "sevennet-ready"
+model = "SevenNet"
+kind = "sevennet_lammps"
+preflight_command = 'python -c "import sevenn"'
+lammps_command = "mpiexec -n 8 lmp"
+input = "inputs/in.sevennet"
+artifacts = ["dataset"]
+
+[[cases]]
+name = "mace-ablation"
+model = "MACE"
+kind = "external_pair"
+preflight_command = 'python -c "import mace"'
+disabled_command = "python run_mace.py --mode baseline"
+enabled_command = "python run_mace.py --mode isodelta"
+ablation_mode = "baseline-disabled"
+artifacts = ["dataset"]
+
+[[cases]]
+name = "nequip-ready"
+model = "NequIP"
+kind = "external_pair"
+preflight_command = 'python -c "import nequip"'
+disabled_command = "python run_nequip.py --mode baseline"
+enabled_command = "python run_nequip.py --mode isodelta"
+artifacts = ["dataset"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+            report = isodelta_cluster_suite.build_readiness_report(config)
+            failed_checks = {
+                check["name"] for check in report["checks"] if not check["passed"]
+            }
+
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("paired_enabled_disabled_cases", failed_checks)
+        self.assertIn("external_pair_final_paper_ablation_mode", failed_checks)
 
     def test_readiness_check_rejects_unedited_template_manifest(self) -> None:
         """A generated template must be filled in before paper execution."""

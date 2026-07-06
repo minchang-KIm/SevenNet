@@ -137,6 +137,7 @@ BASELINE_SAMPLE_STDDEV_SECONDS_KEY = "baseline_sample_stddev_seconds"
 ENABLED_SAMPLE_STDDEV_SECONDS_KEY = "enabled_sample_stddev_seconds"
 SPEEDUP_VS_DISABLED_CACHE_KEY = "speedup_vs_disabled_cache"
 MODE_CONTROLS_KEY = "mode_controls"
+TIMING_MODES_KEY = "timing_modes"
 COMMANDS_KEY = "commands"
 COMMAND_LOG_FINGERPRINTS_KEY = "command_log_fingerprints"
 EVIDENCE_FINGERPRINTS_KEY = "evidence_fingerprints"
@@ -267,6 +268,14 @@ ABLATION_MODE_BENCHMARK_CASES = {
     ABLATION_MODE_PAIRED: (BASELINE_CASE_NAME, ISODELTA_CASE_NAME),
     ABLATION_MODE_BASELINE_ONLY: (BASELINE_CASE_NAME,),
     ABLATION_MODE_ENABLED_ONLY: (ISODELTA_CASE_NAME,),
+}
+ABLATION_MODE_EXTERNAL_TIMING_MODES = {
+    ABLATION_MODE_PAIRED: (
+        EXTERNAL_DISABLED_COMMAND_LABEL,
+        EXTERNAL_ENABLED_COMMAND_LABEL,
+    ),
+    ABLATION_MODE_BASELINE_ONLY: (EXTERNAL_DISABLED_COMMAND_LABEL,),
+    ABLATION_MODE_ENABLED_ONLY: (EXTERNAL_ENABLED_COMMAND_LABEL,),
 }
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 SAFE_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -586,9 +595,14 @@ def _uses_paired_ablation_mode(case: CaseConfig) -> bool:
 
 def _is_final_paper_paired_case(case: CaseConfig) -> bool:
     """Return whether one case can count toward final enabled/disabled timing."""
-    if case.kind == "sevennet_lammps":
+    if case.kind in FINAL_PAPER_PAIRED_CASE_KINDS:
         return _uses_paired_ablation_mode(case)
-    return case.kind == "external_pair"
+    return False
+
+
+def _external_timing_modes_for_ablation(case: CaseConfig) -> tuple[str, ...]:
+    """Return the external command modes requested by one ablation setting."""
+    return ABLATION_MODE_EXTERNAL_TIMING_MODES[case.ablation_mode]
 
 
 def _validate_percent(value: float, field_name: str) -> None:
@@ -1005,10 +1019,6 @@ def validate_suite_config(config: SuiteConfig) -> None:
             _require(bool(case.lammps_command), f"{case.name}: lammps_command is required")
             _require(case.input_path is not None, f"{case.name}: input is required")
         elif case.kind == "external_pair":
-            _require(
-                case.ablation_mode == ABLATION_MODE_PAIRED,
-                f"{case.name}: ablation_mode is only supported for sevennet_lammps cases",
-            )
             _require(bool(case.disabled_command), f"{case.name}: disabled_command is required")
             _require(bool(case.enabled_command), f"{case.name}: enabled_command is required")
             mode_control_errors = _external_pair_mode_control_errors(case)
@@ -1109,6 +1119,21 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
             + MODEL_NAME_JOINER.join(one_sided_ablation_cases)
             if one_sided_ablation_cases
             else "SevenNet final-paper cases use paired ablation_mode",
+        )
+    )
+    one_sided_external_pair_cases = [
+        case.name
+        for case in config.cases
+        if case.kind == "external_pair" and not _uses_paired_ablation_mode(case)
+    ]
+    checks.append(
+        _readiness_record(
+            "external_pair_final_paper_ablation_mode",
+            not one_sided_external_pair_cases,
+            "one-sided external_pair cases are ablation-only: "
+            + MODEL_NAME_JOINER.join(one_sided_external_pair_cases)
+            if one_sided_external_pair_cases
+            else "external_pair final-paper cases use paired ablation_mode",
         )
     )
 
@@ -2970,6 +2995,10 @@ def _case_config_from_external_summary(
         name=case_name,
         model=_as_json_string(case_record.get("model"), f"cases.{case_name}.model"),
         kind=kind,
+        ablation_mode=_as_json_string(
+            mode_controls.get("ablation_mode"),
+            f"case_mode_controls.{case_name}.ablation_mode",
+        ),
         disabled_command=_as_json_string(
             mode_controls.get("disabled_command"),
             f"case_mode_controls.{case_name}.disabled_command",
@@ -4265,6 +4294,8 @@ def _external_pair_mode_control_record(case: CaseConfig) -> dict[str, Any]:
     )
     return {
         "kind": case.kind,
+        "ablation_mode": case.ablation_mode,
+        TIMING_MODES_KEY: list(_external_timing_modes_for_ablation(case)),
         "disabled_command": case.disabled_command,
         "enabled_command": case.enabled_command,
         "disabled_env": disabled_controls,
@@ -4480,35 +4511,38 @@ def run_external_pair_case(
     command_records = list(trace_records)
     disabled_times: list[float] = []
     enabled_times: list[float] = []
+    timing_modes = _external_timing_modes_for_ablation(case)
 
     for repeat_index in range(case.repeat_count):
-        disabled_record = run_shell_command(
-            name=f"{case.name}:{EXTERNAL_DISABLED_COMMAND_LABEL}:{repeat_index}",
-            command=str(case.disabled_command),
-            cwd=REPO_ROOT,
-            env=_default_case_env(case.disabled_env, disabled=True),
-            timeout_seconds=case.command_timeout_seconds,
-            stdout_path=log_dir / f"{EXTERNAL_DISABLED_COMMAND_LABEL}_{repeat_index}.stdout.log",
-            stderr_path=log_dir / f"{EXTERNAL_DISABLED_COMMAND_LABEL}_{repeat_index}.stderr.log",
-            dry_run=dry_run,
-        )
-        command_records.append(disabled_record)
-        if disabled_record.returncode == SUCCESS_RETURN_CODE:
-            disabled_times.append(disabled_record.elapsed_seconds)
+        if EXTERNAL_DISABLED_COMMAND_LABEL in timing_modes:
+            disabled_record = run_shell_command(
+                name=f"{case.name}:{EXTERNAL_DISABLED_COMMAND_LABEL}:{repeat_index}",
+                command=str(case.disabled_command),
+                cwd=REPO_ROOT,
+                env=_default_case_env(case.disabled_env, disabled=True),
+                timeout_seconds=case.command_timeout_seconds,
+                stdout_path=log_dir / f"{EXTERNAL_DISABLED_COMMAND_LABEL}_{repeat_index}.stdout.log",
+                stderr_path=log_dir / f"{EXTERNAL_DISABLED_COMMAND_LABEL}_{repeat_index}.stderr.log",
+                dry_run=dry_run,
+            )
+            command_records.append(disabled_record)
+            if disabled_record.returncode == SUCCESS_RETURN_CODE:
+                disabled_times.append(disabled_record.elapsed_seconds)
 
-        enabled_record = run_shell_command(
-            name=f"{case.name}:{EXTERNAL_ENABLED_COMMAND_LABEL}:{repeat_index}",
-            command=str(case.enabled_command),
-            cwd=REPO_ROOT,
-            env=_default_case_env(case.enabled_env, disabled=False),
-            timeout_seconds=case.command_timeout_seconds,
-            stdout_path=log_dir / f"{EXTERNAL_ENABLED_COMMAND_LABEL}_{repeat_index}.stdout.log",
-            stderr_path=log_dir / f"{EXTERNAL_ENABLED_COMMAND_LABEL}_{repeat_index}.stderr.log",
-            dry_run=dry_run,
-        )
-        command_records.append(enabled_record)
-        if enabled_record.returncode == SUCCESS_RETURN_CODE:
-            enabled_times.append(enabled_record.elapsed_seconds)
+        if EXTERNAL_ENABLED_COMMAND_LABEL in timing_modes:
+            enabled_record = run_shell_command(
+                name=f"{case.name}:{EXTERNAL_ENABLED_COMMAND_LABEL}:{repeat_index}",
+                command=str(case.enabled_command),
+                cwd=REPO_ROOT,
+                env=_default_case_env(case.enabled_env, disabled=False),
+                timeout_seconds=case.command_timeout_seconds,
+                stdout_path=log_dir / f"{EXTERNAL_ENABLED_COMMAND_LABEL}_{repeat_index}.stdout.log",
+                stderr_path=log_dir / f"{EXTERNAL_ENABLED_COMMAND_LABEL}_{repeat_index}.stderr.log",
+                dry_run=dry_run,
+            )
+            command_records.append(enabled_record)
+            if enabled_record.returncode == SUCCESS_RETURN_CODE:
+                enabled_times.append(enabled_record.elapsed_seconds)
 
     timing_report_path = _external_timing_report_path(config, case)
     if not dry_run:
@@ -4591,6 +4625,8 @@ def _build_external_timing_report(
         SCHEMA_VERSION_KEY: EXTERNAL_TIMING_SCHEMA_VERSION,
         CASE_NAME_KEY: case.name,
         MODEL_KEY: case.model,
+        "ablation_mode": case.ablation_mode,
+        TIMING_MODES_KEY: list(_external_timing_modes_for_ablation(case)),
         REPEAT_COUNT_KEY: case.repeat_count,
         DISABLED_SUCCESS_COUNT_KEY: len(disabled_times),
         ENABLED_SUCCESS_COUNT_KEY: len(enabled_times),
@@ -4646,6 +4682,25 @@ def _validate_timing_statistic(
         _require(observed_value is None, f"{key} must be null")
         return None
     _require(observed_value is not None, f"{key} must be numeric")
+    _require(
+        _timing_values_close(observed_value, expected_value),
+        f"{key} must match raw timing samples",
+    )
+    return observed_value
+
+
+def _validate_timing_mean(
+    report: dict[str, Any],
+    key: str,
+    timing_values: list[float],
+) -> float | None:
+    """Validate a mean timing, allowing null only when that mode did not run."""
+    expected_value = _mean(timing_values)
+    if expected_value is None:
+        observed_value = _as_json_optional_nonnegative_number(report.get(key), key)
+        _require(observed_value is None, f"{key} must be null")
+        return None
+    observed_value = _as_json_positive_number(report.get(key), key)
     _require(
         _timing_values_close(observed_value, expected_value),
         f"{key} must match raw timing samples",
@@ -4717,18 +4772,30 @@ def _validate_external_timing_command_records(
         )
 
     verified_count = 0
-    expected_modes = (
-        (
-            EXTERNAL_DISABLED_COMMAND_LABEL,
-            str(case.disabled_command),
-            _as_json_object(mode_controls.get("disabled_env"), "mode_controls.disabled_env"),
-        ),
-        (
-            EXTERNAL_ENABLED_COMMAND_LABEL,
-            str(case.enabled_command),
-            _as_json_object(mode_controls.get("enabled_env"), "mode_controls.enabled_env"),
-        ),
-    )
+    expected_modes: list[tuple[str, str, dict[str, Any]]] = []
+    timing_modes = _external_timing_modes_for_ablation(case)
+    if EXTERNAL_DISABLED_COMMAND_LABEL in timing_modes:
+        expected_modes.append(
+            (
+                EXTERNAL_DISABLED_COMMAND_LABEL,
+                str(case.disabled_command),
+                _as_json_object(
+                    mode_controls.get("disabled_env"),
+                    "mode_controls.disabled_env",
+                ),
+            )
+        )
+    if EXTERNAL_ENABLED_COMMAND_LABEL in timing_modes:
+        expected_modes.append(
+            (
+                EXTERNAL_ENABLED_COMMAND_LABEL,
+                str(case.enabled_command),
+                _as_json_object(
+                    mode_controls.get("enabled_env"),
+                    "mode_controls.enabled_env",
+                ),
+            )
+        )
     for mode_label, expected_command, expected_env in expected_modes:
         for repeat_index in range(repeat_count):
             expected_name = f"{case.name}:{mode_label}:{repeat_index}"
@@ -4824,6 +4891,22 @@ def validate_external_timing_report(
     model_name = _as_json_string(report.get(MODEL_KEY), MODEL_KEY)
     _require(case_name == case.name, f"{CASE_NAME_KEY} must match manifest case name")
     _require(model_name == case.model, f"{MODEL_KEY} must match manifest model")
+    ablation_mode = _as_json_string(report.get("ablation_mode"), "ablation_mode")
+    _require(
+        ablation_mode == case.ablation_mode,
+        "ablation_mode must match manifest ablation_mode",
+    )
+    raw_timing_modes = report.get(TIMING_MODES_KEY)
+    _require(isinstance(raw_timing_modes, list), f"{TIMING_MODES_KEY} must be a JSON array")
+    timing_modes = tuple(
+        _as_json_string(item, f"{TIMING_MODES_KEY}[{index}]")
+        for index, item in enumerate(raw_timing_modes)
+    )
+    expected_timing_modes = _external_timing_modes_for_ablation(case)
+    _require(
+        timing_modes == expected_timing_modes,
+        f"{TIMING_MODES_KEY} must match manifest ablation_mode",
+    )
     repeat_count = _as_json_nonnegative_int(
         report.get(REPEAT_COUNT_KEY),
         REPEAT_COUNT_KEY,
@@ -4837,13 +4920,19 @@ def validate_external_timing_report(
         ENABLED_SUCCESS_COUNT_KEY,
     )
     _require(repeat_count == case.repeat_count, f"{REPEAT_COUNT_KEY} must match manifest repeat_count")
-    _require(
-        disabled_success_count == repeat_count,
-        f"{DISABLED_SUCCESS_COUNT_KEY} must equal {REPEAT_COUNT_KEY}",
+    expected_disabled_success_count = (
+        repeat_count if EXTERNAL_DISABLED_COMMAND_LABEL in timing_modes else 0
+    )
+    expected_enabled_success_count = (
+        repeat_count if EXTERNAL_ENABLED_COMMAND_LABEL in timing_modes else 0
     )
     _require(
-        enabled_success_count == repeat_count,
-        f"{ENABLED_SUCCESS_COUNT_KEY} must equal {REPEAT_COUNT_KEY}",
+        disabled_success_count == expected_disabled_success_count,
+        f"{DISABLED_SUCCESS_COUNT_KEY} must match requested timing modes",
+    )
+    _require(
+        enabled_success_count == expected_enabled_success_count,
+        f"{ENABLED_SUCCESS_COUNT_KEY} must match requested timing modes",
     )
     baseline_times = _as_json_positive_number_list(
         report.get(BASELINE_TIMES_SECONDS_KEY),
@@ -4861,25 +4950,15 @@ def validate_external_timing_report(
         len(enabled_times) == enabled_success_count,
         f"{ENABLED_TIMES_SECONDS_KEY} length must equal {ENABLED_SUCCESS_COUNT_KEY}",
     )
-    baseline_mean_seconds = _as_json_positive_number(
-        report.get(BASELINE_MEAN_SECONDS_KEY),
+    baseline_mean_seconds = _validate_timing_mean(
+        report,
         BASELINE_MEAN_SECONDS_KEY,
+        baseline_times,
     )
-    enabled_mean_seconds = _as_json_positive_number(
-        report.get(ENABLED_MEAN_SECONDS_KEY),
+    enabled_mean_seconds = _validate_timing_mean(
+        report,
         ENABLED_MEAN_SECONDS_KEY,
-    )
-    expected_baseline_mean = _mean(baseline_times)
-    expected_enabled_mean = _mean(enabled_times)
-    _require(
-        expected_baseline_mean is not None
-        and _timing_values_close(baseline_mean_seconds, expected_baseline_mean),
-        f"{BASELINE_MEAN_SECONDS_KEY} must match raw timing samples",
-    )
-    _require(
-        expected_enabled_mean is not None
-        and _timing_values_close(enabled_mean_seconds, expected_enabled_mean),
-        f"{ENABLED_MEAN_SECONDS_KEY} must match raw timing samples",
+        enabled_times,
     )
     baseline_variance = _validate_timing_statistic(
         report,
@@ -4901,19 +4980,33 @@ def validate_external_timing_report(
         ENABLED_SAMPLE_STDDEV_SECONDS_KEY,
         _sample_stddev(enabled_times),
     )
-    speedup = _as_json_positive_number(
-        report.get(SPEEDUP_VS_DISABLED_CACHE_KEY),
-        SPEEDUP_VS_DISABLED_CACHE_KEY,
-    )
-    expected_speedup = baseline_mean_seconds / enabled_mean_seconds
-    _require(
-        _timing_values_close(speedup, expected_speedup),
-        f"{SPEEDUP_VS_DISABLED_CACHE_KEY} must match baseline / enabled seconds",
-    )
-    if case.min_speedup is not None:
+    if _uses_paired_ablation_mode(case):
+        speedup = _as_json_positive_number(
+            report.get(SPEEDUP_VS_DISABLED_CACHE_KEY),
+            SPEEDUP_VS_DISABLED_CACHE_KEY,
+        )
         _require(
-            speedup >= case.min_speedup,
-            f"{case.name}: external timing speedup {speedup:g} is below {case.min_speedup:g}",
+            baseline_mean_seconds is not None and enabled_mean_seconds is not None,
+            f"{SPEEDUP_VS_DISABLED_CACHE_KEY} requires both timing modes",
+        )
+        expected_speedup = baseline_mean_seconds / enabled_mean_seconds
+        _require(
+            _timing_values_close(speedup, expected_speedup),
+            f"{SPEEDUP_VS_DISABLED_CACHE_KEY} must match baseline / enabled seconds",
+        )
+        if case.min_speedup is not None:
+            _require(
+                speedup >= case.min_speedup,
+                f"{case.name}: external timing speedup {speedup:g} is below {case.min_speedup:g}",
+            )
+    else:
+        speedup = _as_json_optional_nonnegative_number(
+            report.get(SPEEDUP_VS_DISABLED_CACHE_KEY),
+            SPEEDUP_VS_DISABLED_CACHE_KEY,
+        )
+        _require(
+            speedup is None,
+            f"{SPEEDUP_VS_DISABLED_CACHE_KEY} must be null for one-sided ablation",
         )
     mode_controls = _validate_external_timing_mode_controls(report, case)
     verified_command_record_count = _validate_external_timing_command_records(
@@ -4933,6 +5026,8 @@ def validate_external_timing_report(
         SCHEMA_VERSION_KEY: schema_version,
         CASE_NAME_KEY: case_name,
         MODEL_KEY: model_name,
+        "ablation_mode": ablation_mode,
+        TIMING_MODES_KEY: list(timing_modes),
         REPEAT_COUNT_KEY: repeat_count,
         DISABLED_SUCCESS_COUNT_KEY: disabled_success_count,
         ENABLED_SUCCESS_COUNT_KEY: enabled_success_count,
@@ -6245,6 +6340,7 @@ disabled_command = "python scripts/run_mace_case.py --mode baseline --dataset da
 enabled_command = "python scripts/run_mace_case.py --mode isodelta --dataset data/shared_dataset.ext"
 disabled_env = {{ SEVENN_ISODELTA_HALO_DISABLE = "1" }}
 enabled_env = {{}}
+ablation_mode = "paired"
 repeat_count = 5
 min_speedup = 1.05
 trace_input = "traces/mace_trace.json"
@@ -6260,6 +6356,7 @@ disabled_command = "python scripts/run_nequip_case.py --mode baseline --dataset 
 enabled_command = "python scripts/run_nequip_case.py --mode isodelta --dataset data/shared_dataset.ext"
 disabled_env = {{ SEVENN_ISODELTA_HALO_DISABLE = "1" }}
 enabled_env = {{}}
+ablation_mode = "paired"
 repeat_count = 5
 min_speedup = 1.05
 trace_input = "traces/nequip_trace.json"
