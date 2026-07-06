@@ -21,9 +21,10 @@ REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 VALIDATION_REPORT_SCHEMA_VERSION = "isodelta-lightweight-validation-report-v1"
 DEFAULT_OUTPUT_TAIL_CHARS = 4000
 SUCCESS_RETURN_CODE = 0
+GOAL_READINESS_SCRIPT = "tools/check_isodelta_goal_readiness.py"
 VALIDATION_COMMANDS = (
     (sys.executable, "tools/run_isodelta_static_checks.py"),
-    (sys.executable, "tools/check_isodelta_goal_readiness.py"),
+    (sys.executable, GOAL_READINESS_SCRIPT),
     (sys.executable, "tests/unit_tests/test_isodelta_halo_static.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_evidence_bundle_check.py"),
     (sys.executable, "tests/unit_tests/test_isodelta_benchmark_report_check.py"),
@@ -119,17 +120,35 @@ def _run(command: tuple[str, ...]) -> dict[str, object]:
     }
 
 
+def _validation_commands(expected_branch: str | None = None) -> tuple[tuple[str, ...], ...]:
+    """Return validation commands, optionally enforcing the active git branch."""
+    commands: list[tuple[str, ...]] = []
+    for command in VALIDATION_COMMANDS:
+        is_goal_readiness_command = (
+            len(command) >= 2 and Path(command[1]).as_posix() == GOAL_READINESS_SCRIPT
+        )
+        if expected_branch is not None and is_goal_readiness_command:
+            commands.append((*command, "--expected-branch", expected_branch))
+        else:
+            commands.append(command)
+    return tuple(commands)
+
+
 def _write_report(report_path: Path, payload: dict[str, object]) -> None:
     """Write a validation report that can be archived with a sync attempt."""
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def run_validation(report_path: Path | None = None) -> int:
+def run_validation(
+    report_path: Path | None = None,
+    *,
+    expected_branch: str | None = None,
+) -> int:
     """Execute checks and optionally persist a JSON sync evidence report."""
     command_records: list[dict[str, object]] = []
     status = "passed"
-    for command in VALIDATION_COMMANDS:
+    for command in _validation_commands(expected_branch):
         record = _run(command)
         command_records.append(record)
         if record["returncode"] != SUCCESS_RETURN_CODE:
@@ -139,6 +158,7 @@ def run_validation(report_path: Path | None = None) -> int:
         "validation_report_schema_version": VALIDATION_REPORT_SCHEMA_VERSION,
         "status": status,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "expected_branch": expected_branch,
         "git_commit": _run_metadata_command(("git", "rev-parse", "HEAD")),
         "git_branch": _run_metadata_command(("git", "branch", "--show-current")),
         "git_status_short": _run_metadata_command(("git", "status", "--short")),
@@ -162,13 +182,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="Write a JSON validation report for commit/push evidence",
     )
+    parser.add_argument(
+        "--expected-branch",
+        default=None,
+        help="Require the goal-readiness audit to observe this active git branch",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     """Execute all lightweight checks in the same order before every commit."""
     args = parse_args(argv)
-    return run_validation(args.report_path)
+    return run_validation(args.report_path, expected_branch=args.expected_branch)
 
 
 if __name__ == "__main__":

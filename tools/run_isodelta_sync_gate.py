@@ -87,14 +87,20 @@ def _current_branch() -> str | None:
     return _metadata_command(("git", "branch", "--show-current"))
 
 
-def _validation_command(validation_report_path: Path) -> tuple[str, ...]:
+def _validation_command(
+    validation_report_path: Path,
+    expected_branch: str | None,
+) -> tuple[str, ...]:
     """Build the validation command used before any push attempt."""
-    return (
+    command = (
         sys.executable,
         str(VALIDATION_RUNNER_PATH),
         "--report-path",
         str(validation_report_path),
     )
+    if expected_branch is not None:
+        command = (*command, "--expected-branch", expected_branch)
+    return command
 
 
 def _push_command(remote: str, branch: str) -> tuple[str, ...]:
@@ -122,7 +128,7 @@ def run_sync(
     resolved_branch = branch or _current_branch()
     command_records: list[dict[str, Any]] = []
     validation_record = _run_command(
-        validation_command or _validation_command(validation_report_path)
+        validation_command or _validation_command(validation_report_path, resolved_branch)
     )
     command_records.append({"name": "validation", **validation_record})
     push_record: dict[str, Any] | None = None

@@ -34,6 +34,8 @@ DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
 DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
 CLUSTER_SUITE_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_cluster_paper_suite.py"
 GOAL_READINESS_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_goal_readiness.py"
+SYNC_GATE_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_sync_gate.py"
+VALIDATION_RUNNER_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_validation_runner.py"
 
 
 def _read(path: Path) -> str:
@@ -71,6 +73,8 @@ def main() -> None:
     doc_index = _read(DOC_INDEX_PATH)
     cluster_suite_test = _read(CLUSTER_SUITE_TEST_PATH)
     goal_readiness_test = _read(GOAL_READINESS_TEST_PATH)
+    sync_gate_test = _read(SYNC_GATE_TEST_PATH)
+    validation_runner_test = _read(VALIDATION_RUNNER_TEST_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
 
     _require(
@@ -316,9 +320,12 @@ def main() -> None:
     _require(
         "VALIDATION_REPORT_SCHEMA_VERSION" in validation_runner
         and "--report-path" in validation_runner
+        and "--expected-branch" in validation_runner
+        and "_validation_commands" in validation_runner
         and "stdout_tail" in validation_runner
         and "stderr_tail" in validation_runner
         and "git_status_short" in validation_runner
+        and "test_expected_branch_reaches_goal_readiness_command" in validation_runner_test
         and "test_isodelta_validation_runner.py" in validation_runner,
         "validation runner must emit auditable sync reports",
     )
@@ -327,7 +334,9 @@ def main() -> None:
         and "PUSH_AUTH_ENVIRONMENT" in sync_gate
         and "GIT_TERMINAL_PROMPT" in sync_gate
         and "run_sync" in sync_gate
+        and "--expected-branch" in sync_gate
         and "STATUS_PUSH_FAILED" in sync_gate
+        and "test_validation_command_enforces_target_branch" in sync_gate_test
         and "test_isodelta_sync_gate.py" in validation_runner,
         "sync gate must validate before recording git push attempts",
     )
@@ -335,6 +344,7 @@ def main() -> None:
         "GOAL_READINESS_SCHEMA_VERSION" in goal_readiness
         and "REQUIRED_FILE_SNIPPETS" in goal_readiness
         and "COMMENT_PREFIX_REQUIREMENTS" in goal_readiness
+        and 'EXPECTED_BRANCH = "codex/isodelta-halo-runtime"' in goal_readiness
         and "ISODELTA_PYTHON_GLOB_PATTERNS" in goal_readiness
         and "_audit_isodelta_python_headers" in goal_readiness
         and "build_goal_readiness_report" in goal_readiness
@@ -1286,6 +1296,9 @@ def main() -> None:
         and "`isodelta_validation_report.json`" in doc
         and "check_isodelta_goal_readiness.py" in doc
         and "`isodelta_goal_readiness_report.json`" in doc
+        and "codex/isodelta-halo-runtime" in doc
+        and "`--expected-branch`" in doc
+        and "validate one checkout branch" in doc
         and "`tools/*isodelta*.py`" in doc
         and "`tests/unit_tests/test_isodelta*.py`" in doc
         and "completion-readiness audit" in doc

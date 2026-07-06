@@ -165,7 +165,7 @@ after committing:
 ```bash
 python tools/run_isodelta_sync_gate.py \
   --remote fork \
-  --branch isodelta-halo-runtime \
+  --branch codex/isodelta-halo-runtime \
   --report-path isodelta_sync_report.json \
   --validation-report-path isodelta_validation_report.json
 ```
@@ -175,14 +175,16 @@ non-interactive `git push -u` when validation passes. It writes
 `isodelta_sync_report.json` with the validation command record, push command
 record, Git status, target remote/branch, and the push stderr tail. This makes
 credential or network failures explicit instead of losing the evidence after a
-failed sync.
+failed sync. It also forwards the same target branch to the goal-readiness
+audit as `--expected-branch`, so the gate cannot validate one checkout branch
+and push another by mistake.
 
 For a local completion-readiness audit, generate
 `isodelta_goal_readiness_report.json` as a source-tree report:
 
 ```bash
 python tools/check_isodelta_goal_readiness.py \
-  --expected-branch isodelta-halo-runtime \
+  --expected-branch codex/isodelta-halo-runtime \
   --report-path isodelta_goal_readiness_report.json
 ```
 

@@ -34,6 +34,18 @@ SPEC.loader.exec_module(sync_gate)
 class IsoDeltaSyncGateTest(unittest.TestCase):
     """Check that validation and push outcomes are reported correctly."""
 
+    def test_validation_command_enforces_target_branch(self) -> None:
+        """The sync gate should validate the same branch it intends to push."""
+        command = sync_gate._validation_command(
+            Path("validation.json"),
+            "codex/isodelta-halo-runtime",
+        )
+
+        self.assertEqual(
+            command[-2:],
+            ("--expected-branch", "codex/isodelta-halo-runtime"),
+        )
+
     def test_run_sync_records_successful_validation_and_push(self) -> None:
         """A passing validation and push command should mark the sync as done."""
         original_root = sync_gate.REPO_ROOT

@@ -28,7 +28,7 @@ GIT_METADATA_TIMEOUT_SECONDS = 10.0
 STATUS_PASSED = "passed"
 STATUS_FAILED = "failed"
 STATUS_NOT_ENFORCED = "not_enforced"
-EXPECTED_BRANCH = "isodelta-halo-runtime"
+EXPECTED_BRANCH = "codex/isodelta-halo-runtime"
 PYTHON_HEADER_PREFIX = '"""'
 ISODELTA_PYTHON_GLOB_PATTERNS = (
     "tools/*isodelta*.py",
@@ -106,6 +106,7 @@ REQUIRED_FILE_SNIPPETS = {
     ),
     "tools/run_isodelta_validation.py": (
         "VALIDATION_REPORT_SCHEMA_VERSION",
+        "--expected-branch",
         "test_isodelta_sync_gate.py",
     ),
     "tools/run_isodelta_lammps_benchmark.py": (
@@ -124,6 +125,7 @@ REQUIRED_FILE_SNIPPETS = {
     "tools/run_isodelta_sync_gate.py": (
         "SYNC_REPORT_SCHEMA_VERSION",
         "PUSH_AUTH_ENVIRONMENT",
+        "--expected-branch",
         "STATUS_PUSH_FAILED",
     ),
     "tools/check_isodelta_goal_readiness.py": (
@@ -216,9 +218,16 @@ REQUIRED_FILE_SNIPPETS = {
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (
         "IsoDeltaSyncGateTest",
+        "test_validation_command_enforces_target_branch",
         "STATUS_VALIDATION_FAILED",
     ),
+    "tests/unit_tests/test_isodelta_validation_runner.py": (
+        "test_expected_branch_reaches_goal_readiness_command",
+        "test_expected_branch_does_not_reach_py_compile",
+        "codex/isodelta-halo-runtime",
+    ),
     "tests/unit_tests/test_isodelta_goal_readiness.py": (
+        "test_expected_branch_names_codex_work_branch",
         "test_goal_readiness_accepts_isodelta_python_headers",
         "test_goal_readiness_rejects_isodelta_python_without_header",
     ),

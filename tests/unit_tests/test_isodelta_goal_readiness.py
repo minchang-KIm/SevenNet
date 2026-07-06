@@ -43,6 +43,13 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
 
         self.assertEqual(parsed.report_path, Path("readiness.json"))
 
+    def test_expected_branch_names_codex_work_branch(self) -> None:
+        """The local completion audit should document the active work branch."""
+        self.assertEqual(
+            goal_readiness.EXPECTED_BRANCH,
+            "codex/isodelta-halo-runtime",
+        )
+
     def test_goal_readiness_report_passes_for_required_snippets_and_prefixes(self) -> None:
         """A source tree with required snippets and comments should pass."""
         with tempfile.TemporaryDirectory() as tmpdir:

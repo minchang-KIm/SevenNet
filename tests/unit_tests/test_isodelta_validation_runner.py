@@ -38,6 +38,59 @@ SPEC.loader.exec_module(validation_runner)
 class IsoDeltaValidationRunnerTest(unittest.TestCase):
     """Check JSON evidence emitted by the lightweight validation runner."""
 
+    def test_expected_branch_reaches_goal_readiness_command(self) -> None:
+        """Branch-specific sync validation should enforce the checkout branch."""
+        original_commands = validation_runner.VALIDATION_COMMANDS
+        validation_runner.VALIDATION_COMMANDS = (
+            (sys.executable, validation_runner.GOAL_READINESS_SCRIPT),
+            (sys.executable, "-c", "print('other-check')"),
+        )
+        try:
+            commands = validation_runner._validation_commands(
+                "codex/isodelta-halo-runtime"
+            )
+        finally:
+            validation_runner.VALIDATION_COMMANDS = original_commands
+
+        self.assertEqual(
+            commands[0],
+            (
+                sys.executable,
+                validation_runner.GOAL_READINESS_SCRIPT,
+                "--expected-branch",
+                "codex/isodelta-halo-runtime",
+            ),
+        )
+        self.assertEqual(commands[1], (sys.executable, "-c", "print('other-check')"))
+
+    def test_expected_branch_does_not_reach_py_compile(self) -> None:
+        """The branch option belongs to the audit command, not py_compile."""
+        original_commands = validation_runner.VALIDATION_COMMANDS
+        validation_runner.VALIDATION_COMMANDS = (
+            (
+                sys.executable,
+                "-m",
+                "py_compile",
+                validation_runner.GOAL_READINESS_SCRIPT,
+            ),
+        )
+        try:
+            commands = validation_runner._validation_commands(
+                "codex/isodelta-halo-runtime"
+            )
+        finally:
+            validation_runner.VALIDATION_COMMANDS = original_commands
+
+        self.assertEqual(
+            commands[0],
+            (
+                sys.executable,
+                "-m",
+                "py_compile",
+                validation_runner.GOAL_READINESS_SCRIPT,
+            ),
+        )
+
     def test_run_validation_writes_success_report(self) -> None:
         """A passing command should produce a passed validation report."""
         original_commands = validation_runner.VALIDATION_COMMANDS
