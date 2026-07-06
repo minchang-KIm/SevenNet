@@ -379,7 +379,9 @@ controls in the run plan, generated timing report, and summary
 truthy value, the manifest is rejected because the "applied" run would actually
 be cache-off too. Explicit false values such as an empty string, `0`, `false`,
 `no`, and `off` are treated as cache-enabled evidence, matching the C++
-runtime parser.
+runtime parser. The recorded mode-control JSON also carries
+`env_flag_false_values`, the false-value parser list used for that decision, so
+an archived report can be interpreted without reopening the source code.
 These external_pair mode controls are part of the paper audit trail, not only a
 runtime convenience.
 For `sevennet_lammps` and `external_pair` cases, the manifest can set
@@ -559,9 +561,10 @@ report also keeps raw `baseline_times_seconds` and `enabled_times_seconds`, and
 the suite recomputes sample variance/stddev before writing the summary table.
 The external timing report also carries `mode_controls`; those controls must
 match the manifest disabled/enabled commands and cache-off/cache-on environment
-before collect-only tables are accepted. Its `commands` array must also contain
-one successful `case:disabled:N` and `case:enabled:N` command record for every
-repeat, with command text and tracked environment matching the manifest mode controls.
+before collect-only tables are accepted. The same `mode_controls` object records
+`env_flag_false_values`, so empty string, `0`, `false`, `no`, and `off`
+interpretation is auditable in the timing artifact itself. Its `commands` array
+must also contain one successful `case:disabled:N` and `case:enabled:N` command record for every repeat, with command text and tracked environment matching the manifest mode controls.
 The companion `command_log_fingerprints` array fingerprints every external
 stdout/stderr log, and suite validation rechecks those hashes before accepting
 the timing report.
@@ -600,7 +603,9 @@ CI tests; for paper runs, keep the GPU check enabled and archive the summary
 JSON with the raw logs. The summary JSON stores the manifest SHA-256 digest and
 the copied `isodelta_cluster_suite_manifest.toml` snapshot path. It also stores
 `case_mode_controls`, so each disabled/enabled pair can be audited for the
-cache-off/cache-on environment used to produce the timing rows. It also stores
+cache-off/cache-on environment used to produce the timing rows, including the
+`env_flag_false_values` parser list that explains explicit false environment
+values. It also stores
 `artifact_fingerprints` with the SHA-256 digest and byte size of each generated
 environment snapshot, table, SVG figure, and manifest snapshot. When
 `preflight_report.json`, `preflight_environment_snapshot.json`, or

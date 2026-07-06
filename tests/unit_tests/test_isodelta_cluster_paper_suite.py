@@ -2117,6 +2117,10 @@ enabled_env = { SEVENN_ISODELTA_HALO_DISABLE = " off " }
             mode_controls["enabled_env"][isodelta_cluster_suite.SEVENNET_DISABLE_ENV],
             "off",
         )
+        self.assertEqual(
+            mode_controls[isodelta_cluster_suite.ENV_FLAG_FALSE_VALUES_KEY],
+            list(isodelta_cluster_suite.ENV_FLAG_FALSE_VALUES),
+        )
 
     def test_manifest_validation_accepts_empty_enabled_disable_env(self) -> None:
         """An empty disable flag should also mean cache-enabled at runtime."""
@@ -2148,6 +2152,10 @@ enabled_env = { SEVENN_ISODELTA_HALO_DISABLE = "" }
         self.assertEqual(
             mode_controls["enabled_env"][isodelta_cluster_suite.SEVENNET_DISABLE_ENV],
             "",
+        )
+        self.assertEqual(
+            mode_controls[isodelta_cluster_suite.ENV_FLAG_FALSE_VALUES_KEY],
+            list(isodelta_cluster_suite.ENV_FLAG_FALSE_VALUES),
         )
 
     def test_download_artifact_copies_file_url_and_checks_sha256(self) -> None:
@@ -3584,6 +3592,10 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         )
         self.assertIsNone(
             nequip_mode_controls["enabled_env"][isodelta_cluster_suite.SEVENNET_DISABLE_ENV]
+        )
+        self.assertEqual(
+            nequip_mode_controls[isodelta_cluster_suite.ENV_FLAG_FALSE_VALUES_KEY],
+            list(isodelta_cluster_suite.ENV_FLAG_FALSE_VALUES),
         )
         self.assertIn("speedup_vs_disabled_cache", case_summary_text)
         self.assertIn("baseline_sample_variance_seconds", case_summary_text)

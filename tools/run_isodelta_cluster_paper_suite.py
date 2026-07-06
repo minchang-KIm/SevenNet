@@ -139,6 +139,7 @@ ENABLED_SAMPLE_STDDEV_SECONDS_KEY = "enabled_sample_stddev_seconds"
 SPEEDUP_VS_DISABLED_CACHE_KEY = "speedup_vs_disabled_cache"
 MODE_CONTROLS_KEY = "mode_controls"
 TIMING_MODES_KEY = "timing_modes"
+ENV_FLAG_FALSE_VALUES_KEY = "env_flag_false_values"
 COMMANDS_KEY = "commands"
 COMMAND_LOG_FINGERPRINTS_KEY = "command_log_fingerprints"
 EVIDENCE_FINGERPRINTS_KEY = "evidence_fingerprints"
@@ -238,7 +239,7 @@ SEVENNET_DISABLE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 SEVENNET_PROFILE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
 SEVENNET_PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 ENV_FLAG_ENABLED = "1"
-ENV_FLAG_FALSE_VALUES = frozenset(("", "0", "false", "no", "off"))
+ENV_FLAG_FALSE_VALUES = ("", "0", "false", "no", "off")
 MODE_CONTROL_ENV_KEYS = (
     SEVENNET_DISABLE_ENV,
     SEVENNET_PROFILE_ENV,
@@ -4382,6 +4383,7 @@ def _external_pair_mode_control_record(case: CaseConfig) -> dict[str, Any]:
         "enabled_command": case.enabled_command,
         "disabled_env": disabled_controls,
         "enabled_env": enabled_controls,
+        ENV_FLAG_FALSE_VALUES_KEY: list(ENV_FLAG_FALSE_VALUES),
         "disabled_cache_disabled": env_flag_is_enabled(
             disabled_controls[SEVENNET_DISABLE_ENV]
         ),
@@ -4422,6 +4424,7 @@ def case_mode_control_record(case: CaseConfig) -> dict[str, Any]:
             "enabled_case": ISODELTA_CASE_NAME,
             "disabled_env": {SEVENNET_DISABLE_ENV: ENV_FLAG_ENABLED},
             "enabled_env": {SEVENNET_DISABLE_ENV: None},
+            ENV_FLAG_FALSE_VALUES_KEY: list(ENV_FLAG_FALSE_VALUES),
         }
     return {"kind": case.kind, "paired_mode_source": None}
 
