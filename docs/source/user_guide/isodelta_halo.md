@@ -262,9 +262,9 @@ python tools/check_isodelta_build_prereqs.py \
 ```
 
 The checker prints JSON so failed checks can be archived with build logs. That
-JSON includes a top-level `report_comment` identifying it as prerequisite
-evidence for source-file, LAMMPS tree, version, and optional torch checks. It
-does not modify the LAMMPS tree.
+JSON includes top-level `report_schema_version` and `report_comment` fields
+identifying it as prerequisite evidence for source-file, LAMMPS tree, version,
+and optional torch checks. It does not modify the LAMMPS tree.
 
 The patch script copies `pair_e3gnn_oeq_autograd.cpp` together with the serial
 and parallel pair styles. Keep that bridge present even for non-oEq builds,
@@ -283,8 +283,9 @@ python tools/check_isodelta_lammps_binary.py \
 
 This command runs LAMMPS help output and checks for `e3gnn/parallel`. It is a
 fast registration check, not a numerical correctness test.
-Its JSON output includes a top-level `report_comment` so the archived stdout log
-remains recognizable as binary-registration evidence.
+Its JSON output includes top-level `report_schema_version` and `report_comment`
+fields so the archived stdout log remains recognizable as binary-registration
+evidence.
 The smoke checker rejects an empty `--lammps-command`, and
 `--timeout-seconds` must be positive so a failed launch cannot masquerade as a
 valid registration check.

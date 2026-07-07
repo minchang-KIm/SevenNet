@@ -54,15 +54,21 @@ REQUIRED_FILE_SNIPPETS = {
         "metadata",
     ),
     "tools/check_isodelta_build_prereqs.py": (
+        "PREREQ_REPORT_SCHEMA_VERSION",
+        "REPORT_SCHEMA_VERSION_KEY",
         "PREREQ_REPORT_COMMENT",
         "GENERATED_REPORT_COMMENT_KEY",
         "build_prereq_report",
+        "REPORT_SCHEMA_VERSION_KEY: PREREQ_REPORT_SCHEMA_VERSION",
         "GENERATED_REPORT_COMMENT_KEY: PREREQ_REPORT_COMMENT",
     ),
     "tools/check_isodelta_lammps_binary.py": (
+        "BINARY_SMOKE_REPORT_SCHEMA_VERSION",
+        "REPORT_SCHEMA_VERSION_KEY",
         "BINARY_SMOKE_REPORT_COMMENT",
         "GENERATED_REPORT_COMMENT_KEY",
         "build_binary_check_report",
+        "REPORT_SCHEMA_VERSION_KEY: BINARY_SMOKE_REPORT_SCHEMA_VERSION",
         "GENERATED_REPORT_COMMENT_KEY: BINARY_SMOKE_REPORT_COMMENT",
     ),
     "tools/run_isodelta_cluster_paper_suite.py": (
@@ -475,13 +481,17 @@ REQUIRED_FILE_SNIPPETS = {
         "test_validate_report_rejects_wrong_report_comment",
     ),
     "tests/unit_tests/test_isodelta_build_prereqs.py": (
+        "EXPECTED_PREREQ_REPORT_SCHEMA_VERSION",
         "EXPECTED_PREREQ_REPORT_COMMENT",
         "test_build_prereq_report_carries_report_comment",
+        'report["report_schema_version"]',
         'report["report_comment"]',
     ),
     "tests/unit_tests/test_isodelta_lammps_binary_check.py": (
+        "EXPECTED_BINARY_SMOKE_REPORT_SCHEMA_VERSION",
         "EXPECTED_BINARY_SMOKE_REPORT_COMMENT",
         "test_build_binary_check_report_carries_report_comment",
+        'report["report_schema_version"]',
         'report["report_comment"]',
     ),
     "tests/unit_tests/test_isodelta_evidence_bundle_check.py": (

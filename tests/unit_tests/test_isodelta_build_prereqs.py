@@ -25,6 +25,7 @@ sys.modules[SPEC.name] = isodelta_prereqs
 SPEC.loader.exec_module(isodelta_prereqs)
 
 
+EXPECTED_PREREQ_REPORT_SCHEMA_VERSION = "isodelta-build-prerequisite-report-v1"
 EXPECTED_PREREQ_REPORT_COMMENT = (
     "IsoDelta-Halo build prerequisite report recording source-file, LAMMPS tree, "
     "version, and optional torch checks before compiling patched LAMMPS."
@@ -87,6 +88,10 @@ class IsoDeltaBuildPrereqTest(unittest.TestCase):
         ]
         report = isodelta_prereqs.build_prereq_report(results)
 
+        self.assertEqual(
+            report["report_schema_version"],
+            EXPECTED_PREREQ_REPORT_SCHEMA_VERSION,
+        )
         self.assertEqual(report["report_comment"], EXPECTED_PREREQ_REPORT_COMMENT)
         self.assertTrue(report["ok"])
         self.assertEqual(report["checks"][0]["name"], "pair-source:pair_e3gnn.cpp")

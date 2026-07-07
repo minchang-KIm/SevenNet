@@ -19,6 +19,8 @@ import sys
 # audit when a LAMMPS build fails on a remote node.
 HELP_FLAG = "-h"
 PAIR_STYLE_NAME = "e3gnn/parallel"
+REPORT_SCHEMA_VERSION_KEY = "report_schema_version"
+BINARY_SMOKE_REPORT_SCHEMA_VERSION = "isodelta-lammps-binary-smoke-report-v1"
 GENERATED_REPORT_COMMENT_KEY = "report_comment"
 BINARY_SMOKE_REPORT_COMMENT = (
     "IsoDelta-Halo LAMMPS binary smoke report recording help-command execution "
@@ -106,6 +108,7 @@ def check_lammps_binary(
 def build_binary_check_report(results: list[BinaryCheckResult]) -> dict[str, object]:
     """Return the self-describing JSON payload printed by the smoke checker."""
     return {
+        REPORT_SCHEMA_VERSION_KEY: BINARY_SMOKE_REPORT_SCHEMA_VERSION,
         GENERATED_REPORT_COMMENT_KEY: BINARY_SMOKE_REPORT_COMMENT,
         "ok": all(result.ok for result in results),
         "checks": [asdict(result) for result in results],

@@ -478,11 +478,16 @@ def main() -> None:
         "IsoDelta-Halo guide must document the build prerequisite checker",
     )
     _require(
-        "PREREQ_REPORT_COMMENT" in prereq
+        "PREREQ_REPORT_SCHEMA_VERSION" in prereq
+        and "REPORT_SCHEMA_VERSION_KEY" in prereq
+        and "PREREQ_REPORT_COMMENT" in prereq
         and "GENERATED_REPORT_COMMENT_KEY" in prereq
         and "build_prereq_report" in prereq
+        and "REPORT_SCHEMA_VERSION_KEY: PREREQ_REPORT_SCHEMA_VERSION" in prereq
         and "GENERATED_REPORT_COMMENT_KEY: PREREQ_REPORT_COMMENT" in prereq
+        and "EXPECTED_PREREQ_REPORT_SCHEMA_VERSION" in build_prereqs_test
         and "EXPECTED_PREREQ_REPORT_COMMENT" in build_prereqs_test
+        and 'report["report_schema_version"]' in build_prereqs_test
         and 'report["report_comment"]' in build_prereqs_test,
         "build prerequisite checker must print a self-describing JSON report",
     )
@@ -504,11 +509,17 @@ def main() -> None:
         "IsoDelta-Halo guide must document the LAMMPS binary smoke checker",
     )
     _require(
-        "BINARY_SMOKE_REPORT_COMMENT" in binary_check
+        "BINARY_SMOKE_REPORT_SCHEMA_VERSION" in binary_check
+        and "REPORT_SCHEMA_VERSION_KEY" in binary_check
+        and "BINARY_SMOKE_REPORT_COMMENT" in binary_check
         and "GENERATED_REPORT_COMMENT_KEY" in binary_check
         and "build_binary_check_report" in binary_check
+        and "REPORT_SCHEMA_VERSION_KEY: BINARY_SMOKE_REPORT_SCHEMA_VERSION"
+        in binary_check
         and "GENERATED_REPORT_COMMENT_KEY: BINARY_SMOKE_REPORT_COMMENT" in binary_check
+        and "EXPECTED_BINARY_SMOKE_REPORT_SCHEMA_VERSION" in binary_check_test
         and "EXPECTED_BINARY_SMOKE_REPORT_COMMENT" in binary_check_test
+        and 'report["report_schema_version"]' in binary_check_test
         and 'report["report_comment"]' in binary_check_test,
         "LAMMPS binary smoke checker must print a self-describing JSON report",
     )

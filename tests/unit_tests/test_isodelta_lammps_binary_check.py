@@ -22,6 +22,7 @@ sys.modules[SPEC.name] = isodelta_binary_check
 SPEC.loader.exec_module(isodelta_binary_check)
 
 
+EXPECTED_BINARY_SMOKE_REPORT_SCHEMA_VERSION = "isodelta-lammps-binary-smoke-report-v1"
 EXPECTED_BINARY_SMOKE_REPORT_COMMENT = (
     "IsoDelta-Halo LAMMPS binary smoke report recording help-command execution "
     "and patched e3gnn/parallel pair-style registration evidence."
@@ -70,6 +71,10 @@ class IsoDeltaLammpsBinaryCheckTest(unittest.TestCase):
         ]
         report = isodelta_binary_check.build_binary_check_report(results)
 
+        self.assertEqual(
+            report["report_schema_version"],
+            EXPECTED_BINARY_SMOKE_REPORT_SCHEMA_VERSION,
+        )
         self.assertEqual(
             report["report_comment"],
             EXPECTED_BINARY_SMOKE_REPORT_COMMENT,

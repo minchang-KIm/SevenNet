@@ -19,6 +19,8 @@ import sys
 # These files are copied by sevenn/pair_e3gnn/patch_lammps.sh, so missing any
 # one of them means the build cannot represent the current branch.
 REPO_ROOT = Path(__file__).resolve().parents[1]
+REPORT_SCHEMA_VERSION_KEY = "report_schema_version"
+PREREQ_REPORT_SCHEMA_VERSION = "isodelta-build-prerequisite-report-v1"
 GENERATED_REPORT_COMMENT_KEY = "report_comment"
 PREREQ_REPORT_COMMENT = (
     "IsoDelta-Halo build prerequisite report recording source-file, LAMMPS tree, "
@@ -123,6 +125,7 @@ def collect_checks(
 def build_prereq_report(results: list[CheckResult]) -> dict[str, object]:
     """Return the self-describing JSON payload printed by the checker."""
     return {
+        REPORT_SCHEMA_VERSION_KEY: PREREQ_REPORT_SCHEMA_VERSION,
         GENERATED_REPORT_COMMENT_KEY: PREREQ_REPORT_COMMENT,
         "ok": all(result.ok for result in results),
         "checks": [asdict(result) for result in results],
