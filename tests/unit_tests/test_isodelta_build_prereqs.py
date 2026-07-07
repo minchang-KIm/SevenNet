@@ -7,6 +7,7 @@ LAMMPS checkout or a local LibTorch installation.
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -22,6 +23,12 @@ assert SPEC is not None and SPEC.loader is not None
 isodelta_prereqs = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = isodelta_prereqs
 SPEC.loader.exec_module(isodelta_prereqs)
+
+
+EXPECTED_PREREQ_REPORT_COMMENT = (
+    "IsoDelta-Halo build prerequisite report recording source-file, LAMMPS tree, "
+    "version, and optional torch checks before compiling patched LAMMPS."
+)
 
 
 class IsoDeltaBuildPrereqTest(unittest.TestCase):
@@ -68,6 +75,22 @@ class IsoDeltaBuildPrereqTest(unittest.TestCase):
         self.assertEqual(len(version_results), 1)
         self.assertFalse(version_results[0].ok)
         self.assertIn("2 Aug 2023", version_results[0].detail)
+
+    def test_build_prereq_report_carries_report_comment(self) -> None:
+        """Archived prerequisite JSON should describe its evidence purpose."""
+        results = [
+            isodelta_prereqs.CheckResult(
+                name="pair-source:pair_e3gnn.cpp",
+                ok=True,
+                detail="present",
+            )
+        ]
+        report = isodelta_prereqs.build_prereq_report(results)
+
+        self.assertEqual(report["report_comment"], EXPECTED_PREREQ_REPORT_COMMENT)
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["checks"][0]["name"], "pair-source:pair_e3gnn.cpp")
+        json.dumps(report)
 
 
 if __name__ == "__main__":

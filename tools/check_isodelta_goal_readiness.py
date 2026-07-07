@@ -53,6 +53,18 @@ REQUIRED_FILE_SNIPPETS = {
         "IsoDelta",
         "metadata",
     ),
+    "tools/check_isodelta_build_prereqs.py": (
+        "PREREQ_REPORT_COMMENT",
+        "GENERATED_REPORT_COMMENT_KEY",
+        "build_prereq_report",
+        "GENERATED_REPORT_COMMENT_KEY: PREREQ_REPORT_COMMENT",
+    ),
+    "tools/check_isodelta_lammps_binary.py": (
+        "BINARY_SMOKE_REPORT_COMMENT",
+        "GENERATED_REPORT_COMMENT_KEY",
+        "build_binary_check_report",
+        "GENERATED_REPORT_COMMENT_KEY: BINARY_SMOKE_REPORT_COMMENT",
+    ),
     "tools/run_isodelta_cluster_paper_suite.py": (
         "--prepare-artifacts",
         "--preflight-only",
@@ -461,6 +473,16 @@ REQUIRED_FILE_SNIPPETS = {
         "test_validate_report_accepts_false_disable_env_in_enabled_case",
         "test_validate_report_rejects_missing_report_comment",
         "test_validate_report_rejects_wrong_report_comment",
+    ),
+    "tests/unit_tests/test_isodelta_build_prereqs.py": (
+        "EXPECTED_PREREQ_REPORT_COMMENT",
+        "test_build_prereq_report_carries_report_comment",
+        'report["report_comment"]',
+    ),
+    "tests/unit_tests/test_isodelta_lammps_binary_check.py": (
+        "EXPECTED_BINARY_SMOKE_REPORT_COMMENT",
+        "test_build_binary_check_report_carries_report_comment",
+        'report["report_comment"]',
     ),
     "tests/unit_tests/test_isodelta_evidence_bundle_check.py": (
         "EXPECTED_BUNDLE_REPORT_COMMENT",

@@ -19,6 +19,11 @@ import sys
 # audit when a LAMMPS build fails on a remote node.
 HELP_FLAG = "-h"
 PAIR_STYLE_NAME = "e3gnn/parallel"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+BINARY_SMOKE_REPORT_COMMENT = (
+    "IsoDelta-Halo LAMMPS binary smoke report recording help-command execution "
+    "and patched e3gnn/parallel pair-style registration evidence."
+)
 SUCCESS_RETURN_CODE = 0
 DEFAULT_TIMEOUT_SECONDS = 60.0
 MIN_POSITIVE_TIMEOUT_SECONDS = 0.0
@@ -98,6 +103,15 @@ def check_lammps_binary(
     ]
 
 
+def build_binary_check_report(results: list[BinaryCheckResult]) -> dict[str, object]:
+    """Return the self-describing JSON payload printed by the smoke checker."""
+    return {
+        GENERATED_REPORT_COMMENT_KEY: BINARY_SMOKE_REPORT_COMMENT,
+        "ok": all(result.ok for result in results),
+        "checks": [asdict(result) for result in results],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the binary smoke check and return nonzero when it fails."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -115,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(str(exc))
 
     results = check_lammps_binary(args.lammps_command, args.timeout_seconds)
-    report = {"ok": all(result.ok for result in results), "checks": [asdict(result) for result in results]}
+    report = build_binary_check_report(results)
     print(json.dumps(report, indent=2))
     return SUCCESS_RETURN_CODE if report["ok"] else 1
 

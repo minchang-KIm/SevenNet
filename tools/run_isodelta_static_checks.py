@@ -48,6 +48,10 @@ MLIP_TRACE_DEMO_TEST_PATH = (
 GOAL_READINESS_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_goal_readiness.py"
 SYNC_GATE_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_sync_gate.py"
 VALIDATION_RUNNER_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_validation_runner.py"
+BUILD_PREREQS_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_build_prereqs.py"
+BINARY_CHECK_TEST_PATH = (
+    REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_lammps_binary_check.py"
+)
 
 
 def _read(path: Path) -> str:
@@ -91,6 +95,8 @@ def main() -> None:
     goal_readiness_test = _read(GOAL_READINESS_TEST_PATH)
     sync_gate_test = _read(SYNC_GATE_TEST_PATH)
     validation_runner_test = _read(VALIDATION_RUNNER_TEST_PATH)
+    build_prereqs_test = _read(BUILD_PREREQS_TEST_PATH)
+    binary_check_test = _read(BINARY_CHECK_TEST_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
 
     _require(
@@ -472,6 +478,15 @@ def main() -> None:
         "IsoDelta-Halo guide must document the build prerequisite checker",
     )
     _require(
+        "PREREQ_REPORT_COMMENT" in prereq
+        and "GENERATED_REPORT_COMMENT_KEY" in prereq
+        and "build_prereq_report" in prereq
+        and "GENERATED_REPORT_COMMENT_KEY: PREREQ_REPORT_COMMENT" in prereq
+        and "EXPECTED_PREREQ_REPORT_COMMENT" in build_prereqs_test
+        and 'report["report_comment"]' in build_prereqs_test,
+        "build prerequisite checker must print a self-describing JSON report",
+    )
+    _require(
         "PAIR_STYLE_NAME = \"e3gnn/parallel\"" in binary_check
         and "parse_pair_style_available" in binary_check,
         "LAMMPS binary smoke checker must verify e3gnn/parallel registration",
@@ -487,6 +502,15 @@ def main() -> None:
         "check_isodelta_lammps_binary.py" in doc
         and "`--timeout-seconds` must be positive" in doc,
         "IsoDelta-Halo guide must document the LAMMPS binary smoke checker",
+    )
+    _require(
+        "BINARY_SMOKE_REPORT_COMMENT" in binary_check
+        and "GENERATED_REPORT_COMMENT_KEY" in binary_check
+        and "build_binary_check_report" in binary_check
+        and "GENERATED_REPORT_COMMENT_KEY: BINARY_SMOKE_REPORT_COMMENT" in binary_check
+        and "EXPECTED_BINARY_SMOKE_REPORT_COMMENT" in binary_check_test
+        and 'report["report_comment"]' in binary_check_test,
+        "LAMMPS binary smoke checker must print a self-describing JSON report",
     )
     _require(
         "MODEL_KEY = \"model\"" in mlip_trace_check

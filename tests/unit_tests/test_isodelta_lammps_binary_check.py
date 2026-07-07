@@ -22,6 +22,12 @@ sys.modules[SPEC.name] = isodelta_binary_check
 SPEC.loader.exec_module(isodelta_binary_check)
 
 
+EXPECTED_BINARY_SMOKE_REPORT_COMMENT = (
+    "IsoDelta-Halo LAMMPS binary smoke report recording help-command execution "
+    "and patched e3gnn/parallel pair-style registration evidence."
+)
+
+
 class IsoDeltaLammpsBinaryCheckTest(unittest.TestCase):
     """Check smoke-test behavior without launching LAMMPS."""
 
@@ -52,6 +58,24 @@ class IsoDeltaLammpsBinaryCheckTest(unittest.TestCase):
         """The help command timeout must be positive."""
         with self.assertRaisesRegex(ValueError, "timeout_seconds"):
             isodelta_binary_check.validate_binary_check_options("lmp", 0.0)
+
+    def test_build_binary_check_report_carries_report_comment(self) -> None:
+        """Archived binary smoke JSON should describe its evidence purpose."""
+        results = [
+            isodelta_binary_check.BinaryCheckResult(
+                name="pair-style:e3gnn/parallel",
+                ok=True,
+                detail="searched='e3gnn/parallel'",
+            )
+        ]
+        report = isodelta_binary_check.build_binary_check_report(results)
+
+        self.assertEqual(
+            report["report_comment"],
+            EXPECTED_BINARY_SMOKE_REPORT_COMMENT,
+        )
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["checks"][0]["name"], "pair-style:e3gnn/parallel")
 
 
 if __name__ == "__main__":

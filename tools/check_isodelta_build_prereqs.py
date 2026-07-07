@@ -19,6 +19,11 @@ import sys
 # These files are copied by sevenn/pair_e3gnn/patch_lammps.sh, so missing any
 # one of them means the build cannot represent the current branch.
 REPO_ROOT = Path(__file__).resolve().parents[1]
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+PREREQ_REPORT_COMMENT = (
+    "IsoDelta-Halo build prerequisite report recording source-file, LAMMPS tree, "
+    "version, and optional torch checks before compiling patched LAMMPS."
+)
 EXPECTED_LAMMPS_VERSION = "2 Aug 2023"
 LAMMPS_VERSION_RE = re.compile(r'#define\s+LAMMPS_VERSION\s+"(?P<version>[^"]+)"')
 REQUIRED_PAIR_SOURCE_FILES = (
@@ -115,6 +120,15 @@ def collect_checks(
     return results
 
 
+def build_prereq_report(results: list[CheckResult]) -> dict[str, object]:
+    """Return the self-describing JSON payload printed by the checker."""
+    return {
+        GENERATED_REPORT_COMMENT_KEY: PREREQ_REPORT_COMMENT,
+        "ok": all(result.ok for result in results),
+        "checks": [asdict(result) for result in results],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run prerequisite checks and return nonzero when a required check fails."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -131,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     results = collect_checks(args.lammps_root, args.require_torch)
-    report = {"ok": all(result.ok for result in results), "checks": [asdict(result) for result in results]}
+    report = build_prereq_report(results)
     print(json.dumps(report, indent=2))
     return 0 if report["ok"] else 1
 
