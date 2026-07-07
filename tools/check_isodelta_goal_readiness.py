@@ -223,6 +223,11 @@ REQUIRED_FILE_SNIPPETS = {
         "EXPERIMENT_REPORT_COMMENT",
         "GENERATED_REPORT_COMMENT_KEY",
         "GENERATED_REPORT_COMMENT_KEY: EXPERIMENT_REPORT_COMMENT",
+        "FINGERPRINT_ALGORITHM",
+        "FILE_FINGERPRINT_CHUNK_BYTES",
+        "file_fingerprint",
+        "stdout_fingerprint",
+        "stderr_fingerprint",
     ),
     "tools/run_isodelta_sync_gate.py": (
         "SYNC_REPORT_SCHEMA_VERSION",
@@ -520,7 +525,11 @@ REQUIRED_FILE_SNIPPETS = {
         "test_build_experiment_commands_supports_one_sided_ablation",
         "test_validate_config_rejects_speedup_gate_for_one_sided_ablation",
         "EXPECTED_EXPERIMENT_REPORT_COMMENT",
+        "EXPECTED_FINGERPRINT_ALGORITHM",
+        "EMPTY_SHA256_HEXDIGEST",
         'report["report_comment"]',
+        'command["stdout_fingerprint"]',
+        'command["stderr_fingerprint"]',
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (
         "IsoDeltaSyncGateTest",

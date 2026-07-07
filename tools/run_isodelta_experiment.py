@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 import math
 import os
@@ -62,6 +63,8 @@ MIN_NONNEGATIVE_VALUE = 0.0
 MIN_COUNT_VALUE = 0
 MIN_PERCENT_VALUE = 0.0
 MAX_PERCENT_VALUE = 100.0
+FINGERPRINT_ALGORITHM = "sha256"
+FILE_FINGERPRINT_CHUNK_BYTES = 1_048_576
 GIT_METADATA_TIMEOUT_SECONDS = 10.0
 PATH_SEPARATOR = ", "
 LOG_DIR_NAME = "logs"
@@ -161,6 +164,8 @@ class ExperimentCommandResult:
     returncode: int
     stdout_path: str
     stderr_path: str
+    stdout_fingerprint: dict[str, str | int | bool]
+    stderr_fingerprint: dict[str, str | int | bool]
 
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -356,6 +361,29 @@ def _run_metadata_command(argv: list[str]) -> str | None:
     return completed.stdout.strip()
 
 
+def file_fingerprint(path: Path) -> dict[str, str | int | bool]:
+    """Return a stable fingerprint for a generated log file."""
+    if not path.is_file():
+        return {
+            "exists": False,
+            "algorithm": FINGERPRINT_ALGORITHM,
+            "sha256": "",
+            "byte_size": 0,
+        }
+    digest = hashlib.sha256()
+    byte_size = 0
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(FILE_FINGERPRINT_CHUNK_BYTES), b""):
+            byte_size += len(chunk)
+            digest.update(chunk)
+    return {
+        "exists": True,
+        "algorithm": FINGERPRINT_ALGORITHM,
+        "sha256": digest.hexdigest(),
+        "byte_size": byte_size,
+    }
+
+
 def collect_run_provenance() -> dict[str, str | bool | None]:
     """Collect driver provenance so experiment reports can be audited later."""
     git_status_short = _run_metadata_command(["git", "status", "--short"])
@@ -536,12 +564,16 @@ def _run_command(
     command.stdout_path.parent.mkdir(parents=True, exist_ok=True)
     command.stdout_path.write_text(completed.stdout, encoding="utf-8")
     command.stderr_path.write_text(completed.stderr, encoding="utf-8")
+    stdout_fingerprint = file_fingerprint(command.stdout_path)
+    stderr_fingerprint = file_fingerprint(command.stderr_path)
     return ExperimentCommandResult(
         name=command.name,
         argv=command.argv,
         returncode=int(completed.returncode),
         stdout_path=str(command.stdout_path),
         stderr_path=str(command.stderr_path),
+        stdout_fingerprint=stdout_fingerprint,
+        stderr_fingerprint=stderr_fingerprint,
     )
 
 

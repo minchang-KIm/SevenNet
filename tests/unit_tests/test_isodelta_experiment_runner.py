@@ -8,6 +8,7 @@ without launching LAMMPS.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -36,6 +37,8 @@ EXPECTED_EXPERIMENT_REPORT_COMMENT = (
     "IsoDelta-Halo experiment driver report recording launched benchmark, trace, "
     "and evidence-bundle commands, output paths, return codes, and run provenance."
 )
+EXPECTED_FINGERPRINT_ALGORITHM = "sha256"
+EMPTY_SHA256_HEXDIGEST = hashlib.sha256(b"").hexdigest()
 MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY = 2
 EMPTY_TRACE_EVIDENCE_COUNT = 0
 
@@ -261,6 +264,21 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["failed_stage"], "binary-smoke")
         self.assertEqual(len(report["commands"]), 2)
+        failed_command = report["commands"][1]
+        self.assertEqual(failed_command["stdout_fingerprint"]["exists"], True)
+        self.assertEqual(
+            failed_command["stdout_fingerprint"]["algorithm"],
+            EXPECTED_FINGERPRINT_ALGORITHM,
+        )
+        self.assertEqual(
+            failed_command["stdout_fingerprint"]["sha256"],
+            hashlib.sha256(b"binary-smoke stdout").hexdigest(),
+        )
+        self.assertEqual(failed_command["stdout_fingerprint"]["byte_size"], 19)
+        self.assertEqual(
+            failed_command["stderr_fingerprint"]["sha256"],
+            hashlib.sha256(b"binary-smoke stderr").hexdigest(),
+        )
         self.assertEqual(
             report["provenance"]["report_schema_version"],
             EXPECTED_EXPERIMENT_REPORT_SCHEMA_VERSION,
@@ -300,6 +318,23 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertIsNone(report["failed_stage"])
         self.assertEqual(len(report["commands"]), 4)
         self.assertEqual(report["benchmark_report"], str(config.benchmark_report_path()))
+        for command in report["commands"]:
+            self.assertEqual(command["stdout_fingerprint"]["exists"], True)
+            self.assertEqual(command["stderr_fingerprint"]["exists"], True)
+            self.assertEqual(
+                command["stdout_fingerprint"]["algorithm"],
+                EXPECTED_FINGERPRINT_ALGORITHM,
+            )
+            self.assertEqual(
+                command["stdout_fingerprint"]["sha256"],
+                hashlib.sha256(b"ok").hexdigest(),
+            )
+            self.assertEqual(command["stdout_fingerprint"]["byte_size"], 2)
+            self.assertEqual(
+                command["stderr_fingerprint"]["sha256"],
+                EMPTY_SHA256_HEXDIGEST,
+            )
+            self.assertEqual(command["stderr_fingerprint"]["byte_size"], 0)
         self.assertIn("git_commit", report["provenance"])
         self.assertIn("python_executable", report["provenance"])
 

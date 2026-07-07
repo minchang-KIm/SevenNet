@@ -52,6 +52,9 @@ BUILD_PREREQS_TEST_PATH = REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_bu
 BINARY_CHECK_TEST_PATH = (
     REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_lammps_binary_check.py"
 )
+EXPERIMENT_RUNNER_TEST_PATH = (
+    REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_experiment_runner.py"
+)
 
 
 def _read(path: Path) -> str:
@@ -97,6 +100,7 @@ def main() -> None:
     validation_runner_test = _read(VALIDATION_RUNNER_TEST_PATH)
     build_prereqs_test = _read(BUILD_PREREQS_TEST_PATH)
     binary_check_test = _read(BINARY_CHECK_TEST_PATH)
+    experiment_runner_test = _read(EXPERIMENT_RUNNER_TEST_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
 
     _require(
@@ -826,6 +830,19 @@ def main() -> None:
         and "git_dirty" in experiment
         and '"provenance": collect_run_provenance()' in experiment,
         "experiment driver must include self-describing report provenance metadata",
+    )
+    _require(
+        "hashlib.sha256" in experiment
+        and "FINGERPRINT_ALGORITHM" in experiment
+        and "FILE_FINGERPRINT_CHUNK_BYTES" in experiment
+        and "file_fingerprint" in experiment
+        and "stdout_fingerprint" in experiment
+        and "stderr_fingerprint" in experiment
+        and "EXPECTED_FINGERPRINT_ALGORITHM" in experiment_runner_test
+        and "EMPTY_SHA256_HEXDIGEST" in experiment_runner_test
+        and 'command["stdout_fingerprint"]' in experiment_runner_test
+        and 'command["stderr_fingerprint"]' in experiment_runner_test,
+        "experiment driver must fingerprint generated stdout and stderr logs",
     )
     _require(
         "DEFAULT_MAX_ABS_THERMO_DELTA" in report_check

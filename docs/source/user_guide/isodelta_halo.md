@@ -318,6 +318,9 @@ when using the numbers in a manuscript.
 The experiment report carries a top-level `report_comment` that identifies it
 as the driver-level audit record for launched commands, paths, return codes,
 and run provenance.
+Each command record also carries `stdout_fingerprint` and `stderr_fingerprint`
+objects with SHA-256 digests and byte sizes for the generated log files, so a
+log edit after the run is visible from the archived experiment report.
 The driver rejects empty or impossible evidence settings before launching
 external commands. `--repeat` must be at least 1.
 `--binary-timeout-seconds` must be positive.
