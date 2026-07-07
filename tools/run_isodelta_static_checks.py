@@ -1197,6 +1197,8 @@ def main() -> None:
         and "test_validate_case_outputs_accepts_experiment_report_check" in cluster_suite_test
         and "test_summary_verifier_counts_experiment_report_check_evidence"
         in cluster_suite_test
+        and "test_run_suite_verifies_sevennet_experiment_check_evidence"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_mismatched_command_fingerprints" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_source_evidence" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_external_command_log" in cluster_suite_test

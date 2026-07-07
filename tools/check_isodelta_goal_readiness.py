@@ -500,6 +500,7 @@ REQUIRED_FILE_SNIPPETS = {
         "test_sevennet_case_runs_experiment_report_checker",
         "test_validate_case_outputs_accepts_experiment_report_check",
         "test_summary_verifier_counts_experiment_report_check_evidence",
+        "test_run_suite_verifies_sevennet_experiment_check_evidence",
     ),
     "tests/unit_tests/test_isodelta_benchmark_report_check.py": (
         "test_validate_report_accepts_false_disable_env_in_enabled_case",

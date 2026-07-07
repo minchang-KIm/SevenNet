@@ -5317,6 +5317,179 @@ trace_evidence = ["{trace_path.as_posix()}"]
         self.assertEqual(exit_code, 1)
         self.assertEqual(verification_calls, [output_dir])
 
+    def test_run_suite_verifies_sevennet_experiment_check_evidence(self) -> None:
+        """A normal SevenNet run should archive and reverify report-check evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            trace_path = root / "sevennet_trace.json"
+            trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "sevennet-check-e2e-suite"
+output_dir = "{output_dir.as_posix()}"
+required_models = ["SevenNet"]
+min_trace_count = 1
+min_distinct_trace_models = 1
+
+[[cases]]
+name = "sevennet-paper"
+model = "SevenNet"
+kind = "sevennet_lammps"
+lammps_command = "lmp"
+input = "inputs/in.sevennet"
+trace_evidence = ["{trace_path.as_posix()}"]
+required_trace_models = ["SevenNet"]
+min_enabled_cache_attempts = 1
+min_enabled_cache_hits = 1
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+            original_runner = isodelta_cluster_suite.run_argv_command
+
+            def fake_run_argv_command(
+                *,
+                name: str,
+                argv: list[str],
+                cwd: Path,
+                env: dict[str, str] | None,
+                timeout_seconds: float,
+                stdout_path: Path,
+                stderr_path: Path,
+                dry_run: bool,
+            ) -> isodelta_cluster_suite.CommandRecord:
+                stdout_path.parent.mkdir(parents=True, exist_ok=True)
+                stdout_path.write_text(f"{name} stdout\n", encoding="utf-8")
+                stderr_path.write_text("", encoding="utf-8")
+                if name.endswith(":sevennet-experiment"):
+                    experiment_dir = Path(argv[argv.index("--output-dir") + 1])
+                    benchmark_path = (
+                        experiment_dir
+                        / "benchmark"
+                        / isodelta_cluster_suite.BENCHMARK_REPORT_NAME
+                    )
+                    bundle_path = (
+                        experiment_dir
+                        / isodelta_cluster_suite.BUNDLE_EVIDENCE_NAME
+                    )
+                    report_path = (
+                        experiment_dir
+                        / isodelta_cluster_suite.EXPERIMENT_REPORT_NAME
+                    )
+                    benchmark_path.parent.mkdir(parents=True, exist_ok=True)
+                    benchmark_path.write_text(
+                        json.dumps(_benchmark_report()),
+                        encoding="utf-8",
+                    )
+                    bundle_path.write_text(
+                        json.dumps(
+                            isodelta_cluster_suite.bundle_check.validate_bundle(
+                                benchmark_report=benchmark_path,
+                                trace_evidence_paths=[trace_path],
+                                required_models=["SevenNet"],
+                                thresholds=(
+                                    isodelta_cluster_suite.bundle_check.BundleThresholds(
+                                        max_abs_thermo_delta=(
+                                            config.cases[0].max_abs_thermo_delta
+                                        ),
+                                        min_paired_thermo_count=(
+                                            config.cases[0].min_paired_thermo_count
+                                        ),
+                                        min_speedup=config.cases[0].min_speedup,
+                                        min_hit_rate_percent=(
+                                            config.cases[0].min_hit_rate_percent
+                                        ),
+                                        min_enabled_cache_attempts=(
+                                            config.cases[0].min_enabled_cache_attempts
+                                        ),
+                                        min_enabled_cache_hits=(
+                                            config.cases[0].min_enabled_cache_hits
+                                        ),
+                                        min_trace_hit_rate_percent=(
+                                            config.cases[0].min_trace_hit_rate_percent
+                                        ),
+                                        min_trace_estimated_speedup=(
+                                            config.cases[0].min_trace_estimated_speedup
+                                        ),
+                                        min_trace_metadata_fraction_percent=(
+                                            config.cases[
+                                                0
+                                            ].min_trace_metadata_fraction_percent
+                                        ),
+                                    )
+                                ),
+                            )
+                        ),
+                        encoding="utf-8",
+                    )
+                    report_path.write_text(
+                        json.dumps(_experiment_report(command_count=5)),
+                        encoding="utf-8",
+                    )
+                if name.endswith(":experiment-report-check"):
+                    report_path = Path(argv[argv.index("--report") + 1])
+                    output_path = Path(argv[argv.index("--output") + 1])
+                    report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+                    command_count = len(report_payload["commands"])
+                    output_path.write_text(
+                        json.dumps(
+                            _experiment_report_check(
+                                report_path,
+                                command_count=command_count,
+                            )
+                        ),
+                        encoding="utf-8",
+                    )
+                return isodelta_cluster_suite.CommandRecord(
+                    name=name,
+                    command=argv,
+                    returncode=isodelta_cluster_suite.SUCCESS_RETURN_CODE,
+                    elapsed_seconds=0.0,
+                    stdout_path=str(stdout_path),
+                    stderr_path=str(stderr_path),
+                    cwd=str(cwd),
+                    tracked_env=isodelta_cluster_suite.command_environment_snapshot(
+                        env
+                    ),
+                )
+
+            try:
+                isodelta_cluster_suite.run_argv_command = fake_run_argv_command
+                exit_code = isodelta_cluster_suite.run_suite(
+                    config,
+                    skip_downloads=True,
+                    skip_gpu_check=True,
+                )
+            finally:
+                isodelta_cluster_suite.run_argv_command = original_runner
+
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            verification = isodelta_cluster_suite.verify_output_bundle(output_dir)
+            evidence = summary[isodelta_cluster_suite.EVIDENCE_FINGERPRINTS_KEY][
+                "sevennet-paper"
+            ]
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(verification["verified_experiment_report_check_count"], 1)
+        self.assertIsNotNone(
+            evidence[isodelta_cluster_suite.EXPERIMENT_REPORT_KEY]
+        )
+        self.assertIsNotNone(
+            evidence[isodelta_cluster_suite.EXPERIMENT_REPORT_CHECK_KEY]
+        )
+        self.assertEqual(
+            summary["cases"][0][isodelta_cluster_suite.EXPERIMENT_REPORT_KEY],
+            evidence[isodelta_cluster_suite.EXPERIMENT_REPORT_KEY]["path"],
+        )
+        self.assertEqual(
+            summary["cases"][0][isodelta_cluster_suite.EXPERIMENT_REPORT_CHECK_KEY],
+            evidence[isodelta_cluster_suite.EXPERIMENT_REPORT_CHECK_KEY]["path"],
+        )
+
     def test_collect_only_rejects_insufficient_distinct_trace_models(self) -> None:
         """Suite-level gates should count model labels inside trace evidence."""
         with tempfile.TemporaryDirectory() as tmpdir:
