@@ -2306,6 +2306,12 @@ trace_evidence = ["trace.json"]
         self.assertIn("#SBATCH --job-name=paper_suite", script)
         self.assertIn("#SBATCH --gres=gpu:8", script)
         self.assertIn("#SBATCH --cpus-per-task=12", script)
+        self.assertIn('if [[ -z "${REPO_ROOT:-}" ]]; then', script)
+        self.assertIn('cd "$REPO_ROOT"', script)
+        self.assertIn(
+            'SUITE_RUNNER="${SUITE_RUNNER:-$REPO_ROOT/tools/run_isodelta_cluster_paper_suite.py}"',
+            script,
+        )
         self.assertIn("COMMON_ARGS=(--manifest \"$MANIFEST_PATH\")", script)
         self.assertIn("PREFLIGHT_OUTPUT=", script)
         self.assertIn("PIPELINE_OUTPUT=", script)

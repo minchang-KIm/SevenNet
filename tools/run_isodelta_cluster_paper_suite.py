@@ -88,6 +88,8 @@ DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 600.0
 DEFAULT_SLURM_JOB_NAME = "isodelta-halo-paper-suite"
 DEFAULT_SLURM_TIME_LIMIT = "24:00:00"
 DEFAULT_SLURM_CPUS_PER_TASK = 8
+SLURM_REPO_ROOT_ENV_NAME = "REPO_ROOT"
+SLURM_SUITE_RUNNER_RELATIVE_PATH = Path("tools") / "run_isodelta_cluster_paper_suite.py"
 DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
 CASE_STATUS_PASSED = "passed"
 CASE_STATUS_REUSED = "reused"
@@ -8105,7 +8107,15 @@ def write_slurm_script(
         "",
         "# Override PYTHON_BIN or SUITE_RUNNER at submit time if the cluster uses modules.",
         'PYTHON_BIN="${PYTHON_BIN:-python}"',
-        'SUITE_RUNNER="${SUITE_RUNNER:-tools/run_isodelta_cluster_paper_suite.py}"',
+        f'if [[ -z "${{{SLURM_REPO_ROOT_ENV_NAME}:-}}" ]]; then',
+        f"  {SLURM_REPO_ROOT_ENV_NAME}={_bash_quote(REPO_ROOT)}",
+        "fi",
+        f'cd "${SLURM_REPO_ROOT_ENV_NAME}"',
+        (
+            'SUITE_RUNNER="${SUITE_RUNNER:-$'
+            f"{SLURM_REPO_ROOT_ENV_NAME}/{SLURM_SUITE_RUNNER_RELATIVE_PATH.as_posix()}"
+            '}"'
+        ),
         f"MANIFEST_PATH={_bash_quote(config.manifest_path)}",
         f"PLAN_OUTPUT={_bash_quote(plan_path)}",
         f"PREFLIGHT_OUTPUT={_bash_quote(config.output_dir / PREFLIGHT_REPORT_NAME)}",

@@ -561,9 +561,10 @@ the exact same `COMMON_ARGS` used by the final run, and then executes the full
 launcher immediately runs `--verify-pipeline-report "$PIPELINE_OUTPUT"` so the
 SLURM job only succeeds after stage fingerprints and final bundle verification
 counts are rechecked. The
-script defines `PYTHON_BIN` and `SUITE_RUNNER` as overridable shell variables so
-cluster module systems can select the intended environment without editing the
-recorded experiment command. `--collect-only` is not accepted when generating
+script records the repository root in `REPO_ROOT`, changes into that directory
+before launching Python, and defines `PYTHON_BIN` and `SUITE_RUNNER` as
+overridable shell variables so cluster module systems can select the intended
+environment without editing the recorded experiment command. `--collect-only` is not accepted when generating
 this SLURM launcher because the launcher is reserved for the full 8-GPU
 pipeline; use the direct `--collect-only` command after jobs finish.
 The generated header also includes a `CLI runtime overrides` comment, so the
