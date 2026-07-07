@@ -310,6 +310,9 @@ The driver runs the prerequisite checker, binary smoke check, paired benchmark,
 and report correctness gate in that order. It writes stage logs and
 `isodelta_experiment_report.json`; archive that report with the benchmark JSON
 when using the numbers in a manuscript.
+The experiment report carries a top-level `report_comment` that identifies it
+as the driver-level audit record for launched commands, paths, return codes,
+and run provenance.
 The driver rejects empty or impossible evidence settings before launching
 external commands. `--repeat` must be at least 1.
 `--binary-timeout-seconds` must be positive.

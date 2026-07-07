@@ -202,6 +202,9 @@ REQUIRED_FILE_SNIPPETS = {
         "ablation-benchmark",
         "should_run_publishable_pair_gates",
         "min_speedup requires paired ablation_mode",
+        "EXPERIMENT_REPORT_COMMENT",
+        "GENERATED_REPORT_COMMENT_KEY",
+        "GENERATED_REPORT_COMMENT_KEY: EXPERIMENT_REPORT_COMMENT",
     ),
     "tools/run_isodelta_sync_gate.py": (
         "SYNC_REPORT_SCHEMA_VERSION",
@@ -484,6 +487,8 @@ REQUIRED_FILE_SNIPPETS = {
     "tests/unit_tests/test_isodelta_experiment_runner.py": (
         "test_build_experiment_commands_supports_one_sided_ablation",
         "test_validate_config_rejects_speedup_gate_for_one_sided_ablation",
+        "EXPECTED_EXPERIMENT_REPORT_COMMENT",
+        'report["report_comment"]',
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (
         "IsoDeltaSyncGateTest",

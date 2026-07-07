@@ -24,6 +24,11 @@ from typing import Callable
 REPO_ROOT_PARENT_DEPTH = 1
 REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+EXPERIMENT_REPORT_COMMENT = (
+    "IsoDelta-Halo experiment driver report recording launched benchmark, trace, "
+    "and evidence-bundle commands, output paths, return codes, and run provenance."
+)
 PREREQ_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_build_prereqs.py"
 BINARY_CHECK_SCRIPT = REPO_ROOT / "tools" / "check_isodelta_lammps_binary.py"
 BENCHMARK_SCRIPT = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
@@ -558,6 +563,7 @@ def _write_report(
         ],
     }
     payload = {
+        GENERATED_REPORT_COMMENT_KEY: EXPERIMENT_REPORT_COMMENT,
         "ok": ok,
         "failed_stage": failed_stage,
         "provenance": collect_run_provenance(),

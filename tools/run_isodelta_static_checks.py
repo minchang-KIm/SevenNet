@@ -784,10 +784,13 @@ def main() -> None:
     )
     _require(
         "EXPERIMENT_REPORT_SCHEMA_VERSION" in experiment
+        and "EXPERIMENT_REPORT_COMMENT" in experiment
+        and "GENERATED_REPORT_COMMENT_KEY" in experiment
+        and "GENERATED_REPORT_COMMENT_KEY: EXPERIMENT_REPORT_COMMENT" in experiment
         and "collect_run_provenance" in experiment
         and "git_dirty" in experiment
         and '"provenance": collect_run_provenance()' in experiment,
-        "experiment driver must include report provenance metadata",
+        "experiment driver must include self-describing report provenance metadata",
     )
     _require(
         "DEFAULT_MAX_ABS_THERMO_DELTA" in report_check

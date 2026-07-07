@@ -32,6 +32,10 @@ SPEC.loader.exec_module(isodelta_experiment)
 
 
 EXPECTED_EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
+EXPECTED_EXPERIMENT_REPORT_COMMENT = (
+    "IsoDelta-Halo experiment driver report recording launched benchmark, trace, "
+    "and evidence-bundle commands, output paths, return codes, and run provenance."
+)
 MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY = 2
 EMPTY_TRACE_EVIDENCE_COUNT = 0
 
@@ -253,6 +257,7 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 2)
         self.assertEqual(executed, ["other", "binary-smoke"])
+        self.assertEqual(report["report_comment"], EXPECTED_EXPERIMENT_REPORT_COMMENT)
         self.assertFalse(report["ok"])
         self.assertEqual(report["failed_stage"], "binary-smoke")
         self.assertEqual(len(report["commands"]), 2)
@@ -290,6 +295,7 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(len(executed), 4)
+        self.assertEqual(report["report_comment"], EXPECTED_EXPERIMENT_REPORT_COMMENT)
         self.assertTrue(report["ok"])
         self.assertIsNone(report["failed_stage"])
         self.assertEqual(len(report["commands"]), 4)
@@ -327,6 +333,7 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(len(executed), 5)
+        self.assertEqual(report["report_comment"], EXPECTED_EXPERIMENT_REPORT_COMMENT)
         self.assertEqual(
             report["bundle_evidence_report"],
             str(config.bundle_evidence_report_path()),
