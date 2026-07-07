@@ -325,11 +325,14 @@ After moving or archiving the run directory, re-open the report and logs with:
 
 ```bash
 python tools/check_isodelta_experiment_report.py \
-  --report isodelta_experiment_runs/isodelta_experiment_report.json
+  --report isodelta_experiment_runs/isodelta_experiment_report.json \
+  --output isodelta_experiment_runs/experiment_report_check.json
 ```
 
 The checker exits nonzero if the driver report comment, provenance schema, or
-any command log fingerprint no longer matches the files on disk.
+any command log fingerprint no longer matches the files on disk. Its optional
+`--output` JSON carries its own `report_comment`, schema version, status, and
+checked log count so the verification step can be archived beside the run.
 The driver rejects empty or impossible evidence settings before launching
 external commands. `--repeat` must be at least 1.
 `--binary-timeout-seconds` must be positive.

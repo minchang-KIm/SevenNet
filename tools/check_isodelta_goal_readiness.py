@@ -234,6 +234,8 @@ REQUIRED_FILE_SNIPPETS = {
         "EXPERIMENT_REPORT_CHECK_COMMENT",
         "validate_experiment_report",
         "_check_fingerprint",
+        "_write_evidence",
+        "--output",
         "experiment_driver.file_fingerprint",
         "SHA256_KEY",
     ),
@@ -544,6 +546,8 @@ REQUIRED_FILE_SNIPPETS = {
         "test_validate_experiment_report_accepts_matching_log_fingerprints",
         "test_validate_experiment_report_rejects_missing_report_comment",
         "test_validate_experiment_report_rejects_changed_stdout_log",
+        "test_main_writes_output_evidence_file",
+        "test_main_writes_failure_output_evidence_file",
         "stdout_fingerprint.sha256",
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (

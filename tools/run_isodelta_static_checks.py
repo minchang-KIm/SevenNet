@@ -855,9 +855,14 @@ def main() -> None:
         and "EXPERIMENT_REPORT_CHECK_COMMENT" in experiment_report_check
         and "validate_experiment_report" in experiment_report_check
         and "_check_fingerprint" in experiment_report_check
+        and "_write_evidence" in experiment_report_check
+        and "--output" in experiment_report_check
         and "experiment_driver.file_fingerprint" in experiment_report_check
         and "stdout_fingerprint.sha256" in experiment_report_check_test
         and "EXPECTED_CHECK_REPORT_COMMENT" in experiment_report_check_test
+        and "test_main_writes_output_evidence_file" in experiment_report_check_test
+        and "test_main_writes_failure_output_evidence_file"
+        in experiment_report_check_test
         and "test_isodelta_experiment_report_check.py" in validation_runner
         and "tools/check_isodelta_experiment_report.py" in validation_runner,
         "experiment report checker must verify archived command log fingerprints",

@@ -191,10 +191,21 @@ def _failure_summary(report_path: Path, detail: str) -> dict[str, object]:
     }
 
 
+def _write_evidence(output_path: Path, evidence: dict[str, object]) -> None:
+    """Write verification evidence as a self-describing JSON file."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line options for report verification."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", required=True, type=Path, help="Experiment report JSON")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Optional JSON evidence file written after verification",
+    )
     return parser.parse_args(argv)
 
 
@@ -204,8 +215,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         evidence = validate_experiment_report(args.report)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
-        print(json.dumps(_failure_summary(args.report, str(exc)), indent=2))
+        evidence = _failure_summary(args.report, str(exc))
+        if args.output is not None:
+            _write_evidence(args.output, evidence)
+        print(json.dumps(evidence, indent=2))
         return FAILURE_RETURN_CODE
+    if args.output is not None:
+        _write_evidence(args.output, evidence)
     print(json.dumps(evidence, indent=2))
     return SUCCESS_RETURN_CODE
 

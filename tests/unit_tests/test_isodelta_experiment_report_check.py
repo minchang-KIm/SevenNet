@@ -6,7 +6,9 @@ fingerprint contract can be validated without running LAMMPS.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import sys
@@ -108,6 +110,40 @@ class IsoDeltaExperimentReportCheckTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "stdout_fingerprint.sha256"):
                 isodelta_experiment_report_check.validate_experiment_report(report_path)
+
+    def test_main_writes_output_evidence_file(self) -> None:
+        """The CLI should persist self-describing verification evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = _write_valid_report(root)
+            output_path = root / "experiment_report_check.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = isodelta_experiment_report_check.main(
+                    ["--report", str(report_path), "--output", str(output_path)]
+                )
+            evidence = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(evidence["report_comment"], EXPECTED_CHECK_REPORT_COMMENT)
+        self.assertEqual(evidence["checked_log_fingerprint_count"], 2)
+
+    def test_main_writes_failure_output_evidence_file(self) -> None:
+        """The CLI should persist failure evidence when verification fails."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            missing_report_path = root / "missing_report.json"
+            output_path = root / "failed_experiment_report_check.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = isodelta_experiment_report_check.main(
+                    ["--report", str(missing_report_path), "--output", str(output_path)]
+                )
+            evidence = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(evidence["status"], "failed")
+        self.assertEqual(evidence["report_comment"], EXPECTED_CHECK_REPORT_COMMENT)
+        self.assertIn("missing_report.json", evidence["experiment_report"])
 
 
 if __name__ == "__main__":
