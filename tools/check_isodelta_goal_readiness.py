@@ -229,6 +229,14 @@ REQUIRED_FILE_SNIPPETS = {
         "stdout_fingerprint",
         "stderr_fingerprint",
     ),
+    "tools/check_isodelta_experiment_report.py": (
+        "EXPERIMENT_REPORT_CHECK_SCHEMA_VERSION",
+        "EXPERIMENT_REPORT_CHECK_COMMENT",
+        "validate_experiment_report",
+        "_check_fingerprint",
+        "experiment_driver.file_fingerprint",
+        "SHA256_KEY",
+    ),
     "tools/run_isodelta_sync_gate.py": (
         "SYNC_REPORT_SCHEMA_VERSION",
         "EXPECTED_VALIDATION_REPORT_SCHEMA_VERSION",
@@ -530,6 +538,13 @@ REQUIRED_FILE_SNIPPETS = {
         'report["report_comment"]',
         'command["stdout_fingerprint"]',
         'command["stderr_fingerprint"]',
+    ),
+    "tests/unit_tests/test_isodelta_experiment_report_check.py": (
+        "EXPECTED_CHECK_REPORT_COMMENT",
+        "test_validate_experiment_report_accepts_matching_log_fingerprints",
+        "test_validate_experiment_report_rejects_missing_report_comment",
+        "test_validate_experiment_report_rejects_changed_stdout_log",
+        "stdout_fingerprint.sha256",
     ),
     "tests/unit_tests/test_isodelta_sync_gate.py": (
         "IsoDeltaSyncGateTest",

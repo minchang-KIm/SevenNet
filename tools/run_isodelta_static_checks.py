@@ -18,6 +18,7 @@ COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
 COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
 BENCHMARK_PATH = REPO_ROOT / "tools" / "run_isodelta_lammps_benchmark.py"
 EXPERIMENT_PATH = REPO_ROOT / "tools" / "run_isodelta_experiment.py"
+EXPERIMENT_REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_experiment_report.py"
 CLUSTER_SUITE_PATH = REPO_ROOT / "tools" / "run_isodelta_cluster_paper_suite.py"
 REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py"
 EVIDENCE_BUNDLE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_evidence_bundle.py"
@@ -55,6 +56,9 @@ BINARY_CHECK_TEST_PATH = (
 EXPERIMENT_RUNNER_TEST_PATH = (
     REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_experiment_runner.py"
 )
+EXPERIMENT_REPORT_CHECK_TEST_PATH = (
+    REPO_ROOT / "tests" / "unit_tests" / "test_isodelta_experiment_report_check.py"
+)
 
 
 def _read(path: Path) -> str:
@@ -76,6 +80,7 @@ def main() -> None:
     comm_brick_header = _read(COMM_BRICK_HEADER_PATH)
     benchmark = _read(BENCHMARK_PATH)
     experiment = _read(EXPERIMENT_PATH)
+    experiment_report_check = _read(EXPERIMENT_REPORT_CHECK_PATH)
     cluster_suite = _read(CLUSTER_SUITE_PATH)
     report_check = _read(REPORT_CHECK_PATH)
     evidence_bundle_check = _read(EVIDENCE_BUNDLE_CHECK_PATH)
@@ -101,6 +106,7 @@ def main() -> None:
     build_prereqs_test = _read(BUILD_PREREQS_TEST_PATH)
     binary_check_test = _read(BINARY_CHECK_TEST_PATH)
     experiment_runner_test = _read(EXPERIMENT_RUNNER_TEST_PATH)
+    experiment_report_check_test = _read(EXPERIMENT_REPORT_CHECK_TEST_PATH)
     combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
 
     _require(
@@ -843,6 +849,18 @@ def main() -> None:
         and 'command["stdout_fingerprint"]' in experiment_runner_test
         and 'command["stderr_fingerprint"]' in experiment_runner_test,
         "experiment driver must fingerprint generated stdout and stderr logs",
+    )
+    _require(
+        "EXPERIMENT_REPORT_CHECK_SCHEMA_VERSION" in experiment_report_check
+        and "EXPERIMENT_REPORT_CHECK_COMMENT" in experiment_report_check
+        and "validate_experiment_report" in experiment_report_check
+        and "_check_fingerprint" in experiment_report_check
+        and "experiment_driver.file_fingerprint" in experiment_report_check
+        and "stdout_fingerprint.sha256" in experiment_report_check_test
+        and "EXPECTED_CHECK_REPORT_COMMENT" in experiment_report_check_test
+        and "test_isodelta_experiment_report_check.py" in validation_runner
+        and "tools/check_isodelta_experiment_report.py" in validation_runner,
+        "experiment report checker must verify archived command log fingerprints",
     )
     _require(
         "DEFAULT_MAX_ABS_THERMO_DELTA" in report_check

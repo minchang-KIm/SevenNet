@@ -321,6 +321,15 @@ and run provenance.
 Each command record also carries `stdout_fingerprint` and `stderr_fingerprint`
 objects with SHA-256 digests and byte sizes for the generated log files, so a
 log edit after the run is visible from the archived experiment report.
+After moving or archiving the run directory, re-open the report and logs with:
+
+```bash
+python tools/check_isodelta_experiment_report.py \
+  --report isodelta_experiment_runs/isodelta_experiment_report.json
+```
+
+The checker exits nonzero if the driver report comment, provenance schema, or
+any command log fingerprint no longer matches the files on disk.
 The driver rejects empty or impossible evidence settings before launching
 external commands. `--repeat` must be at least 1.
 `--binary-timeout-seconds` must be positive.
