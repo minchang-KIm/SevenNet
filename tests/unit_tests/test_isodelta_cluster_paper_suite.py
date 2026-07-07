@@ -2953,6 +2953,82 @@ artifacts = ["dataset"]
         self.assertEqual(record.tracked_env["OMP_NUM_THREADS"], "4")
         self.assertIn("SLURM_JOB_ID", record.tracked_env)
 
+    def test_sevennet_case_runs_experiment_report_checker(self) -> None:
+        """SevenNet runs should immediately verify the driver report and logs."""
+        launched_commands: list[dict[str, object]] = []
+        original_runner = isodelta_cluster_suite.run_argv_command
+
+        def fake_run_argv_command(
+            *,
+            name: str,
+            argv: list[str],
+            cwd: Path,
+            env: dict[str, str] | None,
+            timeout_seconds: float,
+            stdout_path: Path,
+            stderr_path: Path,
+            dry_run: bool,
+        ) -> isodelta_cluster_suite.CommandRecord:
+            stdout_path.parent.mkdir(parents=True, exist_ok=True)
+            stdout_path.write_text("", encoding="utf-8")
+            stderr_path.write_text("", encoding="utf-8")
+            launched_commands.append(
+                {
+                    "name": name,
+                    "argv": argv,
+                    "stdout_path": stdout_path,
+                    "stderr_path": stderr_path,
+                    "dry_run": dry_run,
+                }
+            )
+            return isodelta_cluster_suite.CommandRecord(
+                name=name,
+                command=argv,
+                returncode=0,
+                elapsed_seconds=0.0,
+                stdout_path=str(stdout_path),
+                stderr_path=str(stderr_path),
+                cwd=str(cwd),
+                tracked_env={},
+            )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config = isodelta_cluster_suite.SuiteConfig(
+                name="sevennet-checker-suite",
+                manifest_path=root / "suite.toml",
+                output_dir=root / "paper_outputs",
+                expected_gpus=1,
+                required_models=("SevenNet",),
+            )
+            case = isodelta_cluster_suite.CaseConfig(
+                name="sevennet-checker",
+                model="SevenNet",
+                kind="sevennet_lammps",
+                lammps_command="lmp",
+                input_path=root / "in.sevenn",
+                repeat_count=1,
+                min_speedup=None,
+            )
+            try:
+                isodelta_cluster_suite.run_argv_command = fake_run_argv_command
+                _, _, _, records = isodelta_cluster_suite.run_sevennet_case(
+                    config,
+                    case,
+                    dry_run=False,
+                )
+            finally:
+                isodelta_cluster_suite.run_argv_command = original_runner
+
+        command_names = [record.name for record in records]
+        checker_command = launched_commands[1]
+        checker_argv = checker_command["argv"]
+        self.assertEqual(command_names, ["sevennet-checker:sevennet-experiment", "sevennet-checker:experiment-report-check"])
+        self.assertIn("check_isodelta_experiment_report.py", checker_argv[1])
+        self.assertIn("--report", checker_argv)
+        self.assertIn("--output", checker_argv)
+        self.assertTrue(str(checker_argv[-1]).endswith("experiment_report_check.json"))
+
     def test_preflight_only_reports_failed_case_check(self) -> None:
         """A nonzero case preflight should fail before expensive model runs."""
         with tempfile.TemporaryDirectory() as tmpdir:

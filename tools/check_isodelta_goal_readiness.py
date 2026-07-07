@@ -103,6 +103,9 @@ REQUIRED_FILE_SNIPPETS = {
         "_require_external_command_log_fingerprints",
         "_require_external_timing_reports_from_summary",
         "COMMAND_LOG_FINGERPRINTS_KEY",
+        "EXPERIMENT_REPORT_CHECK_NAME",
+        "EXPERIMENT_REPORT_CHECK_PATH",
+        "experiment-report-check",
         "verified_external_command_log_count",
         "REQUIRED_PAPER_ARTIFACT_NAMES",
         "_require_artifact_index_alignment",
@@ -489,6 +492,7 @@ REQUIRED_FILE_SNIPPETS = {
         "test_external_pair_one_sided_timing_validates_without_speedup",
         "test_external_pair_one_sided_timing_rejects_speedup_claim",
         "test_readiness_check_rejects_one_sided_external_pair_ablation",
+        "test_sevennet_case_runs_experiment_report_checker",
     ),
     "tests/unit_tests/test_isodelta_benchmark_report_check.py": (
         "test_validate_report_accepts_false_disable_env_in_enabled_case",

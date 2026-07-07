@@ -223,6 +223,7 @@ SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_onl
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
 BUNDLE_EVIDENCE_NAME = "bundle_evidence.json"
 EXPERIMENT_REPORT_NAME = "isodelta_experiment_report.json"
+EXPERIMENT_REPORT_CHECK_NAME = "experiment_report_check.json"
 EXTERNAL_TIMING_REPORT_NAME = "external_pair_timing_report.json"
 TRACE_EVIDENCE_SUFFIX = "_trace_evidence.json"
 PLAN_REPORT_NAME = "isodelta_cluster_paper_plan.json"
@@ -509,6 +510,7 @@ BENCHMARK_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_benchmark_report.py
 BUNDLE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_evidence_bundle.py"
 TRACE_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_mlip_trace.py"
 EXPERIMENT_DRIVER_PATH = REPO_ROOT / "tools" / "run_isodelta_experiment.py"
+EXPERIMENT_REPORT_CHECK_PATH = REPO_ROOT / "tools" / "check_isodelta_experiment_report.py"
 
 
 class ClusterSuiteError(ValueError):
@@ -5685,6 +5687,27 @@ def run_sevennet_case(
         dry_run=dry_run,
     )
     command_records = trace_records + [record]
+    experiment_report = experiment_dir / EXPERIMENT_REPORT_NAME
+    experiment_report_check = experiment_dir / EXPERIMENT_REPORT_CHECK_NAME
+    if not dry_run:
+        check_record = run_argv_command(
+            name=f"{case.name}:experiment-report-check",
+            argv=[
+                sys.executable,
+                str(EXPERIMENT_REPORT_CHECK_PATH),
+                "--report",
+                str(experiment_report),
+                "--output",
+                str(experiment_report_check),
+            ],
+            cwd=REPO_ROOT,
+            env=None,
+            timeout_seconds=case.command_timeout_seconds,
+            stdout_path=log_dir / "experiment_report_check.stdout.log",
+            stderr_path=log_dir / "experiment_report_check.stderr.log",
+            dry_run=dry_run,
+        )
+        command_records.append(check_record)
     benchmark_report = experiment_dir / "benchmark" / BENCHMARK_REPORT_NAME
     bundle_evidence = (
         experiment_dir / BUNDLE_EVIDENCE_NAME

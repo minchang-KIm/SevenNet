@@ -610,9 +610,11 @@ python tools/run_isodelta_cluster_paper_suite.py \
 The runner checks the visible GPU count against `expected_gpus = 8`, downloads
 missing artifacts, prints terminal progress as `[suite] [stage/total] ...`,
 then executes each case. A `sevennet_lammps` case calls
-`run_isodelta_experiment.py` and passes the manifest `ablation_mode`; the
-default `paired` mode runs the disabled/enabled LAMMPS benchmark plus report
-gates, while one-sided modes record raw timing without speedup claims. An
+`run_isodelta_experiment.py`, passes the manifest `ablation_mode`, and then
+runs `check_isodelta_experiment_report.py --output` against the generated
+driver report before command-log fingerprints are recorded; the default
+`paired` mode runs the disabled/enabled LAMMPS benchmark plus report gates,
+while one-sided modes record raw timing without speedup claims. An
 `external_pair` case is for MACE, NequIP, or
 another runtime whose disabled and enabled commands are supplied in the
 manifest; it uses the same `ablation_mode` field to run both commands or only
