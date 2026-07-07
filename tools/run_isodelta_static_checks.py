@@ -1327,9 +1327,12 @@ def main() -> None:
         and "runtime_overrides" in cluster_suite
         and "SLURM_REPO_ROOT_ENV_NAME" in cluster_suite
         and "SLURM_SUITE_RUNNER_RELATIVE_PATH" in cluster_suite
+        and "--slurm-repo-root" in cluster_suite
+        and "SLURM repo root must not be empty" in cluster_suite
         and 'cd "${SLURM_REPO_ROOT_ENV_NAME}"' in cluster_suite
         and 'cd "$REPO_ROOT"' in cluster_suite_test
         and "$REPO_ROOT/tools/run_isodelta_cluster_paper_suite.py" in cluster_suite_test
+        and "/scratch/icpp/SevenNet-main" in cluster_suite_test
         and "_has_one_sided_ablation_case" in cluster_suite
         and "one-sided ablation suite" in cluster_suite
         and "PIPELINE_REPORT_PASSED_STATUS_ERROR" in cluster_suite
@@ -1516,6 +1519,8 @@ def main() -> None:
         and "stage fingerprints and final bundle verification" in doc
         and "`--collect-only` is not accepted" in doc
         and "repository root in `REPO_ROOT`" in doc
+        and "using `--slurm-repo-root`" in doc
+        and "/scratch/icpp/SevenNet-main" in doc
         and "changes into that directory" in doc
         and "PYTHON_BIN" in doc
         and "SUITE_RUNNER" in doc,

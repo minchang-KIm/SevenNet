@@ -8076,6 +8076,7 @@ def write_slurm_script(
     job_name: str = DEFAULT_SLURM_JOB_NAME,
     time_limit: str = DEFAULT_SLURM_TIME_LIMIT,
     cpus_per_task: int = DEFAULT_SLURM_CPUS_PER_TASK,
+    slurm_repo_root: str | None = None,
 ) -> None:
     """Write a commented SLURM wrapper that runs the full paper pipeline."""
     validate_suite_config(config)
@@ -8089,6 +8090,8 @@ def write_slurm_script(
     has_one_sided_ablation = _has_one_sided_ablation_case(config)
     plan_path = config.output_dir / PLAN_REPORT_NAME
     slurm_job_name = _safe_name(job_name)
+    slurm_repo_root_default = str(REPO_ROOT) if slurm_repo_root is None else slurm_repo_root
+    _require(slurm_repo_root_default.strip(), "SLURM repo root must not be empty")
     lines = [
         "#!/usr/bin/env bash",
         "# IsoDelta-Halo cluster paper suite launcher.",
@@ -8108,7 +8111,7 @@ def write_slurm_script(
         "# Override PYTHON_BIN or SUITE_RUNNER at submit time if the cluster uses modules.",
         'PYTHON_BIN="${PYTHON_BIN:-python}"',
         f'if [[ -z "${{{SLURM_REPO_ROOT_ENV_NAME}:-}}" ]]; then',
-        f"  {SLURM_REPO_ROOT_ENV_NAME}={_bash_quote(REPO_ROOT)}",
+        f"  {SLURM_REPO_ROOT_ENV_NAME}={_bash_quote(slurm_repo_root_default)}",
         "fi",
         f'cd "${SLURM_REPO_ROOT_ENV_NAME}"',
         (
@@ -8218,6 +8221,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--reuse-passed", action="store_true", help="Reuse existing case outputs that pass current gates")
     parser.add_argument("--slurm-job-name", default=DEFAULT_SLURM_JOB_NAME, help="Job name for --write-slurm-script")
     parser.add_argument("--slurm-time-limit", default=DEFAULT_SLURM_TIME_LIMIT, help="Time limit for --write-slurm-script")
+    parser.add_argument(
+        "--slurm-repo-root",
+        help=(
+            "Repository checkout path embedded in --write-slurm-script; "
+            "REPO_ROOT can still override it at submit time"
+        ),
+    )
     parser.add_argument(
         "--slurm-cpus-per-task",
         type=int,
@@ -8349,6 +8359,7 @@ def main(argv: list[str] | None = None) -> int:
                 job_name=args.slurm_job_name,
                 time_limit=args.slurm_time_limit,
                 cpus_per_task=args.slurm_cpus_per_task,
+                slurm_repo_root=args.slurm_repo_root,
             )
             print(f"Wrote IsoDelta-Halo SLURM launcher to {args.write_slurm_script}")
             return SUCCESS_RETURN_CODE

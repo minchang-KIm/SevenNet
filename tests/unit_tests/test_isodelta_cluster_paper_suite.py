@@ -2295,6 +2295,8 @@ trace_evidence = ["trace.json"]
                     "paper suite",
                     "--slurm-cpus-per-task",
                     "12",
+                    "--slurm-repo-root",
+                    "/scratch/icpp/SevenNet-main",
                 ]
             )
             script = slurm_path.read_text(encoding="utf-8")
@@ -2307,6 +2309,7 @@ trace_evidence = ["trace.json"]
         self.assertIn("#SBATCH --gres=gpu:8", script)
         self.assertIn("#SBATCH --cpus-per-task=12", script)
         self.assertIn('if [[ -z "${REPO_ROOT:-}" ]]; then', script)
+        self.assertIn("  REPO_ROOT=/scratch/icpp/SevenNet-main", script)
         self.assertIn('cd "$REPO_ROOT"', script)
         self.assertIn(
             'SUITE_RUNNER="${SUITE_RUNNER:-$REPO_ROOT/tools/run_isodelta_cluster_paper_suite.py}"',
