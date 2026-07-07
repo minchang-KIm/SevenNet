@@ -612,9 +612,12 @@ missing artifacts, prints terminal progress as `[suite] [stage/total] ...`,
 then executes each case. A `sevennet_lammps` case calls
 `run_isodelta_experiment.py`, passes the manifest `ablation_mode`, and then
 runs `check_isodelta_experiment_report.py --output` against the generated
-driver report before command-log fingerprints are recorded; the default
-`paired` mode runs the disabled/enabled LAMMPS benchmark plus report gates,
-while one-sided modes record raw timing without speedup claims. An
+driver report before command-log fingerprints are recorded. The suite summary
+keeps both the driver report and the report-check evidence as fingerprinted
+source evidence, so a reviewer can reopen the bundle and verify the checker
+status, schema, command count, and log-fingerprint count; the default `paired`
+mode runs the disabled/enabled LAMMPS benchmark plus report gates, while
+one-sided modes record raw timing without speedup claims. An
 `external_pair` case is for MACE, NequIP, or
 another runtime whose disabled and enabled commands are supplied in the
 manifest; it uses the same `ablation_mode` field to run both commands or only
@@ -702,9 +705,13 @@ The sibling `artifacts` index must carry the same artifact names and paths as
 human-facing path index points to a different file than the protected hash
 record.
 The summary also stores `evidence_fingerprints` for each case's benchmark
-report, bundle evidence, external timing report, and trace evidence files. The
-bundle verifier checks those source-evidence SHA-256 digests too, so a paper
-table cannot be verified after its input evidence was edited or lost.
+report, bundle evidence, SevenNet experiment driver report,
+`experiment_report_check.json`, external timing report, and trace evidence
+files. Benchmark report, bundle evidence, external timing report, and trace evidence files are all protected source evidence.
+The bundle verifier checks those source-evidence SHA-256 digests too, then
+reopens any SevenNet experiment report-check evidence to confirm it passed
+against the fingerprinted driver report with matching command and log counts.
+This means a paper table cannot be verified after its input evidence was edited or lost.
 `environment_snapshot.json` records Git/Python provenance, GPU check results,
 selected CUDA/SLURM environment variables, package versions for SevenNet, torch,
 e3nn, ASE, MACE, and NequIP when installed, and lightweight `nvidia-smi` GPU

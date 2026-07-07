@@ -225,6 +225,48 @@ def _trace_evidence(model_name: str) -> dict[str, object]:
     }
 
 
+def _experiment_report(command_count: int = 1) -> dict[str, object]:
+    """Create a SevenNet experiment driver report with auditable metadata."""
+    return {
+        isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_cluster_suite.EXPERIMENT_REPORT_COMMENT
+        ),
+        "provenance": {
+            "report_schema_version": (
+                isodelta_cluster_suite.EXPERIMENT_REPORT_SCHEMA_VERSION
+            ),
+        },
+        "commands": [
+            {
+                "name": f"experiment-command-{index}",
+            }
+            for index in range(command_count)
+        ],
+    }
+
+
+def _experiment_report_check(
+    experiment_report: Path,
+    command_count: int = 1,
+) -> dict[str, object]:
+    """Create report-check evidence that should match an experiment report."""
+    return {
+        "experiment_report_check_schema_version": (
+            isodelta_cluster_suite.EXPERIMENT_REPORT_CHECK_SCHEMA_VERSION
+        ),
+        isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_cluster_suite.EXPERIMENT_REPORT_CHECK_COMMENT
+        ),
+        "status": isodelta_cluster_suite.PASSED_STATUS,
+        "experiment_report": str(experiment_report),
+        "checked_command_count": command_count,
+        "checked_log_fingerprint_count": (
+            command_count
+            * isodelta_cluster_suite.EXPERIMENT_LOG_STREAMS_PER_COMMAND
+        ),
+    }
+
+
 def _external_timing_report(
     model_name: str,
     *,
@@ -1786,6 +1828,113 @@ min_speedup = 1.2
                     None,
                     dry_run=False,
                 )
+
+    def test_validate_case_outputs_accepts_experiment_report_check(self) -> None:
+        """SevenNet case evidence should include a passing driver report check."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "isodelta_experiment_report.json"
+            check_path = root / "experiment_report_check.json"
+            report_path.write_text(json.dumps(_experiment_report()), encoding="utf-8")
+            check_path.write_text(
+                json.dumps(_experiment_report_check(report_path)),
+                encoding="utf-8",
+            )
+            case = isodelta_cluster_suite.CaseConfig(
+                name="sevennet-paper",
+                model="SevenNet",
+                kind="sevennet_lammps",
+            )
+
+            isodelta_cluster_suite.validate_case_outputs(
+                case,
+                None,
+                None,
+                (),
+                None,
+                report_path,
+                check_path,
+                dry_run=False,
+            )
+
+    def test_validate_case_outputs_rejects_mismatched_experiment_check_count(self) -> None:
+        """Report-check evidence should match the driver command count."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "isodelta_experiment_report.json"
+            check_path = root / "experiment_report_check.json"
+            report_path.write_text(
+                json.dumps(_experiment_report(command_count=2)),
+                encoding="utf-8",
+            )
+            check_path.write_text(
+                json.dumps(_experiment_report_check(report_path, command_count=1)),
+                encoding="utf-8",
+            )
+            case = isodelta_cluster_suite.CaseConfig(
+                name="sevennet-paper",
+                model="SevenNet",
+                kind="sevennet_lammps",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "checked command count",
+            ):
+                isodelta_cluster_suite.validate_case_outputs(
+                    case,
+                    None,
+                    None,
+                    (),
+                    None,
+                    report_path,
+                    check_path,
+                    dry_run=False,
+                )
+
+    def test_summary_verifier_counts_experiment_report_check_evidence(self) -> None:
+        """Output-bundle verification should reopen SevenNet report-check evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "isodelta_experiment_report.json"
+            check_path = root / "experiment_report_check.json"
+            report_path.write_text(json.dumps(_experiment_report()), encoding="utf-8")
+            check_path.write_text(
+                json.dumps(_experiment_report_check(report_path)),
+                encoding="utf-8",
+            )
+            summary_payload = {
+                "cases": [
+                    {
+                        "case_name": "sevennet-paper",
+                        "kind": "sevennet_lammps",
+                    }
+                ],
+                isodelta_cluster_suite.EVIDENCE_FINGERPRINTS_KEY: {
+                    "sevennet-paper": {
+                        isodelta_cluster_suite.EXPERIMENT_REPORT_KEY: (
+                            isodelta_cluster_suite.generated_artifact_record(
+                                report_path
+                            )
+                        ),
+                        isodelta_cluster_suite.EXPERIMENT_REPORT_CHECK_KEY: (
+                            isodelta_cluster_suite.generated_artifact_record(
+                                check_path
+                            )
+                        ),
+                    }
+                },
+            }
+
+            verified_count = (
+                isodelta_cluster_suite._require_experiment_report_checks_from_summary(
+                    summary_payload,
+                    bundle_root=root,
+                    original_output_dir=None,
+                )
+            )
+
+        self.assertEqual(verified_count, 1)
 
     def test_one_sided_sevennet_benchmark_rejects_speedup_claim(self) -> None:
         """One-sided raw timing should never be accepted as paired speedup."""

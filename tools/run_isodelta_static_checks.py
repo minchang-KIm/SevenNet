@@ -1194,6 +1194,9 @@ def main() -> None:
         and "test_external_timing_report_rejects_mutated_command_log" in cluster_suite_test
         and "test_command_records_include_cwd_and_tracked_environment" in cluster_suite_test
         and "test_sevennet_case_runs_experiment_report_checker" in cluster_suite_test
+        and "test_validate_case_outputs_accepts_experiment_report_check" in cluster_suite_test
+        and "test_summary_verifier_counts_experiment_report_check_evidence"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_mismatched_command_fingerprints" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_source_evidence" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_external_command_log" in cluster_suite_test
@@ -1255,6 +1258,11 @@ def main() -> None:
         and "COMMAND_LOG_FINGERPRINTS_KEY" in cluster_suite
         and "EXPERIMENT_REPORT_CHECK_NAME" in cluster_suite
         and "EXPERIMENT_REPORT_CHECK_PATH" in cluster_suite
+        and "EXPERIMENT_REPORT_KEY" in cluster_suite
+        and "EXPERIMENT_REPORT_CHECK_KEY" in cluster_suite
+        and "_validate_experiment_report_check" in cluster_suite
+        and "_require_experiment_report_checks_from_summary" in cluster_suite
+        and "verified_experiment_report_check_count" in cluster_suite
         and "experiment-report-check" in cluster_suite
         and "_require_external_timing_reports_from_summary" in cluster_suite
         and "verified_external_command_log_count" in cluster_suite

@@ -42,6 +42,8 @@ ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
 PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
 EXTERNAL_TIMING_SCHEMA_VERSION = "isodelta-external-pair-timing-v1"
+EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
+EXPERIMENT_REPORT_CHECK_SCHEMA_VERSION = "isodelta-experiment-report-check-v1"
 DEFAULT_OUTPUT_DIR = Path("isodelta_cluster_paper_runs")
 DEFAULT_EXPECTED_GPU_COUNT = 8
 DEFAULT_REPEAT_COUNT = 3
@@ -280,10 +282,19 @@ ENV_FLAG_FALSE_VALUES_KEY = "env_flag_false_values"
 COMMANDS_KEY = "commands"
 COMMAND_LOG_FINGERPRINTS_KEY = "command_log_fingerprints"
 EVIDENCE_FINGERPRINTS_KEY = "evidence_fingerprints"
+EXPERIMENT_REPORT_KEY = "experiment_report"
+EXPERIMENT_REPORT_CHECK_KEY = "experiment_report_check"
 TRACE_EVIDENCE_KEY = "trace_evidence"
+CHECKED_COMMAND_COUNT_KEY = "checked_command_count"
+CHECKED_LOG_FINGERPRINT_COUNT_KEY = "checked_log_fingerprint_count"
+STATUS_KEY = "status"
+PASSED_STATUS = "passed"
+EXPERIMENT_LOG_STREAMS_PER_COMMAND = 2
 CASE_EVIDENCE_FINGERPRINT_FIELDS = (
     "benchmark_report",
     "bundle_evidence",
+    EXPERIMENT_REPORT_KEY,
+    EXPERIMENT_REPORT_CHECK_KEY,
     "external_timing_report",
 )
 LOGS_DIR_NAME = "logs"
@@ -306,6 +317,14 @@ REQUIRED_PAPER_ARTIFACT_NAMES = (
 )
 GENERATED_ARTIFACT_COMMENT_KEY = "artifact_comment"
 GENERATED_REPORT_COMMENT_KEY = "report_comment"
+EXPERIMENT_REPORT_COMMENT = (
+    "IsoDelta-Halo experiment driver report recording launched benchmark, trace, "
+    "and evidence-bundle commands, output paths, return codes, and run provenance."
+)
+EXPERIMENT_REPORT_CHECK_COMMENT = (
+    "IsoDelta-Halo experiment report verification evidence recording driver "
+    "report schema, comment, command log fingerprints, and command-result checks."
+)
 CSV_COMMENT_PREFIX = "# "
 MARKDOWN_COMMENT_PREFIX = "<!-- "
 MARKDOWN_COMMENT_SUFFIX = " -->"
@@ -615,6 +634,8 @@ class CaseSummary:
     status: str
     benchmark_report: str | None
     bundle_evidence: str | None
+    experiment_report: str | None
+    experiment_report_check: str | None
     trace_evidence: tuple[str, ...]
     external_timing_report: str | None
     baseline_mean_seconds: float | None
@@ -2884,6 +2905,30 @@ def _planned_trace_paths(
     return case.trace_evidence_paths + generated_paths
 
 
+def _planned_experiment_report(
+    config: SuiteConfig,
+    case: CaseConfig,
+    *,
+    collect_only: bool,
+) -> Path | None:
+    """Return the SevenNet experiment driver report path when the suite creates it."""
+    if collect_only or case.kind != "sevennet_lammps":
+        return None
+    return _case_output_dir(config, case) / "experiment" / EXPERIMENT_REPORT_NAME
+
+
+def _planned_experiment_report_check(
+    config: SuiteConfig,
+    case: CaseConfig,
+    *,
+    collect_only: bool,
+) -> Path | None:
+    """Return the SevenNet experiment report-check evidence path when generated."""
+    if collect_only or case.kind != "sevennet_lammps":
+        return None
+    return _case_output_dir(config, case) / "experiment" / EXPERIMENT_REPORT_CHECK_NAME
+
+
 def planned_case_outputs(
     config: SuiteConfig,
     case: CaseConfig,
@@ -2925,6 +2970,8 @@ def _has_reusable_case_outputs(
     bundle_evidence: Path | None,
     trace_evidence_paths: tuple[Path, ...],
     external_timing_report: Path | None,
+    experiment_report: Path | None = None,
+    experiment_report_check: Path | None = None,
 ) -> bool:
     """Return whether a case has at least one planned artifact to validate."""
     return any(
@@ -2933,6 +2980,8 @@ def _has_reusable_case_outputs(
             bundle_evidence is not None,
             bool(trace_evidence_paths),
             external_timing_report is not None,
+            experiment_report is not None,
+            experiment_report_check is not None,
         )
     )
 
@@ -2996,6 +3045,12 @@ def evidence_fingerprints(case_summaries: list[CaseSummary]) -> dict[str, Any]:
         summary.case_name: {
             "benchmark_report": _optional_path_fingerprint(summary.benchmark_report),
             "bundle_evidence": _optional_path_fingerprint(summary.bundle_evidence),
+            EXPERIMENT_REPORT_KEY: _optional_path_fingerprint(
+                summary.experiment_report
+            ),
+            EXPERIMENT_REPORT_CHECK_KEY: _optional_path_fingerprint(
+                summary.experiment_report_check
+            ),
             "external_timing_report": _optional_path_fingerprint(
                 summary.external_timing_report
             ),
@@ -3879,6 +3934,92 @@ def _load_fingerprinted_json_payload(
     )
 
 
+def _load_fingerprinted_json_payload_with_path(
+    case_evidence: dict[str, Any],
+    case_name: str,
+    field_name: str,
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> tuple[dict[str, Any], Path] | None:
+    """Load a source evidence JSON object and return its verified local path."""
+    raw_record = case_evidence.get(field_name)
+    if raw_record is None:
+        return None
+    record = _as_json_object(
+        raw_record,
+        f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{field_name}",
+    )
+    evidence_path = _resolve_present_fingerprint_path(
+        record,
+        f"{case_name}.{field_name}",
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
+    payload = _as_json_object(
+        json.loads(evidence_path.read_text(encoding="utf-8")),
+        f"{case_name}.{field_name}",
+    )
+    return payload, evidence_path
+
+
+def _require_experiment_report_checks_from_summary(
+    summary_payload: dict[str, Any],
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> int:
+    """Verify SevenNet experiment driver reports and report-check evidence."""
+    cases_by_name = _summary_cases_by_name(summary_payload)
+    raw_evidence_records = _as_json_object(
+        summary_payload.get(EVIDENCE_FINGERPRINTS_KEY),
+        EVIDENCE_FINGERPRINTS_KEY,
+    )
+    verified_count = 0
+    for case_name, case_record in cases_by_name.items():
+        if case_record.get("kind") != "sevennet_lammps":
+            continue
+        case_evidence = _as_json_object(
+            raw_evidence_records.get(case_name),
+            f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}",
+        )
+        report_pair = _load_fingerprinted_json_payload_with_path(
+            case_evidence,
+            case_name,
+            EXPERIMENT_REPORT_KEY,
+            bundle_root=bundle_root,
+            original_output_dir=original_output_dir,
+        )
+        check_pair = _load_fingerprinted_json_payload_with_path(
+            case_evidence,
+            case_name,
+            EXPERIMENT_REPORT_CHECK_KEY,
+            bundle_root=bundle_root,
+            original_output_dir=original_output_dir,
+        )
+        if report_pair is None and check_pair is None:
+            continue
+        _require(
+            report_pair is not None,
+            f"{case_name}: missing fingerprinted {EXPERIMENT_REPORT_KEY}",
+        )
+        _require(
+            check_pair is not None,
+            f"{case_name}: missing fingerprinted {EXPERIMENT_REPORT_CHECK_KEY}",
+        )
+        report_payload, report_path = report_pair
+        check_payload, _check_path = check_pair
+        command_count = _validate_experiment_report_payload(report_payload, case_name)
+        _validate_experiment_report_check_payload(
+            check_payload,
+            case_name,
+            experiment_report=report_path,
+            expected_command_count=command_count,
+        )
+        verified_count += 1
+    return verified_count
+
+
 def _repeat_timing_rows_from_summary(
     summary_payload: dict[str, Any],
     *,
@@ -4307,6 +4448,13 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         bundle_root=bundle_root,
         original_output_dir=original_output_dir,
     )
+    verified_experiment_report_check_count = (
+        _require_experiment_report_checks_from_summary(
+            summary_payload,
+            bundle_root=bundle_root,
+            original_output_dir=original_output_dir,
+        )
+    )
 
     verified_artifact_count = 0
     resolved_artifact_paths: dict[str, Path] = {}
@@ -4368,6 +4516,9 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         "verified_command_record_count": verified_command_record_count,
         "verified_command_log_count": verified_log_count,
         "verified_external_command_log_count": verified_external_command_log_count,
+        "verified_experiment_report_check_count": (
+            verified_experiment_report_check_count
+        ),
     }
 
 
@@ -5319,6 +5470,16 @@ def build_run_plan(
             trace_paths,
             external_timing_report,
         ) = planned_case_outputs(config, case, collect_only=collect_only)
+        experiment_report = _planned_experiment_report(
+            config,
+            case,
+            collect_only=collect_only,
+        )
+        experiment_report_check = _planned_experiment_report_check(
+            config,
+            case,
+            collect_only=collect_only,
+        )
         case_plan.append(
             {
                 "name": case.name,
@@ -5343,6 +5504,8 @@ def build_run_plan(
                 "expected_outputs": {
                     "benchmark_report": _path_text(planned_benchmark_report),
                     "bundle_evidence": _path_text(planned_bundle_evidence),
+                    EXPERIMENT_REPORT_KEY: _path_text(experiment_report),
+                    EXPERIMENT_REPORT_CHECK_KEY: _path_text(experiment_report_check),
                     "trace_evidence": [str(path) for path in trace_paths],
                     "external_timing_report": _path_text(external_timing_report),
                 },
@@ -5353,11 +5516,15 @@ def build_run_plan(
                         planned_bundle_evidence,
                         trace_paths,
                         external_timing_report,
+                        experiment_report,
+                        experiment_report_check,
                     ),
                     "all_expected_outputs_exist": _planned_paths_exist(
                         (
                             planned_benchmark_report,
                             planned_bundle_evidence,
+                            experiment_report,
+                            experiment_report_check,
                             external_timing_report,
                             *trace_paths,
                         )
@@ -6348,6 +6515,147 @@ def _validate_one_sided_benchmark_report(
     )
 
 
+def _require_same_resolved_path(
+    observed_path_text: str,
+    expected_path: Path,
+    label: str,
+) -> None:
+    """Require a recorded path to identify the same generated artifact."""
+    observed_path = Path(observed_path_text)
+    _require(
+        observed_path.resolve() == expected_path.resolve(),
+        f"{label} must point to {expected_path}",
+    )
+
+
+def _validate_experiment_report_payload(
+    payload: dict[str, Any],
+    case_name: str,
+) -> int:
+    """Validate the SevenNet experiment driver report metadata and commands."""
+    _require_report_comment(
+        payload,
+        f"{case_name}: {EXPERIMENT_REPORT_KEY}",
+        EXPERIMENT_REPORT_COMMENT,
+    )
+    provenance = _as_json_object(
+        payload.get("provenance"),
+        f"{case_name}: {EXPERIMENT_REPORT_KEY}.provenance",
+    )
+    schema_version = _as_json_string(
+        provenance.get("report_schema_version"),
+        f"{case_name}: {EXPERIMENT_REPORT_KEY}.provenance.report_schema_version",
+    )
+    _require(
+        schema_version == EXPERIMENT_REPORT_SCHEMA_VERSION,
+        f"{case_name}: {EXPERIMENT_REPORT_KEY} has unexpected schema version",
+    )
+    commands = payload.get(COMMANDS_KEY)
+    _require(
+        isinstance(commands, list),
+        f"{case_name}: {EXPERIMENT_REPORT_KEY}.{COMMANDS_KEY} must be a JSON array",
+    )
+    _require(
+        bool(commands),
+        f"{case_name}: {EXPERIMENT_REPORT_KEY}.{COMMANDS_KEY} must not be empty",
+    )
+    return len(commands)
+
+
+def _validate_experiment_report_check_payload(
+    payload: dict[str, Any],
+    case_name: str,
+    *,
+    experiment_report: Path,
+    expected_command_count: int,
+) -> None:
+    """Validate report-check evidence against the driver report it checked."""
+    _require_report_comment(
+        payload,
+        f"{case_name}: {EXPERIMENT_REPORT_CHECK_KEY}",
+        EXPERIMENT_REPORT_CHECK_COMMENT,
+    )
+    schema_version = _as_json_string(
+        payload.get("experiment_report_check_schema_version"),
+        f"{case_name}: {EXPERIMENT_REPORT_CHECK_KEY}.experiment_report_check_schema_version",
+    )
+    _require(
+        schema_version == EXPERIMENT_REPORT_CHECK_SCHEMA_VERSION,
+        f"{case_name}: {EXPERIMENT_REPORT_CHECK_KEY} has unexpected schema version",
+    )
+    status = _as_json_string(
+        payload.get(STATUS_KEY),
+        f"{case_name}: {EXPERIMENT_REPORT_CHECK_KEY}.{STATUS_KEY}",
+    )
+    _require(status == PASSED_STATUS, f"{case_name}: experiment report check did not pass")
+    recorded_report = _as_json_string(
+        payload.get(EXPERIMENT_REPORT_KEY),
+        f"{case_name}: {EXPERIMENT_REPORT_CHECK_KEY}.{EXPERIMENT_REPORT_KEY}",
+    )
+    _require_same_resolved_path(
+        recorded_report,
+        experiment_report,
+        f"{case_name}: {EXPERIMENT_REPORT_CHECK_KEY}.{EXPERIMENT_REPORT_KEY}",
+    )
+    checked_command_count = _as_json_nonnegative_int(
+        payload.get(CHECKED_COMMAND_COUNT_KEY),
+        f"{case_name}: {EXPERIMENT_REPORT_CHECK_KEY}.{CHECKED_COMMAND_COUNT_KEY}",
+    )
+    checked_log_count = _as_json_nonnegative_int(
+        payload.get(CHECKED_LOG_FINGERPRINT_COUNT_KEY),
+        f"{case_name}: {EXPERIMENT_REPORT_CHECK_KEY}.{CHECKED_LOG_FINGERPRINT_COUNT_KEY}",
+    )
+    _require(
+        checked_command_count == expected_command_count,
+        f"{case_name}: checked command count must match experiment report",
+    )
+    _require(
+        checked_log_count == expected_command_count * EXPERIMENT_LOG_STREAMS_PER_COMMAND,
+        f"{case_name}: checked log fingerprint count must match experiment report",
+    )
+
+
+def _validate_experiment_report_check(
+    case: CaseConfig,
+    experiment_report: Path | None,
+    experiment_report_check: Path | None,
+) -> None:
+    """Validate SevenNet driver report-check evidence when the suite generated it."""
+    if experiment_report is None and experiment_report_check is None:
+        return
+    _require(
+        experiment_report is not None,
+        f"{case.name}: missing planned experiment report path",
+    )
+    _require(
+        experiment_report_check is not None,
+        f"{case.name}: missing planned experiment report check path",
+    )
+    _require(
+        experiment_report.exists(),
+        f"{case.name}: missing experiment report {experiment_report}",
+    )
+    _require(
+        experiment_report_check.exists(),
+        f"{case.name}: missing experiment report check {experiment_report_check}",
+    )
+    report_payload = _as_json_object(
+        json.loads(experiment_report.read_text(encoding="utf-8")),
+        f"{case.name}: {EXPERIMENT_REPORT_KEY}",
+    )
+    check_payload = _as_json_object(
+        json.loads(experiment_report_check.read_text(encoding="utf-8")),
+        f"{case.name}: {EXPERIMENT_REPORT_CHECK_KEY}",
+    )
+    command_count = _validate_experiment_report_payload(report_payload, case.name)
+    _validate_experiment_report_check_payload(
+        check_payload,
+        case.name,
+        experiment_report=experiment_report,
+        expected_command_count=command_count,
+    )
+
+
 def _trace_thresholds(case: CaseConfig) -> Any:
     """Build trace thresholds from one case config."""
     return trace_check.TraceThresholds(
@@ -6363,12 +6671,19 @@ def validate_case_outputs(
     bundle_evidence: Path | None,
     trace_evidence_paths: tuple[Path, ...],
     external_timing_report: Path | None,
+    experiment_report: Path | None = None,
+    experiment_report_check: Path | None = None,
     *,
     dry_run: bool,
 ) -> None:
     """Validate generated files with the same gates used for paper evidence."""
     if dry_run:
         return
+    _validate_experiment_report_check(
+        case,
+        experiment_report,
+        experiment_report_check,
+    )
     if benchmark_report is not None:
         _require(benchmark_report.exists(), f"{case.name}: missing benchmark report {benchmark_report}")
         benchmark_payload = benchmark_check.load_report(benchmark_report)
@@ -6442,7 +6757,14 @@ def validate_case_outputs(
 def try_reuse_case_outputs(
     config: SuiteConfig,
     case: CaseConfig,
-) -> tuple[Path | None, Path | None, tuple[Path, ...], Path | None] | None:
+) -> tuple[
+    Path | None,
+    Path | None,
+    tuple[Path, ...],
+    Path | None,
+    Path | None,
+    Path | None,
+] | None:
     """Return reusable outputs only when existing artifacts pass current gates."""
     (
         benchmark_report,
@@ -6450,11 +6772,23 @@ def try_reuse_case_outputs(
         trace_evidence_paths,
         external_timing_report,
     ) = planned_case_outputs(config, case, collect_only=False)
+    experiment_report = _planned_experiment_report(
+        config,
+        case,
+        collect_only=False,
+    )
+    experiment_report_check = _planned_experiment_report_check(
+        config,
+        case,
+        collect_only=False,
+    )
     if not _has_reusable_case_outputs(
         benchmark_report,
         bundle_evidence,
         trace_evidence_paths,
         external_timing_report,
+        experiment_report,
+        experiment_report_check,
     ):
         return None
     try:
@@ -6464,6 +6798,8 @@ def try_reuse_case_outputs(
             bundle_evidence,
             trace_evidence_paths,
             external_timing_report,
+            experiment_report,
+            experiment_report_check,
             dry_run=False,
         )
     except (
@@ -6474,7 +6810,14 @@ def try_reuse_case_outputs(
         json.JSONDecodeError,
     ):
         return None
-    return benchmark_report, bundle_evidence, trace_evidence_paths, external_timing_report
+    return (
+        benchmark_report,
+        bundle_evidence,
+        trace_evidence_paths,
+        external_timing_report,
+        experiment_report,
+        experiment_report_check,
+    )
 
 
 def _load_json_if_exists(path: Path | None) -> dict[str, Any] | None:
@@ -6726,6 +7069,8 @@ def build_case_summary(
     bundle_evidence: Path | None,
     trace_evidence_paths: tuple[Path, ...],
     external_timing_report: Path | None,
+    experiment_report: Path | None = None,
+    experiment_report_check: Path | None = None,
     status: str,
 ) -> CaseSummary:
     """Build one table row from validated benchmark and trace artifacts."""
@@ -6804,6 +7149,12 @@ def build_case_summary(
         status=status,
         benchmark_report=str(benchmark_report) if benchmark_report is not None else None,
         bundle_evidence=str(bundle_evidence) if bundle_evidence is not None else None,
+        experiment_report=str(experiment_report) if experiment_report is not None else None,
+        experiment_report_check=(
+            str(experiment_report_check)
+            if experiment_report_check is not None
+            else None
+        ),
         trace_evidence=tuple(str(path) for path in trace_evidence_paths),
         external_timing_report=str(external_timing_report) if external_timing_report is not None else None,
         baseline_mean_seconds=baseline_seconds,
@@ -7455,6 +7806,16 @@ def run_suite(
         bundle_evidence = case.bundle_evidence
         trace_evidence_paths = case.trace_evidence_paths
         external_timing_report: Path | None = None
+        experiment_report = _planned_experiment_report(
+            config,
+            case,
+            collect_only=collect_only,
+        )
+        experiment_report_check = _planned_experiment_report_check(
+            config,
+            case,
+            collect_only=collect_only,
+        )
         case_summary: CaseSummary | None = None
         if collect_only:
             external_timing_report = case.external_timing_report
@@ -7470,6 +7831,8 @@ def run_suite(
                         bundle_evidence,
                         trace_evidence_paths,
                         external_timing_report,
+                        experiment_report,
+                        experiment_report_check,
                     ) = reused_outputs
                     case_status = CASE_STATUS_REUSED
                 else:
@@ -7510,6 +7873,8 @@ def run_suite(
                 bundle_evidence,
                 trace_evidence_paths,
                 external_timing_report,
+                experiment_report,
+                experiment_report_check,
                 dry_run=dry_run,
             )
             if any(record.returncode != SUCCESS_RETURN_CODE for record in case_command_records):
@@ -7520,6 +7885,8 @@ def run_suite(
                 bundle_evidence=bundle_evidence,
                 trace_evidence_paths=trace_evidence_paths,
                 external_timing_report=external_timing_report,
+                experiment_report=experiment_report,
+                experiment_report_check=experiment_report_check,
                 status=case_status,
             )
             if not dry_run:
@@ -7538,6 +7905,8 @@ def run_suite(
                 bundle_evidence=bundle_evidence,
                 trace_evidence_paths=trace_evidence_paths,
                 external_timing_report=external_timing_report,
+                experiment_report=experiment_report,
+                experiment_report_check=experiment_report_check,
                 status=case_status,
             )
             if not keep_going:
