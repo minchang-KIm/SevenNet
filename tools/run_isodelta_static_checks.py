@@ -1127,6 +1127,8 @@ def main() -> None:
         and "PIPELINE_REPORT_NAME" in cluster_suite
         and "STAGE_REPORT_FINGERPRINTS_KEY" in cluster_suite
         and "OUTPUT_BUNDLE_VERIFICATION_KEY" in cluster_suite
+        and "PIPELINE_STAGE_REPORT_PATH_ALIGNMENT_ERROR" in cluster_suite
+        and "stage report fingerprint path" in cluster_suite
         and "_pipeline_stage_report_fingerprints" in cluster_suite
         and "SHA256_HEX_LENGTH" in cluster_suite
         and "SHA256_HEX_PATTERN" in cluster_suite
@@ -1222,6 +1224,8 @@ def main() -> None:
         and "test_pipeline_stops_when_preflight_fails" in cluster_suite_test
         and "test_pipeline_reports_bundle_verification_failure" in cluster_suite_test
         and "--verify-pipeline-report" in cluster_suite_test
+        and "stage_path_drift_error" in cluster_suite_test
+        and "wrong_readiness_report.json" in cluster_suite_test
         and "Re-open the finished pipeline report" in cluster_suite_test
         and "test_manifest_validation_rejects_enabled_external_pair_disable_env" in cluster_suite_test
         and "test_manifest_validation_accepts_false_enabled_disable_env"
@@ -1590,6 +1594,9 @@ def main() -> None:
         and "non-skipped stage" in doc
         and "present report files" in doc
         and "skipped artifact-preparation" in doc
+        and "`stages[*].report_path`" in doc
+        and "`stage_report_fingerprints[*].report.path`" in doc
+        and "cannot drift away from the protected fingerprint record" in doc
         and "pipeline `modes` as booleans" in doc
         and "`dry_run = true`" in doc
         and "`skip_gpu_check = true`" in doc

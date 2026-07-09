@@ -4271,6 +4271,24 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            stage_path_drift_pipeline_report = json.loads(json.dumps(pipeline_report))
+            stage_path_drift_pipeline_report["stages"][0]["report_path"] = str(
+                output_dir / "wrong_readiness_report.json"
+            )
+            pipeline_report_path.write_text(
+                json.dumps(stage_path_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                stage_path_drift_error = str(exc)
+            else:
+                stage_path_drift_error = ""
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             bundle_count_drift_errors: dict[str, str] = {}
             for count_key in (
                 "verified_slurm_python_provenance_count",
@@ -4384,6 +4402,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn("run_plan", summary["artifact_fingerprints"])
         self.assertNotIn("pipeline_report", summary["artifact_fingerprints"])
         self.assertIn("pipeline_report.report_comment", uncommented_pipeline_report_error)
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_STAGE_REPORT_PATH_ALIGNMENT_ERROR,
+            stage_path_drift_error,
+        )
         for count_key, error in bundle_count_drift_errors.items():
             self.assertIn(count_key, error)
             self.assertIn("must match current bundle verification", error)

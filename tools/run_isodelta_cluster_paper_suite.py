@@ -130,6 +130,9 @@ PIPELINE_REPORT_PASSED_STATUS_ERROR = (
 PIPELINE_REQUIRED_STAGES_ERROR = (
     "passed pipeline report must contain the final-paper stages in order"
 )
+PIPELINE_STAGE_REPORT_PATH_ALIGNMENT_ERROR = (
+    "pipeline stage report_path must match its stage report fingerprint path"
+)
 PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR = (
     "output_bundle_verification.status must be 'passed' for a passed pipeline report"
 )
@@ -4920,6 +4923,20 @@ def _require_pipeline_stage_report_fingerprints(
             f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].report",
         )
         report_label = f"{STAGE_REPORT_FINGERPRINTS_KEY}[{index}].report"
+        recorded_report_path = _as_json_string(
+            report_record.get("path"),
+            f"{report_label}.path",
+        )
+        stage_report_path = stage.get("report_path")
+        if stage_report_path is not None:
+            _require(
+                _as_json_string(
+                    stage_report_path,
+                    f"stages[{index}].report_path",
+                )
+                == recorded_report_path,
+                PIPELINE_STAGE_REPORT_PATH_ALIGNMENT_ERROR,
+            )
         if fingerprint_required:
             resolved_report_path = _resolve_present_fingerprint_path(
                 report_record,
