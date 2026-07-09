@@ -560,7 +560,10 @@ python tools/run_isodelta_cluster_paper_suite.py \
 The generated `sbatch` file requests `expected_gpus`, writes scheduler logs
 under `slurm_logs/`, runs `--preflight-only`, creates the preflight plan with
 the exact same `COMMON_ARGS` used by the final run, and then executes the full
-`--pipeline` path with `--pipeline-report`. After the pipeline exits, the
+`--pipeline` path with `--pipeline-report`. Before preflight it writes
+`python_runtime_provenance.txt` into the output bundle, recording `PYTHON_BIN`,
+`SUITE_RUNNER`, `python --version`, and `sys.executable` so archived runs show
+which interpreter actually executed the experiment. After the pipeline exits, the
 launcher immediately runs `--verify-pipeline-report "$PIPELINE_OUTPUT"` so the
 SLURM job only succeeds after stage fingerprints and final bundle verification
 counts are rechecked. The
@@ -585,9 +588,8 @@ python tools/run_isodelta_cluster_paper_suite.py \
 ```
 
 This checks the `#SBATCH` GPU request, strict Bash mode, `REPO_ROOT`,
-`MANIFEST_PATH`, `ISODELTA_OUTPUT_DIR`, shared `COMMON_ARGS`, preflight/plan
-stages, and the final `--verify-pipeline-report` or `--verify-output-bundle`
-gate.
+`MANIFEST_PATH`, `ISODELTA_OUTPUT_DIR`, Python provenance capture, shared
+`COMMON_ARGS`, preflight/plan stages, and the final `--verify-pipeline-report` or `--verify-output-bundle` gate.
 If the launcher is generated with `--ablation-mode-override baseline-disabled`
 or `--ablation-mode-override isodelta-enabled`, it runs the one-sided ablation suite
 and reopens the result with `--verify-output-bundle` instead of using the

@@ -1167,6 +1167,12 @@ def main() -> None:
         and "--write-slurm-script" in cluster_suite
         and "#SBATCH --gres=gpu:" in cluster_suite
         and "COMMON_ARGS" in cluster_suite
+        and "SLURM_PYTHON_BIN_ENV_NAME" in cluster_suite
+        and "SLURM_PYTHON_PROVENANCE_ENV_NAME" in cluster_suite
+        and "SLURM_PYTHON_PROVENANCE_NAME" in cluster_suite
+        and "python_runtime_provenance.txt" in cluster_suite
+        and "python_version_probe" in cluster_suite
+        and "python_provenance_before_preflight" in cluster_suite
         and "PIPELINE_OUTPUT" in cluster_suite
         and "--pipeline-report" in cluster_suite
         and ' --verify-pipeline-report "$PIPELINE_OUTPUT"' in cluster_suite
@@ -1403,6 +1409,12 @@ def main() -> None:
         in cluster_suite_test
         and 'COMMON_ARGS+=(--output-dir "${ISODELTA_OUTPUT_DIR}")'
         in cluster_suite_test
+        and 'PYTHON_PROVENANCE_OUTPUT="${ISODELTA_OUTPUT_DIR}/python_runtime_provenance.txt"'
+        in cluster_suite_test
+        and 'echo "PYTHON_BIN=$PYTHON_BIN"' in cluster_suite_test
+        and '"$PYTHON_BIN" --version 2>&1' in cluster_suite_test
+        and "test_verify_slurm_script_rejects_missing_python_provenance"
+        in cluster_suite_test
         and "self.assertNotIn(str(root), script)" in cluster_suite_test
         and "test_verify_slurm_script_rejects_missing_final_gate"
         in cluster_suite_test
@@ -1622,7 +1634,9 @@ def main() -> None:
         and "/scratch/icpp/isodelta_cluster_paper_runs" in doc
         and "changes into `REPO_ROOT`" in doc
         and "PYTHON_BIN" in doc
-        and "SUITE_RUNNER" in doc,
+        and "SUITE_RUNNER" in doc
+        and "`python_runtime_provenance.txt`" in doc
+        and "Python provenance capture" in doc,
         "IsoDelta-Halo guide must document SLURM cluster launch generation",
     )
     _require(

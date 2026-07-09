@@ -2613,6 +2613,8 @@ trace_evidence = ["trace.json"]
             verification["report_comment"],
             isodelta_cluster_suite.SLURM_SCRIPT_VERIFICATION_COMMENT,
         )
+        check_names = {check["name"] for check in verification["checks"]}
+        self.assertIn("python_provenance_before_preflight", check_names)
         self.assertTrue(script.startswith("#!/usr/bin/env bash"))
         self.assertIn("# IsoDelta-Halo cluster paper suite launcher.", script)
         self.assertIn("# CLI runtime overrides: none.", script)
@@ -2633,6 +2635,18 @@ trace_evidence = ["trace.json"]
             'SUITE_RUNNER="${SUITE_RUNNER:-$REPO_ROOT/tools/run_isodelta_cluster_paper_suite.py}"',
             script,
         )
+        self.assertIn('PYTHON_BIN="${PYTHON_BIN:-python}"', script)
+        self.assertIn(
+            'PYTHON_PROVENANCE_OUTPUT="${ISODELTA_OUTPUT_DIR}/python_runtime_provenance.txt"',
+            script,
+        )
+        self.assertIn('echo "PYTHON_BIN=$PYTHON_BIN"', script)
+        self.assertIn('"$PYTHON_BIN" --version 2>&1', script)
+        self.assertIn('sys.executable=', script)
+        self.assertLess(
+            script.index('"$PYTHON_BIN" --version 2>&1'),
+            script.index("--preflight-only --preflight-output \"$PREFLIGHT_OUTPUT\""),
+        )
         self.assertIn("COMMON_ARGS=(--manifest \"$MANIFEST_PATH\")", script)
         self.assertIn('COMMON_ARGS+=(--output-dir "${ISODELTA_OUTPUT_DIR}")', script)
         self.assertIn('PLAN_OUTPUT="${ISODELTA_OUTPUT_DIR}/isodelta_cluster_paper_plan.json"', script)
@@ -2648,6 +2662,48 @@ trace_evidence = ["trace.json"]
         self.assertIn("COMMON_ARGS+=(--reuse-passed)", script)
         self.assertIn("# Run the full paper pipeline", script)
         self.assertIn("# Re-open the finished pipeline report", script)
+
+    def test_verify_slurm_script_rejects_missing_python_provenance(self) -> None:
+        """A generated launcher must keep Python runtime evidence before preflight."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            slurm_path = root / "run_isodelta.sbatch"
+            manifest_path.write_text(
+                """
+[suite]
+name = "slurm-python-provenance-suite"
+required_models = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-trace"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["trace.json"]
+""",
+                encoding="utf-8",
+            )
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-script",
+                    str(slurm_path),
+                    "--skip-downloads",
+                ]
+            )
+            script = slurm_path.read_text(encoding="utf-8")
+            slurm_path.write_text(
+                script.replace('  "$PYTHON_BIN" --version 2>&1\n', ""),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(exit_code, 0)
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "python_version_probe",
+            ):
+                isodelta_cluster_suite.verify_slurm_script(slurm_path)
 
     def test_verify_slurm_script_rejects_missing_final_gate(self) -> None:
         """A launcher edited after generation must still keep final verification."""

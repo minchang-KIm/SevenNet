@@ -41,7 +41,7 @@ READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
 ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
 PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
-SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v1"
+SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v2"
 SLURM_ABLATION_SWEEP_SCHEMA_VERSION = "isodelta-slurm-ablation-sweep-v1"
 SLURM_ABLATION_SWEEP_VERIFICATION_SCHEMA_VERSION = (
     "isodelta-slurm-ablation-sweep-verification-v1"
@@ -95,6 +95,8 @@ DEFAULT_SLURM_TIME_LIMIT = "24:00:00"
 DEFAULT_SLURM_CPUS_PER_TASK = 8
 SLURM_REPO_ROOT_ENV_NAME = "REPO_ROOT"
 SLURM_SUITE_RUNNER_RELATIVE_PATH = Path("tools") / "run_isodelta_cluster_paper_suite.py"
+SLURM_PYTHON_BIN_ENV_NAME = "PYTHON_BIN"
+SLURM_PYTHON_PROVENANCE_ENV_NAME = "PYTHON_PROVENANCE_OUTPUT"
 DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
 CASE_STATUS_PASSED = "passed"
 CASE_STATUS_REUSED = "reused"
@@ -247,6 +249,7 @@ READINESS_REPORT_NAME = "readiness_report.json"
 PIPELINE_REPORT_NAME = "pipeline_report.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
+SLURM_PYTHON_PROVENANCE_NAME = "python_runtime_provenance.txt"
 SLURM_ABLATION_SWEEP_INDEX_NAME = "slurm_ablation_sweep_index.json"
 SLURM_ABLATION_SWEEP_SCRIPT_PREFIX = "run_isodelta"
 SLURM_CLUSTER_PATH_SEPARATOR = "/"
@@ -370,8 +373,8 @@ PIPELINE_REPORT_COMMENT = (
 )
 SLURM_SCRIPT_VERIFICATION_COMMENT = (
     "IsoDelta-Halo SLURM launcher verification report checking scheduler "
-    "headers, portable path variables, shared command arguments, and final "
-    "publication-verification commands."
+    "headers, portable path variables, Python runtime provenance, shared "
+    "command arguments, and final publication-verification commands."
 )
 SLURM_ABLATION_SWEEP_COMMENT = (
     "IsoDelta-Halo SLURM ablation sweep index recording generated baseline "
@@ -8528,7 +8531,7 @@ def write_slurm_script(
         "set -euo pipefail",
         "",
         "# Override PYTHON_BIN or SUITE_RUNNER at submit time if the cluster uses modules.",
-        'PYTHON_BIN="${PYTHON_BIN:-python}"',
+        f'{SLURM_PYTHON_BIN_ENV_NAME}="${{{SLURM_PYTHON_BIN_ENV_NAME}:-python}}"',
         f'if [[ -z "${{{SLURM_REPO_ROOT_ENV_NAME}:-}}" ]]; then',
         f"  {SLURM_REPO_ROOT_ENV_NAME}={_bash_quote(slurm_repo_root_default)}",
         "fi",
@@ -8547,10 +8550,19 @@ def write_slurm_script(
         f'PLAN_OUTPUT="${{{SLURM_OUTPUT_DIR_ENV_NAME}}}/{PLAN_REPORT_NAME}"',
         f'PREFLIGHT_OUTPUT="${{{SLURM_OUTPUT_DIR_ENV_NAME}}}/{PREFLIGHT_REPORT_NAME}"',
         f'PIPELINE_OUTPUT="${{{SLURM_OUTPUT_DIR_ENV_NAME}}}/{PIPELINE_REPORT_NAME}"',
+        f'{SLURM_PYTHON_PROVENANCE_ENV_NAME}="${{{SLURM_OUTPUT_DIR_ENV_NAME}}}/{SLURM_PYTHON_PROVENANCE_NAME}"',
         "",
         "# Keep scheduler stdout/stderr directories explicit and reproducible.",
         f"mkdir -p {_bash_quote(SLURM_LOG_DIR_NAME)}",
         f'mkdir -p "${{{SLURM_OUTPUT_DIR_ENV_NAME}}}"',
+        "",
+        "# Record the Python launcher before preflight so archived runs explain runtime selection.",
+        "{",
+        '  echo "PYTHON_BIN=$PYTHON_BIN"',
+        '  echo "SUITE_RUNNER=$SUITE_RUNNER"',
+        '  "$PYTHON_BIN" --version 2>&1',
+        """  "$PYTHON_BIN" -c 'import sys; print("sys.executable=" + sys.executable)'""",
+        '} > "$PYTHON_PROVENANCE_OUTPUT"',
         "",
         "# COMMON_ARGS is reused for planning and execution to prevent argument drift.",
         'COMMON_ARGS=(--manifest "$MANIFEST_PATH")',
@@ -8653,6 +8665,31 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
             "launcher fails fast on shell errors and unset variables",
         ),
         (
+            "python_bin_default",
+            'PYTHON_BIN="${PYTHON_BIN:-python}"',
+            "launcher records the overridable Python command",
+        ),
+        (
+            "python_provenance_output",
+            'PYTHON_PROVENANCE_OUTPUT="${ISODELTA_OUTPUT_DIR}/python_runtime_provenance.txt"',
+            "launcher writes Python runtime evidence into the output bundle",
+        ),
+        (
+            "python_bin_echo",
+            'echo "PYTHON_BIN=$PYTHON_BIN"',
+            "launcher records the selected Python command",
+        ),
+        (
+            "python_version_probe",
+            '"$PYTHON_BIN" --version 2>&1',
+            "launcher records Python version before model execution",
+        ),
+        (
+            "python_executable_probe",
+            'sys.executable=',
+            "launcher records the resolved Python executable path",
+        ),
+        (
             "repo_root_guard",
             'if [[ -z "${REPO_ROOT:-}" ]]; then',
             "launcher can embed or receive the repository checkout path",
@@ -8700,6 +8737,19 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
             detail=detail,
             checks=checks,
         )
+
+    python_version_probe = '"$PYTHON_BIN" --version 2>&1'
+    preflight_probe = '--preflight-only --preflight-output "$PREFLIGHT_OUTPUT"'
+    _require(
+        script.index(python_version_probe) < script.index(preflight_probe),
+        "SLURM launcher must record Python provenance before preflight",
+    )
+    checks.append(
+        _slurm_script_check(
+            "python_provenance_before_preflight",
+            "launcher records Python runtime evidence before preflight",
+        )
+    )
 
     has_pipeline_gate = (
         '--pipeline --pipeline-report "$PIPELINE_OUTPUT"' in script
