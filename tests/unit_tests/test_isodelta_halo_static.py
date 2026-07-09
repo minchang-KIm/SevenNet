@@ -201,10 +201,32 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
 
     def test_pack_forward_extra_map_uses_atom_index_key(self) -> None:
         """The extra graph map should use the communicated atom index, not loop i."""
+        self.assertIn("kIsoDeltaHaloExtraGraphIndexError", self.cpp)
+        self.assertIn("kIsoDeltaHaloExtraTensorSizeError", self.cpp)
+        self.assertIn("kTrashGraphSlotCount", self.cpp)
+        self.assertIn("checked_extra_graph_index", self.cpp)
+        self.assertIn("checked_extra_tensor_size", self.cpp)
         self.assertIn(
+            "extra_graph_idx_map[list_i] = extra_graph_idx;",
+            self.cpp,
+        )
+        self.assertIn("extra_graph_idx_map[i] = extra_graph_idx;", self.cpp)
+        self.assertIn(
+            "const int extra_size = checked_extra_tensor_size",
+            self.cpp,
+        )
+        self.assertIn(
+            "checked_extra_graph_index(graph_size, extra_graph_idx_map.size(), error)",
+            self.cpp,
+        )
+        self.assertIn("static_cast<long long>(graph_size)", self.cpp)
+        self.assertIn("static_cast<long long>(extra_graph_count)", self.cpp)
+        self.assertIn("static_cast<long long>(ghost_node_count)", self.cpp)
+        self.assertNotIn(
             "extra_graph_idx_map[list_i] = graph_size + extra_graph_idx_map.size();",
             self.cpp,
         )
+        self.assertNotIn("static_cast<int>(extra_graph_idx_map.size())", self.cpp)
 
     def test_cache_can_be_profiled_and_disabled(self) -> None:
         """Runtime toggles should expose fair baseline and profiling experiments."""

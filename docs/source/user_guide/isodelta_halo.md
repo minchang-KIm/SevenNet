@@ -42,6 +42,9 @@ The communication preprocessing init path also checks pack/unpack counts,
 nonempty send-list pointers, and atom-array ranges before reserving vectors or
 reading atom tags, so a malformed halo setup cannot turn into an oversized
 allocation or an out-of-bounds tag lookup.
+Extra graph indexes, the trash slot, and the extra communication tensor size
+are computed through checked integer helpers, so large halo maps fail with a
+named error instead of silently wrapping an index or allocating the wrong tensor.
 The `CommBrick` read-only topology accessors used by the cache apply the same
 phase guard and also check sendlist indexes before returning atom ids.
 For the actual halo payload, the e3gnn communication path allocates host and

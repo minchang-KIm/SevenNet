@@ -88,6 +88,10 @@ constexpr const char *kIsoDeltaHaloCommInitRangeError =
     "IsoDelta-Halo communication initialization atom range is out of range";
 constexpr const char *kIsoDeltaHaloSendListRequiredError =
     "IsoDelta-Halo communication send list is required for nonempty pack init";
+constexpr const char *kIsoDeltaHaloExtraGraphIndexError =
+    "IsoDelta-Halo extra graph index is out of range";
+constexpr const char *kIsoDeltaHaloExtraTensorSizeError =
+    "IsoDelta-Halo extra communication tensor size is out of range";
 constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
@@ -105,6 +109,7 @@ constexpr int kMinimumFeatureWidth = 1;
 constexpr int kMinimumPayloadAtomCount = 0;
 constexpr int kMinimumCommInitCount = 0;
 constexpr int kMinimumAtomArrayIndex = 0;
+constexpr int kTrashGraphSlotCount = 1;
 constexpr int kSpatialDimension = 3;
 constexpr int kXCoordinate = 0;
 constexpr int kYCoordinate = 1;
@@ -208,6 +213,42 @@ void validate_comm_atom_index(int atom_index, int atom_array_capacity,
       atom_index >= atom_array_capacity) {
     error->all(FLERR, kIsoDeltaHaloCommInitRangeError);
   }
+}
+
+int checked_extra_graph_index(int graph_size, size_t extra_graph_count,
+                              Error *error) {
+  if (graph_size < kMinimumCommInitCount) {
+    error->all(FLERR, kIsoDeltaHaloExtraGraphIndexError);
+  }
+  if (extra_graph_count >
+      static_cast<size_t>(std::numeric_limits<int>::max())) {
+    error->all(FLERR, kIsoDeltaHaloExtraGraphIndexError);
+  }
+
+  const long long extra_index =
+      static_cast<long long>(graph_size) +
+      static_cast<long long>(extra_graph_count);
+  if (extra_index > std::numeric_limits<int>::max()) {
+    error->all(FLERR, kIsoDeltaHaloExtraGraphIndexError);
+  }
+  return static_cast<int>(extra_index);
+}
+
+int checked_extra_tensor_size(int ghost_node_count, size_t extra_graph_count,
+                              Error *error) {
+  if (ghost_node_count < kMinimumCommInitCount ||
+      extra_graph_count >
+          static_cast<size_t>(std::numeric_limits<int>::max())) {
+    error->all(FLERR, kIsoDeltaHaloExtraTensorSizeError);
+  }
+
+  const long long extra_size =
+      static_cast<long long>(ghost_node_count) +
+      static_cast<long long>(extra_graph_count) + kTrashGraphSlotCount;
+  if (extra_size > std::numeric_limits<int>::max()) {
+    error->all(FLERR, kIsoDeltaHaloExtraTensorSizeError);
+  }
+  return static_cast<int>(extra_size);
 }
 
 std::string normalize_iso_delta_halo_env_flag_value(const char *value) {
@@ -583,8 +624,8 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
 
   // extra_graph_idx_map is set from comm_preprocess();
   // last one is for trash values. See pack_forward_init
-  const int extra_size =
-      ghost_node_num + static_cast<int>(extra_graph_idx_map.size()) + 1;
+  const int extra_size = checked_extra_tensor_size(
+      ghost_node_num, extra_graph_idx_map.size(), error);
   torch::Tensor x_local;
   torch::Tensor x_ghost;
 
@@ -1357,7 +1398,7 @@ void PairE3GNNParallel::comm_preprocess() {
     std::set<int>& already_met = already_met_map[sproc];
     // the last index of x_comm is used to trash unnecessary values
     const int trash_index =
-        graph_size + static_cast<int>(extra_graph_idx_map.size()); //+ 1;
+        checked_extra_graph_index(graph_size, extra_graph_idx_map.size(), error);
     for (int i = 0; i < n; i++) {
       const int idx = idx_map_forward[i];
       if (idx < graph_size) {
@@ -1420,8 +1461,10 @@ void PairE3GNNParallel::pack_forward_init(int n, int *list_send,
         idx_map.push_back(extra_graph_idx_map[list_i]);
       } else {
         // unknown atom at pack forward, ghost atom outside cutoff?
-        extra_graph_idx_map[list_i] = graph_size + extra_graph_idx_map.size();
-        idx_map.push_back(extra_graph_idx_map[list_i]);
+        const int extra_graph_idx = checked_extra_graph_index(
+            graph_size, extra_graph_idx_map.size(), error);
+        extra_graph_idx_map[list_i] = extra_graph_idx;
+        idx_map.push_back(extra_graph_idx);
       }
     }
   }
@@ -1447,8 +1490,10 @@ void PairE3GNNParallel::unpack_forward_init(int n, int first, int comm_phase) {
     if (graph_idx != kInvalidGraphIndex) {
       idx_map.push_back(graph_idx);
     } else {
-      extra_graph_idx_map[i] = graph_size + extra_graph_idx_map.size();
-      idx_map.push_back(extra_graph_idx_map[i]); // same as list_i in pack
+      const int extra_graph_idx = checked_extra_graph_index(
+          graph_size, extra_graph_idx_map.size(), error);
+      extra_graph_idx_map[i] = extra_graph_idx;
+      idx_map.push_back(extra_graph_idx); // same as list_i in pack
     }
   }
 }

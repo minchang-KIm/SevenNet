@@ -503,9 +503,23 @@ def main() -> None:
             _require("embedding" not in lowered, "embeddings must not be cached")
 
     _require(
-        "extra_graph_idx_map[list_i] = graph_size + extra_graph_idx_map.size();"
-        in cpp,
-        "pack-forward extra graph map must be keyed by list_i",
+        "kIsoDeltaHaloExtraGraphIndexError" in cpp
+        and "kIsoDeltaHaloExtraTensorSizeError" in cpp
+        and "kTrashGraphSlotCount" in cpp
+        and "checked_extra_graph_index" in cpp
+        and "checked_extra_tensor_size" in cpp
+        and "extra_graph_idx_map[list_i] = extra_graph_idx;" in cpp
+        and "extra_graph_idx_map[i] = extra_graph_idx;" in cpp
+        and "const int extra_size = checked_extra_tensor_size" in cpp
+        and "checked_extra_graph_index(graph_size, extra_graph_idx_map.size(), error)"
+        in cpp
+        and "static_cast<long long>(graph_size)" in cpp
+        and "static_cast<long long>(extra_graph_count)" in cpp
+        and "static_cast<long long>(ghost_node_count)" in cpp
+        and "extra_graph_idx_map[list_i] = graph_size + extra_graph_idx_map.size();"
+        not in cpp
+        and "static_cast<int>(extra_graph_idx_map.size())" not in cpp,
+        "extra graph indexes and tensor sizes must be checked and keyed by atom index",
     )
     _require(
         doc.lstrip().startswith("<!--"),
