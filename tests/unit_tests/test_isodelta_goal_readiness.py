@@ -67,6 +67,7 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
                     "tools/script.py": ("FEATURE", "ready"),
                     "docs/guide.md": ("ready docs",),
                 },
+                forbidden_file_snippets={},
                 comment_prefix_requirements={
                     "tools/script.py": '"""',
                     "docs/guide.md": "<!--",
@@ -87,6 +88,7 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
             report = goal_readiness.build_goal_readiness_report(
                 root=root,
                 required_file_snippets={"tools/script.py": ("missing-feature",)},
+                forbidden_file_snippets={},
                 comment_prefix_requirements={"tools/script.py": '"""'},
             )
 
@@ -107,6 +109,7 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
             report = goal_readiness.build_goal_readiness_report(
                 root=root,
                 required_file_snippets={},
+                forbidden_file_snippets={},
                 comment_prefix_requirements={},
             )
 
@@ -130,6 +133,7 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
             report = goal_readiness.build_goal_readiness_report(
                 root=root,
                 required_file_snippets={},
+                forbidden_file_snippets={},
                 comment_prefix_requirements={},
             )
 
@@ -156,6 +160,7 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
             report = goal_readiness.build_goal_readiness_report(
                 root=root,
                 required_file_snippets={},
+                forbidden_file_snippets={},
                 comment_prefix_requirements={},
                 implementation_marker_glob_patterns=("tools/*isodelta*.py",),
             )
@@ -184,6 +189,7 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
             report = goal_readiness.build_goal_readiness_report(
                 root=root,
                 required_file_snippets={},
+                forbidden_file_snippets={},
                 comment_prefix_requirements={},
                 implementation_marker_glob_patterns=("tools/*isodelta*.py",),
             )
@@ -197,6 +203,34 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
         ]
         self.assertEqual(len(marker_checks), 1)
         self.assertTrue(marker_checks[0]["passed"])
+
+    def test_goal_readiness_rejects_forbidden_file_snippet(self) -> None:
+        """Known magic-number snippets should not return to production files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_path = root / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
+            source_path.parent.mkdir(parents=True)
+            source_path.write_text("int all[6];\n", encoding="utf-8")
+
+            report = goal_readiness.build_goal_readiness_report(
+                root=root,
+                required_file_snippets={},
+                forbidden_file_snippets={
+                    "sevenn/pair_e3gnn/comm_brick.cpp": ("int all[6]",),
+                },
+                comment_prefix_requirements={},
+                isodelta_python_glob_patterns=(),
+                implementation_marker_glob_patterns=(),
+            )
+
+        self.assertEqual(report["status"], goal_readiness.STATUS_FAILED)
+        failed_checks = [
+            record
+            for record in report["checks"]
+            if record["name"] == "forbidden_file:sevenn/pair_e3gnn/comm_brick.cpp"
+        ]
+        self.assertEqual(len(failed_checks), 1)
+        self.assertIn("int all[6]", failed_checks[0]["detail"])
 
 
 if __name__ == "__main__":

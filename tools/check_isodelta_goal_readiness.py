@@ -53,6 +53,25 @@ FORBIDDEN_IMPLEMENTATION_MARKERS = (
     "not implemented",
     "stub",
 )
+FORBIDDEN_FILE_SNIPPETS = {
+    "sevenn/pair_e3gnn/pair_e3gnn_parallel.cpp": (
+        "[6]",
+        "(1024 * 1024)",
+        "x_dim * n * 4",
+        "std::getenv(kIsoDeltaHaloDisableEnv) == nullptr",
+        "std::getenv(kIsoDeltaHaloProfileEnv) != nullptr",
+        "send size(MB)",
+    ),
+    "sevenn/pair_e3gnn/pair_e3gnn_parallel.h": (
+        "[6]",
+        "static constexpr const char *",
+    ),
+    "sevenn/pair_e3gnn/comm_brick.cpp": (
+        "int all[6]",
+        "MPI_Allreduce(&recvneed[0][0],all,6",
+        "nswap > 6",
+    ),
+}
 REQUIRED_FILE_SNIPPETS = {
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.cpp": (
         "IsoDelta-Halo",
@@ -362,8 +381,10 @@ REQUIRED_FILE_SNIPPETS = {
         "ISODELTA_PYTHON_GLOB_PATTERNS",
         "ISODELTA_PRODUCTION_GLOB_PATTERNS",
         "FORBIDDEN_IMPLEMENTATION_MARKERS",
+        "FORBIDDEN_FILE_SNIPPETS",
         "_audit_isodelta_python_headers",
         "_audit_forbidden_implementation_markers",
+        "_audit_forbidden_file_snippets",
     ),
     ".github/workflows/isodelta-halo.yml": (
         "--report-path isodelta_validation_report.json",
@@ -702,6 +723,7 @@ REQUIRED_FILE_SNIPPETS = {
         "test_goal_readiness_rejects_isodelta_python_without_header",
         "test_goal_readiness_rejects_forbidden_production_marker",
         "test_goal_readiness_ignores_marker_string_literals",
+        "test_goal_readiness_rejects_forbidden_file_snippet",
     ),
 }
 COMMENT_PREFIX_REQUIREMENTS = {
@@ -783,6 +805,40 @@ def _audit_comment_prefixes(
                 f"comment_prefix:{relative_path}",
                 stripped_text.startswith(prefix),
                 f"expected prefix {prefix!r}",
+            )
+        )
+    return records
+
+
+def _audit_forbidden_file_snippets(
+    root: Path,
+    forbidden_file_snippets: dict[str, tuple[str, ...]],
+) -> list[dict[str, Any]]:
+    """Reject known magic-number or brittle implementation snippets."""
+    records: list[dict[str, Any]] = []
+    for relative_path, snippets in forbidden_file_snippets.items():
+        path = root / relative_path
+        if not path.exists():
+            records.append(
+                _check_record(
+                    f"forbidden_file:{relative_path}",
+                    False,
+                    "missing file",
+                )
+            )
+            continue
+        text = _read_text(path)
+        present = [snippet for snippet in snippets if snippet in text]
+        detail = (
+            "no forbidden snippets"
+            if not present
+            else "present snippets: " + ", ".join(present)
+        )
+        records.append(
+            _check_record(
+                f"forbidden_file:{relative_path}",
+                not present,
+                detail,
             )
         )
     return records
@@ -901,6 +957,7 @@ def build_goal_readiness_report(
     root: Path = REPO_ROOT,
     expected_branch: str | None = None,
     required_file_snippets: dict[str, tuple[str, ...]] | None = None,
+    forbidden_file_snippets: dict[str, tuple[str, ...]] | None = None,
     comment_prefix_requirements: dict[str, str] | None = None,
     isodelta_python_glob_patterns: tuple[str, ...] = ISODELTA_PYTHON_GLOB_PATTERNS,
     implementation_marker_glob_patterns: tuple[str, ...] = (
@@ -918,6 +975,11 @@ def build_goal_readiness_report(
         if comment_prefix_requirements is None
         else comment_prefix_requirements
     )
+    forbidden_snippets = (
+        FORBIDDEN_FILE_SNIPPETS
+        if forbidden_file_snippets is None
+        else forbidden_file_snippets
+    )
     branch = _git_metadata(root, ("git", "branch", "--show-current"))
     checks = []
     if expected_branch is None:
@@ -931,6 +993,7 @@ def build_goal_readiness_report(
             )
         )
     checks.extend(_audit_required_snippets(root, snippet_requirements))
+    checks.extend(_audit_forbidden_file_snippets(root, forbidden_snippets))
     checks.extend(_audit_comment_prefixes(root, prefix_requirements))
     checks.extend(_audit_isodelta_python_headers(root, isodelta_python_glob_patterns))
     checks.extend(

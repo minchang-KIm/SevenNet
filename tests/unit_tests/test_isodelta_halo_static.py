@@ -43,9 +43,12 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         """The LAMMPS six-phase detail should be a named constant."""
         self.assertIn("kCommPhaseCount = 6", self.header)
         self.assertIn("kE3GnnCommPhaseLimit = 6", self.comm_brick_cpp)
+        self.assertIn("kNeedAllreduceComponentCount", self.comm_brick_cpp)
         self.assertIn("kE3GnnCommPhaseLimitError", self.comm_brick_cpp)
         self.assertNotIn("[6]", self.cpp)
         self.assertNotIn("[6]", self.header)
+        self.assertNotIn("int all[6]", self.comm_brick_cpp)
+        self.assertNotIn("MPI_Allreduce(&recvneed[0][0],all,6", self.comm_brick_cpp)
         self.assertNotIn("nswap > 6", self.comm_brick_cpp)
 
     def test_sources_do_not_contain_temporary_markers(self) -> None:

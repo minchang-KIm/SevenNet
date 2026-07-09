@@ -43,6 +43,10 @@ using namespace LAMMPS_NS;
 
 namespace {
 
+constexpr int kSpatialDimensionCount = 3;
+constexpr int kBoundarySideCount = 2;
+constexpr int kNeedAllreduceComponentCount =
+    kSpatialDimensionCount * kBoundarySideCount;
 constexpr int kE3GnnCommPhaseLimit = 6;
 constexpr const char *kE3GnnCommPhaseLimitError =
     "PairE3GNNParallel: Cell size is too small. "
@@ -410,8 +414,8 @@ void CommBrick::setup()
     } else recvneed[2][0] = recvneed[2][1] =
              sendneed[2][0] = sendneed[2][1] = 0;
 
-    int all[6];
-    MPI_Allreduce(&recvneed[0][0],all,6,MPI_INT,MPI_MAX,world);
+    int all[kNeedAllreduceComponentCount];
+    MPI_Allreduce(&recvneed[0][0],all,kNeedAllreduceComponentCount,MPI_INT,MPI_MAX,world);
     maxneed[0] = MAX(all[0],all[1]);
     maxneed[1] = MAX(all[2],all[3]);
     maxneed[2] = MAX(all[4],all[5]);
