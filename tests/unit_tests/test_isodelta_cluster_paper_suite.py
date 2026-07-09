@@ -2535,10 +2535,22 @@ ablation_mode = "paired"
             enabled_script = (
                 sweep_dir / "run_isodelta_isodelta-enabled.sbatch"
             ).read_text(encoding="utf-8")
+            sweep_verification = (
+                isodelta_cluster_suite.verify_slurm_ablation_sweep_index(index_path)
+            )
+            verify_exit_code = isodelta_cluster_suite.main(
+                ["--verify-slurm-ablation-sweep-index", str(index_path)]
+            )
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(verify_exit_code, 0)
         self.assertEqual(index_path.name, "slurm_ablation_sweep_index.json")
         self.assertEqual(index["status"], "passed")
+        self.assertEqual(sweep_verification["status"], "passed")
+        self.assertEqual(
+            sweep_verification["report_comment"],
+            isodelta_cluster_suite.SLURM_ABLATION_SWEEP_VERIFICATION_COMMENT,
+        )
         self.assertEqual(
             index["report_comment"],
             isodelta_cluster_suite.SLURM_ABLATION_SWEEP_COMMENT,
@@ -2576,6 +2588,57 @@ ablation_mode = "paired"
         self.assertIn("--verify-output-bundle", enabled_script)
         self.assertNotIn("--pipeline --pipeline-report", baseline_script)
         self.assertNotIn("--pipeline --pipeline-report", enabled_script)
+
+    def test_verify_slurm_ablation_sweep_rejects_launcher_mode_drift(self) -> None:
+        """Sweep verification should catch launchers edited after generation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            sweep_dir = root / "slurm_sweep"
+            manifest_path.write_text(
+                """
+[suite]
+name = "slurm-sweep-drift"
+required_models = ["MACE"]
+
+[[cases]]
+name = "mace-ablation"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "run baseline"
+enabled_command = "run enabled"
+""",
+                encoding="utf-8",
+            )
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-ablation-sweep-dir",
+                    str(sweep_dir),
+                    "--slurm-ablation-sweep-modes",
+                    "baseline-disabled",
+                    "isodelta-enabled",
+                    "--skip-downloads",
+                ]
+            )
+            index_path = sweep_dir / isodelta_cluster_suite.SLURM_ABLATION_SWEEP_INDEX_NAME
+            enabled_script_path = sweep_dir / "run_isodelta_isodelta-enabled.sbatch"
+            enabled_script = enabled_script_path.read_text(encoding="utf-8")
+            enabled_script_path.write_text(
+                enabled_script.replace(
+                    "COMMON_ARGS+=(--ablation-mode-override isodelta-enabled)",
+                    "",
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(exit_code, 0)
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "launcher missing mode override isodelta-enabled",
+            ):
+                isodelta_cluster_suite.verify_slurm_ablation_sweep_index(index_path)
 
     def test_write_slurm_ablation_sweep_rejects_single_mode_override(self) -> None:
         """Sweep generation owns ablation mode selection to avoid ambiguous launchers."""

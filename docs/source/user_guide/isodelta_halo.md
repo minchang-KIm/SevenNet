@@ -614,6 +614,17 @@ The sweep writer creates `run_isodelta_baseline-disabled.sbatch`,
 immediately reopened with `--verify-slurm-script`; the index stores that
 verification evidence so ablation jobs can be submitted or archived without
 guessing which launcher passed the publication-safety checks.
+After copying or archiving the sweep directory, reopen the index and every
+referenced launcher with `--verify-slurm-ablation-sweep-index`:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --verify-slurm-ablation-sweep-index slurm_ablation_sweep/slurm_ablation_sweep_index.json
+```
+
+This verifier checks the sweep schema, mode list, script count,
+mode-specific `ISODELTA_OUTPUT_DIR`, recorded `--ablation-mode-override`, and
+the nested `--verify-slurm-script` safety checks for each generated launcher.
 
 Before submitting a long job, write a preflight plan:
 

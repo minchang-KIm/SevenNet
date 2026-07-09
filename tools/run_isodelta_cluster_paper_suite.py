@@ -43,6 +43,9 @@ PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
 PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
 SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v1"
 SLURM_ABLATION_SWEEP_SCHEMA_VERSION = "isodelta-slurm-ablation-sweep-v1"
+SLURM_ABLATION_SWEEP_VERIFICATION_SCHEMA_VERSION = (
+    "isodelta-slurm-ablation-sweep-verification-v1"
+)
 EXTERNAL_TIMING_SCHEMA_VERSION = "isodelta-external-pair-timing-v1"
 EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
 EXPERIMENT_REPORT_CHECK_SCHEMA_VERSION = "isodelta-experiment-report-check-v1"
@@ -369,6 +372,10 @@ SLURM_ABLATION_SWEEP_COMMENT = (
     "IsoDelta-Halo SLURM ablation sweep index recording generated baseline "
     "and enabled launchers, per-mode output directories, and launcher "
     "verification evidence."
+)
+SLURM_ABLATION_SWEEP_VERIFICATION_COMMENT = (
+    "IsoDelta-Halo SLURM ablation sweep verification report reopening the "
+    "sweep index and every referenced mode-specific launcher."
 )
 RUN_PLAN_REPORT_COMMENT = (
     "IsoDelta-Halo execution plan written before cluster jobs so paper runs "
@@ -8454,6 +8461,116 @@ def write_slurm_ablation_sweep(
     return {"index_path": str(index_path), **payload}
 
 
+def _resolve_slurm_sweep_script_path(index_path: Path, script_path_text: str) -> Path:
+    """Resolve a sweep launcher path after the index is archived or moved."""
+    recorded_path = Path(script_path_text)
+    if recorded_path.exists():
+        return recorded_path
+    sibling_path = index_path.parent / recorded_path.name
+    _require(sibling_path.exists(), f"missing SLURM sweep launcher {script_path_text}")
+    return sibling_path
+
+
+def verify_slurm_ablation_sweep_index(index_path: Path) -> dict[str, Any]:
+    """Verify a generated SLURM ablation sweep index and its launchers."""
+    _require(index_path.exists(), f"missing SLURM ablation sweep index {index_path}")
+    payload = _as_json_object(
+        json.loads(index_path.read_text(encoding="utf-8")),
+        "slurm_ablation_sweep_index",
+    )
+    schema_version = _as_json_string(
+        payload.get("slurm_ablation_sweep_schema_version"),
+        "slurm_ablation_sweep_index.slurm_ablation_sweep_schema_version",
+    )
+    _require(
+        schema_version == SLURM_ABLATION_SWEEP_SCHEMA_VERSION,
+        (
+            "slurm_ablation_sweep_index.slurm_ablation_sweep_schema_version "
+            f"must be {SLURM_ABLATION_SWEEP_SCHEMA_VERSION!r}"
+        ),
+    )
+    _require_report_comment(
+        payload,
+        "slurm_ablation_sweep_index",
+        SLURM_ABLATION_SWEEP_COMMENT,
+    )
+    status = _as_json_string(payload.get(STATUS_KEY), f"slurm_ablation_sweep_index.{STATUS_KEY}")
+    _require(status == PASSED_STATUS, "SLURM ablation sweep index status must be passed")
+    raw_modes = payload.get("modes")
+    _require(isinstance(raw_modes, list), "slurm_ablation_sweep_index.modes must be a JSON array")
+    modes = _normalize_slurm_ablation_sweep_modes(
+        tuple(
+            _as_json_string(mode, f"slurm_ablation_sweep_index.modes[{index}]")
+            for index, mode in enumerate(raw_modes)
+        )
+    )
+    raw_scripts = payload.get("scripts")
+    _require(isinstance(raw_scripts, list), "slurm_ablation_sweep_index.scripts must be a JSON array")
+    script_count = _as_json_nonnegative_int(
+        payload.get("script_count"),
+        "slurm_ablation_sweep_index.script_count",
+    )
+    _require(script_count == len(raw_scripts), "script_count must match scripts length")
+    _require(script_count == len(modes), "script_count must match modes length")
+
+    verified_scripts: list[dict[str, Any]] = []
+    for index, raw_script in enumerate(raw_scripts):
+        script_record = _as_json_object(raw_script, f"scripts[{index}]")
+        mode = _as_json_string(script_record.get("mode"), f"scripts[{index}].mode")
+        _require(mode == modes[index], f"scripts[{index}].mode must match modes[{index}]")
+        script_path_text = _as_json_string(
+            script_record.get("script_path"),
+            f"scripts[{index}].script_path",
+        )
+        slurm_output_dir = _as_json_string(
+            script_record.get("slurm_output_dir"),
+            f"scripts[{index}].slurm_output_dir",
+        )
+        _as_json_string(script_record.get("slurm_job_name"), f"scripts[{index}].slurm_job_name")
+        recorded_verification = _as_json_object(
+            script_record.get("verification"),
+            f"scripts[{index}].verification",
+        )
+        recorded_status = _as_json_string(
+            recorded_verification.get(STATUS_KEY),
+            f"scripts[{index}].verification.{STATUS_KEY}",
+        )
+        _require(recorded_status == PASSED_STATUS, f"scripts[{index}].verification must be passed")
+        resolved_script_path = _resolve_slurm_sweep_script_path(index_path, script_path_text)
+        script_text = resolved_script_path.read_text(encoding="utf-8")
+        expected_mode_argument = f"COMMON_ARGS+=(--ablation-mode-override {mode})"
+        _require(
+            expected_mode_argument in script_text,
+            f"scripts[{index}] launcher missing mode override {mode}",
+        )
+        expected_output_dir_assignment = f"{SLURM_OUTPUT_DIR_ENV_NAME}={_bash_quote(slurm_output_dir)}"
+        _require(
+            expected_output_dir_assignment in script_text,
+            f"scripts[{index}] launcher missing mode-specific output directory",
+        )
+        verification = verify_slurm_script(resolved_script_path)
+        verified_scripts.append(
+            {
+                "mode": mode,
+                "script_path": str(resolved_script_path),
+                "slurm_output_dir": slurm_output_dir,
+                "verification": verification,
+            }
+        )
+    return {
+        "slurm_ablation_sweep_verification_schema_version": (
+            SLURM_ABLATION_SWEEP_VERIFICATION_SCHEMA_VERSION
+        ),
+        GENERATED_REPORT_COMMENT_KEY: SLURM_ABLATION_SWEEP_VERIFICATION_COMMENT,
+        STATUS_KEY: PASSED_STATUS,
+        "index_path": str(index_path),
+        "mode_count": len(modes),
+        "script_count": len(verified_scripts),
+        "modes": list(modes),
+        "scripts": verified_scripts,
+    }
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI options for the cluster paper suite."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -8466,6 +8583,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Write verified per-mode SLURM sbatch scripts for an ablation sweep",
     )
     parser.add_argument("--verify-slurm-script", type=Path, help="Verify a generated SLURM sbatch script")
+    parser.add_argument(
+        "--verify-slurm-ablation-sweep-index",
+        type=Path,
+        help="Verify a generated SLURM ablation sweep index and its launchers",
+    )
     parser.add_argument("--verify-output-bundle", type=Path, help="Verify summary artifact and log fingerprints")
     parser.add_argument("--verify-pipeline-report", type=Path, help="Verify a pipeline report and its stage fingerprints")
     parser.add_argument("--pipeline", action="store_true", help="Run readiness, prepare, preflight, plan, suite, and bundle verification")
@@ -8573,6 +8695,16 @@ def main(argv: list[str] | None = None) -> int:
             verification = verify_slurm_script(args.verify_slurm_script)
         except ClusterSuiteError as exc:
             print(f"IsoDelta-Halo SLURM launcher verification failed: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(verification, indent=2))
+        return SUCCESS_RETURN_CODE
+    if args.verify_slurm_ablation_sweep_index is not None:
+        try:
+            verification = verify_slurm_ablation_sweep_index(
+                args.verify_slurm_ablation_sweep_index
+            )
+        except ClusterSuiteError as exc:
+            print(f"IsoDelta-Halo SLURM ablation sweep verification failed: {exc}", file=sys.stderr)
             return 1
         print(json.dumps(verification, indent=2))
         return SUCCESS_RETURN_CODE
