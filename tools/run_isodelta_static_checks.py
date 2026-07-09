@@ -1723,6 +1723,9 @@ def main() -> None:
         and "test_manifest_validation_accepts_empty_enabled_disable_env"
         in cluster_suite_test
         and "ENV_FLAG_FALSE_VALUES_KEY" in cluster_suite_test
+        and "EXTERNAL_TIMING_REPORT_COMMENT" in cluster_suite_test
+        and "test_external_timing_report_rejects_missing_report_comment"
+        in cluster_suite_test
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
         and "test_external_timing_report_requires_repeat_command_records" in cluster_suite_test
         and "test_external_timing_report_rejects_unexpected_timing_command_record"
@@ -1813,6 +1816,9 @@ def main() -> None:
         and "manifest_snapshot: body SHA-256 must match suite.manifest.sha256"
         in cluster_suite
         and "EXTERNAL_TIMING_SCHEMA_VERSION" in cluster_suite
+        and "EXTERNAL_TIMING_REPORT_COMMENT" in cluster_suite
+        and "GENERATED_REPORT_COMMENT_KEY: EXTERNAL_TIMING_REPORT_COMMENT"
+        in cluster_suite
         and "validate_external_timing_report" in cluster_suite
         and "_validate_external_timing_command_records" in cluster_suite
         and "_require_external_command_log_fingerprints" in cluster_suite
@@ -2382,6 +2388,7 @@ def main() -> None:
     )
     _require(
         "external timing report" in doc
+        and "`report_comment`" in doc
         and "repeat success counts" in doc
         and "`commands` array" in doc
         and "`case:disabled:N` and `case:enabled:N` command record" in doc

@@ -430,6 +430,10 @@ PREFLIGHT_REPORT_COMMENT = (
     "IsoDelta-Halo preflight report recording artifact availability, GPU "
     "detection, model import checks, command logs, and environment evidence."
 )
+EXTERNAL_TIMING_REPORT_COMMENT = (
+    "IsoDelta-Halo external-pair timing report recording disabled/enabled "
+    "runtime commands, repeat timings, mode controls, and log fingerprints."
+)
 PIPELINE_REPORT_COMMENT = (
     "IsoDelta-Halo pipeline report linking readiness, artifact preparation, "
     "preflight, run-plan, suite execution, and bundle-verification evidence."
@@ -6624,6 +6628,7 @@ def _build_external_timing_report(
         speedup = disabled_mean / enabled_mean
     return {
         SCHEMA_VERSION_KEY: EXTERNAL_TIMING_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: EXTERNAL_TIMING_REPORT_COMMENT,
         CASE_NAME_KEY: case.name,
         MODEL_KEY: case.model,
         "ablation_mode": case.ablation_mode,
@@ -6933,6 +6938,11 @@ def validate_external_timing_report(
             f"{EXTERNAL_TIMING_SCHEMA_VERSION!r}"
         ),
     )
+    report_comment = _require_report_comment(
+        report,
+        "external_timing_report",
+        EXTERNAL_TIMING_REPORT_COMMENT,
+    )
     case_name = _as_json_string(report.get(CASE_NAME_KEY), CASE_NAME_KEY)
     model_name = _as_json_string(report.get(MODEL_KEY), MODEL_KEY)
     _require(case_name == case.name, f"{CASE_NAME_KEY} must match manifest case name")
@@ -7070,6 +7080,7 @@ def validate_external_timing_report(
     return {
         "status": "passed",
         SCHEMA_VERSION_KEY: schema_version,
+        GENERATED_REPORT_COMMENT_KEY: report_comment,
         CASE_NAME_KEY: case_name,
         MODEL_KEY: model_name,
         "ablation_mode": ablation_mode,

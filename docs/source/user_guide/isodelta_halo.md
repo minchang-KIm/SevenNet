@@ -771,7 +771,7 @@ Unless `--dry-run` is active, the normal suite run also reopens the completed
 output bundle immediately after writing tables, correlations, figures, logs,
 and fingerprints; any bundle verification failure returns a nonzero exit code.
 For `external_pair` results, the suite validates the external timing report
-schema, manifest case/model labels, repeat success counts, positive
+schema, `report_comment`, manifest case/model labels, repeat success counts, positive
 `baseline_mean_seconds` and `enabled_mean_seconds`, and requires
 `speedup_vs_disabled_cache` to match baseline divided by enabled seconds. The
 report also keeps raw `baseline_times_seconds` and `enabled_times_seconds`, and

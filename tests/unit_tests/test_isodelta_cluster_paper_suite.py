@@ -402,6 +402,9 @@ def _external_timing_report_for_case(
     ]
     return {
         "schema_version": "isodelta-external-pair-timing-v1",
+        isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
+            isodelta_cluster_suite.EXTERNAL_TIMING_REPORT_COMMENT
+        ),
         "case_name": case.name,
         "model": case.model,
         "ablation_mode": case.ablation_mode,
@@ -5982,6 +5985,26 @@ artifacts = ["dataset"]
         with self.assertRaisesRegex(
             isodelta_cluster_suite.ClusterSuiteError,
             "must match baseline / enabled seconds",
+        ):
+            isodelta_cluster_suite.validate_external_timing_report(report, case)
+
+    def test_external_timing_report_rejects_missing_report_comment(self) -> None:
+        """External timing reports should describe their evidence purpose."""
+        report = _external_timing_report("NequIP")
+        del report[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY]
+        case = isodelta_cluster_suite.CaseConfig(
+            name="nequip-existing",
+            model="NequIP",
+            kind="external_pair",
+            disabled_command="run baseline",
+            enabled_command="run enabled",
+            repeat_count=2,
+            min_speedup=1.1,
+        )
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "external_timing_report.report_comment",
         ):
             isodelta_cluster_suite.validate_external_timing_report(report, case)
 
