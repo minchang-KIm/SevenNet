@@ -1175,12 +1175,15 @@ def main() -> None:
         and "SLURM_PYTHON_VERSION_PROVENANCE_PREFIX" in cluster_suite
         and "SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX" in cluster_suite
         and "SLURM_PYTHON_PROVENANCE_FUNCTION_NAME" in cluster_suite
+        and "SLURM_PYTHON_PROVENANCE_COMMENT" in cluster_suite
         and "python_runtime_provenance.txt" in cluster_suite
         and "python_version_probe" in cluster_suite
         and "python_provenance_before_preflight" in cluster_suite
         and "python_provenance_file_nonempty" in cluster_suite
         and "python_provenance_gate_before_preflight" in cluster_suite
         and "python_provenance_gate_after_final_verification" in cluster_suite
+        and "python_provenance_comment_echo" in cluster_suite
+        and "python_provenance_comment_marker" in cluster_suite
         and "SLURM launcher must recheck Python provenance after final verification"
         in cluster_suite
         and "PIPELINE_OUTPUT" in cluster_suite
@@ -1424,6 +1427,8 @@ def main() -> None:
         and "verify_python_provenance() {" in cluster_suite_test
         and "provenance_call = \"\\nverify_python_provenance\\n\""
         in cluster_suite_test
+        and "IsoDelta-Halo Python runtime provenance captured by the generated SLURM launcher"
+        in cluster_suite_test
         and 'echo "PYTHON_BIN=$PYTHON_BIN"' in cluster_suite_test
         and '"$PYTHON_BIN" --version 2>&1' in cluster_suite_test
         and 'test -s "$PYTHON_PROVENANCE_OUTPUT"' in cluster_suite_test
@@ -1434,6 +1439,8 @@ def main() -> None:
         and "test_verify_slurm_script_rejects_missing_python_provenance"
         in cluster_suite_test
         and "test_verify_slurm_script_rejects_missing_python_provenance_gate"
+        in cluster_suite_test
+        and "test_verify_slurm_script_rejects_missing_python_provenance_comment"
         in cluster_suite_test
         and "test_verify_slurm_script_rejects_missing_final_python_provenance_gate"
         in cluster_suite_test
@@ -1660,6 +1667,7 @@ def main() -> None:
         and "`python_runtime_provenance.txt`" in doc
         and "non-empty" in doc
         and "marker checks" in doc
+        and "comment header" in doc
         and "again after the final verification command" in doc
         and "Python provenance capture" in doc,
         "IsoDelta-Halo guide must document SLURM cluster launch generation",

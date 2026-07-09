@@ -41,7 +41,7 @@ READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
 ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
 PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
-SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v4"
+SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v5"
 SLURM_ABLATION_SWEEP_SCHEMA_VERSION = "isodelta-slurm-ablation-sweep-v1"
 SLURM_ABLATION_SWEEP_VERIFICATION_SCHEMA_VERSION = (
     "isodelta-slurm-ablation-sweep-verification-v1"
@@ -102,6 +102,9 @@ SLURM_SUITE_RUNNER_PROVENANCE_PREFIX = "SUITE_RUNNER="
 SLURM_PYTHON_VERSION_PROVENANCE_PREFIX = "Python "
 SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX = "sys.executable="
 SLURM_PYTHON_PROVENANCE_FUNCTION_NAME = "verify_python_provenance"
+SLURM_PYTHON_PROVENANCE_COMMENT = (
+    "# IsoDelta-Halo Python runtime provenance captured by the generated SLURM launcher."
+)
 DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
 CASE_STATUS_PASSED = "passed"
 CASE_STATUS_REUSED = "reused"
@@ -8563,6 +8566,7 @@ def write_slurm_script(
         "",
         "# Record the Python launcher before preflight so archived runs explain runtime selection.",
         "{",
+        f'  echo "{SLURM_PYTHON_PROVENANCE_COMMENT}"',
         f'  echo "{SLURM_PYTHON_BIN_PROVENANCE_PREFIX}$PYTHON_BIN"',
         f'  echo "{SLURM_SUITE_RUNNER_PROVENANCE_PREFIX}$SUITE_RUNNER"',
         '  "$PYTHON_BIN" --version 2>&1',
@@ -8572,6 +8576,11 @@ def write_slurm_script(
         "# Reusable provenance gate for both early launch and final archive checks.",
         f"{SLURM_PYTHON_PROVENANCE_FUNCTION_NAME}() {{",
         '  test -s "$PYTHON_PROVENANCE_OUTPUT"',
+        (
+            "  grep -q "
+            f"{_bash_quote('^' + SLURM_PYTHON_PROVENANCE_COMMENT)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"'
+        ),
         (
             "  grep -q "
             f"{_bash_quote('^' + SLURM_PYTHON_BIN_PROVENANCE_PREFIX)} "
@@ -8717,6 +8726,17 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
             "python_provenance_function",
             f"{SLURM_PYTHON_PROVENANCE_FUNCTION_NAME}() {{",
             "launcher defines a reusable Python provenance verification gate",
+        ),
+        (
+            "python_provenance_comment_echo",
+            f'echo "{SLURM_PYTHON_PROVENANCE_COMMENT}"',
+            "launcher writes a purpose comment into Python provenance evidence",
+        ),
+        (
+            "python_provenance_comment_marker",
+            f"grep -q {_bash_quote('^' + SLURM_PYTHON_PROVENANCE_COMMENT)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"',
+            "launcher verifies the Python provenance purpose comment",
         ),
         (
             "python_bin_echo",

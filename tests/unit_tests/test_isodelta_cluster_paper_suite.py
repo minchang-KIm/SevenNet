@@ -2643,6 +2643,19 @@ trace_evidence = ["trace.json"]
             script,
         )
         self.assertIn("verify_python_provenance() {", script)
+        self.assertIn(
+            "# IsoDelta-Halo Python runtime provenance captured by the generated SLURM launcher.",
+            script,
+        )
+        self.assertIn(
+            'echo "# IsoDelta-Halo Python runtime provenance captured by the generated SLURM launcher."',
+            script,
+        )
+        self.assertIn(
+            "grep -q '^# IsoDelta-Halo Python runtime provenance captured by the generated SLURM launcher.' "
+            "\"$PYTHON_PROVENANCE_OUTPUT\"",
+            script,
+        )
         self.assertIn('echo "PYTHON_BIN=$PYTHON_BIN"', script)
         self.assertIn('"$PYTHON_BIN" --version 2>&1', script)
         self.assertIn('sys.executable=', script)
@@ -2654,6 +2667,12 @@ trace_evidence = ["trace.json"]
         self.assertLess(
             script.index('"$PYTHON_BIN" --version 2>&1'),
             script.index("--preflight-only --preflight-output \"$PREFLIGHT_OUTPUT\""),
+        )
+        self.assertLess(
+            script.index(
+                "# IsoDelta-Halo Python runtime provenance captured by the generated SLURM launcher."
+            ),
+            script.index('echo "PYTHON_BIN=$PYTHON_BIN"'),
         )
         provenance_call = "\nverify_python_provenance\n"
         self.assertEqual(script.count(provenance_call), 2)
@@ -2762,6 +2781,51 @@ trace_evidence = ["trace.json"]
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 "python_provenance_file_nonempty",
+            ):
+                isodelta_cluster_suite.verify_slurm_script(slurm_path)
+
+    def test_verify_slurm_script_rejects_missing_python_provenance_comment(self) -> None:
+        """The generated Python provenance file must carry a comment header."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            slurm_path = root / "run_isodelta.sbatch"
+            manifest_path.write_text(
+                """
+[suite]
+name = "slurm-python-provenance-comment-suite"
+required_models = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-trace"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["trace.json"]
+""",
+                encoding="utf-8",
+            )
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-script",
+                    str(slurm_path),
+                    "--skip-downloads",
+                ]
+            )
+            script = slurm_path.read_text(encoding="utf-8")
+            slurm_path.write_text(
+                script.replace(
+                    '  echo "# IsoDelta-Halo Python runtime provenance captured by the generated SLURM launcher."\n',
+                    "",
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(exit_code, 0)
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "python_provenance_comment_echo",
             ):
                 isodelta_cluster_suite.verify_slurm_script(slurm_path)
 

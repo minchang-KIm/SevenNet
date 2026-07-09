@@ -561,8 +561,8 @@ The generated `sbatch` file requests `expected_gpus`, writes scheduler logs
 under `slurm_logs/`, runs `--preflight-only`, creates the preflight plan with
 the exact same `COMMON_ARGS` used by the final run, and then executes the full
 `--pipeline` path with `--pipeline-report`. Before preflight it writes
-`python_runtime_provenance.txt` into the output bundle, recording `PYTHON_BIN`,
-`SUITE_RUNNER`, `python --version`, and `sys.executable` so archived runs show
+`python_runtime_provenance.txt` into the output bundle with a comment header,
+recording `PYTHON_BIN`, `SUITE_RUNNER`, `python --version`, and `sys.executable` so archived runs show
 which interpreter actually executed the experiment. The launcher then requires
 that file to be non-empty and passes marker checks for each recorded field before
 starting preflight, and runs the same checks again after the final verification command.
