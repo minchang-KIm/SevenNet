@@ -40,6 +40,9 @@ before indexing the six-phase communication arrays, which turns an invalid
 phase route into a named runtime error instead of silent metadata corruption.
 The `CommBrick` read-only topology accessors used by the cache apply the same
 phase guard and also check sendlist indexes before returning atom ids.
+For the actual halo payload, the e3gnn communication path allocates host and
+CUDA/MPI float buffers by `feature_width * atom_capacity`, not by the scalar
+LAMMPS atom buffer length, so wide hidden-state tensors have explicit capacity.
 
 ## Why This Is Model-Agnostic
 

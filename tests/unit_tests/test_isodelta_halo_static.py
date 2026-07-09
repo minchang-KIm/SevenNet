@@ -265,8 +265,8 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
             self.cpp,
         )
 
-    def test_comm_brick_exposes_read_only_topology_accessors(self) -> None:
-        """The pair cache should compare current CommBrick topology before reuse."""
+    def test_comm_brick_topology_accessors_validate_indexes(self) -> None:
+        """CommBrick should reject invalid topology accessor indexes."""
         self.assertIn("kE3GnnCommPhaseRangeError", self.comm_brick_cpp)
         self.assertIn("kE3GnnSendlistIndexRangeError", self.comm_brick_cpp)
         self.assertIn(
@@ -302,6 +302,42 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
             "validate_e3gnn_sendlist_index(iswap, index);",
             self.comm_brick_cpp,
         )
+
+    def test_comm_brick_sizes_e3gnn_float_buffers_by_feature_width(self) -> None:
+        """GNN halo buffers should reserve x_dim floats for each atom slot."""
+        self.assertIn("checked_e3gnn_buffer_elements", self.comm_brick_cpp)
+        self.assertIn("kE3GnnMinimumAtomBufferCapacity", self.comm_brick_cpp)
+        self.assertIn("kE3GnnMinimumFeatureWidth", self.comm_brick_cpp)
+        self.assertIn("kE3GnnFeatureWidthError", self.comm_brick_cpp)
+        self.assertIn("kE3GnnBufferCapacityError", self.comm_brick_cpp)
+        self.assertIn("std::numeric_limits<int>::max()", self.comm_brick_cpp)
+        self.assertIn("static_cast<long long>(atom_capacity)", self.comm_brick_cpp)
+        self.assertIn("static_cast<long long>(feature_width)", self.comm_brick_cpp)
+        self.assertIn("std::vector<float> host_send_buffer", self.comm_brick_cpp)
+        self.assertIn("std::vector<float> host_recv_buffer", self.comm_brick_cpp)
+        self.assertIn("e3gnn_forward_send_capacity", self.comm_brick_cpp)
+        self.assertIn("e3gnn_forward_recv_capacity", self.comm_brick_cpp)
+        self.assertIn("e3gnn_reverse_send_capacity", self.comm_brick_cpp)
+        self.assertIn("e3gnn_reverse_recv_capacity", self.comm_brick_cpp)
+        self.assertIn(
+            "DeviceBuffManager::getInstance().get_buffer(\n"
+            "          e3gnn_forward_send_capacity, e3gnn_forward_recv_capacity",
+            self.comm_brick_cpp,
+        )
+        self.assertIn(
+            "DeviceBuffManager::getInstance().get_buffer(\n"
+            "        e3gnn_reverse_send_capacity, e3gnn_reverse_recv_capacity",
+            self.comm_brick_cpp,
+        )
+        self.assertNotIn(
+            "DeviceBuffManager::getInstance().get_buffer(maxsend+bufextra, maxrecv",
+            self.comm_brick_cpp,
+        )
+        self.assertNotIn("reinterpret_cast<float*>(buf_send)", self.comm_brick_cpp)
+        self.assertNotIn("reinterpret_cast<float*>(buf_recv)", self.comm_brick_cpp)
+
+    def test_comm_brick_exposes_read_only_topology_accessors(self) -> None:
+        """The pair cache should compare current CommBrick topology before reuse."""
         for accessor_name in (
             "e3gnn_nswap",
             "e3gnn_sendnum",

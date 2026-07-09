@@ -260,6 +260,33 @@ def main() -> None:
         and "validate_e3gnn_sendlist_index(iswap, index);" in comm_brick_cpp,
         "CommBrick e3gnn topology accessors must validate phase and list indexes",
     )
+    _require(
+        "checked_e3gnn_buffer_elements" in comm_brick_cpp
+        and "kE3GnnMinimumAtomBufferCapacity" in comm_brick_cpp
+        and "kE3GnnMinimumFeatureWidth" in comm_brick_cpp
+        and "kE3GnnFeatureWidthError" in comm_brick_cpp
+        and "kE3GnnBufferCapacityError" in comm_brick_cpp
+        and "std::numeric_limits<int>::max()" in comm_brick_cpp
+        and "static_cast<long long>(atom_capacity)" in comm_brick_cpp
+        and "static_cast<long long>(feature_width)" in comm_brick_cpp
+        and "std::vector<float> host_send_buffer" in comm_brick_cpp
+        and "std::vector<float> host_recv_buffer" in comm_brick_cpp
+        and "e3gnn_forward_send_capacity" in comm_brick_cpp
+        and "e3gnn_forward_recv_capacity" in comm_brick_cpp
+        and "e3gnn_reverse_send_capacity" in comm_brick_cpp
+        and "e3gnn_reverse_recv_capacity" in comm_brick_cpp
+        and "DeviceBuffManager::getInstance().get_buffer(\n"
+        "          e3gnn_forward_send_capacity, e3gnn_forward_recv_capacity"
+        in comm_brick_cpp
+        and "DeviceBuffManager::getInstance().get_buffer(\n"
+        "        e3gnn_reverse_send_capacity, e3gnn_reverse_recv_capacity"
+        in comm_brick_cpp
+        and "DeviceBuffManager::getInstance().get_buffer(maxsend+bufextra, maxrecv"
+        not in comm_brick_cpp
+        and "reinterpret_cast<float*>(buf_send)" not in comm_brick_cpp
+        and "reinterpret_cast<float*>(buf_recv)" not in comm_brick_cpp,
+        "CommBrick e3gnn buffers must be sized by feature width for host and CUDA MPI",
+    )
     for accessor_name in (
         "e3gnn_nswap",
         "e3gnn_sendnum",

@@ -32,6 +32,8 @@
 
 #include <cmath>
 #include <cstring>
+#include <limits>
+#include <vector>
 
 #include "pair_e3gnn_parallel.h"
 
@@ -50,6 +52,8 @@ constexpr int kNeedAllreduceComponentCount =
 constexpr int kE3GnnFirstCommPhase = 0;
 constexpr int kE3GnnFirstSendlistIndex = 0;
 constexpr int kE3GnnCommPhaseLimit = 6;
+constexpr int kE3GnnMinimumAtomBufferCapacity = 0;
+constexpr int kE3GnnMinimumFeatureWidth = 1;
 constexpr const char *kE3GnnCommPhaseLimitError =
     "PairE3GNNParallel: Cell size is too small. "
     "Please use a single GPU or make a supercell";
@@ -57,6 +61,26 @@ constexpr const char *kE3GnnCommPhaseRangeError =
     "PairE3GNNParallel: communication phase index is out of range";
 constexpr const char *kE3GnnSendlistIndexRangeError =
     "PairE3GNNParallel: sendlist atom index is out of range";
+constexpr const char *kE3GnnFeatureWidthError =
+    "PairE3GNNParallel: feature width must be positive before communication";
+constexpr const char *kE3GnnBufferCapacityError =
+    "PairE3GNNParallel: communication buffer capacity is out of range";
+
+int checked_e3gnn_buffer_elements(int atom_capacity, int feature_width,
+                                  Error *error)
+{
+  if (atom_capacity < kE3GnnMinimumAtomBufferCapacity)
+    error->all(FLERR, kE3GnnBufferCapacityError);
+  if (feature_width < kE3GnnMinimumFeatureWidth)
+    error->all(FLERR, kE3GnnFeatureWidthError);
+
+  const long long element_count =
+      static_cast<long long>(atom_capacity) * static_cast<long long>(feature_width);
+  if (element_count > std::numeric_limits<int>::max())
+    error->all(FLERR, kE3GnnBufferCapacityError);
+
+  return static_cast<int>(element_count);
+}
 
 } // namespace
 
@@ -1134,17 +1158,29 @@ void CommBrick::forward_comm(PairE3GNNParallel *pair)
 
   const bool comm_preprocess_done = pair->is_comm_preprocess_done();
   const int nsize = pair->get_x_dim();
-  float *buf_send_, *buf_recv_;
-  if(pair->use_cuda_mpi_()) {
-    DeviceBuffManager::getInstance().get_buffer(maxsend+bufextra, maxrecv,buf_send_, buf_recv_);
-  } else {
-    buf_send_ = reinterpret_cast<float*>(buf_send);
-    buf_recv_ = reinterpret_cast<float*>(buf_recv);
-  }
+  float *buf_send_ = nullptr;
+  float *buf_recv_ = nullptr;
+  std::vector<float> host_send_buffer;
+  std::vector<float> host_recv_buffer;
   if (nswap > kE3GnnCommPhaseLimit)
     error->all(FLERR, kE3GnnCommPhaseLimitError);
   if(!comm_preprocess_done) {
     pair->notify_proc_ids(sendproc, recvproc, nswap);
+  } else {
+    const int e3gnn_forward_send_capacity =
+        checked_e3gnn_buffer_elements(maxsend + bufextra, nsize, error);
+    const int e3gnn_forward_recv_capacity =
+        checked_e3gnn_buffer_elements(maxrecv, nsize, error);
+    if(pair->use_cuda_mpi_()) {
+      DeviceBuffManager::getInstance().get_buffer(
+          e3gnn_forward_send_capacity, e3gnn_forward_recv_capacity, buf_send_,
+          buf_recv_);
+    } else {
+      host_send_buffer.resize(e3gnn_forward_send_capacity);
+      host_recv_buffer.resize(e3gnn_forward_recv_capacity);
+      buf_send_ = host_send_buffer.data();
+      buf_recv_ = host_recv_buffer.data();
+    }
   }
 
   for (iswap = 0; iswap < nswap; iswap++) {
@@ -1172,14 +1208,27 @@ void CommBrick::reverse_comm(PairE3GNNParallel *pair)
   int iswap,n;
   MPI_Request request;
 
-  const bool comm_preprocess_done = pair->is_comm_preprocess_done();
   int nsize = pair->get_x_dim();
-  float *buf_send_, *buf_recv_;
+  float *buf_send_ = nullptr;
+  float *buf_recv_ = nullptr;
+  std::vector<float> host_send_buffer;
+  std::vector<float> host_recv_buffer;
+  if (nswap > kE3GnnCommPhaseLimit)
+    error->all(FLERR, kE3GnnCommPhaseLimitError);
+
+  const int e3gnn_reverse_send_capacity =
+      checked_e3gnn_buffer_elements(maxrecv, nsize, error);
+  const int e3gnn_reverse_recv_capacity =
+      checked_e3gnn_buffer_elements(maxsend + bufextra, nsize, error);
   if(pair->use_cuda_mpi_()) {
-    DeviceBuffManager::getInstance().get_buffer(maxsend+bufextra, maxrecv,buf_send_, buf_recv_);
+    DeviceBuffManager::getInstance().get_buffer(
+        e3gnn_reverse_send_capacity, e3gnn_reverse_recv_capacity, buf_send_,
+        buf_recv_);
   } else {
-    buf_send_ = reinterpret_cast<float*>(buf_send);
-    buf_recv_ = reinterpret_cast<float*>(buf_recv);
+    host_send_buffer.resize(e3gnn_reverse_send_capacity);
+    host_recv_buffer.resize(e3gnn_reverse_recv_capacity);
+    buf_send_ = host_send_buffer.data();
+    buf_recv_ = host_recv_buffer.data();
   }
 
   for (iswap = nswap-1; iswap >= 0; iswap--) {
