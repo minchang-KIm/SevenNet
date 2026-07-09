@@ -219,7 +219,8 @@ def main() -> None:
         in cpp
         and "node_type_ghost.push_back(j_model_type);" in cpp
         and "i + kFirstLammpsAtomType" in cpp
-        and "map[lammps_atom_type] = j;" in cpp
+        and "map[lammps_atom_type] =\n            static_cast<int>(j); // LAMMPS atom types are 1-based."
+        in cpp
         and "map[i] != kUnmappedAtomType" in cpp
         and "map[j] != kUnmappedAtomType" in cpp
         and "for (int i = kFirstLammpsAtomType; i <= ntypes; i++)" in cpp
@@ -237,6 +238,7 @@ def main() -> None:
     _require(
         "kPairCoeffArgumentError" in cpp
         and "kPairCoeffNumericMetadataError" in cpp
+        and "kPairCoeffSpeciesMetadataError" in cpp
         and "kPairCoeffWildcardFirstIndex = 0" in cpp
         and "kPairCoeffWildcardSecondIndex = 1" in cpp
         and "kPairCoeffModelCountIndex = 2" in cpp
@@ -250,6 +252,10 @@ def main() -> None:
         and "checked_parse_positive_double_metadata" in cpp
         and "checked_parse_positive_int_metadata" in cpp
         and "checked_explicit_model_species_start" in cpp
+        and "parse_chemical_symbol_tokens" in cpp
+        and "validate_deployed_species_metadata" in cpp
+        and "validate_pair_coeff_species_count" in cpp
+        and "std::istringstream symbol_stream(chemical_symbols)" in cpp
         and "!std::isfinite(parsed_value)" in cpp
         and "validate_pair_coeff_minimum_args(narg, error);" in cpp
         and "checked_parse_positive_int(arg[kPairCoeffModelCountIndex], error)"
@@ -263,14 +269,24 @@ def main() -> None:
         in cpp
         and 'checked_parse_positive_int_metadata(meta_dict["comm_size"], error)'
         in cpp
+        and 'checked_parse_positive_int_metadata(meta_dict["num_species"], error)'
+        in cpp
+        and "validate_deployed_species_metadata(deployed_species_count, chem_vec.size()"
+        in cpp
         and "if (n_chem <= kMinimumGraphNodeCount)" in cpp
+        and "validate_pair_coeff_species_count(n_chem, ntypes, error);" in cpp
+        and "for (size_t j = 0; j < chem_vec.size(); j++)" in cpp
+        and "static_cast<int>(j); // LAMMPS atom types are 1-based." in cpp
         and "int n_model = std::stoi(arg[2]);" not in cpp
         and "std::filesystem::exists(arg[3])" not in cpp
         and "int chem_arg_i = 4" not in cpp
         and "for (int i = 3; i < n_model + 3; i++)" not in cpp
         and "chem_arg_i = n_model + 3" not in cpp
         and 'cutoff = std::stod(meta_dict["cutoff"])' not in cpp
-        and 'int comm_size = std::stod(meta_dict["comm_size"])' not in cpp,
+        and 'int comm_size = std::stod(meta_dict["comm_size"])' not in cpp
+        and "std::strtok" not in cpp
+        and "const_cast<char *>" not in cpp
+        and 'auto delim = " "' not in cpp,
         "pair_coeff arguments and deployed numeric metadata must be checked",
     )
     _require(
@@ -322,6 +338,8 @@ def main() -> None:
         "<list>",
         "<map>",
         "<set>",
+        "<sstream>",
+        "<vector>",
     ):
         _require(
             f"#include {include_name}" in cpp,
@@ -582,8 +600,10 @@ def main() -> None:
         and "runtime-sized stack arrays" in doc
         and "compiler-specific variable-length arrays" in doc
         and "`NEIGHMASK` before the runtime reads" in doc
-        and "canonical atom index" in doc,
-        "guide must document heap-backed graph buffers and masked neighbor indices",
+        and "canonical atom index" in doc
+        and "tokenized without mutating" in doc
+        and "deployed `num_species`" in doc,
+        "guide must document graph buffer, neighbor index, and pair_coeff metadata guards",
     )
 
     _require(

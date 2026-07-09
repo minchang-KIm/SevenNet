@@ -30,8 +30,10 @@
 #include <list>
 #include <map>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <torch/csrc/jit/api/module.h>
 #include <torch/script.h>
@@ -109,6 +111,8 @@ constexpr const char *kPairCoeffArgumentError =
     "PairE3GNNParallel: pair_coeff arguments are invalid";
 constexpr const char *kPairCoeffNumericMetadataError =
     "PairE3GNNParallel: deployed model numeric metadata is invalid";
+constexpr const char *kPairCoeffSpeciesMetadataError =
+    "PairE3GNNParallel: deployed model species metadata is invalid";
 constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
@@ -465,6 +469,36 @@ int checked_explicit_model_species_start(int model_count, int arg_count,
     error->all(FLERR, kPairCoeffArgumentError);
   }
   return static_cast<int>(species_start);
+}
+
+std::vector<std::string> parse_chemical_symbol_tokens(
+    const std::string &chemical_symbols, Error *error) {
+  std::istringstream symbol_stream(chemical_symbols);
+  std::vector<std::string> symbols;
+  std::string symbol;
+  while (symbol_stream >> symbol) {
+    symbols.push_back(symbol);
+  }
+  if (symbols.empty()) {
+    error->all(FLERR, kPairCoeffSpeciesMetadataError);
+  }
+  return symbols;
+}
+
+void validate_deployed_species_metadata(int deployed_species_count,
+                                        size_t parsed_symbol_count,
+                                        Error *error) {
+  if (static_cast<size_t>(deployed_species_count) != parsed_symbol_count) {
+    error->all(FLERR, kPairCoeffSpeciesMetadataError);
+  }
+}
+
+void validate_pair_coeff_species_count(int pair_coeff_species_count,
+                                       int lammps_atom_type_count,
+                                       Error *error) {
+  if (pair_coeff_species_count != lammps_atom_type_count) {
+    error->all(FLERR, kPairCoeffArgumentError);
+  }
 }
 
 int checked_extra_graph_index(int graph_size, size_t extra_graph_count,
@@ -1225,16 +1259,14 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
     error->all(FLERR, "given model type is not E3_equivariant_model");
   }
 
-  std::string chem_str = meta_dict["chemical_symbols_to_index"];
+  const std::vector<std::string> chem_vec =
+      parse_chemical_symbol_tokens(meta_dict["chemical_symbols_to_index"],
+                                   error);
+  const int deployed_species_count =
+      checked_parse_positive_int_metadata(meta_dict["num_species"], error);
+  validate_deployed_species_metadata(deployed_species_count, chem_vec.size(),
+                                     error);
   int ntypes = atom->ntypes;
-
-  auto delim = " ";
-  char *tok = std::strtok(const_cast<char *>(chem_str.c_str()), delim);
-  std::vector<std::string> chem_vec;
-  while (tok != nullptr) {
-    chem_vec.push_back(std::string(tok));
-    tok = std::strtok(nullptr, delim);
-  }
 
   // what if unknown chemical specie is in arg? should I abort? is there any use
   // case for that?
@@ -1243,13 +1275,15 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
   if (n_chem <= kMinimumGraphNodeCount) {
     error->all(FLERR, kPairCoeffArgumentError);
   }
+  validate_pair_coeff_species_count(n_chem, ntypes, error);
   for (int i = 0; i < n_chem; i++) {
     found_flag = false;
-    for (int j = 0; j < chem_vec.size(); j++) {
+    for (size_t j = 0; j < chem_vec.size(); j++) {
       if (chem_vec[j].compare(arg[i + chem_arg_i]) == 0) {
         const int lammps_atom_type = checked_lammps_atom_type(
             i + kFirstLammpsAtomType, ntypes, error);
-        map[lammps_atom_type] = j; // LAMMPS atom types are 1-based.
+        map[lammps_atom_type] =
+            static_cast<int>(j); // LAMMPS atom types are 1-based.
         found_flag = true;
         if (lmp->logfile) {
           fprintf(lmp->logfile, "Chemical specie '%s' is assigned to type %d\n",

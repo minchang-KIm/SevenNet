@@ -191,7 +191,11 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         )
         self.assertIn("node_type_ghost.push_back(j_model_type);", self.cpp)
         self.assertIn("i + kFirstLammpsAtomType", self.cpp)
-        self.assertIn("map[lammps_atom_type] = j;", self.cpp)
+        self.assertIn(
+            "map[lammps_atom_type] =\n"
+            "            static_cast<int>(j); // LAMMPS atom types are 1-based.",
+            self.cpp,
+        )
         self.assertIn("map[i] != kUnmappedAtomType", self.cpp)
         self.assertIn("map[j] != kUnmappedAtomType", self.cpp)
         self.assertIn("for (int i = kFirstLammpsAtomType; i <= ntypes; i++)", self.cpp)
@@ -209,6 +213,7 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         """pair_coeff input and deployed metadata should fail through LAMMPS errors."""
         self.assertIn("kPairCoeffArgumentError", self.cpp)
         self.assertIn("kPairCoeffNumericMetadataError", self.cpp)
+        self.assertIn("kPairCoeffSpeciesMetadataError", self.cpp)
         self.assertIn("kPairCoeffWildcardFirstIndex = 0", self.cpp)
         self.assertIn("kPairCoeffWildcardSecondIndex = 1", self.cpp)
         self.assertIn("kPairCoeffModelCountIndex = 2", self.cpp)
@@ -222,6 +227,10 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("checked_parse_positive_double_metadata", self.cpp)
         self.assertIn("checked_parse_positive_int_metadata", self.cpp)
         self.assertIn("checked_explicit_model_species_start", self.cpp)
+        self.assertIn("parse_chemical_symbol_tokens", self.cpp)
+        self.assertIn("validate_deployed_species_metadata", self.cpp)
+        self.assertIn("validate_pair_coeff_species_count", self.cpp)
+        self.assertIn("std::istringstream symbol_stream(chemical_symbols)", self.cpp)
         self.assertIn("!std::isfinite(parsed_value)", self.cpp)
         self.assertIn("validate_pair_coeff_minimum_args(narg, error);", self.cpp)
         self.assertIn(
@@ -245,7 +254,18 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
             "checked_parse_positive_int_metadata(meta_dict[\"comm_size\"], error)",
             self.cpp,
         )
+        self.assertIn(
+            "checked_parse_positive_int_metadata(meta_dict[\"num_species\"], error)",
+            self.cpp,
+        )
+        self.assertIn(
+            "validate_deployed_species_metadata(deployed_species_count, chem_vec.size()",
+            self.cpp,
+        )
         self.assertIn("if (n_chem <= kMinimumGraphNodeCount)", self.cpp)
+        self.assertIn("validate_pair_coeff_species_count(n_chem, ntypes, error);", self.cpp)
+        self.assertIn("for (size_t j = 0; j < chem_vec.size(); j++)", self.cpp)
+        self.assertIn("static_cast<int>(j); // LAMMPS atom types are 1-based.", self.cpp)
         self.assertNotIn("int n_model = std::stoi(arg[2]);", self.cpp)
         self.assertNotIn("std::filesystem::exists(arg[3])", self.cpp)
         self.assertNotIn("int chem_arg_i = 4", self.cpp)
@@ -253,6 +273,9 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertNotIn("chem_arg_i = n_model + 3", self.cpp)
         self.assertNotIn("cutoff = std::stod(meta_dict[\"cutoff\"])", self.cpp)
         self.assertNotIn("int comm_size = std::stod(meta_dict[\"comm_size\"])", self.cpp)
+        self.assertNotIn("std::strtok", self.cpp)
+        self.assertNotIn("const_cast<char *>", self.cpp)
+        self.assertNotIn('auto delim = " "', self.cpp)
 
     def test_graph_index_pointer_lifetime_is_guarded(self) -> None:
         """Comm preprocessing should never dereference an inactive lookup map."""
