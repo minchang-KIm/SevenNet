@@ -41,7 +41,7 @@ READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
 ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
 PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
-SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v2"
+SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v3"
 SLURM_ABLATION_SWEEP_SCHEMA_VERSION = "isodelta-slurm-ablation-sweep-v1"
 SLURM_ABLATION_SWEEP_VERIFICATION_SCHEMA_VERSION = (
     "isodelta-slurm-ablation-sweep-verification-v1"
@@ -97,6 +97,10 @@ SLURM_REPO_ROOT_ENV_NAME = "REPO_ROOT"
 SLURM_SUITE_RUNNER_RELATIVE_PATH = Path("tools") / "run_isodelta_cluster_paper_suite.py"
 SLURM_PYTHON_BIN_ENV_NAME = "PYTHON_BIN"
 SLURM_PYTHON_PROVENANCE_ENV_NAME = "PYTHON_PROVENANCE_OUTPUT"
+SLURM_PYTHON_BIN_PROVENANCE_PREFIX = "PYTHON_BIN="
+SLURM_SUITE_RUNNER_PROVENANCE_PREFIX = "SUITE_RUNNER="
+SLURM_PYTHON_VERSION_PROVENANCE_PREFIX = "Python "
+SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX = "sys.executable="
 DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
 CASE_STATUS_PASSED = "passed"
 CASE_STATUS_REUSED = "reused"
@@ -8558,11 +8562,34 @@ def write_slurm_script(
         "",
         "# Record the Python launcher before preflight so archived runs explain runtime selection.",
         "{",
-        '  echo "PYTHON_BIN=$PYTHON_BIN"',
-        '  echo "SUITE_RUNNER=$SUITE_RUNNER"',
+        f'  echo "{SLURM_PYTHON_BIN_PROVENANCE_PREFIX}$PYTHON_BIN"',
+        f'  echo "{SLURM_SUITE_RUNNER_PROVENANCE_PREFIX}$SUITE_RUNNER"',
         '  "$PYTHON_BIN" --version 2>&1',
         """  "$PYTHON_BIN" -c 'import sys; print("sys.executable=" + sys.executable)'""",
         '} > "$PYTHON_PROVENANCE_OUTPUT"',
+        "",
+        "# Fail early if runtime provenance capture is missing or incomplete.",
+        'test -s "$PYTHON_PROVENANCE_OUTPUT"',
+        (
+            "grep -q "
+            f"{_bash_quote('^' + SLURM_PYTHON_BIN_PROVENANCE_PREFIX)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"'
+        ),
+        (
+            "grep -q "
+            f"{_bash_quote('^' + SLURM_SUITE_RUNNER_PROVENANCE_PREFIX)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"'
+        ),
+        (
+            "grep -q "
+            f"{_bash_quote('^' + SLURM_PYTHON_VERSION_PROVENANCE_PREFIX)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"'
+        ),
+        (
+            "grep -q "
+            f"{_bash_quote('^' + SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"'
+        ),
         "",
         "# COMMON_ARGS is reused for planning and execution to prevent argument drift.",
         'COMMON_ARGS=(--manifest "$MANIFEST_PATH")',
@@ -8690,6 +8717,35 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
             "launcher records the resolved Python executable path",
         ),
         (
+            "python_provenance_file_nonempty",
+            'test -s "$PYTHON_PROVENANCE_OUTPUT"',
+            "launcher fails before model execution if Python provenance is absent",
+        ),
+        (
+            "python_provenance_python_bin_marker",
+            f"grep -q {_bash_quote('^' + SLURM_PYTHON_BIN_PROVENANCE_PREFIX)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"',
+            "launcher verifies the recorded Python command marker",
+        ),
+        (
+            "python_provenance_suite_runner_marker",
+            f"grep -q {_bash_quote('^' + SLURM_SUITE_RUNNER_PROVENANCE_PREFIX)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"',
+            "launcher verifies the recorded suite runner marker",
+        ),
+        (
+            "python_provenance_version_marker",
+            f"grep -q {_bash_quote('^' + SLURM_PYTHON_VERSION_PROVENANCE_PREFIX)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"',
+            "launcher verifies the recorded Python version marker",
+        ),
+        (
+            "python_provenance_executable_marker",
+            f"grep -q {_bash_quote('^' + SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX)} "
+            '"$PYTHON_PROVENANCE_OUTPUT"',
+            "launcher verifies the recorded sys.executable marker",
+        ),
+        (
             "repo_root_guard",
             'if [[ -z "${REPO_ROOT:-}" ]]; then',
             "launcher can embed or receive the repository checkout path",
@@ -8739,6 +8795,7 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
         )
 
     python_version_probe = '"$PYTHON_BIN" --version 2>&1'
+    python_provenance_file_gate = 'test -s "$PYTHON_PROVENANCE_OUTPUT"'
     preflight_probe = '--preflight-only --preflight-output "$PREFLIGHT_OUTPUT"'
     _require(
         script.index(python_version_probe) < script.index(preflight_probe),
@@ -8748,6 +8805,16 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
         _slurm_script_check(
             "python_provenance_before_preflight",
             "launcher records Python runtime evidence before preflight",
+        )
+    )
+    _require(
+        script.index(python_provenance_file_gate) < script.index(preflight_probe),
+        "SLURM launcher must verify Python provenance before preflight",
+    )
+    checks.append(
+        _slurm_script_check(
+            "python_provenance_gate_before_preflight",
+            "launcher verifies Python runtime evidence before preflight",
         )
     )
 

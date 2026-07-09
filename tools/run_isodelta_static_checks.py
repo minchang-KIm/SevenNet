@@ -1170,9 +1170,15 @@ def main() -> None:
         and "SLURM_PYTHON_BIN_ENV_NAME" in cluster_suite
         and "SLURM_PYTHON_PROVENANCE_ENV_NAME" in cluster_suite
         and "SLURM_PYTHON_PROVENANCE_NAME" in cluster_suite
+        and "SLURM_PYTHON_BIN_PROVENANCE_PREFIX" in cluster_suite
+        and "SLURM_SUITE_RUNNER_PROVENANCE_PREFIX" in cluster_suite
+        and "SLURM_PYTHON_VERSION_PROVENANCE_PREFIX" in cluster_suite
+        and "SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX" in cluster_suite
         and "python_runtime_provenance.txt" in cluster_suite
         and "python_version_probe" in cluster_suite
         and "python_provenance_before_preflight" in cluster_suite
+        and "python_provenance_file_nonempty" in cluster_suite
+        and "python_provenance_gate_before_preflight" in cluster_suite
         and "PIPELINE_OUTPUT" in cluster_suite
         and "--pipeline-report" in cluster_suite
         and ' --verify-pipeline-report "$PIPELINE_OUTPUT"' in cluster_suite
@@ -1413,7 +1419,14 @@ def main() -> None:
         in cluster_suite_test
         and 'echo "PYTHON_BIN=$PYTHON_BIN"' in cluster_suite_test
         and '"$PYTHON_BIN" --version 2>&1' in cluster_suite_test
+        and 'test -s "$PYTHON_PROVENANCE_OUTPUT"' in cluster_suite_test
+        and r"grep -q '^PYTHON_BIN=' \"$PYTHON_PROVENANCE_OUTPUT\""
+        in cluster_suite_test
+        and r"grep -q '^Python ' \"$PYTHON_PROVENANCE_OUTPUT\""
+        in cluster_suite_test
         and "test_verify_slurm_script_rejects_missing_python_provenance"
+        in cluster_suite_test
+        and "test_verify_slurm_script_rejects_missing_python_provenance_gate"
         in cluster_suite_test
         and "self.assertNotIn(str(root), script)" in cluster_suite_test
         and "test_verify_slurm_script_rejects_missing_final_gate"
@@ -1636,6 +1649,8 @@ def main() -> None:
         and "PYTHON_BIN" in doc
         and "SUITE_RUNNER" in doc
         and "`python_runtime_provenance.txt`" in doc
+        and "non-empty" in doc
+        and "marker checks" in doc
         and "Python provenance capture" in doc,
         "IsoDelta-Halo guide must document SLURM cluster launch generation",
     )

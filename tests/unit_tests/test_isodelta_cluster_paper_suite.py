@@ -2615,6 +2615,7 @@ trace_evidence = ["trace.json"]
         )
         check_names = {check["name"] for check in verification["checks"]}
         self.assertIn("python_provenance_before_preflight", check_names)
+        self.assertIn("python_provenance_gate_before_preflight", check_names)
         self.assertTrue(script.startswith("#!/usr/bin/env bash"))
         self.assertIn("# IsoDelta-Halo cluster paper suite launcher.", script)
         self.assertIn("# CLI runtime overrides: none.", script)
@@ -2643,8 +2644,17 @@ trace_evidence = ["trace.json"]
         self.assertIn('echo "PYTHON_BIN=$PYTHON_BIN"', script)
         self.assertIn('"$PYTHON_BIN" --version 2>&1', script)
         self.assertIn('sys.executable=', script)
+        self.assertIn('test -s "$PYTHON_PROVENANCE_OUTPUT"', script)
+        self.assertIn("grep -q '^PYTHON_BIN=' \"$PYTHON_PROVENANCE_OUTPUT\"", script)
+        self.assertIn("grep -q '^SUITE_RUNNER=' \"$PYTHON_PROVENANCE_OUTPUT\"", script)
+        self.assertIn("grep -q '^Python ' \"$PYTHON_PROVENANCE_OUTPUT\"", script)
+        self.assertIn("grep -q '^sys.executable=' \"$PYTHON_PROVENANCE_OUTPUT\"", script)
         self.assertLess(
             script.index('"$PYTHON_BIN" --version 2>&1'),
+            script.index("--preflight-only --preflight-output \"$PREFLIGHT_OUTPUT\""),
+        )
+        self.assertLess(
+            script.index('test -s "$PYTHON_PROVENANCE_OUTPUT"'),
             script.index("--preflight-only --preflight-output \"$PREFLIGHT_OUTPUT\""),
         )
         self.assertIn("COMMON_ARGS=(--manifest \"$MANIFEST_PATH\")", script)
@@ -2702,6 +2712,48 @@ trace_evidence = ["trace.json"]
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 "python_version_probe",
+            ):
+                isodelta_cluster_suite.verify_slurm_script(slurm_path)
+
+    def test_verify_slurm_script_rejects_missing_python_provenance_gate(self) -> None:
+        """A launcher must verify the captured Python provenance before work starts."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            slurm_path = root / "run_isodelta.sbatch"
+            manifest_path.write_text(
+                """
+[suite]
+name = "slurm-python-provenance-gate-suite"
+required_models = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-trace"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["trace.json"]
+""",
+                encoding="utf-8",
+            )
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-script",
+                    str(slurm_path),
+                    "--skip-downloads",
+                ]
+            )
+            script = slurm_path.read_text(encoding="utf-8")
+            slurm_path.write_text(
+                script.replace('test -s "$PYTHON_PROVENANCE_OUTPUT"\n', ""),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(exit_code, 0)
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "python_provenance_file_nonempty",
             ):
                 isodelta_cluster_suite.verify_slurm_script(slurm_path)
 
