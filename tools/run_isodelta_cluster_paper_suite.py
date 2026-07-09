@@ -136,6 +136,9 @@ PIPELINE_STAGE_REPORT_PATH_ALIGNMENT_ERROR = (
 PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR = (
     "output_bundle_verification.status must be 'passed' for a passed pipeline report"
 )
+PIPELINE_BUNDLE_SUMMARY_PATH_ALIGNMENT_ERROR = (
+    "pipeline output_bundle_verification.summary_json must match current bundle summary path"
+)
 PIPELINE_READINESS_REPORT_REQUIRED_ERROR = (
     "passed pipeline report must fingerprint a present readiness report"
 )
@@ -5710,6 +5713,31 @@ def _require_pipeline_bundle_verification(
         return recorded_verification
     bundle_root = _pipeline_report_output_dir(pipeline_report_path, original_output_dir)
     verification = verify_output_bundle(bundle_root)
+    recorded_summary_path = Path(
+        _as_json_string(
+            recorded_verification.get("summary_json"),
+            f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.summary_json",
+        )
+    )
+    actual_summary_path = Path(
+        _as_json_string(
+            verification.get("summary_json"),
+            f"actual_{OUTPUT_BUNDLE_VERIFICATION_KEY}.summary_json",
+        )
+    )
+    actual_summary_key = str(actual_summary_path.resolve())
+    summary_path_candidates = _candidate_fingerprint_paths(
+        recorded_summary_path,
+        bundle_root,
+        original_output_dir,
+    )
+    _require(
+        any(
+            str(candidate.resolve()) == actual_summary_key
+            for candidate in summary_path_candidates
+        ),
+        PIPELINE_BUNDLE_SUMMARY_PATH_ALIGNMENT_ERROR,
+    )
     for count_key in OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS:
         recorded_count = _as_json_nonnegative_int(
             recorded_verification.get(count_key),

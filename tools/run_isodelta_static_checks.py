@@ -1227,6 +1227,8 @@ def main() -> None:
         and "stage_path_drift_error" in cluster_suite_test
         and "plan_output_drift_error" in cluster_suite_test
         and "wrong_case_summary.csv" in cluster_suite_test
+        and "bundle_summary_path_drift_error" in cluster_suite_test
+        and "wrong_summary.json" in cluster_suite_test
         and "verified_paper_output_count" in cluster_suite_test
         and "wrong_readiness_report.json" in cluster_suite_test
         and "Re-open the finished pipeline report" in cluster_suite_test
@@ -1511,6 +1513,7 @@ def main() -> None:
         and "REQUIRED_PIPELINE_STAGE_NAMES" in cluster_suite
         and "PIPELINE_REQUIRED_STAGES_ERROR" in cluster_suite
         and "PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR" in cluster_suite
+        and "PIPELINE_BUNDLE_SUMMARY_PATH_ALIGNMENT_ERROR" in cluster_suite
         and "_as_json_bool" in cluster_suite
         and "_require_pipeline_report_modes" in cluster_suite
         and "_require_pipeline_readiness_report" in cluster_suite
@@ -1525,6 +1528,7 @@ def main() -> None:
         and "_require_pipeline_runtime_overrides" in cluster_suite
         and "_require_pipeline_suite_metadata" in cluster_suite
         and "_require_pipeline_success_stages" in cluster_suite
+        and "summary_path_candidates" in cluster_suite
         and "_resolve_present_fingerprint_path" in cluster_suite
         and "# CLI runtime overrides: ablation_mode=isodelta-enabled." in cluster_suite_test
         and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
@@ -1593,6 +1597,7 @@ def main() -> None:
         and "`--verify-pipeline-report`" in doc
         and "publication-success gate" in doc
         and "re-runs the current output-bundle verifier" in doc
+        and "output-bundle `summary_json` path" in doc
         and "SLURM Python provenance" in doc
         and "experiment-report-check evidence counts" in doc
         and "failed or planned `pipeline_report.json` exits" in doc

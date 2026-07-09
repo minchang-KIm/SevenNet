@@ -523,7 +523,7 @@ python tools/run_isodelta_cluster_paper_suite.py \
 
 This rechecks the pipeline report schema, every recorded stage report
 fingerprint, re-runs the current output-bundle verifier, and compares every
-embedded final output-bundle verification count, including
+embedded final output-bundle `summary_json` path and verification count, including
 SLURM Python provenance and experiment-report-check evidence counts. It is a
 publication-success gate: a failed or planned `pipeline_report.json` exits
 nonzero even when its diagnostic stage fingerprints are internally consistent.
