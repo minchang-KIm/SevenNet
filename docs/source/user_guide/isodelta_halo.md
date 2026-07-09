@@ -565,7 +565,8 @@ the exact same `COMMON_ARGS` used by the final run, and then executes the full
 `SUITE_RUNNER`, `python --version`, and `sys.executable` so archived runs show
 which interpreter actually executed the experiment. The launcher then requires
 that file to be non-empty and passes marker checks for each recorded field before
-starting preflight. After the pipeline exits, the
+starting preflight, and runs the same checks again after the final verification command.
+After the pipeline exits, the
 launcher immediately runs `--verify-pipeline-report "$PIPELINE_OUTPUT"` so the
 SLURM job only succeeds after stage fingerprints and final bundle verification
 counts are rechecked. The

@@ -41,7 +41,7 @@ READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
 ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
 PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
-SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v3"
+SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v4"
 SLURM_ABLATION_SWEEP_SCHEMA_VERSION = "isodelta-slurm-ablation-sweep-v1"
 SLURM_ABLATION_SWEEP_VERIFICATION_SCHEMA_VERSION = (
     "isodelta-slurm-ablation-sweep-verification-v1"
@@ -101,6 +101,7 @@ SLURM_PYTHON_BIN_PROVENANCE_PREFIX = "PYTHON_BIN="
 SLURM_SUITE_RUNNER_PROVENANCE_PREFIX = "SUITE_RUNNER="
 SLURM_PYTHON_VERSION_PROVENANCE_PREFIX = "Python "
 SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX = "sys.executable="
+SLURM_PYTHON_PROVENANCE_FUNCTION_NAME = "verify_python_provenance"
 DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
 CASE_STATUS_PASSED = "passed"
 CASE_STATUS_REUSED = "reused"
@@ -8568,28 +8569,33 @@ def write_slurm_script(
         """  "$PYTHON_BIN" -c 'import sys; print("sys.executable=" + sys.executable)'""",
         '} > "$PYTHON_PROVENANCE_OUTPUT"',
         "",
-        "# Fail early if runtime provenance capture is missing or incomplete.",
-        'test -s "$PYTHON_PROVENANCE_OUTPUT"',
+        "# Reusable provenance gate for both early launch and final archive checks.",
+        f"{SLURM_PYTHON_PROVENANCE_FUNCTION_NAME}() {{",
+        '  test -s "$PYTHON_PROVENANCE_OUTPUT"',
         (
-            "grep -q "
+            "  grep -q "
             f"{_bash_quote('^' + SLURM_PYTHON_BIN_PROVENANCE_PREFIX)} "
             '"$PYTHON_PROVENANCE_OUTPUT"'
         ),
         (
-            "grep -q "
+            "  grep -q "
             f"{_bash_quote('^' + SLURM_SUITE_RUNNER_PROVENANCE_PREFIX)} "
             '"$PYTHON_PROVENANCE_OUTPUT"'
         ),
         (
-            "grep -q "
+            "  grep -q "
             f"{_bash_quote('^' + SLURM_PYTHON_VERSION_PROVENANCE_PREFIX)} "
             '"$PYTHON_PROVENANCE_OUTPUT"'
         ),
         (
-            "grep -q "
+            "  grep -q "
             f"{_bash_quote('^' + SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX)} "
             '"$PYTHON_PROVENANCE_OUTPUT"'
         ),
+        "}",
+        "",
+        "# Fail early if runtime provenance capture is missing or incomplete.",
+        SLURM_PYTHON_PROVENANCE_FUNCTION_NAME,
         "",
         "# COMMON_ARGS is reused for planning and execution to prevent argument drift.",
         'COMMON_ARGS=(--manifest "$MANIFEST_PATH")',
@@ -8632,6 +8638,9 @@ def write_slurm_script(
                 "# Re-open the finished output bundle before allowing the SLURM job to succeed.",
                 f'"$PYTHON_BIN" "$SUITE_RUNNER" --verify-output-bundle "${{{SLURM_OUTPUT_DIR_ENV_NAME}}}"',
                 "",
+                "# Ensure the archived Python launcher evidence survived the completed run.",
+                SLURM_PYTHON_PROVENANCE_FUNCTION_NAME,
+                "",
             ]
         )
     else:
@@ -8642,6 +8651,9 @@ def write_slurm_script(
                 "",
                 "# Re-open the finished pipeline report before allowing the SLURM job to succeed.",
                 '"$PYTHON_BIN" "$SUITE_RUNNER" --verify-pipeline-report "$PIPELINE_OUTPUT"',
+                "",
+                "# Ensure the archived Python launcher evidence survived the completed run.",
+                SLURM_PYTHON_PROVENANCE_FUNCTION_NAME,
                 "",
             ]
         )
@@ -8700,6 +8712,11 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
             "python_provenance_output",
             'PYTHON_PROVENANCE_OUTPUT="${ISODELTA_OUTPUT_DIR}/python_runtime_provenance.txt"',
             "launcher writes Python runtime evidence into the output bundle",
+        ),
+        (
+            "python_provenance_function",
+            f"{SLURM_PYTHON_PROVENANCE_FUNCTION_NAME}() {{",
+            "launcher defines a reusable Python provenance verification gate",
         ),
         (
             "python_bin_echo",
@@ -8795,7 +8812,7 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
         )
 
     python_version_probe = '"$PYTHON_BIN" --version 2>&1'
-    python_provenance_file_gate = 'test -s "$PYTHON_PROVENANCE_OUTPUT"'
+    python_provenance_gate_call = f"\n{SLURM_PYTHON_PROVENANCE_FUNCTION_NAME}\n"
     preflight_probe = '--preflight-only --preflight-output "$PREFLIGHT_OUTPUT"'
     _require(
         script.index(python_version_probe) < script.index(preflight_probe),
@@ -8808,7 +8825,7 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
         )
     )
     _require(
-        script.index(python_provenance_file_gate) < script.index(preflight_probe),
+        script.index(python_provenance_gate_call) < script.index(preflight_probe),
         "SLURM launcher must verify Python provenance before preflight",
     )
     checks.append(
@@ -8838,6 +8855,21 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
                 if has_pipeline_gate
                 else "launcher verifies the one-sided output bundle"
             ),
+        )
+    )
+    final_gate_snippet = (
+        '--verify-pipeline-report "$PIPELINE_OUTPUT"'
+        if has_pipeline_gate
+        else '--verify-output-bundle "${ISODELTA_OUTPUT_DIR}"'
+    )
+    _require(
+        script.index(final_gate_snippet) < script.rindex(python_provenance_gate_call),
+        "SLURM launcher must recheck Python provenance after final verification",
+    )
+    checks.append(
+        _slurm_script_check(
+            "python_provenance_gate_after_final_verification",
+            "launcher verifies Python runtime evidence after final publication gate",
         )
     )
     _require("--collect-only" not in script, "SLURM launcher must not run collect-only mode")
