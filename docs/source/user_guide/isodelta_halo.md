@@ -73,6 +73,12 @@ through named LAMMPS errors instead of being ignored by the halo path.
 The pair pack/unpack helpers compute payload element and byte counts through a
 checked helper before MPI or CUDA copy calls, so `x_dim * atom_count` overflow
 cannot silently truncate a communication message.
+The `pair_coeff` parser checks the minimum argument count, positive model-file
+count, model path existence, explicit model-file argument range, nonempty
+species mapping, positive finite `cutoff`, and positive integer `comm_size`
+before loading TorchScript modules. Invalid deployment input therefore fails as
+a named LAMMPS error instead of escaping as a C++ parsing exception or an empty
+model list.
 Cached CUDA index tensors are reused only when their length, integer dtype, and
 device still match the current communication path, preventing a stale tensor
 layout from crossing a later `index_select` or `scatter_` call.

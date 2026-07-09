@@ -23,12 +23,14 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <limits>
 #include <list>
 #include <map>
 #include <set>
+#include <stdexcept>
 #include <string>
 
 #include <torch/csrc/jit/api/module.h>
@@ -103,6 +105,10 @@ constexpr const char *kIsoDeltaHaloEdgeBufferSizeError =
     "IsoDelta-Halo edge buffer size is out of range";
 constexpr const char *kIsoDeltaHaloAtomTypeMapError =
     "IsoDelta-Halo atom type map is invalid";
+constexpr const char *kPairCoeffArgumentError =
+    "PairE3GNNParallel: pair_coeff arguments are invalid";
+constexpr const char *kPairCoeffNumericMetadataError =
+    "PairE3GNNParallel: deployed model numeric metadata is invalid";
 constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
@@ -137,6 +143,14 @@ constexpr int kMinimumCudaBufferElementCount = 0;
 constexpr int kMinimumCudaDeviceCount = 1;
 constexpr int kFirstLammpsAtomType = 1;
 constexpr int kUnmappedAtomType = -1;
+constexpr int kPairCoeffWildcardFirstIndex = 0;
+constexpr int kPairCoeffWildcardSecondIndex = 1;
+constexpr int kPairCoeffModelCountIndex = 2;
+constexpr int kPairCoeffModelPathIndex = 3;
+constexpr int kPairCoeffDirectorySpeciesStartIndex = 4;
+constexpr int kPairCoeffExplicitModelStartIndex = 3;
+constexpr int kMinimumPairCoeffArgumentCount = 5;
+constexpr int kMinimumModelFileCount = 1;
 constexpr int kTrashGraphSlotCount = 1;
 constexpr int kSpatialDimension = 3;
 constexpr int kNodeFeatureTensorRank = 2;
@@ -385,6 +399,72 @@ int checked_model_atom_type(const int *type_map, int atom_type,
     error->all(FLERR, kIsoDeltaHaloAtomTypeMapError);
   }
   return model_atom_type;
+}
+
+void validate_pair_coeff_minimum_args(int arg_count, Error *error) {
+  if (arg_count < kMinimumPairCoeffArgumentCount) {
+    error->all(FLERR, kPairCoeffArgumentError);
+  }
+}
+
+int checked_parse_positive_int(const char *raw_value, Error *error) {
+  if (raw_value == nullptr) {
+    error->all(FLERR, kPairCoeffArgumentError);
+  }
+  const std::string value(raw_value);
+  size_t parsed_length = 0;
+  int parsed_value = 0;
+  try {
+    parsed_value = std::stoi(value, &parsed_length);
+  } catch (const std::exception &) {
+    error->all(FLERR, kPairCoeffArgumentError);
+  }
+  if (parsed_length != value.size() ||
+      parsed_value < kMinimumModelFileCount) {
+    error->all(FLERR, kPairCoeffArgumentError);
+  }
+  return parsed_value;
+}
+
+double checked_parse_positive_double_metadata(const std::string &value,
+                                              Error *error) {
+  size_t parsed_length = 0;
+  double parsed_value = 0.0;
+  try {
+    parsed_value = std::stod(value, &parsed_length);
+  } catch (const std::exception &) {
+    error->all(FLERR, kPairCoeffNumericMetadataError);
+  }
+  if (parsed_length != value.size() || !std::isfinite(parsed_value) ||
+      parsed_value <= 0.0) {
+    error->all(FLERR, kPairCoeffNumericMetadataError);
+  }
+  return parsed_value;
+}
+
+int checked_parse_positive_int_metadata(const std::string &value,
+                                        Error *error) {
+  const double parsed_value = checked_parse_positive_double_metadata(value, error);
+  if (parsed_value > static_cast<double>(std::numeric_limits<int>::max())) {
+    error->all(FLERR, kPairCoeffNumericMetadataError);
+  }
+  const int parsed_int = static_cast<int>(parsed_value);
+  if (static_cast<double>(parsed_int) != parsed_value) {
+    error->all(FLERR, kPairCoeffNumericMetadataError);
+  }
+  return parsed_int;
+}
+
+int checked_explicit_model_species_start(int model_count, int arg_count,
+                                         Error *error) {
+  const long long species_start =
+      static_cast<long long>(kPairCoeffExplicitModelStartIndex) +
+      static_cast<long long>(model_count);
+  if (species_start > std::numeric_limits<int>::max() ||
+      species_start >= static_cast<long long>(arg_count)) {
+    error->all(FLERR, kPairCoeffArgumentError);
+  }
+  return static_cast<int>(species_start);
 }
 
 int checked_extra_graph_index(int graph_size, size_t extra_graph_count,
@@ -1063,9 +1143,11 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
   if (allocated) {
     error->all(FLERR, "pair_e3gnn coeff called twice");
   }
+  validate_pair_coeff_minimum_args(narg, error);
   allocate();
 
-  if (strcmp(arg[0], "*") != 0 || strcmp(arg[1], "*") != 0) {
+  if (strcmp(arg[kPairCoeffWildcardFirstIndex], "*") != 0 ||
+      strcmp(arg[kPairCoeffWildcardSecondIndex], "*") != 0) {
     error->all(FLERR,
                "e3gnn: first and second input of pair_coeff should be '*'");
   }
@@ -1084,24 +1166,29 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
       {"comm_size", ""}};
 
   // model loading from input
-  int n_model = std::stoi(arg[2]);
-  int chem_arg_i = 4;
+  const int n_model =
+      checked_parse_positive_int(arg[kPairCoeffModelCountIndex], error);
+  int chem_arg_i = kPairCoeffDirectorySpeciesStartIndex;
   std::vector<std::string> model_fnames;
-  if (std::filesystem::exists(arg[3])) {
-    if (std::filesystem::is_directory(arg[3])) {
-      auto headf = std::string(arg[3]);
+  if (std::filesystem::exists(arg[kPairCoeffModelPathIndex])) {
+    if (std::filesystem::is_directory(arg[kPairCoeffModelPathIndex])) {
+      auto headf = std::string(arg[kPairCoeffModelPathIndex]);
       for (int i = 0; i < n_model; i++) {
         auto stri = std::to_string(i);
         model_fnames.push_back(headf + "/deployed_parallel_" + stri + ".pt");
       }
-    } else if (std::filesystem::is_regular_file(arg[3])) {
-      for (int i = 3; i < n_model + 3; i++) {
+    } else if (std::filesystem::is_regular_file(arg[kPairCoeffModelPathIndex])) {
+      chem_arg_i = checked_explicit_model_species_start(n_model, narg, error);
+      for (int i = kPairCoeffExplicitModelStartIndex; i < chem_arg_i; i++) {
         model_fnames.push_back(std::string(arg[i]));
       }
-      chem_arg_i = n_model + 3;
     } else {
-      error->all(FLERR, "No such file or directory:" + std::string(arg[3]));
+      error->all(FLERR, "No such file or directory:" +
+                             std::string(arg[kPairCoeffModelPathIndex]));
     }
+  } else {
+    error->all(FLERR, "No such file or directory:" +
+                           std::string(arg[kPairCoeffModelPathIndex]));
   }
 
   for (const auto &modelf : model_fnames) {
@@ -1117,10 +1204,11 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
   strategy = {{torch::jit::FusionBehavior::STATIC, 0}};
   torch::jit::setFusionStrategy(strategy);
 
-  cutoff = std::stod(meta_dict["cutoff"]);
+  cutoff = checked_parse_positive_double_metadata(meta_dict["cutoff"], error);
 
   // maximum possible size of per atom x before last convolution
-  int comm_size = std::stod(meta_dict["comm_size"]);
+  const int comm_size =
+      checked_parse_positive_int_metadata(meta_dict["comm_size"], error);
 
   // to initialize buffer size for communication
   comm_forward = comm_size;
@@ -1152,6 +1240,9 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
   // case for that?
   bool found_flag = false;
   int n_chem = narg - chem_arg_i;
+  if (n_chem <= kMinimumGraphNodeCount) {
+    error->all(FLERR, kPairCoeffArgumentError);
+  }
   for (int i = 0; i < n_chem; i++) {
     found_flag = false;
     for (int j = 0; j < chem_vec.size(); j++) {

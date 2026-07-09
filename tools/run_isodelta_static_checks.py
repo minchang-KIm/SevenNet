@@ -235,6 +235,45 @@ def main() -> None:
         "atom type maps must be initialized and checked before model lookup",
     )
     _require(
+        "kPairCoeffArgumentError" in cpp
+        and "kPairCoeffNumericMetadataError" in cpp
+        and "kPairCoeffWildcardFirstIndex = 0" in cpp
+        and "kPairCoeffWildcardSecondIndex = 1" in cpp
+        and "kPairCoeffModelCountIndex = 2" in cpp
+        and "kPairCoeffModelPathIndex = 3" in cpp
+        and "kPairCoeffDirectorySpeciesStartIndex = 4" in cpp
+        and "kPairCoeffExplicitModelStartIndex = 3" in cpp
+        and "kMinimumPairCoeffArgumentCount = 5" in cpp
+        and "kMinimumModelFileCount = 1" in cpp
+        and "validate_pair_coeff_minimum_args" in cpp
+        and "checked_parse_positive_int" in cpp
+        and "checked_parse_positive_double_metadata" in cpp
+        and "checked_parse_positive_int_metadata" in cpp
+        and "checked_explicit_model_species_start" in cpp
+        and "!std::isfinite(parsed_value)" in cpp
+        and "validate_pair_coeff_minimum_args(narg, error);" in cpp
+        and "checked_parse_positive_int(arg[kPairCoeffModelCountIndex], error)"
+        in cpp
+        and "std::filesystem::exists(arg[kPairCoeffModelPathIndex])" in cpp
+        and "chem_arg_i = checked_explicit_model_species_start(n_model, narg, error);"
+        in cpp
+        and "for (int i = kPairCoeffExplicitModelStartIndex; i < chem_arg_i; i++)"
+        in cpp
+        and 'cutoff = checked_parse_positive_double_metadata(meta_dict["cutoff"], error);'
+        in cpp
+        and 'checked_parse_positive_int_metadata(meta_dict["comm_size"], error)'
+        in cpp
+        and "if (n_chem <= kMinimumGraphNodeCount)" in cpp
+        and "int n_model = std::stoi(arg[2]);" not in cpp
+        and "std::filesystem::exists(arg[3])" not in cpp
+        and "int chem_arg_i = 4" not in cpp
+        and "for (int i = 3; i < n_model + 3; i++)" not in cpp
+        and "chem_arg_i = n_model + 3" not in cpp
+        and 'cutoff = std::stod(meta_dict["cutoff"])' not in cpp
+        and 'int comm_size = std::stod(meta_dict["comm_size"])' not in cpp,
+        "pair_coeff arguments and deployed numeric metadata must be checked",
+    )
+    _require(
         "kIsoDeltaHaloGraphIndexRequiredError" in cpp
         and "tag_to_graph_idx_ptr = nullptr;" in cpp
         and "if (tag_to_graph_idx_ptr == nullptr)" in cpp

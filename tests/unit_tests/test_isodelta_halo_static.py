@@ -205,6 +205,55 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertNotIn("map[i] >= 0", self.cpp)
         self.assertNotIn("map[j] >= 0", self.cpp)
 
+    def test_pair_coeff_arguments_and_metadata_are_guarded(self) -> None:
+        """pair_coeff input and deployed metadata should fail through LAMMPS errors."""
+        self.assertIn("kPairCoeffArgumentError", self.cpp)
+        self.assertIn("kPairCoeffNumericMetadataError", self.cpp)
+        self.assertIn("kPairCoeffWildcardFirstIndex = 0", self.cpp)
+        self.assertIn("kPairCoeffWildcardSecondIndex = 1", self.cpp)
+        self.assertIn("kPairCoeffModelCountIndex = 2", self.cpp)
+        self.assertIn("kPairCoeffModelPathIndex = 3", self.cpp)
+        self.assertIn("kPairCoeffDirectorySpeciesStartIndex = 4", self.cpp)
+        self.assertIn("kPairCoeffExplicitModelStartIndex = 3", self.cpp)
+        self.assertIn("kMinimumPairCoeffArgumentCount = 5", self.cpp)
+        self.assertIn("kMinimumModelFileCount = 1", self.cpp)
+        self.assertIn("validate_pair_coeff_minimum_args", self.cpp)
+        self.assertIn("checked_parse_positive_int", self.cpp)
+        self.assertIn("checked_parse_positive_double_metadata", self.cpp)
+        self.assertIn("checked_parse_positive_int_metadata", self.cpp)
+        self.assertIn("checked_explicit_model_species_start", self.cpp)
+        self.assertIn("!std::isfinite(parsed_value)", self.cpp)
+        self.assertIn("validate_pair_coeff_minimum_args(narg, error);", self.cpp)
+        self.assertIn(
+            "checked_parse_positive_int(arg[kPairCoeffModelCountIndex], error)",
+            self.cpp,
+        )
+        self.assertIn("std::filesystem::exists(arg[kPairCoeffModelPathIndex])", self.cpp)
+        self.assertIn(
+            "chem_arg_i = checked_explicit_model_species_start(n_model, narg, error);",
+            self.cpp,
+        )
+        self.assertIn(
+            "for (int i = kPairCoeffExplicitModelStartIndex; i < chem_arg_i; i++)",
+            self.cpp,
+        )
+        self.assertIn(
+            "cutoff = checked_parse_positive_double_metadata(meta_dict[\"cutoff\"], error);",
+            self.cpp,
+        )
+        self.assertIn(
+            "checked_parse_positive_int_metadata(meta_dict[\"comm_size\"], error)",
+            self.cpp,
+        )
+        self.assertIn("if (n_chem <= kMinimumGraphNodeCount)", self.cpp)
+        self.assertNotIn("int n_model = std::stoi(arg[2]);", self.cpp)
+        self.assertNotIn("std::filesystem::exists(arg[3])", self.cpp)
+        self.assertNotIn("int chem_arg_i = 4", self.cpp)
+        self.assertNotIn("for (int i = 3; i < n_model + 3; i++)", self.cpp)
+        self.assertNotIn("chem_arg_i = n_model + 3", self.cpp)
+        self.assertNotIn("cutoff = std::stod(meta_dict[\"cutoff\"])", self.cpp)
+        self.assertNotIn("int comm_size = std::stod(meta_dict[\"comm_size\"])", self.cpp)
+
     def test_graph_index_pointer_lifetime_is_guarded(self) -> None:
         """Comm preprocessing should never dereference an inactive lookup map."""
         self.assertIn("kIsoDeltaHaloGraphIndexRequiredError", self.cpp)
