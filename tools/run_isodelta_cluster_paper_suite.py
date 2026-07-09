@@ -105,6 +105,12 @@ SLURM_PYTHON_PROVENANCE_FUNCTION_NAME = "verify_python_provenance"
 SLURM_PYTHON_PROVENANCE_COMMENT = (
     "# IsoDelta-Halo Python runtime provenance captured by the generated SLURM launcher."
 )
+SLURM_PYTHON_PROVENANCE_MARKER_PREFIXES = (
+    SLURM_PYTHON_BIN_PROVENANCE_PREFIX,
+    SLURM_SUITE_RUNNER_PROVENANCE_PREFIX,
+    SLURM_PYTHON_VERSION_PROVENANCE_PREFIX,
+    SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX,
+)
 DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
 CASE_STATUS_PASSED = "passed"
 CASE_STATUS_REUSED = "reused"
@@ -258,6 +264,7 @@ PIPELINE_REPORT_NAME = "pipeline_report.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
 SLURM_PYTHON_PROVENANCE_NAME = "python_runtime_provenance.txt"
+SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY = "slurm_python_provenance"
 SLURM_ABLATION_SWEEP_INDEX_NAME = "slurm_ablation_sweep_index.json"
 SLURM_ABLATION_SWEEP_SCRIPT_PREFIX = "run_isodelta"
 SLURM_CLUSTER_PATH_SEPARATOR = "/"
@@ -3592,6 +3599,23 @@ def _require_markdown_artifact_comment(
     _require(first_line == expected_comment, f"{label}: missing generated file comment")
 
 
+def _require_slurm_python_provenance_artifact(path: Path) -> None:
+    """Require archived SLURM Python evidence to explain and identify itself."""
+    label = SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY
+    lines = path.read_text(encoding="utf-8").splitlines()
+    _require(bool(lines), f"{label}: file must not be empty")
+    first_line = lines[0]
+    _require(
+        first_line == SLURM_PYTHON_PROVENANCE_COMMENT,
+        f"{label}: missing runtime provenance comment",
+    )
+    for marker_prefix in SLURM_PYTHON_PROVENANCE_MARKER_PREFIXES:
+        _require(
+            any(line.startswith(marker_prefix) for line in lines),
+            f"{label}: missing {marker_prefix} marker",
+        )
+
+
 def _markdown_table_lines(path: Path) -> list[str]:
     """Return non-comment Markdown table lines from a generated table."""
     return [
@@ -4659,6 +4683,17 @@ def _require_paper_artifact_semantics(
     return len(REQUIRED_PAPER_ARTIFACT_NAMES)
 
 
+def _require_optional_slurm_python_provenance_semantics(
+    resolved_artifact_paths: dict[str, Path],
+) -> int:
+    """Validate SLURM Python provenance semantics when a bundle includes it."""
+    provenance_path = resolved_artifact_paths.get(SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY)
+    if provenance_path is None:
+        return 0
+    _require_slurm_python_provenance_artifact(provenance_path)
+    return 1
+
+
 def _require_artifact_index_alignment(
     summary_payload: dict[str, Any],
     artifact_fingerprints: dict[str, Any],
@@ -4768,6 +4803,9 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         bundle_root=bundle_root,
         original_output_dir=original_output_dir,
     )
+    verified_slurm_python_provenance_count = (
+        _require_optional_slurm_python_provenance_semantics(resolved_artifact_paths)
+    )
 
     verified_log_count = 0
     for index, raw_command_record in enumerate(command_fingerprints):
@@ -4798,6 +4836,9 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         "verified_artifact_count": verified_artifact_count,
         "verified_artifact_index_count": verified_artifact_index_count,
         "verified_paper_artifact_semantic_count": verified_paper_artifact_semantic_count,
+        "verified_slurm_python_provenance_count": (
+            verified_slurm_python_provenance_count
+        ),
         "verified_evidence_file_count": verified_evidence_file_count,
         "verified_command_record_count": verified_command_record_count,
         "verified_command_log_count": verified_log_count,
@@ -8099,6 +8140,9 @@ def write_paper_outputs(
         "preflight_report": config.output_dir / PREFLIGHT_REPORT_NAME,
         "preflight_environment_snapshot": config.output_dir / PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME,
         "run_plan": config.output_dir / PLAN_REPORT_NAME,
+        SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY: (
+            config.output_dir / SLURM_PYTHON_PROVENANCE_NAME
+        ),
     }
     artifact_fingerprints = {
         name: generated_artifact_record(path) for name, path in artifact_paths.items()

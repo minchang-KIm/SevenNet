@@ -755,12 +755,17 @@ cache-off/cache-on environment used to produce the timing rows, including the
 values. It also stores
 `artifact_fingerprints` with the SHA-256 digest and byte size of each generated
 environment snapshot, table, SVG figure, and manifest snapshot. When
-`preflight_report.json`, `preflight_environment_snapshot.json`, or
-`isodelta_cluster_paper_plan.json` already exists in the output directory, those
-auxiliary pre-run artifacts are fingerprinted too; when they are absent, the
+`preflight_report.json`, `preflight_environment_snapshot.json`,
+`isodelta_cluster_paper_plan.json`, or the SLURM-generated
+`python_runtime_provenance.txt` already exists in the output directory, those
+auxiliary run artifacts are fingerprinted too; when they are absent, the
 summary records that absence explicitly so the bundle verifier can still
-distinguish a direct run from a missing archived file. This lets reviewers
-verify that the submitted paper artifacts match the archived run.
+distinguish a direct run from a missing archived file. If the Python provenance
+file is present, `--verify-output-bundle` also reopens it and requires the
+comment header plus the `PYTHON_BIN`, `SUITE_RUNNER`, `Python`, and
+`sys.executable` markers, so an archived cluster result shows which interpreter
+actually executed the experiment. This lets reviewers verify that the submitted
+paper artifacts match the archived run.
 The sibling `artifacts` index must carry the same artifact names and paths as
 `artifact_fingerprints`; `--verify-output-bundle` rejects the bundle if the
 human-facing path index points to a different file than the protected hash

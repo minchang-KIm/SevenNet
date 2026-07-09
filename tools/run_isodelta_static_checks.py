@@ -1176,6 +1176,9 @@ def main() -> None:
         and "SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX" in cluster_suite
         and "SLURM_PYTHON_PROVENANCE_FUNCTION_NAME" in cluster_suite
         and "SLURM_PYTHON_PROVENANCE_COMMENT" in cluster_suite
+        and "SLURM_PYTHON_PROVENANCE_MARKER_PREFIXES" in cluster_suite
+        and "SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY" in cluster_suite
+        and "slurm_python_provenance" in cluster_suite
         and "python_runtime_provenance.txt" in cluster_suite
         and "python_version_probe" in cluster_suite
         and "python_provenance_before_preflight" in cluster_suite
@@ -1239,6 +1242,10 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_mismatched_command_fingerprints" in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_source_evidence" in cluster_suite_test
+        and "test_verify_output_bundle_accepts_slurm_python_provenance_artifact"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_uncommented_slurm_python_provenance_artifact"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_mutated_external_command_log" in cluster_suite_test
         and "test_verify_output_bundle_rejects_semantically_invalid_svg_artifact"
         in cluster_suite_test
@@ -1296,6 +1303,10 @@ def main() -> None:
         and '"preflight_environment_snapshot": config.output_dir / PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME'
         in cluster_suite
         and '"run_plan": config.output_dir / PLAN_REPORT_NAME' in cluster_suite
+        and "config.output_dir / SLURM_PYTHON_PROVENANCE_NAME" in cluster_suite
+        and "_require_slurm_python_provenance_artifact" in cluster_suite
+        and "_require_optional_slurm_python_provenance_semantics" in cluster_suite
+        and "verified_slurm_python_provenance_count" in cluster_suite
         and "write_manifest_snapshot" in cluster_suite
         and "_manifest_snapshot_body" in cluster_suite
         and "manifest_snapshot: body SHA-256 must match suite.manifest.sha256"
@@ -1732,9 +1743,18 @@ def main() -> None:
         "`preflight_report.json`" in doc
         and "`preflight_environment_snapshot.json`" in doc
         and "`isodelta_cluster_paper_plan.json`" in doc
-        and "auxiliary pre-run artifacts are fingerprinted too" in doc
+        and "`python_runtime_provenance.txt`" in doc
+        and "auxiliary run artifacts are fingerprinted too" in doc
         and "records that absence explicitly" in doc,
-        "IsoDelta-Halo guide must document optional pre-run artifact fingerprints",
+        "IsoDelta-Halo guide must document optional run artifact fingerprints",
+    )
+    _require(
+        "requires the" in doc
+        and "`PYTHON_BIN`" in doc
+        and "`SUITE_RUNNER`" in doc
+        and "`sys.executable` markers" in doc
+        and "which interpreter actually executed the experiment" in doc,
+        "IsoDelta-Halo guide must document SLURM Python provenance bundle verification",
     )
     _require(
         "`evidence_fingerprints`" in doc

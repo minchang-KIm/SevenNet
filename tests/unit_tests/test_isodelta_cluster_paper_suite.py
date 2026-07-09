@@ -61,6 +61,26 @@ PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
 ENV_FLAG_ENABLED = "1"
 
 
+def _slurm_python_provenance_text() -> str:
+    """Create valid SLURM Python runtime provenance for bundle tests."""
+    return "\n".join(
+        (
+            isodelta_cluster_suite.SLURM_PYTHON_PROVENANCE_COMMENT,
+            f"{isodelta_cluster_suite.SLURM_PYTHON_BIN_PROVENANCE_PREFIX}python",
+            (
+                f"{isodelta_cluster_suite.SLURM_SUITE_RUNNER_PROVENANCE_PREFIX}"
+                "tools/run_isodelta_cluster_paper_suite.py"
+            ),
+            f"{isodelta_cluster_suite.SLURM_PYTHON_VERSION_PROVENANCE_PREFIX}3.13.0",
+            (
+                f"{isodelta_cluster_suite.SLURM_SYS_EXECUTABLE_PROVENANCE_PREFIX}"
+                "/opt/conda/bin/python"
+            ),
+            "",
+        )
+    )
+
+
 def _cache_summary(
     *,
     attempts: float = ENABLED_ATTEMPTS,
@@ -1133,6 +1153,103 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 isodelta_cluster_suite.verify_output_bundle(summary_path)
 
         self.assertEqual(verification["verified_evidence_file_count"], 1)
+
+    def test_verify_output_bundle_accepts_slurm_python_provenance_artifact(self) -> None:
+        """Bundle verification should validate archived SLURM Python provenance."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            provenance_path = (
+                output_dir / isodelta_cluster_suite.SLURM_PYTHON_PROVENANCE_NAME
+            )
+            provenance_path.parent.mkdir(parents=True)
+            provenance_path.write_text(_slurm_python_provenance_text(), encoding="utf-8")
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            artifact_fingerprints[
+                isodelta_cluster_suite.SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY
+            ] = isodelta_cluster_suite.optional_file_fingerprint(provenance_path)
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            verification = isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+        self.assertEqual(verification["status"], "passed")
+        self.assertEqual(verification["verified_slurm_python_provenance_count"], 1)
+
+    def test_verify_output_bundle_rejects_uncommented_slurm_python_provenance_artifact(
+        self,
+    ) -> None:
+        """SLURM Python provenance should keep its generated-file comment."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            provenance_path = (
+                output_dir / isodelta_cluster_suite.SLURM_PYTHON_PROVENANCE_NAME
+            )
+            provenance_path.parent.mkdir(parents=True)
+            provenance_path.write_text(
+                _slurm_python_provenance_text().replace(
+                    isodelta_cluster_suite.SLURM_PYTHON_PROVENANCE_COMMENT + "\n",
+                    "",
+                ),
+                encoding="utf-8",
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            artifact_fingerprints[
+                isodelta_cluster_suite.SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY
+            ] = isodelta_cluster_suite.optional_file_fingerprint(provenance_path)
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "missing runtime provenance comment",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
 
     def test_verify_output_bundle_rejects_mutated_external_command_log(self) -> None:
         """Bundle verification should recurse into external timing log hashes."""
@@ -5773,12 +5890,19 @@ min_speedup_95ci_lower_bound = 1.1
             output_dir.mkdir(parents=True)
             preflight_report_path = output_dir / isodelta_cluster_suite.PREFLIGHT_REPORT_NAME
             plan_path = output_dir / isodelta_cluster_suite.PLAN_REPORT_NAME
+            python_provenance_path = (
+                output_dir / isodelta_cluster_suite.SLURM_PYTHON_PROVENANCE_NAME
+            )
             preflight_report_path.write_text(
                 json.dumps({"status": "passed", "kind": "preflight"}),
                 encoding="utf-8",
             )
             plan_path.write_text(
                 json.dumps({"status": "planned", "kind": "plan"}),
+                encoding="utf-8",
+            )
+            python_provenance_path.write_text(
+                _slurm_python_provenance_text(),
                 encoding="utf-8",
             )
             manifest_path = root / "suite.toml"
@@ -5875,6 +5999,9 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             manifest_snapshot_digest = hashlib.sha256(manifest_snapshot.read_bytes()).hexdigest()
             preflight_digest = hashlib.sha256(preflight_report_path.read_bytes()).hexdigest()
             plan_digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+            python_provenance_digest = hashlib.sha256(
+                python_provenance_path.read_bytes()
+            ).hexdigest()
             benchmark_digest = hashlib.sha256(benchmark_path.read_bytes()).hexdigest()
             sevennet_trace_digest = hashlib.sha256(sevennet_trace_path.read_bytes()).hexdigest()
             nequip_timing_digest = hashlib.sha256(nequip_timing_path.read_bytes()).hexdigest()
@@ -5886,6 +6013,7 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             manifest_snapshot_size = manifest_snapshot.stat().st_size
             preflight_size = preflight_report_path.stat().st_size
             plan_size = plan_path.stat().st_size
+            python_provenance_size = python_provenance_path.stat().st_size
             nequip_case = next(
                 case for case in summary["cases"] if case["model"] == "NequIP"
             )
@@ -6117,6 +6245,19 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             summary["artifact_fingerprints"]["run_plan"]["size_bytes"],
             plan_size,
         )
+        self.assertEqual(
+            summary["artifact_fingerprints"][
+                isodelta_cluster_suite.SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY
+            ]["sha256"],
+            python_provenance_digest,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"][
+                isodelta_cluster_suite.SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY
+            ]["size_bytes"],
+            python_provenance_size,
+        )
+        self.assertEqual(verification["verified_slurm_python_provenance_count"], 1)
         self.assertEqual(
             summary["evidence_fingerprints"]["sevennet-existing"]["benchmark_report"]["sha256"],
             benchmark_digest,
