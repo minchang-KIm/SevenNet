@@ -13,6 +13,7 @@ from pathlib import Path
 # from both CI-like shells and ad-hoc local invocations.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.cpp"
+SERIAL_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn.cpp"
 HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
 COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
 COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
@@ -76,6 +77,7 @@ def _require(condition: bool, message: str) -> None:
 def main() -> None:
     """Validate that the cache remains metadata-only and conservatively gated."""
     cpp = _read(CPP_PATH)
+    serial_cpp = _read(SERIAL_CPP_PATH)
     header = _read(HEADER_PATH)
     comm_brick_cpp = _read(COMM_BRICK_CPP_PATH)
     comm_brick_header = _read(COMM_BRICK_HEADER_PATH)
@@ -109,7 +111,17 @@ def main() -> None:
     binary_check_test = _read(BINARY_CHECK_TEST_PATH)
     experiment_runner_test = _read(EXPERIMENT_RUNNER_TEST_PATH)
     experiment_report_check_test = _read(EXPERIMENT_REPORT_CHECK_TEST_PATH)
-    combined = cpp + "\n" + header + "\n" + comm_brick_cpp + "\n" + comm_brick_header
+    combined = (
+        cpp
+        + "\n"
+        + header
+        + "\n"
+        + comm_brick_cpp
+        + "\n"
+        + comm_brick_header
+        + "\n"
+        + serial_cpp
+    )
 
     _require(
         "TODO" not in combined and "temporary" not in combined.lower(),
@@ -302,6 +314,44 @@ def main() -> None:
         and "chem_list.strip()" not in deploy
         and "chem_list += chemical_symbols" not in deploy,
         "deployment metadata species lists must be normalized before saving",
+    )
+    _require(
+        "kSerialPairCoeffArgumentError" in serial_cpp
+        and "kSerialPairCoeffNumericMetadataError" in serial_cpp
+        and "kSerialPairCoeffSpeciesMetadataError" in serial_cpp
+        and "kSerialPairCoeffWildcardFirstIndex = 0" in serial_cpp
+        and "kSerialPairCoeffWildcardSecondIndex = 1" in serial_cpp
+        and "kSerialPairCoeffModelPathIndex = 2" in serial_cpp
+        and "kSerialPairCoeffSpeciesStartIndex = 3" in serial_cpp
+        and "kMinimumSerialPairCoeffArgumentCount = 4" in serial_cpp
+        and "kMinimumSerialSpeciesCount = 1" in serial_cpp
+        and "kSerialFirstLammpsAtomType = 1" in serial_cpp
+        and "validate_serial_pair_coeff_minimum_args(narg, error);" in serial_cpp
+        and "checked_serial_positive_double_metadata" in serial_cpp
+        and "checked_serial_positive_int_metadata" in serial_cpp
+        and "parse_serial_chemical_symbol_tokens" in serial_cpp
+        and "validate_serial_deployed_species_metadata" in serial_cpp
+        and "validate_serial_pair_coeff_species_count" in serial_cpp
+        and "std::istringstream symbol_stream(chemical_symbols)" in serial_cpp
+        and "!std::isfinite(parsed_value)" in serial_cpp
+        and "torch::jit::load(std::string(arg[kSerialPairCoeffModelPathIndex])"
+        in serial_cpp
+        and 'cutoff = checked_serial_positive_double_metadata(meta_dict["cutoff"], error);'
+        in serial_cpp
+        and 'checked_serial_positive_int_metadata(meta_dict["num_species"], error)'
+        in serial_cpp
+        and "validate_serial_pair_coeff_species_count(n_chem, ntypes, error);"
+        in serial_cpp
+        and "for (size_t j = 0; j < chem_vec.size(); j++)" in serial_cpp
+        and "map[lammps_atom_type] = static_cast<int>(j);" in serial_cpp
+        and "if (lmp->logfile)" in serial_cpp
+        and 'cutoff = std::stod(meta_dict["cutoff"])' not in serial_cpp
+        and "std::strtok" not in serial_cpp
+        and "const_cast<char *>" not in serial_cpp
+        and 'auto delim = " "' not in serial_cpp
+        and "for (int i = 3; i < narg; i++)" not in serial_cpp
+        and "ntypes > narg - 3" not in serial_cpp,
+        "serial pair_coeff metadata parsing must match the parallel contract",
     )
     _require(
         "kIsoDeltaHaloGraphIndexRequiredError" in cpp
@@ -624,6 +674,12 @@ def main() -> None:
         and "without leading or trailing whitespace" in doc
         and "TorchScript artifacts expose the same metadata contract" in doc,
         "guide must document normalized deployment species metadata",
+    )
+    _require(
+        "serial `e3gnn` pair style mirrors the parallel parser checks" in doc
+        and "baseline smoke runs and parallel" in doc
+        and "aligned on deployment validation" in doc,
+        "guide must document serial and parallel metadata validation alignment",
     )
 
     _require(

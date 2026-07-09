@@ -18,7 +18,16 @@
 #include <ATen/ops/from_blob.h>
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#include <numeric>
+#include <sstream>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <torch/script.h>
 #include <torch/torch.h>
@@ -41,6 +50,89 @@ extern void pair_e3gnn_oeq_register_autograd();
 
 #define INTEGER_TYPE torch::TensorOptions().dtype(torch::kInt64)
 #define FLOAT_TYPE torch::TensorOptions().dtype(torch::kFloat)
+
+namespace {
+constexpr const char *kSerialPairCoeffArgumentError =
+    "PairE3GNN: pair_coeff arguments are invalid";
+constexpr const char *kSerialPairCoeffNumericMetadataError =
+    "PairE3GNN: deployed model numeric metadata is invalid";
+constexpr const char *kSerialPairCoeffSpeciesMetadataError =
+    "PairE3GNN: deployed model species metadata is invalid";
+constexpr int kSerialPairCoeffWildcardFirstIndex = 0;
+constexpr int kSerialPairCoeffWildcardSecondIndex = 1;
+constexpr int kSerialPairCoeffModelPathIndex = 2;
+constexpr int kSerialPairCoeffSpeciesStartIndex = 3;
+constexpr int kMinimumSerialPairCoeffArgumentCount = 4;
+constexpr int kMinimumSerialSpeciesCount = 1;
+constexpr int kSerialFirstLammpsAtomType = 1;
+
+void validate_serial_pair_coeff_minimum_args(int arg_count, Error *error) {
+  if (arg_count < kMinimumSerialPairCoeffArgumentCount) {
+    error->all(FLERR, kSerialPairCoeffArgumentError);
+  }
+}
+
+double checked_serial_positive_double_metadata(const std::string &value,
+                                               Error *error) {
+  size_t parsed_length = 0;
+  double parsed_value = 0.0;
+  try {
+    parsed_value = std::stod(value, &parsed_length);
+  } catch (const std::exception &) {
+    error->all(FLERR, kSerialPairCoeffNumericMetadataError);
+  }
+  if (parsed_length != value.size() || !std::isfinite(parsed_value) ||
+      parsed_value <= 0.0) {
+    error->all(FLERR, kSerialPairCoeffNumericMetadataError);
+  }
+  return parsed_value;
+}
+
+int checked_serial_positive_int_metadata(const std::string &value,
+                                         Error *error) {
+  const double parsed_value =
+      checked_serial_positive_double_metadata(value, error);
+  if (parsed_value > static_cast<double>(std::numeric_limits<int>::max())) {
+    error->all(FLERR, kSerialPairCoeffNumericMetadataError);
+  }
+  const int parsed_int = static_cast<int>(parsed_value);
+  if (static_cast<double>(parsed_int) != parsed_value) {
+    error->all(FLERR, kSerialPairCoeffNumericMetadataError);
+  }
+  return parsed_int;
+}
+
+std::vector<std::string> parse_serial_chemical_symbol_tokens(
+    const std::string &chemical_symbols, Error *error) {
+  std::istringstream symbol_stream(chemical_symbols);
+  std::vector<std::string> symbols;
+  std::string symbol;
+  while (symbol_stream >> symbol) {
+    symbols.push_back(symbol);
+  }
+  if (symbols.empty()) {
+    error->all(FLERR, kSerialPairCoeffSpeciesMetadataError);
+  }
+  return symbols;
+}
+
+void validate_serial_deployed_species_metadata(int deployed_species_count,
+                                               size_t parsed_symbol_count,
+                                               Error *error) {
+  if (static_cast<size_t>(deployed_species_count) != parsed_symbol_count) {
+    error->all(FLERR, kSerialPairCoeffSpeciesMetadataError);
+  }
+}
+
+void validate_serial_pair_coeff_species_count(int pair_coeff_species_count,
+                                              int lammps_atom_type_count,
+                                              Error *error) {
+  if (pair_coeff_species_count < kMinimumSerialSpeciesCount ||
+      pair_coeff_species_count != lammps_atom_type_count) {
+    error->all(FLERR, kSerialPairCoeffArgumentError);
+  }
+}
+} // namespace
 
 PairE3GNN::PairE3GNN(LAMMPS *lmp) : Pair(lmp) {
   // constructor
@@ -310,9 +402,11 @@ void PairE3GNN::coeff(int narg, char **arg) {
   if (allocated) {
     error->all(FLERR, "pair_e3gnn coeff called twice");
   }
+  validate_serial_pair_coeff_minimum_args(narg, error);
   allocate();
 
-  if (strcmp(arg[0], "*") != 0 || strcmp(arg[1], "*") != 0) {
+  if (strcmp(arg[kSerialPairCoeffWildcardFirstIndex], "*") != 0 ||
+      strcmp(arg[kSerialPairCoeffWildcardSecondIndex], "*") != 0) {
     error->all(FLERR,
                "e3gnn: first and second input of pair_coeff should be '*'");
   }
@@ -331,7 +425,8 @@ void PairE3GNN::coeff(int narg, char **arg) {
 
   // model loading from input
   try {
-    model = torch::jit::load(std::string(arg[2]), device, meta_dict);
+    model = torch::jit::load(std::string(arg[kSerialPairCoeffModelPathIndex]),
+                             device, meta_dict);
   } catch (const c10::Error &e) {
     error->all(FLERR, "error loading the model, check the path of the model");
   }
@@ -344,7 +439,7 @@ void PairE3GNN::coeff(int narg, char **arg) {
   strategy = {{torch::jit::FusionBehavior::STATIC, 0}};
   torch::jit::setFusionStrategy(strategy);
 
-  cutoff = std::stod(meta_dict["cutoff"]);
+  cutoff = checked_serial_positive_double_metadata(meta_dict["cutoff"], error);
   cutoff_square = cutoff * cutoff;
 
   // to make torch::autograd::grad() works
@@ -356,26 +451,31 @@ void PairE3GNN::coeff(int narg, char **arg) {
     error->all(FLERR, "given model type is not E3_equivariant_model");
   }
 
-  std::string chem_str = meta_dict["chemical_symbols_to_index"];
+  const std::vector<std::string> chem_vec =
+      parse_serial_chemical_symbol_tokens(
+          meta_dict["chemical_symbols_to_index"], error);
+  const int deployed_species_count =
+      checked_serial_positive_int_metadata(meta_dict["num_species"], error);
+  validate_serial_deployed_species_metadata(deployed_species_count,
+                                            chem_vec.size(), error);
   int ntypes = atom->ntypes;
 
-  auto delim = " ";
-  char *tok = std::strtok(const_cast<char *>(chem_str.c_str()), delim);
-  std::vector<std::string> chem_vec;
-  while (tok != nullptr) {
-    chem_vec.push_back(std::string(tok));
-    tok = std::strtok(nullptr, delim);
-  }
-
   bool found_flag = false;
-  for (int i = 3; i < narg; i++) {
+  const int n_chem = narg - kSerialPairCoeffSpeciesStartIndex;
+  validate_serial_pair_coeff_species_count(n_chem, ntypes, error);
+  for (int i = 0; i < n_chem; i++) {
     found_flag = false;
-    for (int j = 0; j < chem_vec.size(); j++) {
-      if (chem_vec[j].compare(arg[i]) == 0) {
-        map[i - 2] = j;
+    for (size_t j = 0; j < chem_vec.size(); j++) {
+      if (chem_vec[j].compare(arg[i + kSerialPairCoeffSpeciesStartIndex]) ==
+          0) {
+        const int lammps_atom_type = i + kSerialFirstLammpsAtomType;
+        map[lammps_atom_type] = static_cast<int>(j);
         found_flag = true;
-        fprintf(lmp->logfile, "Chemical specie '%s' is assigned to type %d\n",
-                arg[i], i - 2);
+        if (lmp->logfile) {
+          fprintf(lmp->logfile, "Chemical specie '%s' is assigned to type %d\n",
+                  arg[i + kSerialPairCoeffSpeciesStartIndex],
+                  lammps_atom_type);
+        }
         break;
       }
     }
@@ -384,13 +484,8 @@ void PairE3GNN::coeff(int narg, char **arg) {
     }
   }
 
-  if (ntypes > narg - 3) {
-    error->all(FLERR, "Not enough chemical specie is given. Check pair_coeff "
-                      "and types in your data/script");
-  }
-
-  for (int i = 1; i <= ntypes; i++) {
-    for (int j = 1; j <= ntypes; j++) {
+  for (int i = kSerialFirstLammpsAtomType; i <= ntypes; i++) {
+    for (int j = kSerialFirstLammpsAtomType; j <= ntypes; j++) {
       if ((map[i] >= 0) && (map[j] >= 0)) {
         setflag[i][j] = 1;
         cutsq[i][j] = cutoff * cutoff;

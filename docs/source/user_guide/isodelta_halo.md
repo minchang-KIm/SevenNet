@@ -85,6 +85,9 @@ field and the number of LAMMPS atom types supplied to `pair_coeff`.
 The deployment script writes that species list as a single space-delimited
 string without leading or trailing whitespace, so serial and parallel
 TorchScript artifacts expose the same metadata contract.
+The serial `e3gnn` pair style mirrors the parallel parser checks for the same
+TorchScript metadata fields, which keeps baseline smoke runs and parallel
+IsoDelta-Halo runs aligned on deployment validation.
 Cached CUDA index tensors are reused only when their length, integer dtype, and
 device still match the current communication path, preventing a stale tensor
 layout from crossing a later `index_select` or `scatter_` call.

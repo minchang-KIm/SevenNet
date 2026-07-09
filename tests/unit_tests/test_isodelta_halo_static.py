@@ -14,6 +14,7 @@ import unittest
 # directory, which differs between local shells and automated runners.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.cpp"
+SERIAL_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn.cpp"
 HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
 COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
 COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
@@ -27,6 +28,7 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         """Load source text once so individual tests stay focused."""
         cls.cpp = CPP_PATH.read_text(encoding="utf-8")
+        cls.serial_cpp = SERIAL_CPP_PATH.read_text(encoding="utf-8")
         cls.header = HEADER_PATH.read_text(encoding="utf-8")
         cls.comm_brick_cpp = COMM_BRICK_CPP_PATH.read_text(encoding="utf-8")
         cls.comm_brick_header = COMM_BRICK_HEADER_PATH.read_text(encoding="utf-8")
@@ -39,6 +41,8 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
             + cls.comm_brick_cpp
             + "\n"
             + cls.comm_brick_header
+            + "\n"
+            + cls.serial_cpp
         )
 
     def test_named_comm_phase_count_replaces_raw_six(self) -> None:
@@ -296,6 +300,49 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         )
         self.assertNotIn("chem_list.strip()", self.deploy)
         self.assertNotIn("chem_list += chemical_symbols", self.deploy)
+
+    def test_serial_pair_coeff_metadata_matches_parallel_contract(self) -> None:
+        """Serial e3gnn should reject malformed deployment metadata like parallel."""
+        self.assertIn("kSerialPairCoeffArgumentError", self.serial_cpp)
+        self.assertIn("kSerialPairCoeffNumericMetadataError", self.serial_cpp)
+        self.assertIn("kSerialPairCoeffSpeciesMetadataError", self.serial_cpp)
+        self.assertIn("kSerialPairCoeffWildcardFirstIndex = 0", self.serial_cpp)
+        self.assertIn("kSerialPairCoeffWildcardSecondIndex = 1", self.serial_cpp)
+        self.assertIn("kSerialPairCoeffModelPathIndex = 2", self.serial_cpp)
+        self.assertIn("kSerialPairCoeffSpeciesStartIndex = 3", self.serial_cpp)
+        self.assertIn("kMinimumSerialPairCoeffArgumentCount = 4", self.serial_cpp)
+        self.assertIn("kMinimumSerialSpeciesCount = 1", self.serial_cpp)
+        self.assertIn("kSerialFirstLammpsAtomType = 1", self.serial_cpp)
+        self.assertIn("validate_serial_pair_coeff_minimum_args(narg, error);", self.serial_cpp)
+        self.assertIn("checked_serial_positive_double_metadata", self.serial_cpp)
+        self.assertIn("checked_serial_positive_int_metadata", self.serial_cpp)
+        self.assertIn("parse_serial_chemical_symbol_tokens", self.serial_cpp)
+        self.assertIn("validate_serial_deployed_species_metadata", self.serial_cpp)
+        self.assertIn("validate_serial_pair_coeff_species_count", self.serial_cpp)
+        self.assertIn("std::istringstream symbol_stream(chemical_symbols)", self.serial_cpp)
+        self.assertIn("!std::isfinite(parsed_value)", self.serial_cpp)
+        self.assertIn(
+            "torch::jit::load(std::string(arg[kSerialPairCoeffModelPathIndex])",
+            self.serial_cpp,
+        )
+        self.assertIn(
+            "cutoff = checked_serial_positive_double_metadata(meta_dict[\"cutoff\"], error);",
+            self.serial_cpp,
+        )
+        self.assertIn(
+            "checked_serial_positive_int_metadata(meta_dict[\"num_species\"], error)",
+            self.serial_cpp,
+        )
+        self.assertIn("validate_serial_pair_coeff_species_count(n_chem, ntypes, error);", self.serial_cpp)
+        self.assertIn("for (size_t j = 0; j < chem_vec.size(); j++)", self.serial_cpp)
+        self.assertIn("map[lammps_atom_type] = static_cast<int>(j);", self.serial_cpp)
+        self.assertIn("if (lmp->logfile)", self.serial_cpp)
+        self.assertNotIn("cutoff = std::stod(meta_dict[\"cutoff\"])", self.serial_cpp)
+        self.assertNotIn("std::strtok", self.serial_cpp)
+        self.assertNotIn("const_cast<char *>", self.serial_cpp)
+        self.assertNotIn('auto delim = " "', self.serial_cpp)
+        self.assertNotIn("for (int i = 3; i < narg; i++)", self.serial_cpp)
+        self.assertNotIn("ntypes > narg - 3", self.serial_cpp)
 
     def test_graph_index_pointer_lifetime_is_guarded(self) -> None:
         """Comm preprocessing should never dereference an inactive lookup map."""
