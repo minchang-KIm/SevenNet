@@ -391,6 +391,29 @@ def main() -> None:
         "cache reuse must compare and report send/recv list tag signatures",
     )
     _require(
+        "kIsoDeltaHaloGraphAtomIndexError" in cpp
+        and "checked_graph_atom_index" in cpp
+        and "graph_index_to_i == nullptr" in cpp
+        and cpp.count(
+            "checked_graph_atom_index(\n"
+            "        graph_index_to_i, graph_idx, atom_array_capacity, error)"
+        )
+        >= 2
+        and cpp.count("validate_comm_atom_index(atom_idx, atom_array_capacity, error);")
+        >= 3
+        and "checked_comm_init_count(comm_brick->e3gnn_sendnum" in cpp
+        and "checked_comm_init_count(comm_brick->e3gnn_recvnum" in cpp
+        and "checked_comm_init_last_index(firstrecv, current_recvnum" in cpp
+        and "const int recv_atom_idx = firstrecv + index;" in cpp
+        and "tag[recv_atom_idx]" in cpp
+        and "tag[firstrecv + index]" not in cpp
+        and "comm_cache_sendlist_tags[comm_phase].reserve(current_sendnum)"
+        not in cpp
+        and "comm_cache_recvlist_tags[comm_phase].reserve(current_recvnum)"
+        not in cpp,
+        "cache tag signatures must validate graph, send, and receive atom indexes",
+    )
+    _require(
         "heap-backed `std::vector` storage" in doc
         and "runtime-sized stack arrays" in doc
         and "compiler-specific variable-length arrays" in doc

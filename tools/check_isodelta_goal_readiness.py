@@ -128,6 +128,8 @@ REQUIRED_FILE_SNIPPETS = {
         "checked_node_feature_width",
         "kNodeFeatureTensorRank",
         "kNodeFeatureWidthDimension",
+        "kIsoDeltaHaloGraphAtomIndexError",
+        "checked_graph_atom_index",
         "check_cuda_status(cudaError_t cuda_err",
         "kCudaSendBufferAllocationError",
         "kCudaRecvBufferAllocationError",

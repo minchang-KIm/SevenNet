@@ -165,6 +165,34 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("comm-list-tag-order-changed", self.cpp)
         self.assertIn("index-tensor-shape-changed", self.cpp)
 
+    def test_cache_tag_signature_atom_indexes_are_guarded(self) -> None:
+        """Cache tag signatures should validate atom indexes before tag reads."""
+        self.assertIn("kIsoDeltaHaloGraphAtomIndexError", self.cpp)
+        self.assertIn("checked_graph_atom_index", self.cpp)
+        self.assertIn("graph_index_to_i == nullptr", self.cpp)
+        self.assertGreaterEqual(
+            self.cpp.count(
+                "checked_graph_atom_index(\n"
+                "        graph_index_to_i, graph_idx, atom_array_capacity, error)"
+            ),
+            2,
+        )
+        self.assertGreaterEqual(
+            self.cpp.count("validate_comm_atom_index(atom_idx, atom_array_capacity, error);"),
+            3,
+        )
+        self.assertIn("checked_comm_init_count(comm_brick->e3gnn_sendnum", self.cpp)
+        self.assertIn("checked_comm_init_count(comm_brick->e3gnn_recvnum", self.cpp)
+        self.assertIn(
+            "checked_comm_init_last_index(firstrecv, current_recvnum",
+            self.cpp,
+        )
+        self.assertIn("const int recv_atom_idx = firstrecv + index;", self.cpp)
+        self.assertIn("tag[recv_atom_idx]", self.cpp)
+        self.assertNotIn("tag[firstrecv + index]", self.cpp)
+        self.assertNotIn("comm_cache_sendlist_tags[comm_phase].reserve(current_sendnum)", self.cpp)
+        self.assertNotIn("comm_cache_recvlist_tags[comm_phase].reserve(current_recvnum)", self.cpp)
+
     def test_cache_miss_rebuilds_and_stores_metadata(self) -> None:
         """A miss must rebuild first and store only when the cache is enabled."""
         self.assertIn(

@@ -94,6 +94,8 @@ constexpr const char *kIsoDeltaHaloExtraTensorSizeError =
     "IsoDelta-Halo extra communication tensor size is out of range";
 constexpr const char *kIsoDeltaHaloNodeFeatureShapeError =
     "IsoDelta-Halo node feature tensor shape is invalid for communication";
+constexpr const char *kIsoDeltaHaloGraphAtomIndexError =
+    "IsoDelta-Halo graph-to-atom index is out of range";
 constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
@@ -217,6 +219,16 @@ void validate_comm_atom_index(int atom_index, int atom_array_capacity,
       atom_index >= atom_array_capacity) {
     error->all(FLERR, kIsoDeltaHaloCommInitRangeError);
   }
+}
+
+int checked_graph_atom_index(const int *graph_index_to_i, int graph_idx,
+                             int atom_array_capacity, Error *error) {
+  if (graph_index_to_i == nullptr) {
+    error->all(FLERR, kIsoDeltaHaloGraphAtomIndexError);
+  }
+  const int atom_idx = graph_index_to_i[graph_idx];
+  validate_comm_atom_index(atom_idx, atom_array_capacity, error);
+  return atom_idx;
 }
 
 int checked_extra_graph_index(int graph_size, size_t extra_graph_count,
@@ -1110,8 +1122,10 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
   }
 
   tagint *tag = atom->tag;
+  const int atom_array_capacity = atom->nmax;
   for (int graph_idx = 0; graph_idx < graph_size; graph_idx++) {
-    const int atom_idx = graph_index_to_i[graph_idx];
+    const int atom_idx = checked_graph_atom_index(
+        graph_index_to_i, graph_idx, atom_array_capacity, error);
     if (tag[atom_idx] != comm_cache_graph_tags[graph_idx]) {
       record_comm_cache_miss(CommCacheMissReason::kTagOrderChanged);
       invalidate_comm_preprocess_cache();
@@ -1179,10 +1193,12 @@ void PairE3GNNParallel::store_comm_preprocess_cache(
   comm_cache_nedges = nedges;
 
   tagint *tag = atom->tag;
+  const int atom_array_capacity = atom->nmax;
   comm_cache_graph_tags.clear();
   comm_cache_graph_tags.reserve(graph_size);
   for (int graph_idx = 0; graph_idx < graph_size; graph_idx++) {
-    const int atom_idx = graph_index_to_i[graph_idx];
+    const int atom_idx = checked_graph_atom_index(
+        graph_index_to_i, graph_idx, atom_array_capacity, error);
     comm_cache_graph_tags.push_back(tag[atom_idx]);
   }
 
@@ -1304,12 +1320,19 @@ bool PairE3GNNParallel::comm_list_tags_match_cache() const {
   }
 
   tagint *tag = atom->tag;
+  const int atom_array_capacity = atom->nmax;
   for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
     const bool active_phase = comm_phase < current_nswap;
     const int current_sendnum =
-        active_phase ? comm_brick->e3gnn_sendnum(comm_phase) : 0;
+        active_phase
+            ? checked_comm_init_count(comm_brick->e3gnn_sendnum(comm_phase),
+                                      error)
+            : kMinimumCommInitCount;
     const int current_recvnum =
-        active_phase ? comm_brick->e3gnn_recvnum(comm_phase) : 0;
+        active_phase
+            ? checked_comm_init_count(comm_brick->e3gnn_recvnum(comm_phase),
+                                      error)
+            : kMinimumCommInitCount;
     if (comm_cache_sendlist_tags[comm_phase].size() !=
             static_cast<size_t>(current_sendnum) ||
         comm_cache_recvlist_tags[comm_phase].size() !=
@@ -1319,15 +1342,20 @@ bool PairE3GNNParallel::comm_list_tags_match_cache() const {
 
     for (int index = 0; index < current_sendnum; index++) {
       const int atom_idx = comm_brick->e3gnn_sendlist_atom(comm_phase, index);
+      validate_comm_atom_index(atom_idx, atom_array_capacity, error);
       if (tag[atom_idx] != comm_cache_sendlist_tags[comm_phase][index]) {
         return false;
       }
     }
 
     const int firstrecv =
-        active_phase ? comm_brick->e3gnn_firstrecv(comm_phase) : 0;
+        active_phase ? comm_brick->e3gnn_firstrecv(comm_phase)
+                     : kMinimumAtomArrayIndex;
+    checked_comm_init_last_index(firstrecv, current_recvnum,
+                                 atom_array_capacity, error);
     for (int index = 0; index < current_recvnum; index++) {
-      if (tag[firstrecv + index] !=
+      const int recv_atom_idx = firstrecv + index;
+      if (tag[recv_atom_idx] !=
           comm_cache_recvlist_tags[comm_phase][index]) {
         return false;
       }
@@ -1376,19 +1404,28 @@ void PairE3GNNParallel::store_comm_list_tag_signature() {
   }
 
   tagint *tag = atom->tag;
+  const int atom_array_capacity = atom->nmax;
   for (int comm_phase = 0; comm_phase < current_nswap; comm_phase++) {
-    const int current_sendnum = comm_brick->e3gnn_sendnum(comm_phase);
-    comm_cache_sendlist_tags[comm_phase].reserve(current_sendnum);
+    const int current_sendnum =
+        checked_comm_init_count(comm_brick->e3gnn_sendnum(comm_phase), error);
+    comm_cache_sendlist_tags[comm_phase].reserve(
+        static_cast<size_t>(current_sendnum));
     for (int index = 0; index < current_sendnum; index++) {
       const int atom_idx = comm_brick->e3gnn_sendlist_atom(comm_phase, index);
+      validate_comm_atom_index(atom_idx, atom_array_capacity, error);
       comm_cache_sendlist_tags[comm_phase].push_back(tag[atom_idx]);
     }
 
-    const int current_recvnum = comm_brick->e3gnn_recvnum(comm_phase);
+    const int current_recvnum =
+        checked_comm_init_count(comm_brick->e3gnn_recvnum(comm_phase), error);
     const int firstrecv = comm_brick->e3gnn_firstrecv(comm_phase);
-    comm_cache_recvlist_tags[comm_phase].reserve(current_recvnum);
+    checked_comm_init_last_index(firstrecv, current_recvnum,
+                                 atom_array_capacity, error);
+    comm_cache_recvlist_tags[comm_phase].reserve(
+        static_cast<size_t>(current_recvnum));
     for (int index = 0; index < current_recvnum; index++) {
-      comm_cache_recvlist_tags[comm_phase].push_back(tag[firstrecv + index]);
+      const int recv_atom_idx = firstrecv + index;
+      comm_cache_recvlist_tags[comm_phase].push_back(tag[recv_atom_idx]);
     }
   }
 }

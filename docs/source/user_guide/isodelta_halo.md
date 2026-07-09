@@ -48,6 +48,8 @@ named error instead of silently wrapping an index or allocating the wrong tensor
 The node feature tensor produced by each model stage is checked for rank and
 feature width before `x_dim` is updated, so malformed model outputs cannot feed
 an invalid hidden-state width into halo buffer sizing.
+Cache tag-signature reuse and storage also validate graph-to-atom indexes,
+sendlist atom ids, and contiguous receive ranges before reading `atom->tag`.
 The `CommBrick` read-only topology accessors used by the cache apply the same
 phase guard and also check sendlist indexes before returning atom ids.
 For the actual halo payload, the e3gnn communication path allocates host and
