@@ -31,6 +31,10 @@ compiler-specific variable-length arrays or small per-rank stack limits. LAMMPS
 neighbor-list special bits are stripped with `NEIGHMASK` before the runtime reads
 atom tags or types, so graph construction and the cached halo guards see the same
 canonical atom index.
+The per-step graph-index pointer used by `CommBrick` pack/unpack initialization
+is reset after each compute step. If that communication path is entered without
+an active graph-index map, the runtime aborts with a named IsoDelta-Halo error
+instead of dereferencing an inactive lookup.
 
 ## Why This Is Model-Agnostic
 

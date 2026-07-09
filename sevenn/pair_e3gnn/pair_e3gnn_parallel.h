@@ -128,7 +128,8 @@ private:
   static const char *comm_cache_miss_reason_name(CommCacheMissReason);
   void print_comm_cache_summary() const;
 
-  // to use tag_to_graph_idx inside comm methods
+  // Per-step graph-index lookup borrowed from compute() while CommBrick fills
+  // communication maps; clear_comm_preprocess_work() closes this borrow.
   int *tag_to_graph_idx_ptr = nullptr;
 
   int sendproc[kCommPhaseCount];

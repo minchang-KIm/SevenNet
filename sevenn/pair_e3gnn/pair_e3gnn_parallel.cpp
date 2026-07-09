@@ -77,6 +77,8 @@ constexpr const char *kIsoDeltaHaloEnvFlagValueNo = "no";
 constexpr const char *kIsoDeltaHaloEnvFlagValueOff = "off";
 constexpr const char *kIsoDeltaHaloCommBrickRequiredError =
     "IsoDelta-Halo e3gnn/parallel requires LAMMPS CommBrick communication";
+constexpr const char *kIsoDeltaHaloGraphIndexRequiredError =
+    "IsoDelta-Halo graph index map must be active before communication preprocessing";
 constexpr double kIsoDeltaHaloPercentScale = 100.0;
 constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
 constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
@@ -1049,6 +1051,7 @@ void PairE3GNNParallel::store_comm_preprocess_cache(
 
 void PairE3GNNParallel::clear_comm_preprocess_work() {
   comm_preprocess_done = false;
+  tag_to_graph_idx_ptr = nullptr;
   for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
     comm_index_pack_forward[comm_phase].clear();
     comm_index_unpack_forward[comm_phase].clear();
@@ -1289,6 +1292,9 @@ void PairE3GNNParallel::comm_preprocess() {
 // called from comm_brick if comm_preprocess_done is false
 void PairE3GNNParallel::pack_forward_init(int n, int *list_send,
                                           int comm_phase) {
+  if (tag_to_graph_idx_ptr == nullptr) {
+    error->all(FLERR, kIsoDeltaHaloGraphIndexRequiredError);
+  }
   std::vector<long> &idx_map = comm_index_pack_forward[comm_phase];
 
   idx_map.reserve(n);
@@ -1301,7 +1307,7 @@ void PairE3GNNParallel::pack_forward_init(int n, int *list_send,
     int list_i = list_send[i];
     int graph_idx = tag_to_graph_idx_ptr[tag[list_i]];
 
-    if (graph_idx != -1) {
+    if (graph_idx != kInvalidGraphIndex) {
       // known atom (local atom + ghost atom inside cutoff)
       idx_map.push_back(graph_idx);
     } else {
@@ -1321,6 +1327,9 @@ void PairE3GNNParallel::pack_forward_init(int n, int *list_send,
 
 // called from comm_brick if comm_preprocess_done is false
 void PairE3GNNParallel::unpack_forward_init(int n, int first, int comm_phase) {
+  if (tag_to_graph_idx_ptr == nullptr) {
+    error->all(FLERR, kIsoDeltaHaloGraphIndexRequiredError);
+  }
   std::vector<long> &idx_map = comm_index_unpack_forward[comm_phase];
 
   idx_map.reserve(n);
@@ -1332,7 +1341,7 @@ void PairE3GNNParallel::unpack_forward_init(int n, int first, int comm_phase) {
 
   for (i = first; i < last; i++) {
     int graph_idx = tag_to_graph_idx_ptr[tag[i]];
-    if (graph_idx != -1) {
+    if (graph_idx != kInvalidGraphIndex) {
       idx_map.push_back(graph_idx);
     } else {
       extra_graph_idx_map[i] = graph_size + extra_graph_idx_map.size();

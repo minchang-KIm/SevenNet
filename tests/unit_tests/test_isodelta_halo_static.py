@@ -80,6 +80,18 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("j &= NEIGHMASK;\n      const tagint jtag = tag[j];", self.cpp)
         self.assertNotIn("const int jtag = tag[j];\n      j &= NEIGHMASK;", self.cpp)
 
+    def test_graph_index_pointer_lifetime_is_guarded(self) -> None:
+        """Comm preprocessing should never dereference an inactive lookup map."""
+        self.assertIn("kIsoDeltaHaloGraphIndexRequiredError", self.cpp)
+        self.assertIn("tag_to_graph_idx_ptr = nullptr;", self.cpp)
+        self.assertIn("if (tag_to_graph_idx_ptr == nullptr)", self.cpp)
+        self.assertIn(
+            "error->all(FLERR, kIsoDeltaHaloGraphIndexRequiredError)",
+            self.cpp,
+        )
+        self.assertIn("graph_idx != kInvalidGraphIndex", self.cpp)
+        self.assertNotIn("graph_idx != -1", self.cpp)
+
     def test_cache_reuses_only_communication_metadata(self) -> None:
         """Force, message, embedding, and edge-geometry values must not be cached."""
         for term in (

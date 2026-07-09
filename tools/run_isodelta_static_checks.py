@@ -144,6 +144,15 @@ def main() -> None:
         and "const int jtag = tag[j];\n      j &= NEIGHMASK;" not in cpp,
         "neighbor special bits must be masked before tag access",
     )
+    _require(
+        "kIsoDeltaHaloGraphIndexRequiredError" in cpp
+        and "tag_to_graph_idx_ptr = nullptr;" in cpp
+        and "if (tag_to_graph_idx_ptr == nullptr)" in cpp
+        and "error->all(FLERR, kIsoDeltaHaloGraphIndexRequiredError)" in cpp
+        and "graph_idx != kInvalidGraphIndex" in cpp
+        and "graph_idx != -1" not in cpp,
+        "per-step graph index pointer must be closed and guarded",
+    )
     for include_name in (
         "<algorithm>",
         "<cstring>",

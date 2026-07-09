@@ -67,6 +67,7 @@ FORBIDDEN_FILE_SNIPPETS = {
         "long edge_idx_src[nedges_upper_bound]",
         "long edge_idx_dst[nedges_upper_bound]",
         "const int jtag = tag[j];\n      j &= NEIGHMASK;",
+        "graph_idx != -1",
     ),
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.h": (
         "[6]",
@@ -104,6 +105,10 @@ REQUIRED_FILE_SNIPPETS = {
         "tag_to_graph_idx.data()",
         "graph_index_to_i.data()",
         "j &= NEIGHMASK;\n      const tagint jtag = tag[j];",
+        "kIsoDeltaHaloGraphIndexRequiredError",
+        "tag_to_graph_idx_ptr = nullptr;",
+        "if (tag_to_graph_idx_ptr == nullptr)",
+        "graph_idx != kInvalidGraphIndex",
     ),
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.h": (
         "IsoDelta",
