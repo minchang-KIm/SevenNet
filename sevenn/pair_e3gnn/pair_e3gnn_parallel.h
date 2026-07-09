@@ -181,7 +181,7 @@ private:
 
 public:
   static DeviceBuffManager &getInstance();
-  void get_buffer(int, int, float *&, float *&);
+  void get_buffer(int, int, float *&, float *&, class Error *);
 
   ~DeviceBuffManager();
 };

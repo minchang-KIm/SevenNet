@@ -43,6 +43,8 @@ phase guard and also check sendlist indexes before returning atom ids.
 For the actual halo payload, the e3gnn communication path allocates host and
 CUDA/MPI float buffers by `feature_width * atom_capacity`, not by the scalar
 LAMMPS atom buffer length, so wide hidden-state tensors have explicit capacity.
+CUDA buffer allocation and device-to-device copy failures are also checked and
+reported through named LAMMPS errors instead of being ignored by the halo path.
 
 ## Why This Is Model-Agnostic
 

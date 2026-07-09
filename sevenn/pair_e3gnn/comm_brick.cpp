@@ -1174,7 +1174,7 @@ void CommBrick::forward_comm(PairE3GNNParallel *pair)
     if(pair->use_cuda_mpi_()) {
       DeviceBuffManager::getInstance().get_buffer(
           e3gnn_forward_send_capacity, e3gnn_forward_recv_capacity, buf_send_,
-          buf_recv_);
+          buf_recv_, error);
     } else {
       host_send_buffer.resize(e3gnn_forward_send_capacity);
       host_recv_buffer.resize(e3gnn_forward_recv_capacity);
@@ -1223,7 +1223,7 @@ void CommBrick::reverse_comm(PairE3GNNParallel *pair)
   if(pair->use_cuda_mpi_()) {
     DeviceBuffManager::getInstance().get_buffer(
         e3gnn_reverse_send_capacity, e3gnn_reverse_recv_capacity, buf_send_,
-        buf_recv_);
+        buf_recv_, error);
   } else {
     host_send_buffer.resize(e3gnn_reverse_send_capacity);
     host_recv_buffer.resize(e3gnn_reverse_recv_capacity);

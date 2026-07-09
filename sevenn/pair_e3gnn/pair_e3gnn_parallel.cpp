@@ -81,6 +81,14 @@ constexpr const char *kIsoDeltaHaloGraphIndexRequiredError =
     "IsoDelta-Halo graph index map must be active before communication preprocessing";
 constexpr const char *kIsoDeltaHaloCommPhaseRangeError =
     "IsoDelta-Halo communication phase index is out of range";
+constexpr const char *kCudaSendBufferAllocationError =
+    "PairE3GNNParallel: CUDA send buffer allocation failed";
+constexpr const char *kCudaRecvBufferAllocationError =
+    "PairE3GNNParallel: CUDA receive buffer allocation failed";
+constexpr const char *kCudaPackForwardMemcpyError =
+    "PairE3GNNParallel: CUDA pack-forward buffer copy failed";
+constexpr const char *kCudaPackReverseMemcpyError =
+    "PairE3GNNParallel: CUDA pack-reverse buffer copy failed";
 constexpr double kIsoDeltaHaloPercentScale = 100.0;
 constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
 constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
@@ -122,6 +130,15 @@ bool index_tensor_matches_vector(const torch::Tensor &index_tensor,
   return index_tensor.defined() && index_tensor.dim() == kIndexTensorRank &&
          index_tensor.size(kIndexTensorLengthDimension) ==
              static_cast<long long>(index_map.size());
+}
+
+void check_cuda_status(cudaError_t cuda_err, const char *context,
+                       Error *error) {
+  if (cuda_err == cudaSuccess) {
+    return;
+  }
+  error->all(FLERR, std::string(context) + ": " +
+                         std::string(cudaGetErrorString(cuda_err)));
 }
 
 std::string normalize_iso_delta_halo_env_flag_value(const char *value) {
@@ -173,17 +190,20 @@ DeviceBuffManager &DeviceBuffManager::getInstance() {
 }
 
 void DeviceBuffManager::get_buffer(int send_size, int recv_size,
-                                   float *&buf_send_ptr, float *&buf_recv_ptr) {
+                                   float *&buf_send_ptr, float *&buf_recv_ptr,
+                                   Error *error) {
   if (send_size > send_buf_size) {
     cudaFree(buf_send_device);
     cudaError_t cuda_err =
         cudaMalloc(&buf_send_device, send_size * sizeof(float));
+    check_cuda_status(cuda_err, kCudaSendBufferAllocationError, error);
     send_buf_size = send_size;
   }
   if (recv_size > recv_buf_size) {
     cudaFree(buf_recv_device);
     cudaError_t cuda_err =
         cudaMalloc(&buf_recv_device, recv_size * sizeof(float));
+    check_cuda_status(cuda_err, kCudaRecvBufferAllocationError, error);
     recv_buf_size = recv_size;
   }
   buf_send_ptr = buf_send_device;
@@ -1370,6 +1390,7 @@ int PairE3GNNParallel::pack_forward_comm_gnn(float *buf, int comm_phase) {
     cudaError_t cuda_err =
         cudaMemcpy(buf, selected.data_ptr<float>(), (x_dim * n) * sizeof(float),
                    cudaMemcpyDeviceToDevice);
+    check_cuda_status(cuda_err, kCudaPackForwardMemcpyError, error);
   } else {
     int i, j, m;
     m = 0;
@@ -1427,6 +1448,7 @@ int PairE3GNNParallel::pack_reverse_comm_gnn(float *buf, int comm_phase) {
     torch::Tensor &idx_map_tensor = comm_index_unpack_forward_tensor[comm_phase];
     auto selected = x_comm.index_select(0, idx_map_tensor);
     cudaError_t cuda_err = cudaMemcpy(buf, selected.data_ptr<float>(), (x_dim * n) * sizeof(float), cudaMemcpyDeviceToDevice);
+    check_cuda_status(cuda_err, kCudaPackReverseMemcpyError, error);
   } else {
     int i, j, m;
     m = 0;

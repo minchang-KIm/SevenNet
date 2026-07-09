@@ -287,6 +287,27 @@ def main() -> None:
         and "reinterpret_cast<float*>(buf_recv)" not in comm_brick_cpp,
         "CommBrick e3gnn buffers must be sized by feature width for host and CUDA MPI",
     )
+    _require(
+        "void get_buffer(int, int, float *&, float *&, class Error *)" in header
+        and "check_cuda_status(cudaError_t cuda_err" in cpp
+        and "cudaGetErrorString(cuda_err)" in cpp
+        and "kCudaSendBufferAllocationError" in cpp
+        and "kCudaRecvBufferAllocationError" in cpp
+        and "kCudaPackForwardMemcpyError" in cpp
+        and "kCudaPackReverseMemcpyError" in cpp
+        and "check_cuda_status(cuda_err, kCudaSendBufferAllocationError, error);"
+        in cpp
+        and "check_cuda_status(cuda_err, kCudaRecvBufferAllocationError, error);"
+        in cpp
+        and "check_cuda_status(cuda_err, kCudaPackForwardMemcpyError, error);"
+        in cpp
+        and "check_cuda_status(cuda_err, kCudaPackReverseMemcpyError, error);"
+        in cpp
+        and "buf_recv_, error);" in comm_brick_cpp
+        and "get_buffer(\n          e3gnn_forward_send_capacity, e3gnn_forward_recv_capacity, buf_send_,\n          buf_recv_);"
+        not in comm_brick_cpp,
+        "CUDA allocation and memcpy errors must be checked in e3gnn communication",
+    )
     for accessor_name in (
         "e3gnn_nswap",
         "e3gnn_sendnum",

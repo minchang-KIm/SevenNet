@@ -114,10 +114,17 @@ REQUIRED_FILE_SNIPPETS = {
         "validate_comm_phase(int comm_phase) const",
         "comm_phase >= kCommPhaseCount",
         "idx == kInvalidGraphIndex",
+        "check_cuda_status(cudaError_t cuda_err",
+        "kCudaSendBufferAllocationError",
+        "kCudaRecvBufferAllocationError",
+        "kCudaPackForwardMemcpyError",
+        "kCudaPackReverseMemcpyError",
+        "cudaGetErrorString(cuda_err)",
     ),
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.h": (
         "IsoDelta",
         "metadata",
+        "void get_buffer(int, int, float *&, float *&, class Error *)",
     ),
     "sevenn/pair_e3gnn/comm_brick.cpp": (
         "kE3GnnCommPhaseLimit = 6",
@@ -136,6 +143,7 @@ REQUIRED_FILE_SNIPPETS = {
         "std::vector<float> host_recv_buffer",
         "e3gnn_forward_send_capacity",
         "e3gnn_reverse_recv_capacity",
+        "buf_recv_, error);",
     ),
     "sevenn/pair_e3gnn/comm_brick.h": (
         "validate_e3gnn_comm_phase(int iswap) const",

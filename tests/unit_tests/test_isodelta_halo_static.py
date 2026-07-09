@@ -336,6 +336,34 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertNotIn("reinterpret_cast<float*>(buf_send)", self.comm_brick_cpp)
         self.assertNotIn("reinterpret_cast<float*>(buf_recv)", self.comm_brick_cpp)
 
+    def test_cuda_comm_errors_are_checked(self) -> None:
+        """CUDA allocation and copy failures should stop with LAMMPS errors."""
+        self.assertIn("void get_buffer(int, int, float *&, float *&, class Error *)", self.header)
+        self.assertIn("check_cuda_status(cudaError_t cuda_err", self.cpp)
+        self.assertIn("cudaGetErrorString(cuda_err)", self.cpp)
+        self.assertIn("kCudaSendBufferAllocationError", self.cpp)
+        self.assertIn("kCudaRecvBufferAllocationError", self.cpp)
+        self.assertIn("kCudaPackForwardMemcpyError", self.cpp)
+        self.assertIn("kCudaPackReverseMemcpyError", self.cpp)
+        self.assertIn(
+            "check_cuda_status(cuda_err, kCudaSendBufferAllocationError, error);",
+            self.cpp,
+        )
+        self.assertIn(
+            "check_cuda_status(cuda_err, kCudaRecvBufferAllocationError, error);",
+            self.cpp,
+        )
+        self.assertIn(
+            "check_cuda_status(cuda_err, kCudaPackForwardMemcpyError, error);",
+            self.cpp,
+        )
+        self.assertIn(
+            "check_cuda_status(cuda_err, kCudaPackReverseMemcpyError, error);",
+            self.cpp,
+        )
+        self.assertIn("buf_recv_, error);", self.comm_brick_cpp)
+        self.assertNotIn("get_buffer(\n          e3gnn_forward_send_capacity, e3gnn_forward_recv_capacity, buf_send_,\n          buf_recv_);", self.comm_brick_cpp)
+
     def test_comm_brick_exposes_read_only_topology_accessors(self) -> None:
         """The pair cache should compare current CommBrick topology before reuse."""
         for accessor_name in (
