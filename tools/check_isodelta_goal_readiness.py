@@ -120,6 +120,11 @@ REQUIRED_FILE_SNIPPETS = {
         "kCudaPackForwardMemcpyError",
         "kCudaPackReverseMemcpyError",
         "cudaGetErrorString(cuda_err)",
+        "kE3GnnPayloadElementCountError",
+        "checked_e3gnn_payload_element_count",
+        "checked_e3gnn_payload_byte_count",
+        "payload_byte_count",
+        "return payload_element_count;",
     ),
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.h": (
         "IsoDelta",

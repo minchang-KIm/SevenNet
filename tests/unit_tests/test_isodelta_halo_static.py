@@ -364,6 +364,26 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("buf_recv_, error);", self.comm_brick_cpp)
         self.assertNotIn("get_buffer(\n          e3gnn_forward_send_capacity, e3gnn_forward_recv_capacity, buf_send_,\n          buf_recv_);", self.comm_brick_cpp)
 
+    def test_pair_comm_payload_size_is_guarded(self) -> None:
+        """Pack/unpack payload size should use checked element and byte counts."""
+        self.assertIn("kE3GnnPayloadElementCountError", self.cpp)
+        self.assertIn("kMinimumFeatureWidth", self.cpp)
+        self.assertIn("kMinimumPayloadAtomCount", self.cpp)
+        self.assertIn("checked_e3gnn_payload_element_count", self.cpp)
+        self.assertIn("checked_e3gnn_payload_byte_count", self.cpp)
+        self.assertIn("std::numeric_limits<int>::max()", self.cpp)
+        self.assertIn("static_cast<long long>(feature_width)", self.cpp)
+        self.assertIn("static_cast<long long>(atom_count)", self.cpp)
+        self.assertIn("const int payload_element_count", self.cpp)
+        self.assertIn("const size_t payload_byte_count", self.cpp)
+        self.assertIn("cudaMemcpy(buf, selected.data_ptr<float>(), payload_byte_count", self.cpp)
+        self.assertIn("return payload_element_count;", self.cpp)
+        self.assertGreaterEqual(
+            self.cpp.count("checked_e3gnn_payload_element_count(x_dim, n, error)"),
+            4,
+        )
+        self.assertNotIn("(x_dim * n) * sizeof(float)", self.cpp)
+
     def test_comm_brick_exposes_read_only_topology_accessors(self) -> None:
         """The pair cache should compare current CommBrick topology before reuse."""
         for accessor_name in (

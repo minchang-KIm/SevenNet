@@ -25,6 +25,7 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <list>
 #include <map>
 #include <numeric>
@@ -89,9 +90,13 @@ constexpr const char *kCudaPackForwardMemcpyError =
     "PairE3GNNParallel: CUDA pack-forward buffer copy failed";
 constexpr const char *kCudaPackReverseMemcpyError =
     "PairE3GNNParallel: CUDA pack-reverse buffer copy failed";
+constexpr const char *kE3GnnPayloadElementCountError =
+    "PairE3GNNParallel: communication payload element count is out of range";
 constexpr double kIsoDeltaHaloPercentScale = 100.0;
 constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
 constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
+constexpr int kMinimumFeatureWidth = 1;
+constexpr int kMinimumPayloadAtomCount = 0;
 constexpr int kSpatialDimension = 3;
 constexpr int kXCoordinate = 0;
 constexpr int kYCoordinate = 1;
@@ -139,6 +144,25 @@ void check_cuda_status(cudaError_t cuda_err, const char *context,
   }
   error->all(FLERR, std::string(context) + ": " +
                          std::string(cudaGetErrorString(cuda_err)));
+}
+
+int checked_e3gnn_payload_element_count(int feature_width, int atom_count,
+                                        Error *error) {
+  if (feature_width < kMinimumFeatureWidth ||
+      atom_count < kMinimumPayloadAtomCount) {
+    error->all(FLERR, kE3GnnPayloadElementCountError);
+  }
+
+  const long long element_count =
+      static_cast<long long>(feature_width) * static_cast<long long>(atom_count);
+  if (element_count > std::numeric_limits<int>::max()) {
+    error->all(FLERR, kE3GnnPayloadElementCountError);
+  }
+  return static_cast<int>(element_count);
+}
+
+size_t checked_e3gnn_payload_byte_count(int payload_element_count) {
+  return static_cast<size_t>(payload_element_count) * sizeof(float);
 }
 
 std::string normalize_iso_delta_halo_env_flag_value(const char *value) {
@@ -1384,11 +1408,15 @@ int PairE3GNNParallel::pack_forward_comm_gnn(float *buf, int comm_phase) {
   validate_comm_phase(comm_phase);
   std::vector<long> &idx_map = comm_index_pack_forward[comm_phase];
   const int n = static_cast<int>(idx_map.size());
+  const int payload_element_count =
+      checked_e3gnn_payload_element_count(x_dim, n, error);
+  const size_t payload_byte_count =
+      checked_e3gnn_payload_byte_count(payload_element_count);
   if (use_cuda_mpi && n != 0) {
     torch::Tensor &idx_map_tensor = comm_index_pack_forward_tensor[comm_phase];
     auto selected = x_comm.index_select(0, idx_map_tensor); // its size is x_dim * n
     cudaError_t cuda_err =
-        cudaMemcpy(buf, selected.data_ptr<float>(), (x_dim * n) * sizeof(float),
+        cudaMemcpy(buf, selected.data_ptr<float>(), payload_byte_count,
                    cudaMemcpyDeviceToDevice);
     check_cuda_status(cuda_err, kCudaPackForwardMemcpyError, error);
   } else {
@@ -1406,19 +1434,20 @@ int PairE3GNNParallel::pack_forward_comm_gnn(float *buf, int comm_phase) {
     std::cout << world_rank << " comm_phase: " << comm_phase << std::endl;
     std::cout << world_rank << " pack_forward x_dim: " << x_dim << std::endl;
     std::cout << world_rank << " pack_forward n: " << n << std::endl;
-    std::cout << world_rank << " pack_forward x_dim*n: " << x_dim * n
+    std::cout << world_rank << " pack_forward x_dim*n: " << payload_element_count
               << std::endl;
     double Msend = static_cast<double>(x_dim) * static_cast<double>(n) *
                    kFloatElementBytes / kBytesPerMebibyte;
     std::cout << world_rank << " send size(MiB): " << Msend << "\n" << std::endl;
   }
-  return x_dim * n;
+  return payload_element_count;
 }
 
 void PairE3GNNParallel::unpack_forward_comm_gnn(float *buf, int comm_phase) {
   validate_comm_phase(comm_phase);
   std::vector<long> &idx_map = comm_index_unpack_forward[comm_phase];
   const int n = static_cast<int>(idx_map.size());
+  checked_e3gnn_payload_element_count(x_dim, n, error);
 
   if (use_cuda_mpi && n != 0) {
     torch::Tensor &idx_map_tensor = comm_index_unpack_forward_tensor[comm_phase];
@@ -1443,11 +1472,17 @@ int PairE3GNNParallel::pack_reverse_comm_gnn(float *buf, int comm_phase) {
   validate_comm_phase(comm_phase);
   std::vector<long> &idx_map = comm_index_unpack_forward[comm_phase];
   const int n = static_cast<int>(idx_map.size());
+  const int payload_element_count =
+      checked_e3gnn_payload_element_count(x_dim, n, error);
+  const size_t payload_byte_count =
+      checked_e3gnn_payload_byte_count(payload_element_count);
 
   if (use_cuda_mpi && n != 0) {
     torch::Tensor &idx_map_tensor = comm_index_unpack_forward_tensor[comm_phase];
     auto selected = x_comm.index_select(0, idx_map_tensor);
-    cudaError_t cuda_err = cudaMemcpy(buf, selected.data_ptr<float>(), (x_dim * n) * sizeof(float), cudaMemcpyDeviceToDevice);
+    cudaError_t cuda_err =
+        cudaMemcpy(buf, selected.data_ptr<float>(), payload_byte_count,
+                   cudaMemcpyDeviceToDevice);
     check_cuda_status(cuda_err, kCudaPackReverseMemcpyError, error);
   } else {
     int i, j, m;
@@ -1464,18 +1499,19 @@ int PairE3GNNParallel::pack_reverse_comm_gnn(float *buf, int comm_phase) {
     std::cout << world_rank << " comm_phase: " << comm_phase << std::endl;
     std::cout << world_rank << " pack_reverse x_dim: " << x_dim << std::endl;
     std::cout << world_rank << " pack_reverse n: " << n << std::endl;
-    std::cout << world_rank << " pack_reverse x_dim*n: " << x_dim * n
+    std::cout << world_rank << " pack_reverse x_dim*n: " << payload_element_count
               << std::endl;
     double Msend = static_cast<double>(x_dim) * static_cast<double>(n) *
                    kFloatElementBytes / kBytesPerMebibyte;
   }
-  return x_dim * n;
+  return payload_element_count;
 }
 
 void PairE3GNNParallel::unpack_reverse_comm_gnn(float *buf, int comm_phase) {
   validate_comm_phase(comm_phase);
   std::vector<long> &idx_map = comm_index_unpack_reverse[comm_phase];
   const int n = static_cast<int>(idx_map.size());
+  checked_e3gnn_payload_element_count(x_dim, n, error);
 
   if (use_cuda_mpi && n != 0) {
     torch::Tensor &idx_map_tensor = comm_index_unpack_reverse_tensor[comm_phase];

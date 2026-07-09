@@ -308,6 +308,24 @@ def main() -> None:
         not in comm_brick_cpp,
         "CUDA allocation and memcpy errors must be checked in e3gnn communication",
     )
+    _require(
+        "kE3GnnPayloadElementCountError" in cpp
+        and "kMinimumFeatureWidth" in cpp
+        and "kMinimumPayloadAtomCount" in cpp
+        and "checked_e3gnn_payload_element_count" in cpp
+        and "checked_e3gnn_payload_byte_count" in cpp
+        and "std::numeric_limits<int>::max()" in cpp
+        and "static_cast<long long>(feature_width)" in cpp
+        and "static_cast<long long>(atom_count)" in cpp
+        and "const int payload_element_count" in cpp
+        and "const size_t payload_byte_count" in cpp
+        and "cudaMemcpy(buf, selected.data_ptr<float>(), payload_byte_count"
+        in cpp
+        and "return payload_element_count;" in cpp
+        and cpp.count("checked_e3gnn_payload_element_count(x_dim, n, error)") >= 4
+        and "(x_dim * n) * sizeof(float)" not in cpp,
+        "e3gnn pack/unpack payload element and byte counts must be checked",
+    )
     for accessor_name in (
         "e3gnn_nswap",
         "e3gnn_sendnum",
