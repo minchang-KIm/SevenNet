@@ -181,6 +181,9 @@ PIPELINE_PLAN_CASES_ERROR = (
 PIPELINE_PLAN_OUTPUTS_ERROR = (
     "passed pipeline run plan must include required paper output paths"
 )
+PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR = (
+    "pipeline run plan paper_outputs must match verified summary artifact paths"
+)
 PIPELINE_DRY_RUN_PASSED_ERROR = "passed pipeline report must record dry_run=false"
 PIPELINE_GPU_CHECK_SKIPPED_ERROR = (
     "passed pipeline report must record skip_gpu_check=false"
@@ -243,12 +246,17 @@ PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS = (
     "case_summary_csv",
     "case_summary_markdown",
     "correlation_csv",
+    "command_timing_csv",
+    "command_timing_markdown",
+    "repeat_timing_csv",
+    "repeat_timing_markdown",
     "speedup_uncertainty_csv",
     "speedup_uncertainty_markdown",
     "speedup_uncertainty_svg",
     "speedup_svg",
     "hit_rate_svg",
     "trace_svg",
+    "manifest_snapshot",
 )
 SUPPORTED_CASE_KINDS = frozenset(("sevennet_lammps", "external_pair", "trace_only"))
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
@@ -5490,7 +5498,53 @@ def _require_pipeline_plan_report(
         "gpu_check_planned": True,
         "verified_required_artifact_plan_count": verified_required_artifact_count,
         "verified_case_plan_count": len(raw_cases),
+        "paper_outputs": dict(paper_outputs),
     }
+
+
+def _require_pipeline_plan_output_alignment(
+    run_plan_report: dict[str, Any],
+    *,
+    summary_path: Path,
+    original_output_dir: Path,
+) -> int:
+    """Verify the run plan's promised paper outputs match the final bundle."""
+    paper_outputs = _as_json_object(
+        run_plan_report.get("paper_outputs"),
+        "run_plan_report.paper_outputs",
+    )
+    expected_summary_path = str(original_output_dir / SUMMARY_REPORT_NAME)
+    observed_summary_path = _as_json_string(
+        paper_outputs.get("summary_json"),
+        "run_plan_report.paper_outputs.summary_json",
+    )
+    _require(
+        observed_summary_path == expected_summary_path,
+        PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,
+    )
+    summary_payload = _as_json_object(
+        json.loads(summary_path.read_text(encoding="utf-8")),
+        "summary",
+    )
+    summary_artifacts = _as_json_object(summary_payload.get("artifacts"), "summary.artifacts")
+    verified_count = 1
+    for output_key in PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS:
+        if output_key == "summary_json":
+            continue
+        planned_path = _as_json_string(
+            paper_outputs.get(output_key),
+            f"run_plan_report.paper_outputs.{output_key}",
+        )
+        summary_path_text = _as_json_string(
+            summary_artifacts.get(output_key),
+            f"summary.artifacts.{output_key}",
+        )
+        _require(
+            planned_path == summary_path_text,
+            PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,
+        )
+        verified_count += 1
+    return verified_count
 
 
 def _require_pipeline_preflight_gpu_check(
@@ -5732,6 +5786,17 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         and bundle_verification.get("status") == PIPELINE_STATUS_PASSED,
         PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR,
     )
+    verified_paper_output_count = _require_pipeline_plan_output_alignment(
+        run_plan_report,
+        summary_path=Path(
+            _as_json_string(
+                bundle_verification.get("summary_json"),
+                f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.summary_json",
+            )
+        ),
+        original_output_dir=original_output_dir,
+    )
+    run_plan_report["verified_paper_output_count"] = verified_paper_output_count
     _require_report_comment(
         pipeline_payload,
         "pipeline_report",
@@ -5923,6 +5988,18 @@ def build_run_plan(
             "case_summary_csv": str(config.output_dir / TABLES_DIR_NAME / "case_summary.csv"),
             "case_summary_markdown": str(config.output_dir / TABLES_DIR_NAME / "case_summary.md"),
             "correlation_csv": str(config.output_dir / TABLES_DIR_NAME / "correlation.csv"),
+            "command_timing_csv": str(
+                config.output_dir / TABLES_DIR_NAME / "command_timing.csv"
+            ),
+            "command_timing_markdown": str(
+                config.output_dir / TABLES_DIR_NAME / "command_timing.md"
+            ),
+            "repeat_timing_csv": str(
+                config.output_dir / TABLES_DIR_NAME / "repeat_timing.csv"
+            ),
+            "repeat_timing_markdown": str(
+                config.output_dir / TABLES_DIR_NAME / "repeat_timing.md"
+            ),
             "speedup_uncertainty_csv": str(
                 config.output_dir / TABLES_DIR_NAME / "speedup_uncertainty.csv"
             ),
@@ -5937,6 +6014,7 @@ def build_run_plan(
             "trace_svg": str(
                 config.output_dir / FIGURES_DIR_NAME / "trace_metadata_fraction_vs_speedup.svg"
             ),
+            "manifest_snapshot": str(config.output_dir / MANIFEST_SNAPSHOT_NAME),
         },
     }
 

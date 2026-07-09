@@ -1225,6 +1225,9 @@ def main() -> None:
         and "test_pipeline_reports_bundle_verification_failure" in cluster_suite_test
         and "--verify-pipeline-report" in cluster_suite_test
         and "stage_path_drift_error" in cluster_suite_test
+        and "plan_output_drift_error" in cluster_suite_test
+        and "wrong_case_summary.csv" in cluster_suite_test
+        and "verified_paper_output_count" in cluster_suite_test
         and "wrong_readiness_report.json" in cluster_suite_test
         and "Re-open the finished pipeline report" in cluster_suite_test
         and "test_manifest_validation_rejects_enabled_external_pair_disable_env" in cluster_suite_test
@@ -1490,6 +1493,7 @@ def main() -> None:
         and "PIPELINE_PLAN_MODES_ERROR" in cluster_suite
         and "PIPELINE_PLAN_CASES_ERROR" in cluster_suite
         and "PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS" in cluster_suite
+        and "PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR" in cluster_suite
         and "PAPER_ARTIFACT_COMMENTS" in cluster_suite
         and "GENERATED_ARTIFACT_COMMENT_KEY" in cluster_suite
         and "READINESS_REPORT_COMMENT" in cluster_suite
@@ -1512,6 +1516,8 @@ def main() -> None:
         and "_require_pipeline_readiness_report" in cluster_suite
         and "_require_pipeline_artifact_preparation_report" in cluster_suite
         and "_require_pipeline_plan_report" in cluster_suite
+        and "_require_pipeline_plan_output_alignment" in cluster_suite
+        and "verified_paper_output_count" in cluster_suite
         and "_require_csv_artifact_comment" in cluster_suite
         and "_require_markdown_artifact_comment" in cluster_suite
         and "_svg_desc_content" in cluster_suite
@@ -1617,6 +1623,10 @@ def main() -> None:
         and "final-paper execution modes" in doc
         and "checks `gpu_check_planned`" in doc
         and "required model case plans" in doc
+        and "`run_plan.paper_outputs`" in doc
+        and "summary artifact index" in doc
+        and "command/repeat timing" in doc
+        and "manifest snapshot" in doc
         and "Generated paper artifacts are self-describing" in doc
         and "`artifact_comment` or `report_comment`" in doc
         and "Every generated table must keep its explanatory comment" in doc

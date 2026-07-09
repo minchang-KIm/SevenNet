@@ -4250,9 +4250,13 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 output_dir / isodelta_cluster_suite.ARTIFACT_PREPARATION_REPORT_NAME
             )
             preflight_report_path = output_dir / isodelta_cluster_suite.PREFLIGHT_REPORT_NAME
+            plan_path = output_dir / isodelta_cluster_suite.PLAN_REPORT_NAME
             readiness_report = json.loads(readiness_report_path.read_text(encoding="utf-8"))
             artifact_report = json.loads(artifact_report_path.read_text(encoding="utf-8"))
             preflight_report = json.loads(preflight_report_path.read_text(encoding="utf-8"))
+            plan_report_text = plan_path.read_text(encoding="utf-8")
+            plan_report = json.loads(plan_report_text)
+            summary_report_text = summary_path.read_text(encoding="utf-8")
             uncommented_pipeline_report = dict(pipeline_report)
             uncommented_pipeline_report.pop(
                 isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY
@@ -4285,6 +4289,77 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 stage_path_drift_error = str(exc)
             else:
                 stage_path_drift_error = ""
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
+            plan_output_drift_report = json.loads(json.dumps(plan_report))
+            plan_output_drift_report["paper_outputs"]["case_summary_csv"] = str(
+                output_dir / "tables" / "wrong_case_summary.csv"
+            )
+            plan_path.write_text(
+                json.dumps(plan_output_drift_report),
+                encoding="utf-8",
+            )
+            plan_output_drift_summary = json.loads(json.dumps(summary))
+            plan_output_drift_summary["artifact_fingerprints"]["run_plan"] = (
+                isodelta_cluster_suite.generated_artifact_record(plan_path)
+            )
+            summary_path.write_text(
+                json.dumps(plan_output_drift_summary),
+                encoding="utf-8",
+            )
+            plan_output_drift_pipeline_report = json.loads(json.dumps(pipeline_report))
+            plan_stage_index = stage_names.index(
+                isodelta_cluster_suite.PIPELINE_STAGE_PLAN
+            )
+            plan_output_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][plan_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(plan_path)
+            )
+            run_suite_stage_index = stage_names.index(
+                isodelta_cluster_suite.PIPELINE_STAGE_RUN_SUITE
+            )
+            run_suite_stage_report_path = Path(
+                plan_output_drift_pipeline_report["stages"][run_suite_stage_index][
+                    "report_path"
+                ]
+            )
+            plan_output_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][run_suite_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(
+                    run_suite_stage_report_path
+                )
+            )
+            verify_stage_index = stage_names.index(
+                isodelta_cluster_suite.PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE
+            )
+            verify_stage_report_path = Path(
+                plan_output_drift_pipeline_report["stages"][verify_stage_index][
+                    "report_path"
+                ]
+            )
+            plan_output_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][verify_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(
+                    verify_stage_report_path
+                )
+            )
+            pipeline_report_path.write_text(
+                json.dumps(plan_output_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                plan_output_drift_error = str(exc)
+            else:
+                plan_output_drift_error = ""
+            plan_path.write_text(plan_report_text, encoding="utf-8")
+            summary_path.write_text(summary_report_text, encoding="utf-8")
             pipeline_report_path.write_text(
                 json.dumps(pipeline_report),
                 encoding="utf-8",
@@ -4380,6 +4455,12 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             pipeline_report_verification["run_plan_report"]["verified_case_plan_count"],
             len(isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS),
         )
+        self.assertEqual(
+            pipeline_report_verification["run_plan_report"][
+                "verified_paper_output_count"
+            ],
+            len(isodelta_cluster_suite.PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS),
+        )
         self.assertEqual(pipeline_verification["status"], "passed")
         self.assertEqual(
             pipeline_verification["verified_artifact_index_count"],
@@ -4405,6 +4486,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_STAGE_REPORT_PATH_ALIGNMENT_ERROR,
             stage_path_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,
+            plan_output_drift_error,
         )
         for count_key, error in bundle_count_drift_errors.items():
             self.assertIn(count_key, error)

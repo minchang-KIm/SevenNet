@@ -546,7 +546,11 @@ also reopens the fingerprinted readiness report and requires every final-paper r
 It reopens the fingerprinted artifact preparation report, requires `dry_run = false`,
 and checks `missing_required_artifacts` plus each required artifact SHA-256 digest.
 It also reopens the fingerprinted run plan report, requires final-paper execution modes,
-checks `gpu_check_planned`, and verifies required model case plans plus paper output paths.
+checks `gpu_check_planned`, verifies required model case plans, and compares
+`run_plan.paper_outputs` against the summary artifact index. That comparison
+includes the summary JSON path, case/correlation tables, command/repeat timing
+tables, uncertainty figures, and the manifest snapshot, so a run plan cannot
+promise one publication artifact while the verified bundle archives another.
 It then reopens the fingerprinted preflight report and checks `gpu_check` so the
 archive proves the requested GPU count was actually detected.
 
