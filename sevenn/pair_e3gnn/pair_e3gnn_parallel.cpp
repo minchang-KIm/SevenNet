@@ -96,6 +96,10 @@ constexpr const char *kIsoDeltaHaloNodeFeatureShapeError =
     "IsoDelta-Halo node feature tensor shape is invalid for communication";
 constexpr const char *kIsoDeltaHaloGraphAtomIndexError =
     "IsoDelta-Halo graph-to-atom index is out of range";
+constexpr const char *kIsoDeltaHaloAtomTagLookupSizeError =
+    "IsoDelta-Halo atom tag lookup table size is out of range";
+constexpr const char *kIsoDeltaHaloAtomTagIndexError =
+    "IsoDelta-Halo atom tag index is out of range";
 constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
@@ -117,6 +121,7 @@ constexpr int kTrashGraphSlotCount = 1;
 constexpr int kSpatialDimension = 3;
 constexpr int kNodeFeatureTensorRank = 2;
 constexpr int kNodeFeatureWidthDimension = 1;
+constexpr int kMinimumGlobalAtomCount = 0;
 constexpr int kXCoordinate = 0;
 constexpr int kYCoordinate = 1;
 constexpr int kZCoordinate = 2;
@@ -281,6 +286,31 @@ int checked_node_feature_width(const torch::Tensor &node_feature_tensor,
     error->all(FLERR, kIsoDeltaHaloNodeFeatureShapeError);
   }
   return static_cast<int>(feature_width);
+}
+
+size_t checked_atom_tag_lookup_size(bigint atom_count, Error *error) {
+  if (atom_count < kMinimumGlobalAtomCount) {
+    error->all(FLERR, kIsoDeltaHaloAtomTagLookupSizeError);
+  }
+
+  const auto atom_count_unsigned =
+      static_cast<unsigned long long>(atom_count);
+  const auto max_lookup_size =
+      static_cast<unsigned long long>(std::numeric_limits<size_t>::max()) -
+      kAtomTagIndexBase;
+  if (atom_count_unsigned > max_lookup_size) {
+    error->all(FLERR, kIsoDeltaHaloAtomTagLookupSizeError);
+  }
+  return static_cast<size_t>(atom_count) + kAtomTagIndexBase;
+}
+
+size_t checked_atom_tag_index(tagint atom_tag, bigint atom_count,
+                              Error *error) {
+  const bigint atom_tag_value = static_cast<bigint>(atom_tag);
+  if (atom_tag_value < kAtomTagIndexBase || atom_tag_value > atom_count) {
+    error->all(FLERR, kIsoDeltaHaloAtomTagIndexError);
+  }
+  return static_cast<size_t>(atom_tag_value);
 }
 
 std::string normalize_iso_delta_halo_env_flag_value(const char *value) {
@@ -518,7 +548,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   // Store graph_idx from local to known ghost atoms inside the cutoff. The tag
   // table is heap-backed because paper runs may contain millions of atoms.
   std::vector<int> tag_to_graph_idx(
-      static_cast<size_t>(natoms) + kAtomTagIndexBase, kInvalidGraphIndex);
+      checked_atom_tag_lookup_size(natoms, error), kInvalidGraphIndex);
 
   // to access tag_to_graph_idx from comm
   tag_to_graph_idx_ptr = tag_to_graph_idx.data();
@@ -545,7 +575,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
     const int i = ilist[ii];
     const tagint itag = tag[i];
     const int itype = type[i];
-    tag_to_graph_idx[static_cast<size_t>(itag)] = ii;
+    tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] = ii;
     graph_index_to_i[ii] = i;
     node_type.push_back(map[itype]);
   }
@@ -574,15 +604,16 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
       int j_graph_idx;
       if (Rij < cutoff_square) {
         // if given j is not local atom and inside cutoff
-        if (tag_to_graph_idx[static_cast<size_t>(jtag)] == kInvalidGraphIndex) {
+        const size_t jtag_index = checked_atom_tag_index(jtag, natoms, error);
+        if (tag_to_graph_idx[jtag_index] == kInvalidGraphIndex) {
           // if j is ghost atom inside cutoff but first seen
-          tag_to_graph_idx[static_cast<size_t>(jtag)] = graph_indexer;
+          tag_to_graph_idx[jtag_index] = graph_indexer;
           graph_index_to_i[graph_indexer] = j;
           node_type_ghost.push_back(map[jtype]);
           graph_indexer++;
         }
 
-        j_graph_idx = tag_to_graph_idx[static_cast<size_t>(jtag)];
+        j_graph_idx = tag_to_graph_idx[jtag_index];
         edge_idx_src[nedges] = i_graph_idx;
         edge_idx_dst[nedges] = j_graph_idx;
         const size_t edge_offset =

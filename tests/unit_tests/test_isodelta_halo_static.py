@@ -75,6 +75,29 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertNotIn("long edge_idx_src[nedges_upper_bound]", self.cpp)
         self.assertNotIn("long edge_idx_dst[nedges_upper_bound]", self.cpp)
 
+    def test_graph_build_atom_tag_lookup_is_guarded(self) -> None:
+        """Atom tags should be checked before indexing the graph lookup table."""
+        self.assertIn("kIsoDeltaHaloAtomTagLookupSizeError", self.cpp)
+        self.assertIn("kIsoDeltaHaloAtomTagIndexError", self.cpp)
+        self.assertIn("kMinimumGlobalAtomCount", self.cpp)
+        self.assertIn("checked_atom_tag_lookup_size", self.cpp)
+        self.assertIn("checked_atom_tag_index", self.cpp)
+        self.assertIn("std::numeric_limits<size_t>::max()", self.cpp)
+        self.assertIn("static_cast<unsigned long long>(atom_count)", self.cpp)
+        self.assertIn("checked_atom_tag_lookup_size(natoms, error)", self.cpp)
+        self.assertIn(
+            "tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] = ii;",
+            self.cpp,
+        )
+        self.assertIn(
+            "const size_t jtag_index = checked_atom_tag_index(jtag, natoms, error);",
+            self.cpp,
+        )
+        self.assertIn("tag_to_graph_idx[jtag_index]", self.cpp)
+        self.assertNotIn("tag_to_graph_idx[static_cast<size_t>(itag)]", self.cpp)
+        self.assertNotIn("tag_to_graph_idx[static_cast<size_t>(jtag)]", self.cpp)
+        self.assertNotIn("static_cast<size_t>(natoms) + kAtomTagIndexBase", self.cpp)
+
     def test_neighbor_indices_are_masked_before_tag_access(self) -> None:
         """Special neighbor bits should be stripped before reading atom arrays."""
         self.assertIn("j &= NEIGHMASK;\n      const tagint jtag = tag[j];", self.cpp)

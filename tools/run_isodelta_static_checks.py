@@ -140,6 +140,25 @@ def main() -> None:
         "runtime-sized graph buffers must be heap-backed and named",
     )
     _require(
+        "kIsoDeltaHaloAtomTagLookupSizeError" in cpp
+        and "kIsoDeltaHaloAtomTagIndexError" in cpp
+        and "kMinimumGlobalAtomCount" in cpp
+        and "checked_atom_tag_lookup_size" in cpp
+        and "checked_atom_tag_index" in cpp
+        and "std::numeric_limits<size_t>::max()" in cpp
+        and "static_cast<unsigned long long>(atom_count)" in cpp
+        and "checked_atom_tag_lookup_size(natoms, error)" in cpp
+        and "tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] = ii;"
+        in cpp
+        and "const size_t jtag_index = checked_atom_tag_index(jtag, natoms, error);"
+        in cpp
+        and "tag_to_graph_idx[jtag_index]" in cpp
+        and "tag_to_graph_idx[static_cast<size_t>(itag)]" not in cpp
+        and "tag_to_graph_idx[static_cast<size_t>(jtag)]" not in cpp
+        and "static_cast<size_t>(natoms) + kAtomTagIndexBase" not in cpp,
+        "graph atom tags must be checked before indexing the lookup table",
+    )
+    _require(
         "j &= NEIGHMASK;\n      const tagint jtag = tag[j];" in cpp
         and "const int jtag = tag[j];\n      j &= NEIGHMASK;" not in cpp,
         "neighbor special bits must be masked before tag access",
