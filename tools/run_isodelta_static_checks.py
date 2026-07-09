@@ -1227,6 +1227,8 @@ def main() -> None:
         and "stage_path_drift_error" in cluster_suite_test
         and "summary_stage_path_drift_error" in cluster_suite_test
         and "wrong_stage_summary.json" in cluster_suite_test
+        and "summary_suite_drift_error" in cluster_suite_test
+        and "PIPELINE_SUMMARY_SUITE_GPU_DRIFT" in cluster_suite_test
         and "plan_output_drift_error" in cluster_suite_test
         and "wrong_case_summary.csv" in cluster_suite_test
         and "bundle_summary_path_drift_error" in cluster_suite_test
@@ -1517,6 +1519,8 @@ def main() -> None:
         and "PIPELINE_REQUIRED_STAGES_ERROR" in cluster_suite
         and "PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR" in cluster_suite
+        and "PIPELINE_SUMMARY_SUITE_ERROR" in cluster_suite
+        and "PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS" in cluster_suite
         and "PIPELINE_BUNDLE_SUMMARY_PATH_ALIGNMENT_ERROR" in cluster_suite
         and "_as_json_bool" in cluster_suite
         and "_require_pipeline_report_modes" in cluster_suite
@@ -1526,6 +1530,8 @@ def main() -> None:
         and "_require_pipeline_plan_output_alignment" in cluster_suite
         and "_require_pipeline_summary_stage_alignment" in cluster_suite
         and "verified_summary_stage_count" in cluster_suite
+        and "_require_pipeline_summary_suite_report" in cluster_suite
+        and "verified_suite_field_count" in cluster_suite
         and "verified_paper_output_count" in cluster_suite
         and "_require_csv_artifact_comment" in cluster_suite
         and "_require_markdown_artifact_comment" in cluster_suite
@@ -1618,6 +1624,9 @@ def main() -> None:
         and "`verify_output_bundle`" in doc
         and "verified output bundle" in doc
         and "copied or stale summary" in doc
+        and "summary's suite metadata" in doc
+        and "manifest SHA-256" in doc
+        and "artifact SHA gate" in doc
         and "pipeline `modes` as booleans" in doc
         and "`dry_run = true`" in doc
         and "`skip_gpu_check = true`" in doc

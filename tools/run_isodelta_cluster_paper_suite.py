@@ -136,6 +136,9 @@ PIPELINE_STAGE_REPORT_PATH_ALIGNMENT_ERROR = (
 PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR = (
     "pipeline summary stages must point to the verified output bundle summary"
 )
+PIPELINE_SUMMARY_SUITE_ERROR = (
+    "verified output bundle summary suite metadata must match the pipeline suite"
+)
 PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR = (
     "output_bundle_verification.status must be 'passed' for a passed pipeline report"
 )
@@ -238,6 +241,16 @@ REQUIRED_PIPELINE_STAGE_NAMES = (
 SUMMARY_PIPELINE_STAGE_NAMES = (
     PIPELINE_STAGE_RUN_SUITE,
     PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE,
+)
+PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS = (
+    "name",
+    "manifest_path",
+    "manifest.sha256",
+    "output_dir",
+    "expected_gpus",
+    "required_models",
+    "runtime_overrides",
+    "require_artifact_sha256",
 )
 PIPELINE_SUCCESS_STAGE_STATUSES = {
     PIPELINE_STAGE_READINESS: (PIPELINE_STAGE_STATUS_READY,),
@@ -5783,6 +5796,84 @@ def _require_pipeline_summary_stage_alignment(
     return verified_count
 
 
+def _require_pipeline_summary_suite_report(
+    summary_path: Path,
+    suite_record: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify the final summary describes the same suite as the pipeline."""
+    summary_payload = _as_json_object(
+        json.loads(summary_path.read_text(encoding="utf-8")),
+        "summary",
+    )
+    summary_suite = _as_json_object(summary_payload.get("suite"), "summary.suite")
+    _require(
+        _as_json_string(summary_suite.get("name"), "summary.suite.name")
+        == _as_json_string(suite_record.get("name"), "suite.name"),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
+        _as_json_string(
+            summary_suite.get("manifest_path"),
+            "summary.suite.manifest_path",
+        )
+        == _as_json_string(suite_record.get("manifest_path"), "suite.manifest_path"),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    suite_manifest = _as_json_object(suite_record.get("manifest"), "suite.manifest")
+    summary_manifest = _as_json_object(
+        summary_suite.get("manifest"),
+        "summary.suite.manifest",
+    )
+    _require(
+        _require_sha256_digest(
+            summary_manifest.get("sha256"),
+            "summary.suite.manifest.sha256",
+        )
+        == _require_sha256_digest(suite_manifest.get("sha256"), "suite.manifest.sha256"),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
+        _as_json_string(summary_suite.get("output_dir"), "summary.suite.output_dir")
+        == _as_json_string(suite_record.get("output_dir"), "suite.output_dir"),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
+        _as_json_nonnegative_int(
+            summary_suite.get("expected_gpus"),
+            "summary.suite.expected_gpus",
+        )
+        == _as_json_nonnegative_int(suite_record.get("expected_gpus"), "suite.expected_gpus"),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
+        _as_string_tuple(
+            summary_suite.get("required_models"),
+            "summary.suite.required_models",
+        )
+        == _as_string_tuple(suite_record.get("required_models"), "suite.required_models"),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
+        _as_json_object(
+            summary_suite.get("runtime_overrides"),
+            "summary.suite.runtime_overrides",
+        )
+        == _as_json_object(suite_record.get("runtime_overrides"), "suite.runtime_overrides"),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
+        _as_json_bool(
+            summary_suite.get("require_artifact_sha256"),
+            "summary.suite.require_artifact_sha256",
+        ),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    return {
+        "summary_json": str(summary_path),
+        "verified_suite_field_count": len(PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS),
+    }
+
+
 def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
     """Verify a pipeline report and all stage reports it fingerprints."""
     _require(pipeline_report_path.exists(), f"missing pipeline report {pipeline_report_path}")
@@ -5853,6 +5944,10 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         stage_report_paths,
         summary_path=summary_path,
     )
+    summary_suite_report = _require_pipeline_summary_suite_report(
+        summary_path,
+        suite_record,
+    )
     verified_paper_output_count = _require_pipeline_plan_output_alignment(
         run_plan_report,
         summary_path=summary_path,
@@ -5870,6 +5965,7 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "pipeline_status": pipeline_status,
         "verified_stage_report_count": verified_stage_report_count,
         "verified_summary_stage_count": verified_summary_stage_count,
+        "summary_suite_report": summary_suite_report,
         "readiness_report": readiness_report,
         "artifact_preparation_report": artifact_preparation_report,
         "run_plan_report": run_plan_report,

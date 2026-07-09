@@ -537,7 +537,10 @@ stage. Each `stages[*].report_path` entry must also match the paired
 cannot drift away from the protected fingerprint record. The `run_suite` and
 `verify_output_bundle` stage reports must both resolve to the verified output bundle
 summary, so a copied or stale summary cannot masquerade as the final pipeline
-result. The verifier also
+result. The summary's suite metadata must also match the pipeline suite metadata,
+including manifest SHA-256, output directory, requested GPU count,
+SevenNet/MACE/NequIP model scope, runtime overrides, and the artifact SHA gate.
+The verifier also
 checks pipeline `modes` as booleans, rejects
 `dry_run = true`, `skip_gpu_check = true`, or `allow_gpu_mismatch = true` for a
 passed report, and requires suite metadata to keep `expected_gpus >= 8`, the

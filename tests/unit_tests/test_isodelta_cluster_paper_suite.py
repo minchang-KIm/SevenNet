@@ -42,6 +42,7 @@ ENABLED_ATTEMPTS = 10.0
 ENABLED_HITS = 8.0
 DISABLED_ATTEMPTS = 10.0
 PIPELINE_PREFLIGHT_FAILURE_RETURN_CODE = 7
+PIPELINE_SUMMARY_SUITE_GPU_DRIFT = 1
 PIPELINE_MIN_SPEEDUP = 1.05
 PIPELINE_MIN_SPEEDUP_LOWER_BOUND = 1.0
 PAPER_REPEAT_COUNT = isodelta_cluster_suite.FINAL_PAPER_MIN_REPEAT_COUNT
@@ -4323,6 +4324,48 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            verify_stage_index = stage_names.index(
+                isodelta_cluster_suite.PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE
+            )
+            summary_suite_drift_summary = json.loads(json.dumps(summary))
+            summary_suite_drift_summary["suite"]["expected_gpus"] = (
+                isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT
+                + PIPELINE_SUMMARY_SUITE_GPU_DRIFT
+            )
+            summary_path.write_text(
+                json.dumps(summary_suite_drift_summary),
+                encoding="utf-8",
+            )
+            summary_suite_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            for stage_index in (run_suite_stage_index, verify_stage_index):
+                summary_suite_drift_pipeline_report[
+                    isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+                ][stage_index]["report"] = (
+                    isodelta_cluster_suite.generated_artifact_record(
+                        Path(
+                            summary_suite_drift_pipeline_report["stages"][stage_index][
+                                "report_path"
+                            ]
+                        )
+                    )
+                )
+            pipeline_report_path.write_text(
+                json.dumps(summary_suite_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                summary_suite_drift_error = str(exc)
+            else:
+                summary_suite_drift_error = ""
+            summary_path.write_text(summary_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             plan_output_drift_report = json.loads(json.dumps(plan_report))
             plan_output_drift_report["paper_outputs"]["case_summary_csv"] = str(
                 output_dir / "tables" / "wrong_case_summary.csv"
@@ -4359,9 +4402,6 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 isodelta_cluster_suite.generated_artifact_record(
                     run_suite_stage_report_path
                 )
-            )
-            verify_stage_index = stage_names.index(
-                isodelta_cluster_suite.PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE
             )
             verify_stage_report_path = Path(
                 plan_output_drift_pipeline_report["stages"][verify_stage_index][
@@ -4489,6 +4529,12 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             len(isodelta_cluster_suite.SUMMARY_PIPELINE_STAGE_NAMES),
         )
         self.assertEqual(
+            pipeline_report_verification["summary_suite_report"][
+                "verified_suite_field_count"
+            ],
+            len(isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS),
+        )
+        self.assertEqual(
             pipeline_report_verification["preflight_gpu_check"]["detected_gpus"],
             isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
         )
@@ -4541,6 +4587,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR,
             summary_stage_path_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
+            summary_suite_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,
