@@ -782,6 +782,9 @@ before collect-only tables are accepted. The same `mode_controls` object records
 `env_flag_false_values`, so empty string, `0`, `false`, `no`, and `off`
 interpretation is auditable in the timing artifact itself. Its `commands` array
 must also contain one successful `case:disabled:N` and `case:enabled:N` command record for every repeat, with command text and tracked environment matching the manifest mode controls.
+Timing command records outside the requested repeat indices are rejected, so an
+external report cannot hide extra disabled or enabled trials that were not part
+of the declared sample count.
 The companion `command_log_fingerprints` array fingerprints every external
 stdout/stderr log, and suite validation rechecks those hashes before accepting
 the timing report.

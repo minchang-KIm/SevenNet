@@ -6663,6 +6663,33 @@ def _validate_external_timing_mode_controls(
     return observed_controls
 
 
+def _expected_external_timing_command_names(
+    case: CaseConfig,
+    repeat_count: int,
+    timing_modes: tuple[str, ...],
+) -> set[str]:
+    """Return the disabled/enabled timing command names allowed in a report."""
+    return {
+        f"{case.name}:{mode_label}:{repeat_index}"
+        for mode_label in timing_modes
+        for repeat_index in range(repeat_count)
+    }
+
+
+def _external_timing_role_from_command_name(
+    command_name: str,
+    case: CaseConfig,
+) -> str | None:
+    """Return the timing role encoded in a command name when it is present."""
+    case_prefix = f"{case.name}:"
+    if not command_name.startswith(case_prefix):
+        return None
+    role = command_name[len(case_prefix) :].split(":", maxsplit=1)[0]
+    if role in ABLATION_MODE_EXTERNAL_TIMING_MODES[ABLATION_MODE_PAIRED]:
+        return role
+    return None
+
+
 def _timing_values_close(observed: float, expected: float) -> bool:
     """Return whether two timing-derived values agree within named tolerance."""
     tolerance = max(
@@ -6797,6 +6824,24 @@ def _validate_external_timing_command_records(
                 ),
             )
         )
+    expected_timing_names = _expected_external_timing_command_names(
+        case,
+        repeat_count,
+        timing_modes,
+    )
+    unexpected_timing_names = sorted(
+        command_name
+        for command_name in records_by_name
+        if _external_timing_role_from_command_name(command_name, case) is not None
+        and command_name not in expected_timing_names
+    )
+    _require(
+        not unexpected_timing_names,
+        (
+            f"{COMMANDS_KEY} contains unexpected external timing command records: "
+            + MODEL_NAME_JOINER.join(unexpected_timing_names)
+        ),
+    )
     for mode_label, expected_command, expected_env in expected_modes:
         for repeat_index in range(repeat_count):
             expected_name = f"{case.name}:{mode_label}:{repeat_index}"

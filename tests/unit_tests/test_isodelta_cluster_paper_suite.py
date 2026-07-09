@@ -6051,6 +6051,28 @@ artifacts = ["dataset"]
         ):
             isodelta_cluster_suite.validate_external_timing_report(report, case)
 
+    def test_external_timing_report_rejects_unexpected_timing_command_record(self) -> None:
+        """External timing provenance should not hide extra disabled/enabled trials."""
+        report = _external_timing_report("NequIP")
+        extra_record = dict(report["commands"][0])
+        extra_record["name"] = "nequip-existing:enabled:2"
+        report["commands"].append(extra_record)
+        case = isodelta_cluster_suite.CaseConfig(
+            name="nequip-existing",
+            model="NequIP",
+            kind="external_pair",
+            disabled_command="run baseline",
+            enabled_command="run enabled",
+            repeat_count=2,
+            min_speedup=1.1,
+        )
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "unexpected external timing command records",
+        ):
+            isodelta_cluster_suite.validate_external_timing_report(report, case)
+
     def test_external_timing_report_rejects_failed_command_record(self) -> None:
         """External timing rows should not hide failed disabled/enabled commands."""
         report = _external_timing_report("NequIP")

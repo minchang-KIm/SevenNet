@@ -1725,6 +1725,8 @@ def main() -> None:
         and "ENV_FLAG_FALSE_VALUES_KEY" in cluster_suite_test
         and "test_external_timing_report_rejects_mismatched_mode_controls" in cluster_suite_test
         and "test_external_timing_report_requires_repeat_command_records" in cluster_suite_test
+        and "test_external_timing_report_rejects_unexpected_timing_command_record"
+        in cluster_suite_test
         and "test_external_timing_report_rejects_failed_command_record" in cluster_suite_test
         and "test_external_timing_report_rejects_mutated_command_log" in cluster_suite_test
         and "test_command_records_include_cwd_and_tracked_environment" in cluster_suite_test
@@ -1875,6 +1877,9 @@ def main() -> None:
         and "validate_case_summary_thresholds" in cluster_suite
         and "must match baseline / enabled seconds" in cluster_suite
         and "must match raw timing samples" in cluster_suite
+        and "_expected_external_timing_command_names" in cluster_suite
+        and "_external_timing_role_from_command_name" in cluster_suite
+        and "unexpected external timing command records" in cluster_suite
         and "--plan-only" in cluster_suite
         and "--plan-output" in cluster_suite
         and "case_summary.csv" in cluster_suite
@@ -2380,6 +2385,9 @@ def main() -> None:
         and "repeat success counts" in doc
         and "`commands` array" in doc
         and "`case:disabled:N` and `case:enabled:N` command record" in doc
+        and "Timing command records outside the requested repeat indices are rejected"
+        in doc
+        and "cannot hide extra disabled or enabled trials" in doc
         and "tracked environment matching the manifest mode controls" in doc
         and "`command_log_fingerprints` array fingerprints every external" in doc
         and "suite validation rechecks those hashes" in doc
