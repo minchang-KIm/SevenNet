@@ -79,6 +79,8 @@ constexpr const char *kIsoDeltaHaloCommBrickRequiredError =
     "IsoDelta-Halo e3gnn/parallel requires LAMMPS CommBrick communication";
 constexpr const char *kIsoDeltaHaloGraphIndexRequiredError =
     "IsoDelta-Halo graph index map must be active before communication preprocessing";
+constexpr const char *kIsoDeltaHaloCommPhaseRangeError =
+    "IsoDelta-Halo communication phase index is out of range";
 constexpr double kIsoDeltaHaloPercentScale = 100.0;
 constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
 constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
@@ -906,6 +908,12 @@ void PairE3GNNParallel::print_comm_cache_summary() const {
   std::cout << std::endl;
 }
 
+void PairE3GNNParallel::validate_comm_phase(int comm_phase) const {
+  if (comm_phase < kNoActiveCommPhases || comm_phase >= kCommPhaseCount) {
+    error->all(FLERR, kIsoDeltaHaloCommPhaseRangeError);
+  }
+}
+
 bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
     int nlocal, int ghost_node_num, int nedges, const int *graph_index_to_i) {
   comm_cache_attempts++;
@@ -1292,6 +1300,7 @@ void PairE3GNNParallel::comm_preprocess() {
 // called from comm_brick if comm_preprocess_done is false
 void PairE3GNNParallel::pack_forward_init(int n, int *list_send,
                                           int comm_phase) {
+  validate_comm_phase(comm_phase);
   if (tag_to_graph_idx_ptr == nullptr) {
     error->all(FLERR, kIsoDeltaHaloGraphIndexRequiredError);
   }
@@ -1327,6 +1336,7 @@ void PairE3GNNParallel::pack_forward_init(int n, int *list_send,
 
 // called from comm_brick if comm_preprocess_done is false
 void PairE3GNNParallel::unpack_forward_init(int n, int first, int comm_phase) {
+  validate_comm_phase(comm_phase);
   if (tag_to_graph_idx_ptr == nullptr) {
     error->all(FLERR, kIsoDeltaHaloGraphIndexRequiredError);
   }
@@ -1351,6 +1361,7 @@ void PairE3GNNParallel::unpack_forward_init(int n, int first, int comm_phase) {
 }
 
 int PairE3GNNParallel::pack_forward_comm_gnn(float *buf, int comm_phase) {
+  validate_comm_phase(comm_phase);
   std::vector<long> &idx_map = comm_index_pack_forward[comm_phase];
   const int n = static_cast<int>(idx_map.size());
   if (use_cuda_mpi && n != 0) {
@@ -1384,6 +1395,7 @@ int PairE3GNNParallel::pack_forward_comm_gnn(float *buf, int comm_phase) {
 }
 
 void PairE3GNNParallel::unpack_forward_comm_gnn(float *buf, int comm_phase) {
+  validate_comm_phase(comm_phase);
   std::vector<long> &idx_map = comm_index_unpack_forward[comm_phase];
   const int n = static_cast<int>(idx_map.size());
 
@@ -1407,6 +1419,7 @@ void PairE3GNNParallel::unpack_forward_comm_gnn(float *buf, int comm_phase) {
 }
 
 int PairE3GNNParallel::pack_reverse_comm_gnn(float *buf, int comm_phase) {
+  validate_comm_phase(comm_phase);
   std::vector<long> &idx_map = comm_index_unpack_forward[comm_phase];
   const int n = static_cast<int>(idx_map.size());
 
@@ -1438,6 +1451,7 @@ int PairE3GNNParallel::pack_reverse_comm_gnn(float *buf, int comm_phase) {
 }
 
 void PairE3GNNParallel::unpack_reverse_comm_gnn(float *buf, int comm_phase) {
+  validate_comm_phase(comm_phase);
   std::vector<long> &idx_map = comm_index_unpack_reverse[comm_phase];
   const int n = static_cast<int>(idx_map.size());
 
@@ -1452,7 +1466,7 @@ void PairE3GNNParallel::unpack_reverse_comm_gnn(float *buf, int comm_phase) {
     m = 0;
     for (i = 0; i < n; i++) {
       const int idx = static_cast<int>(idx_map.at(i));
-      if (idx == -1) {
+      if (idx == kInvalidGraphIndex) {
         m += x_dim;
         continue;
       }

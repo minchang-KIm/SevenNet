@@ -92,6 +92,24 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("graph_idx != kInvalidGraphIndex", self.cpp)
         self.assertNotIn("graph_idx != -1", self.cpp)
 
+    def test_comm_phase_index_is_guarded_before_array_access(self) -> None:
+        """Pair communication helpers should reject invalid phase indexes."""
+        self.assertIn("kIsoDeltaHaloCommPhaseRangeError", self.cpp)
+        self.assertIn("validate_comm_phase(int comm_phase) const", self.header)
+        self.assertIn(
+            "void PairE3GNNParallel::validate_comm_phase(int comm_phase) const",
+            self.cpp,
+        )
+        self.assertIn("comm_phase < kNoActiveCommPhases", self.cpp)
+        self.assertIn("comm_phase >= kCommPhaseCount", self.cpp)
+        self.assertIn(
+            "error->all(FLERR, kIsoDeltaHaloCommPhaseRangeError)",
+            self.cpp,
+        )
+        self.assertGreaterEqual(self.cpp.count("validate_comm_phase(comm_phase);"), 6)
+        self.assertIn("idx == kInvalidGraphIndex", self.cpp)
+        self.assertNotIn("idx == -1", self.cpp)
+
     def test_cache_reuses_only_communication_metadata(self) -> None:
         """Force, message, embedding, and edge-geometry values must not be cached."""
         for term in (

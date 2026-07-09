@@ -35,6 +35,9 @@ The per-step graph-index pointer used by `CommBrick` pack/unpack initialization
 is reset after each compute step. If that communication path is entered without
 an active graph-index map, the runtime aborts with a named IsoDelta-Halo error
 instead of dereferencing an inactive lookup.
+Every pair-style communication helper also validates the `comm_phase` argument
+before indexing the six-phase communication arrays, which turns an invalid
+phase route into a named runtime error instead of silent metadata corruption.
 
 ## Why This Is Model-Agnostic
 

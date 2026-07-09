@@ -68,6 +68,7 @@ FORBIDDEN_FILE_SNIPPETS = {
         "long edge_idx_dst[nedges_upper_bound]",
         "const int jtag = tag[j];\n      j &= NEIGHMASK;",
         "graph_idx != -1",
+        "idx == -1",
     ),
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.h": (
         "[6]",
@@ -109,6 +110,10 @@ REQUIRED_FILE_SNIPPETS = {
         "tag_to_graph_idx_ptr = nullptr;",
         "if (tag_to_graph_idx_ptr == nullptr)",
         "graph_idx != kInvalidGraphIndex",
+        "kIsoDeltaHaloCommPhaseRangeError",
+        "validate_comm_phase(int comm_phase) const",
+        "comm_phase >= kCommPhaseCount",
+        "idx == kInvalidGraphIndex",
     ),
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.h": (
         "IsoDelta",

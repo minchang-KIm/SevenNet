@@ -153,6 +153,19 @@ def main() -> None:
         and "graph_idx != -1" not in cpp,
         "per-step graph index pointer must be closed and guarded",
     )
+    _require(
+        "kIsoDeltaHaloCommPhaseRangeError" in cpp
+        and "validate_comm_phase(int comm_phase) const" in header
+        and "void PairE3GNNParallel::validate_comm_phase(int comm_phase) const"
+        in cpp
+        and "comm_phase < kNoActiveCommPhases" in cpp
+        and "comm_phase >= kCommPhaseCount" in cpp
+        and "error->all(FLERR, kIsoDeltaHaloCommPhaseRangeError)" in cpp
+        and cpp.count("validate_comm_phase(comm_phase);") >= 6
+        and "idx == kInvalidGraphIndex" in cpp
+        and "idx == -1" not in cpp,
+        "pair communication helpers must validate phase indexes before array access",
+    )
     for include_name in (
         "<algorithm>",
         "<cstring>",
