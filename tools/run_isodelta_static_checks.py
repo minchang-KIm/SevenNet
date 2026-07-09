@@ -1328,6 +1328,10 @@ def main() -> None:
         and "SLURM_REPO_ROOT_ENV_NAME" in cluster_suite
         and "SLURM_MANIFEST_PATH_ENV_NAME" in cluster_suite
         and "SLURM_OUTPUT_DIR_ENV_NAME" in cluster_suite
+        and "SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION" in cluster_suite
+        and "SLURM_SCRIPT_VERIFICATION_COMMENT" in cluster_suite
+        and "verify_slurm_script" in cluster_suite
+        and "--verify-slurm-script" in cluster_suite
         and "SLURM_SUITE_RUNNER_RELATIVE_PATH" in cluster_suite
         and "--slurm-repo-root" in cluster_suite
         and "--slurm-manifest-path" in cluster_suite
@@ -1346,6 +1350,10 @@ def main() -> None:
         and 'COMMON_ARGS+=(--output-dir "${ISODELTA_OUTPUT_DIR}")'
         in cluster_suite_test
         and "self.assertNotIn(str(root), script)" in cluster_suite_test
+        and "test_verify_slurm_script_rejects_missing_final_gate"
+        in cluster_suite_test
+        and "pipeline-report or output-bundle verification"
+        in cluster_suite_test
         and "_has_one_sided_ablation_case" in cluster_suite
         and "one-sided ablation suite" in cluster_suite
         and "PIPELINE_REPORT_PASSED_STATUS_ERROR" in cluster_suite
@@ -1527,6 +1535,8 @@ def main() -> None:
         and "`--pipeline` path" in doc
         and "`--pipeline-report`" in doc
         and "`--verify-pipeline-report \"$PIPELINE_OUTPUT\"`" in doc
+        and "`--verify-slurm-script`" in doc
+        and "final `--verify-pipeline-report` or `--verify-output-bundle`" in doc
         and "one-sided ablation suite" in doc
         and "`--verify-output-bundle`" in doc
         and "stage fingerprints and final bundle verification" in doc

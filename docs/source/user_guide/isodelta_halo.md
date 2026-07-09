@@ -576,6 +576,18 @@ pipeline; use the direct `--collect-only` command after jobs finish.
 The generated header also includes a `CLI runtime overrides` comment, so the
 standalone `sbatch` file records whether it used the manifest as-is or applied
 an execution-time ablation override.
+Before submitting or archiving the file, verify the launcher itself with
+`--verify-slurm-script`:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --verify-slurm-script run_isodelta_cluster_suite.sbatch
+```
+
+This checks the `#SBATCH` GPU request, strict Bash mode, `REPO_ROOT`,
+`MANIFEST_PATH`, `ISODELTA_OUTPUT_DIR`, shared `COMMON_ARGS`, preflight/plan
+stages, and the final `--verify-pipeline-report` or `--verify-output-bundle`
+gate.
 If the launcher is generated with `--ablation-mode-override baseline-disabled`
 or `--ablation-mode-override isodelta-enabled`, it runs the one-sided ablation suite
 and reopens the result with `--verify-output-bundle` instead of using the

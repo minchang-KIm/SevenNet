@@ -41,6 +41,7 @@ READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
 ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
 PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
+SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v1"
 EXTERNAL_TIMING_SCHEMA_VERSION = "isodelta-external-pair-timing-v1"
 EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
 EXPERIMENT_REPORT_CHECK_SCHEMA_VERSION = "isodelta-experiment-report-check-v1"
@@ -354,6 +355,11 @@ PREFLIGHT_REPORT_COMMENT = (
 PIPELINE_REPORT_COMMENT = (
     "IsoDelta-Halo pipeline report linking readiness, artifact preparation, "
     "preflight, run-plan, suite execution, and bundle-verification evidence."
+)
+SLURM_SCRIPT_VERIFICATION_COMMENT = (
+    "IsoDelta-Halo SLURM launcher verification report checking scheduler "
+    "headers, portable path variables, shared command arguments, and final "
+    "publication-verification commands."
 )
 RUN_PLAN_REPORT_COMMENT = (
     "IsoDelta-Halo execution plan written before cluster jobs so paper runs "
@@ -8206,12 +8212,145 @@ def write_slurm_script(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _slurm_script_check(name: str, detail: str) -> dict[str, str | bool]:
+    """Return one passed SLURM launcher verification check record."""
+    return {"name": name, "passed": True, "detail": detail}
+
+
+def _require_slurm_script_snippet(
+    script: str,
+    snippet: str,
+    *,
+    name: str,
+    detail: str,
+    checks: list[dict[str, str | bool]],
+) -> None:
+    """Record a required generated-launcher snippet or fail with context."""
+    _require(snippet in script, f"SLURM launcher missing {name}: {snippet}")
+    checks.append(_slurm_script_check(name, detail))
+
+
+def verify_slurm_script(path: Path) -> dict[str, Any]:
+    """Verify that a generated SLURM launcher still has publication gates."""
+    _require(path.exists(), f"missing SLURM launcher {path}")
+    script = path.read_text(encoding="utf-8")
+    checks: list[dict[str, str | bool]] = []
+    _require(script.startswith("#!/usr/bin/env bash"), "SLURM launcher must start with a bash shebang")
+    checks.append(_slurm_script_check("bash_shebang", "launcher starts with bash shebang"))
+    for name, snippet, detail in (
+        (
+            "launcher_comment",
+            "# IsoDelta-Halo cluster paper suite launcher.",
+            "launcher carries the generated-script purpose comment",
+        ),
+        (
+            "runtime_override_comment",
+            "# CLI runtime overrides:",
+            "launcher records manifest/runtime override provenance",
+        ),
+        ("gpu_request", "#SBATCH --gres=gpu:", "launcher requests GPUs through SLURM"),
+        (
+            "strict_bash_mode",
+            "set -euo pipefail",
+            "launcher fails fast on shell errors and unset variables",
+        ),
+        (
+            "repo_root_guard",
+            'if [[ -z "${REPO_ROOT:-}" ]]; then',
+            "launcher can embed or receive the repository checkout path",
+        ),
+        (
+            "manifest_guard",
+            'if [[ -z "${MANIFEST_PATH:-}" ]]; then',
+            "launcher can embed or receive the manifest path",
+        ),
+        (
+            "output_dir_guard",
+            'if [[ -z "${ISODELTA_OUTPUT_DIR:-}" ]]; then',
+            "launcher can embed or receive the paper output directory",
+        ),
+        (
+            "repo_root_cd",
+            'cd "$REPO_ROOT"',
+            "launcher enters the repository before invoking Python",
+        ),
+        (
+            "shared_manifest_arg",
+            'COMMON_ARGS=(--manifest "$MANIFEST_PATH")',
+            "launcher shares the manifest argument across all stages",
+        ),
+        (
+            "shared_output_arg",
+            'COMMON_ARGS+=(--output-dir "${ISODELTA_OUTPUT_DIR}")',
+            "launcher shares the output directory across all stages",
+        ),
+        (
+            "preflight_stage",
+            '--preflight-only --preflight-output "$PREFLIGHT_OUTPUT"',
+            "launcher runs preflight before model execution",
+        ),
+        (
+            "plan_stage",
+            '--plan-only --plan-output "$PLAN_OUTPUT"',
+            "launcher writes the auditable run plan before model execution",
+        ),
+    ):
+        _require_slurm_script_snippet(
+            script,
+            snippet,
+            name=name,
+            detail=detail,
+            checks=checks,
+        )
+
+    has_pipeline_gate = (
+        '--pipeline --pipeline-report "$PIPELINE_OUTPUT"' in script
+        and '--verify-pipeline-report "$PIPELINE_OUTPUT"' in script
+    )
+    has_one_sided_bundle_gate = (
+        "one-sided ablation suite" in script
+        and '--verify-output-bundle "${ISODELTA_OUTPUT_DIR}"' in script
+    )
+    _require(
+        has_pipeline_gate or has_one_sided_bundle_gate,
+        "SLURM launcher must end with pipeline-report or output-bundle verification",
+    )
+    checks.append(
+        _slurm_script_check(
+            "final_verification_gate",
+            (
+                "launcher verifies the final pipeline report"
+                if has_pipeline_gate
+                else "launcher verifies the one-sided output bundle"
+            ),
+        )
+    )
+    _require("--collect-only" not in script, "SLURM launcher must not run collect-only mode")
+    checks.append(
+        _slurm_script_check(
+            "collect_only_absent",
+            "launcher is reserved for active execution rather than collect-only reuse",
+        )
+    )
+    return {
+        "slurm_script_verification_schema_version": (
+            SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION
+        ),
+        GENERATED_REPORT_COMMENT_KEY: SLURM_SCRIPT_VERIFICATION_COMMENT,
+        STATUS_KEY: PASSED_STATUS,
+        "path": str(path),
+        "check_count": len(checks),
+        "checks": checks,
+    }
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI options for the cluster paper suite."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, help="TOML suite manifest")
     parser.add_argument("--write-template", type=Path, help="Write a commented TOML template and exit")
     parser.add_argument("--write-slurm-script", type=Path, help="Write a commented SLURM sbatch script and exit")
+    parser.add_argument("--verify-slurm-script", type=Path, help="Verify a generated SLURM sbatch script")
     parser.add_argument("--verify-output-bundle", type=Path, help="Verify summary artifact and log fingerprints")
     parser.add_argument("--verify-pipeline-report", type=Path, help="Verify a pipeline report and its stage fingerprints")
     parser.add_argument("--pipeline", action="store_true", help="Run readiness, prepare, preflight, plan, suite, and bundle verification")
@@ -8298,6 +8437,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.write_template is not None:
         write_template(args.write_template)
         print(f"Wrote IsoDelta-Halo cluster suite template to {args.write_template}")
+        return SUCCESS_RETURN_CODE
+    if args.verify_slurm_script is not None:
+        try:
+            verification = verify_slurm_script(args.verify_slurm_script)
+        except ClusterSuiteError as exc:
+            print(f"IsoDelta-Halo SLURM launcher verification failed: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(verification, indent=2))
         return SUCCESS_RETURN_CODE
     if args.verify_output_bundle is not None:
         try:

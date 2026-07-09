@@ -2304,8 +2304,18 @@ trace_evidence = ["trace.json"]
                 ]
             )
             script = slurm_path.read_text(encoding="utf-8")
+            verification = isodelta_cluster_suite.verify_slurm_script(slurm_path)
+            verify_exit_code = isodelta_cluster_suite.main(
+                ["--verify-slurm-script", str(slurm_path)]
+            )
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(verify_exit_code, 0)
+        self.assertEqual(verification["status"], "passed")
+        self.assertEqual(
+            verification["report_comment"],
+            isodelta_cluster_suite.SLURM_SCRIPT_VERIFICATION_COMMENT,
+        )
         self.assertTrue(script.startswith("#!/usr/bin/env bash"))
         self.assertIn("# IsoDelta-Halo cluster paper suite launcher.", script)
         self.assertIn("# CLI runtime overrides: none.", script)
@@ -2341,6 +2351,51 @@ trace_evidence = ["trace.json"]
         self.assertIn("COMMON_ARGS+=(--reuse-passed)", script)
         self.assertIn("# Run the full paper pipeline", script)
         self.assertIn("# Re-open the finished pipeline report", script)
+
+    def test_verify_slurm_script_rejects_missing_final_gate(self) -> None:
+        """A launcher edited after generation must still keep final verification."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            slurm_path = root / "run_isodelta.sbatch"
+            manifest_path.write_text(
+                """
+[suite]
+name = "slurm-verify-suite"
+required_models = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-trace"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["trace.json"]
+""",
+                encoding="utf-8",
+            )
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-script",
+                    str(slurm_path),
+                    "--skip-downloads",
+                ]
+            )
+            script = slurm_path.read_text(encoding="utf-8")
+            slurm_path.write_text(
+                script.replace(
+                    '"$PYTHON_BIN" "$SUITE_RUNNER" --verify-pipeline-report "$PIPELINE_OUTPUT"',
+                    "",
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(exit_code, 0)
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "pipeline-report or output-bundle verification",
+            ):
+                isodelta_cluster_suite.verify_slurm_script(slurm_path)
 
     def test_write_slurm_script_rejects_collect_only_pipeline_launcher(self) -> None:
         """The generated cluster launcher should not combine collect-only with pipeline."""
