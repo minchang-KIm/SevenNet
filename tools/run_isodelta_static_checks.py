@@ -1206,6 +1206,8 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_speedup_svg_label_drift"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_speedup_uncertainty_svg_point_drift"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_scatter_svg_point_count_drift"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_manifest_snapshot_body_drift"
@@ -1299,8 +1301,13 @@ def main() -> None:
         and "verified_paper_artifact_semantic_count" in cluster_suite
         and "_require_svg_document" in cluster_suite
         and "_require_speedup_svg_semantics" in cluster_suite
+        and "_require_speedup_uncertainty_svg_semantics" in cluster_suite
         and "_require_scatter_svg_semantics" in cluster_suite
         and "_svg_element_count" in cluster_suite
+        and "_svg_element_count_with_attribute" in cluster_suite
+        and "write_speedup_uncertainty_svg" in cluster_suite
+        and "SPEEDUP_UNCERTAINTY_TITLE" in cluster_suite
+        and 'data-role="speedup-ci"' in cluster_suite
         and "verify_output" in cluster_suite
         and "verifying output bundle" in cluster_suite
         and "CORRELATION_METRIC_PAIRS" in cluster_suite
@@ -1331,6 +1338,7 @@ def main() -> None:
         and "speedup_uncertainty.csv" in cluster_suite
         and "speedup_uncertainty.md" in cluster_suite
         and "speedup_by_case.svg" in cluster_suite
+        and "speedup_uncertainty.svg" in cluster_suite
         and "write_template" in cluster_suite
         and "ABLATION_MODE_CHOICES" in cluster_suite
         and "ABLATION_OVERRIDE_CASE_KINDS" in cluster_suite
@@ -1542,6 +1550,9 @@ def main() -> None:
         and "command_timing.csv" in doc
         and "repeat_timing.csv" in doc
         and "speedup_uncertainty.csv" in doc
+        and "speedup_uncertainty.svg" in doc
+        and "lower/upper error bars" in doc
+        and "speedup-ci" in doc
         and "speedup_by_case.svg" in doc
         and "`ablation_mode = \"paired\"`" in doc
         and "`--ablation-mode-override`" in doc

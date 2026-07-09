@@ -721,6 +721,7 @@ After successful collection, the suite writes:
 - `tables/speedup_uncertainty.csv`
 - `tables/speedup_uncertainty.md`
 - `figures/speedup_by_case.svg`
+- `figures/speedup_uncertainty.svg`
 - `figures/hit_rate_vs_speedup.svg`
 - `figures/trace_metadata_fraction_vs_speedup.svg`
 - `isodelta_cluster_suite_manifest.toml`
@@ -759,6 +760,11 @@ The sibling `artifacts` index must carry the same artifact names and paths as
 `artifact_fingerprints`; `--verify-output-bundle` rejects the bundle if the
 human-facing path index points to a different file than the protected hash
 record.
+The `figures/speedup_uncertainty.svg` plot shows measured speedup with 95% CI
+lower/upper error bars for every case that has bounded repeat timing evidence.
+The bundle verifier requires one plotted point and one `speedup-ci` error bar
+per eligible summary case, so the paper figure cannot silently omit a weak or
+wide-confidence run while the table still reports it.
 The summary also stores `evidence_fingerprints` for each case's benchmark
 report, bundle evidence, SevenNet experiment driver report,
 `experiment_report_check.json`, external timing report, and trace evidence

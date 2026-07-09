@@ -226,6 +226,7 @@ PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS = (
     "correlation_csv",
     "speedup_uncertainty_csv",
     "speedup_uncertainty_markdown",
+    "speedup_uncertainty_svg",
     "speedup_svg",
     "hit_rate_svg",
     "trace_svg",
@@ -426,6 +427,10 @@ PAPER_ARTIFACT_COMMENTS = {
         "IsoDelta-Halo appendix table in Markdown for reviewing per-case "
         "timing means, repeat counts, and 95% confidence bounds."
     ),
+    "speedup_uncertainty_svg": (
+        "IsoDelta-Halo generated figure: measured speedup with 95% confidence "
+        "interval bounds for each case."
+    ),
     "speedup_svg": (
         "IsoDelta-Halo generated figure: measured speedup by case relative to "
         "the disabled-cache baseline."
@@ -478,8 +483,15 @@ PAPER_SPEEDUP_UNCERTAINTY_COLUMNS = (
 )
 BENCHMARK_TIMING_SOURCE = "benchmark_report"
 EXTERNAL_TIMING_SOURCE = "external_timing_report"
-PAPER_SVG_ARTIFACT_NAMES = ("speedup_svg", "hit_rate_svg", "trace_svg")
+PAPER_SVG_ARTIFACT_NAMES = (
+    "speedup_svg",
+    "speedup_uncertainty_svg",
+    "hit_rate_svg",
+    "trace_svg",
+)
 SPEEDUP_SVG_EMPTY_MESSAGE = "No measured speedup values"
+SPEEDUP_UNCERTAINTY_SVG_EMPTY_MESSAGE = "No speedup confidence intervals"
+SPEEDUP_UNCERTAINTY_TITLE = "Measured speedup with 95% confidence interval"
 HIT_RATE_SCATTER_TITLE = "Cache hit rate vs measured speedup"
 TRACE_METADATA_SCATTER_TITLE = "Trace metadata fraction vs estimated speedup"
 DOWNLOAD_CHUNK_BYTES = 1024 * 1024
@@ -513,6 +525,7 @@ SVG_MARGIN_TOP = 56
 SVG_MARGIN_BOTTOM = 88
 BAR_GAP_RATIO = 0.28
 SCATTER_POINT_RADIUS = 5
+ERROR_BAR_CAP_WIDTH = 18.0
 MODEL_NAME_JOINER = ", "
 CORRELATION_METRIC_PAIRS = (
     ("cache_hit_rate_percent", "speedup_vs_disabled_cache"),
@@ -3692,6 +3705,21 @@ def _svg_element_count(root: Any, element_name: str) -> int:
     return sum(1 for element in root.iter() if _svg_local_name(element) == element_name)
 
 
+def _svg_element_count_with_attribute(
+    root: Any,
+    element_name: str,
+    attribute_name: str,
+    attribute_value: str,
+) -> int:
+    """Count SVG elements carrying a specific semantic marker attribute."""
+    return sum(
+        1
+        for element in root.iter()
+        if _svg_local_name(element) == element_name
+        and element.attrib.get(attribute_name) == attribute_value
+    )
+
+
 def _svg_desc_content(root: Any) -> str:
     """Return the generated SVG description text."""
     for element in root:
@@ -4392,6 +4420,52 @@ def _require_speedup_svg_semantics(
         )
 
 
+def _require_speedup_uncertainty_svg_semantics(
+    path: Path,
+    cases_by_name: dict[str, dict[str, Any]],
+) -> None:
+    """Verify the speedup uncertainty chart has one point and CI per case."""
+    root = _require_svg_document(path, "speedup_uncertainty_svg")
+    text_content = _svg_text_content(root)
+    expected_case_names = [
+        case_name
+        for case_name, case_record in cases_by_name.items()
+        if _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
+        and _summary_numeric_value(case_record, "speedup_95ci_lower_bound") is not None
+        and _summary_numeric_value(case_record, "speedup_95ci_upper_bound") is not None
+    ]
+    if not expected_case_names:
+        _require(
+            SPEEDUP_UNCERTAINTY_SVG_EMPTY_MESSAGE in text_content,
+            "speedup_uncertainty_svg must state that no speedup confidence intervals are available",
+        )
+        return
+    _require(
+        SPEEDUP_UNCERTAINTY_TITLE in text_content,
+        "speedup_uncertainty_svg must include uncertainty figure title",
+    )
+    for case_name in expected_case_names:
+        _require(
+            case_name in text_content,
+            f"speedup_uncertainty_svg must include case label {case_name}",
+        )
+    observed_point_count = _svg_element_count(root, "circle")
+    _require(
+        observed_point_count == len(expected_case_names),
+        "speedup_uncertainty_svg circle count must match summary CI cases",
+    )
+    observed_error_bar_count = _svg_element_count_with_attribute(
+        root,
+        "line",
+        "data-role",
+        "speedup-ci",
+    )
+    _require(
+        observed_error_bar_count == len(expected_case_names),
+        "speedup_uncertainty_svg error-bar count must match summary CI cases",
+    )
+
+
 def _require_scatter_svg_semantics(
     path: Path,
     *,
@@ -4547,6 +4621,10 @@ def _require_paper_artifact_semantics(
         summary_payload,
     )
     _require_speedup_svg_semantics(resolved_artifact_paths["speedup_svg"], cases_by_name)
+    _require_speedup_uncertainty_svg_semantics(
+        resolved_artifact_paths["speedup_uncertainty_svg"],
+        cases_by_name,
+    )
     _require_scatter_svg_semantics(
         resolved_artifact_paths["hit_rate_svg"],
         label="hit_rate_svg",
@@ -5778,6 +5856,9 @@ def build_run_plan(
             ),
             "speedup_uncertainty_markdown": str(
                 config.output_dir / TABLES_DIR_NAME / "speedup_uncertainty.md"
+            ),
+            "speedup_uncertainty_svg": str(
+                config.output_dir / FIGURES_DIR_NAME / "speedup_uncertainty.svg"
             ),
             "speedup_svg": str(config.output_dir / FIGURES_DIR_NAME / "speedup_by_case.svg"),
             "hit_rate_svg": str(config.output_dir / FIGURES_DIR_NAME / "hit_rate_vs_speedup.svg"),
@@ -7711,6 +7792,82 @@ def write_speedup_svg(path: Path, case_summaries: list[CaseSummary]) -> None:
     )
 
 
+def write_speedup_uncertainty_svg(
+    path: Path,
+    case_summaries: list[CaseSummary],
+) -> None:
+    """Write a dependency-free error-bar chart for measured speedup bounds."""
+    points: list[tuple[str, float, float, float]] = []
+    for summary in case_summaries:
+        speedup = _coerce_optional_float(summary.speedup_vs_disabled_cache)
+        lower_bound = _coerce_optional_float(summary.speedup_95ci_lower_bound)
+        upper_bound = _coerce_optional_float(summary.speedup_95ci_upper_bound)
+        if speedup is None or lower_bound is None or upper_bound is None:
+            continue
+        points.append((summary.case_name, speedup, lower_bound, upper_bound))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not points:
+        path.write_text(
+            _empty_svg(
+                SPEEDUP_UNCERTAINTY_SVG_EMPTY_MESSAGE,
+                description=PAPER_ARTIFACT_COMMENTS["speedup_uncertainty_svg"],
+            ),
+            encoding="utf-8",
+        )
+        return
+    plot_width = SVG_WIDTH - SVG_MARGIN_LEFT - SVG_MARGIN_RIGHT
+    plot_height = SVG_HEIGHT - SVG_MARGIN_TOP - SVG_MARGIN_BOTTOM
+    y_values = [
+        value
+        for _label, speedup, lower_bound, upper_bound in points
+        for value in (speedup, lower_bound, upper_bound)
+    ]
+    y_min, y_max = _expanded_range(min(y_values), max(y_values))
+    point_slot = plot_width / len(points)
+    elements: list[str] = []
+    for index, (label, speedup, lower_bound, upper_bound) in enumerate(points):
+        x_pos = SVG_MARGIN_LEFT + point_slot * (index + 0.5)
+        speedup_y = SVG_MARGIN_TOP + plot_height - plot_height * (speedup - y_min) / (y_max - y_min)
+        lower_y = SVG_MARGIN_TOP + plot_height - plot_height * (lower_bound - y_min) / (y_max - y_min)
+        upper_y = SVG_MARGIN_TOP + plot_height - plot_height * (upper_bound - y_min) / (y_max - y_min)
+        cap_left = x_pos - ERROR_BAR_CAP_WIDTH / 2.0
+        cap_right = x_pos + ERROR_BAR_CAP_WIDTH / 2.0
+        elements.append(
+            f'<line x1="{x_pos:.2f}" y1="{upper_y:.2f}" x2="{x_pos:.2f}" '
+            f'y2="{lower_y:.2f}" stroke="#2f6f9f" stroke-width="2.2" '
+            'data-role="speedup-ci"/>'
+        )
+        elements.append(
+            f'<line x1="{cap_left:.2f}" y1="{upper_y:.2f}" x2="{cap_right:.2f}" '
+            f'y2="{upper_y:.2f}" stroke="#2f6f9f" stroke-width="2.2"/>'
+        )
+        elements.append(
+            f'<line x1="{cap_left:.2f}" y1="{lower_y:.2f}" x2="{cap_right:.2f}" '
+            f'y2="{lower_y:.2f}" stroke="#2f6f9f" stroke-width="2.2"/>'
+        )
+        elements.append(
+            f'<circle cx="{x_pos:.2f}" cy="{speedup_y:.2f}" '
+            f'r="{SCATTER_POINT_RADIUS}" fill="#b23a48"/>'
+        )
+        elements.append(
+            f'<text x="{x_pos + 8:.2f}" y="{speedup_y - 8:.2f}" '
+            f'font-size="12">{speedup:.3g}x</text>'
+        )
+        elements.append(
+            f'<text x="{x_pos:.2f}" y="{SVG_HEIGHT - 30}" text-anchor="middle" '
+            f'font-size="12" transform="rotate(-25 {x_pos:.2f} {SVG_HEIGHT - 30})">'
+            f'{_svg_escape(label)}</text>'
+        )
+    axis = _svg_axes(SPEEDUP_UNCERTAINTY_TITLE, "case", "speedup")
+    path.write_text(
+        _svg_document(
+            axis + "\n".join(elements),
+            description=PAPER_ARTIFACT_COMMENTS["speedup_uncertainty_svg"],
+        ),
+        encoding="utf-8",
+    )
+
+
 def write_scatter_svg(
     path: Path,
     case_summaries: list[CaseSummary],
@@ -7882,9 +8039,11 @@ def write_paper_outputs(
         comment=PAPER_ARTIFACT_COMMENTS["speedup_uncertainty_markdown"],
     )
     speedup_svg = figures_dir / "speedup_by_case.svg"
+    speedup_uncertainty_svg = figures_dir / "speedup_uncertainty.svg"
     hit_rate_svg = figures_dir / "hit_rate_vs_speedup.svg"
     trace_svg = figures_dir / "trace_metadata_fraction_vs_speedup.svg"
     write_speedup_svg(speedup_svg, case_summaries)
+    write_speedup_uncertainty_svg(speedup_uncertainty_svg, case_summaries)
     write_scatter_svg(
         hit_rate_svg,
         case_summaries,
@@ -7919,6 +8078,7 @@ def write_paper_outputs(
         "repeat_timing_markdown": repeat_timing_md,
         "speedup_uncertainty_csv": speedup_uncertainty_csv,
         "speedup_uncertainty_markdown": speedup_uncertainty_md,
+        "speedup_uncertainty_svg": speedup_uncertainty_svg,
         "speedup_svg": speedup_svg,
         "hit_rate_svg": hit_rate_svg,
         "trace_svg": trace_svg,
@@ -7982,6 +8142,7 @@ def write_paper_outputs(
         "repeat_timing_markdown": str(repeat_timing_md),
         "speedup_uncertainty_csv": str(speedup_uncertainty_csv),
         "speedup_uncertainty_markdown": str(speedup_uncertainty_md),
+        "speedup_uncertainty_svg": str(speedup_uncertainty_svg),
         "speedup_svg": str(speedup_svg),
         "hit_rate_svg": str(hit_rate_svg),
         "trace_svg": str(trace_svg),
