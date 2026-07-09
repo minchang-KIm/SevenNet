@@ -820,6 +820,7 @@ the speedup chart must include every measured-speedup case label from
 points as the summary data pairs they visualize.
 `environment_snapshot.json` must carry the expected snapshot schema and `artifact_comment`, stage reports
 must carry the expected `report_comment`, and the manifest snapshot must contain both the generated-file comment and the `[suite]` table.
+When the summary records `suite.manifest`, the verifier also hashes the manifest snapshot body after the generated comment and requires that SHA-256 digest and byte size to match the recorded manifest provenance.
 This catches a corrupted table or graph even when the summary JSON was
 regenerated with a matching hash.
 For `external_pair` cases, `--verify-output-bundle` also reopens the archived

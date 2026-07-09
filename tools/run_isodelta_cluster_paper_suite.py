@@ -4325,17 +4325,52 @@ def _require_environment_snapshot(path: Path) -> None:
     )
 
 
-def _require_manifest_snapshot(path: Path) -> None:
-    """Verify that the archived manifest snapshot is not an empty placeholder."""
-    manifest_text = path.read_text(encoding="utf-8")
-    _require(bool(manifest_text.strip()), "manifest_snapshot: file must not be empty")
-    expected_comment = f"# {PAPER_ARTIFACT_COMMENTS['manifest_snapshot']}"
-    first_line = manifest_text.splitlines()[0]
+def _manifest_snapshot_body(path: Path) -> bytes:
+    """Return the original manifest bytes archived after the generated comment."""
+    manifest_bytes = path.read_bytes()
+    _require(bool(manifest_bytes.strip()), "manifest_snapshot: file must not be empty")
+    expected_comment = f"# {PAPER_ARTIFACT_COMMENTS['manifest_snapshot']}".encode(
+        "utf-8"
+    )
+    first_line, separator, body = manifest_bytes.partition(b"\n")
     _require(
-        first_line == expected_comment,
+        first_line.rstrip(b"\r") == expected_comment and separator == b"\n",
         "manifest_snapshot: missing generated file comment",
     )
+    return body
+
+
+def _require_manifest_snapshot(
+    path: Path,
+    summary_payload: dict[str, Any],
+) -> None:
+    """Verify that the archived manifest snapshot matches summary provenance."""
+    manifest_body = _manifest_snapshot_body(path)
+    manifest_text = manifest_body.decode("utf-8")
     _require("[suite]" in manifest_text, "manifest_snapshot: missing [suite] table")
+    suite_record = summary_payload.get("suite")
+    if not isinstance(suite_record, dict):
+        return
+    manifest_record_payload = suite_record.get("manifest")
+    if not isinstance(manifest_record_payload, dict):
+        return
+    expected_digest = _require_sha256_digest(
+        manifest_record_payload.get("sha256"),
+        "suite.manifest.sha256",
+    )
+    observed_digest = hashlib.sha256(manifest_body).hexdigest()
+    _require(
+        observed_digest == expected_digest,
+        "manifest_snapshot: body SHA-256 must match suite.manifest.sha256",
+    )
+    expected_size = _as_json_nonnegative_int(
+        manifest_record_payload.get("size_bytes"),
+        "suite.manifest.size_bytes",
+    )
+    _require(
+        len(manifest_body) == expected_size,
+        "manifest_snapshot: body size must match suite.manifest.size_bytes",
+    )
 
 
 def _require_paper_artifact_semantics(
@@ -4399,7 +4434,10 @@ def _require_paper_artifact_semantics(
         y_field="trace_estimated_average_speedup",
         title=TRACE_METADATA_SCATTER_TITLE,
     )
-    _require_manifest_snapshot(resolved_artifact_paths["manifest_snapshot"])
+    _require_manifest_snapshot(
+        resolved_artifact_paths["manifest_snapshot"],
+        summary_payload,
+    )
     return len(REQUIRED_PAPER_ARTIFACT_NAMES)
 
 
@@ -5437,11 +5475,8 @@ def write_manifest_snapshot(config: SuiteConfig) -> Path:
     """Copy the manifest into the output bundle for archival review."""
     snapshot_path = config.output_dir / MANIFEST_SNAPSHOT_NAME
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-    snapshot_text = config.manifest_path.read_text(encoding="utf-8")
-    snapshot_path.write_text(
-        f"# {MANIFEST_SNAPSHOT_COMMENT}\n{snapshot_text}",
-        encoding="utf-8",
-    )
+    comment = f"# {MANIFEST_SNAPSHOT_COMMENT}\n".encode("utf-8")
+    snapshot_path.write_bytes(comment + config.manifest_path.read_bytes())
     return snapshot_path
 
 

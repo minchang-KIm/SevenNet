@@ -1208,6 +1208,8 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_scatter_svg_point_count_drift"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_manifest_snapshot_body_drift"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_mismatched_artifact_index_path"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_case_summary_value_drift"
@@ -1253,6 +1255,9 @@ def main() -> None:
         in cluster_suite
         and '"run_plan": config.output_dir / PLAN_REPORT_NAME' in cluster_suite
         and "write_manifest_snapshot" in cluster_suite
+        and "_manifest_snapshot_body" in cluster_suite
+        and "manifest_snapshot: body SHA-256 must match suite.manifest.sha256"
+        in cluster_suite
         and "EXTERNAL_TIMING_SCHEMA_VERSION" in cluster_suite
         and "validate_external_timing_report" in cluster_suite
         and "_validate_external_timing_command_records" in cluster_suite
@@ -1800,6 +1805,8 @@ def main() -> None:
         and "`isodelta_sync_report.json`" in doc
         and "`report_comment`" in doc
         and "`readiness_report.json`" in doc
+        and "manifest snapshot body" in doc
+        and "recorded manifest provenance" in doc
         and "`artifact_preparation_report.json`" in doc
         and "`preflight_report.json`" in doc
         and "`pipeline_report.json`" in doc

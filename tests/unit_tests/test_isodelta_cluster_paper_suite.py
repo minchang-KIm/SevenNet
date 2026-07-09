@@ -1314,6 +1314,64 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
+    def test_verify_output_bundle_rejects_manifest_snapshot_body_drift(self) -> None:
+        """The archived manifest body should match summary manifest provenance."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            manifest_snapshot = output_dir / isodelta_cluster_suite.MANIFEST_SNAPSHOT_NAME
+            original_body = manifest_snapshot.read_bytes().partition(b"\n")[2]
+            manifest_snapshot.write_text(
+                (
+                    "# "
+                    + isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                        "manifest_snapshot"
+                    ]
+                    + '\n[suite]\nname = "mutated-suite"\n'
+                ),
+                encoding="utf-8",
+            )
+            artifact_fingerprints["manifest_snapshot"] = (
+                isodelta_cluster_suite.generated_artifact_record(manifest_snapshot)
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {
+                            "output_dir": str(output_dir),
+                            "manifest": {
+                                "path": str(output_dir / "suite.toml"),
+                                "sha256": hashlib.sha256(original_body).hexdigest(),
+                                "size_bytes": len(original_body),
+                            },
+                        },
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "manifest_snapshot: body SHA-256 must match suite.manifest.sha256",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
     def test_verify_output_bundle_rejects_case_summary_value_drift(self) -> None:
         """The main paper table should not drift from summary JSON case values."""
         with tempfile.TemporaryDirectory() as tmpdir:
