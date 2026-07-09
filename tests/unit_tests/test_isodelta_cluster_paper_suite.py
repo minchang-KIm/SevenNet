@@ -785,6 +785,7 @@ def _pipeline_suite_record(root: Path, output_dir: Path) -> dict[str, object]:
         "output_dir": str(output_dir),
         "expected_gpus": isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
         "required_models": list(isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS),
+        "require_artifact_sha256": True,
         "runtime_overrides": {},
     }
 
@@ -879,7 +880,7 @@ def _pipeline_artifact_preparation_report(
         "dry_run": dry_run,
         "suite": {
             "manifest": suite_record["manifest"],
-            "require_artifact_sha256": True,
+            "require_artifact_sha256": suite_record["require_artifact_sha256"],
             "runtime_overrides": suite_record["runtime_overrides"],
         },
         "missing_required_artifacts": (
@@ -917,7 +918,7 @@ def _pipeline_plan_report(
             "manifest": suite_record["manifest"],
             "expected_gpus": suite_record["expected_gpus"],
             "required_models": suite_record["required_models"],
-            "require_artifact_sha256": True,
+            "require_artifact_sha256": suite_record["require_artifact_sha256"],
             "runtime_overrides": suite_record["runtime_overrides"],
         },
         "modes": {
@@ -4366,6 +4367,44 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            summary_artifact_sha_gate_drift_summary = json.loads(json.dumps(summary))
+            summary_artifact_sha_gate_drift_summary["suite"][
+                "require_artifact_sha256"
+            ] = False
+            summary_path.write_text(
+                json.dumps(summary_artifact_sha_gate_drift_summary),
+                encoding="utf-8",
+            )
+            summary_artifact_sha_gate_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            for stage_index in (run_suite_stage_index, verify_stage_index):
+                summary_artifact_sha_gate_drift_pipeline_report[
+                    isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+                ][stage_index]["report"] = (
+                    isodelta_cluster_suite.generated_artifact_record(
+                        Path(
+                            summary_artifact_sha_gate_drift_pipeline_report["stages"][
+                                stage_index
+                            ]["report_path"]
+                        )
+                    )
+                )
+            pipeline_report_path.write_text(
+                json.dumps(summary_artifact_sha_gate_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                summary_artifact_sha_gate_drift_error = str(exc)
+            else:
+                summary_artifact_sha_gate_drift_error = ""
+            summary_path.write_text(summary_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             plan_output_drift_report = json.loads(json.dumps(plan_report))
             plan_output_drift_report["paper_outputs"]["case_summary_csv"] = str(
                 output_dir / "tables" / "wrong_case_summary.csv"
@@ -4490,6 +4529,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertEqual(exit_code, 0)
         self.assertEqual(pipeline_cli_exit_code, 0)
         self.assertEqual(pipeline_report["status"], isodelta_cluster_suite.PIPELINE_STATUS_PASSED)
+        self.assertTrue(pipeline_report["suite"]["require_artifact_sha256"])
         self.assertEqual(
             pipeline_report[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
             isodelta_cluster_suite.PIPELINE_REPORT_COMMENT,
@@ -4591,6 +4631,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
             summary_suite_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
+            summary_artifact_sha_gate_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,
@@ -5030,6 +5074,34 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 re.escape(isodelta_cluster_suite.PIPELINE_SUITE_REQUIRED_MODELS_ERROR),
+            ):
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+
+    def test_verify_pipeline_report_requires_suite_artifact_sha_gate(self) -> None:
+        """Final-paper pipeline metadata should keep required artifact SHA checks."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            suite_record = _pipeline_suite_record(root, output_dir)
+            suite_record["require_artifact_sha256"] = False
+            pipeline_report_path = root / "pipeline_report.json"
+            pipeline_report_path.write_text(
+                json.dumps(
+                    {
+                        "pipeline_report_schema_version": (
+                            isodelta_cluster_suite.PIPELINE_REPORT_SCHEMA_VERSION
+                        ),
+                        "status": isodelta_cluster_suite.PIPELINE_STATUS_PASSED,
+                        "modes": _pipeline_report_modes(),
+                        "suite": suite_record,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                re.escape(isodelta_cluster_suite.PIPELINE_SUITE_ARTIFACT_SHA_ERROR),
             ):
                 isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
 

@@ -501,8 +501,8 @@ The `--pipeline` mode executes the final-paper readiness gate, prepares
 artifacts, runs the cluster preflight gate, writes the plan JSON, executes the
 full suite, and then verifies the output bundle fingerprints. Its
 `pipeline_report.json` records every stage, stage report path, selected modes,
-manifest fingerprint, stage report fingerprints, final bundle verification counts,
-and final status. If the readiness gate fails, the pipeline writes
+manifest fingerprint, suite artifact SHA gate, stage report fingerprints,
+final bundle verification counts, and final status. If the readiness gate fails, the pipeline writes
 `readiness_report.json` and stops before downloads, preflight commands, timing runs, or summary generation. Use `--reuse-passed` with
 `--pipeline` after an interrupted run to reuse already validated case outputs
 while still rerunning readiness, preflight, summary generation, and bundle
@@ -540,6 +540,9 @@ summary, so a copied or stale summary cannot masquerade as the final pipeline
 result. The summary's suite metadata must also match the pipeline suite metadata,
 including manifest SHA-256, output directory, requested GPU count,
 SevenNet/MACE/NequIP model scope, runtime overrides, and the artifact SHA gate.
+The pipeline suite record itself stores `require_artifact_sha256`, and the
+verifier requires the artifact preparation report, run plan, and final summary
+to keep the same value.
 The verifier also
 checks pipeline `modes` as booleans, rejects
 `dry_run = true`, `skip_gpu_check = true`, or `allow_gpu_mismatch = true` for a

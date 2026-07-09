@@ -40,7 +40,7 @@ SUITE_SCHEMA_VERSION = "isodelta-cluster-paper-suite-v1"
 READINESS_SCHEMA_VERSION = "isodelta-cluster-readiness-v1"
 ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
-PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
+PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v2"
 SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v5"
 SLURM_ABLATION_SWEEP_SCHEMA_VERSION = "isodelta-slurm-ablation-sweep-v1"
 SLURM_ABLATION_SWEEP_VERIFICATION_SCHEMA_VERSION = (
@@ -214,6 +214,9 @@ PIPELINE_SUITE_GPU_ERROR = (
 )
 PIPELINE_SUITE_REQUIRED_MODELS_ERROR = (
     "pipeline suite required_models must include SevenNet, MACE, and NequIP"
+)
+PIPELINE_SUITE_ARTIFACT_SHA_ERROR = (
+    "pipeline suite require_artifact_sha256 must be true"
 )
 PIPELINE_REQUIRED_MODE_KEYS = (
     "dry_run",
@@ -2445,6 +2448,7 @@ def run_preflight_only(
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
+            "require_artifact_sha256": config.require_artifact_sha256,
             "runtime_overrides": dict(config.runtime_overrides),
         },
         "gpu_check": gpu_record,
@@ -2549,6 +2553,7 @@ def _write_pipeline_report(
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
+            "require_artifact_sha256": config.require_artifact_sha256,
             "runtime_overrides": dict(config.runtime_overrides),
         },
         "stages": stages,
@@ -5227,6 +5232,10 @@ def _require_pipeline_artifact_preparation_report(
         _as_json_bool(
             artifact_suite.get("require_artifact_sha256"),
             "artifact_preparation_report.suite.require_artifact_sha256",
+        )
+        == _as_json_bool(
+            suite_record.get("require_artifact_sha256"),
+            "suite.require_artifact_sha256",
         ),
         PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
     )
@@ -5379,6 +5388,10 @@ def _require_pipeline_plan_report(
         _as_json_bool(
             plan_suite.get("require_artifact_sha256"),
             "run_plan.suite.require_artifact_sha256",
+        )
+        == _as_json_bool(
+            suite_record.get("require_artifact_sha256"),
+            "suite.require_artifact_sha256",
         ),
         PIPELINE_PLAN_SUITE_ERROR,
     )
@@ -5701,6 +5714,13 @@ def _require_pipeline_suite_metadata(
         if model_name not in required_models
     ]
     _require(not missing_models, PIPELINE_SUITE_REQUIRED_MODELS_ERROR)
+    _require(
+        _as_json_bool(
+            suite_record.get("require_artifact_sha256"),
+            "suite.require_artifact_sha256",
+        ),
+        PIPELINE_SUITE_ARTIFACT_SHA_ERROR,
+    )
     _require_pipeline_runtime_overrides(
         _as_json_object(suite_record.get("runtime_overrides"), "suite.runtime_overrides")
     )
@@ -5865,6 +5885,10 @@ def _require_pipeline_summary_suite_report(
         _as_json_bool(
             summary_suite.get("require_artifact_sha256"),
             "summary.suite.require_artifact_sha256",
+        )
+        == _as_json_bool(
+            suite_record.get("require_artifact_sha256"),
+            "suite.require_artifact_sha256",
         ),
         PIPELINE_SUMMARY_SUITE_ERROR,
     )

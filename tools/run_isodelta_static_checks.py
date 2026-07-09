@@ -1228,6 +1228,7 @@ def main() -> None:
         and "summary_stage_path_drift_error" in cluster_suite_test
         and "wrong_stage_summary.json" in cluster_suite_test
         and "summary_suite_drift_error" in cluster_suite_test
+        and "summary_artifact_sha_gate_drift_error" in cluster_suite_test
         and "PIPELINE_SUMMARY_SUITE_GPU_DRIFT" in cluster_suite_test
         and "plan_output_drift_error" in cluster_suite_test
         and "wrong_case_summary.csv" in cluster_suite_test
@@ -1510,6 +1511,7 @@ def main() -> None:
         and "_require_report_comment" in cluster_suite
         and "PIPELINE_READINESS_CHECKS_ERROR" in cluster_suite
         and "PIPELINE_SUITE_REQUIRED_MODELS_ERROR" in cluster_suite
+        and "PIPELINE_SUITE_ARTIFACT_SHA_ERROR" in cluster_suite
         and "PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
         and "PIPELINE_ONE_SIDED_RUNTIME_OVERRIDE_ERROR" in cluster_suite
         and "PIPELINE_ALLOWED_RUNTIME_OVERRIDE_KEYS" in cluster_suite
@@ -1566,6 +1568,8 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_pipeline_report_requires_final_paper_suite_models"
         in cluster_suite_test
+        and "test_verify_pipeline_report_requires_suite_artifact_sha_gate"
+        in cluster_suite_test
         and "test_verify_pipeline_report_rejects_unsupported_runtime_override"
         in cluster_suite_test
         and "test_verify_pipeline_report_rejects_one_sided_runtime_override"
@@ -1606,6 +1610,7 @@ def main() -> None:
         and "byte-level download progress" in doc
         and "`--pipeline`" in doc
         and "`pipeline_report.json`" in doc
+        and "suite artifact SHA gate" in doc
         and "`--verify-pipeline-report`" in doc
         and "publication-success gate" in doc
         and "re-runs the current output-bundle verifier" in doc
@@ -1627,6 +1632,8 @@ def main() -> None:
         and "summary's suite metadata" in doc
         and "manifest SHA-256" in doc
         and "artifact SHA gate" in doc
+        and "pipeline suite record itself stores `require_artifact_sha256`" in doc
+        and "artifact preparation report, run plan, and final summary" in doc
         and "pipeline `modes` as booleans" in doc
         and "`dry_run = true`" in doc
         and "`skip_gpu_check = true`" in doc
