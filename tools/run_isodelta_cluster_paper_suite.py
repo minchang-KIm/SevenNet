@@ -8436,6 +8436,7 @@ def write_slurm_ablation_sweep(
             {
                 "mode": mode,
                 "script_path": str(script_path),
+                "script_fingerprint": generated_artifact_record(script_path),
                 "slurm_output_dir": mode_slurm_output_dir,
                 "slurm_job_name": mode_job_name,
                 "verification": verify_slurm_script(script_path),
@@ -8453,22 +8454,13 @@ def write_slurm_ablation_sweep(
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
         },
+        "sweep_dir": str(output_dir),
         "modes": list(normalized_modes),
         "script_count": len(scripts),
         "scripts": scripts,
     }
     index_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return {"index_path": str(index_path), **payload}
-
-
-def _resolve_slurm_sweep_script_path(index_path: Path, script_path_text: str) -> Path:
-    """Resolve a sweep launcher path after the index is archived or moved."""
-    recorded_path = Path(script_path_text)
-    if recorded_path.exists():
-        return recorded_path
-    sibling_path = index_path.parent / recorded_path.name
-    _require(sibling_path.exists(), f"missing SLURM sweep launcher {script_path_text}")
-    return sibling_path
 
 
 def verify_slurm_ablation_sweep_index(index_path: Path) -> dict[str, Any]:
@@ -8496,6 +8488,12 @@ def verify_slurm_ablation_sweep_index(index_path: Path) -> dict[str, Any]:
     )
     status = _as_json_string(payload.get(STATUS_KEY), f"slurm_ablation_sweep_index.{STATUS_KEY}")
     _require(status == PASSED_STATUS, "SLURM ablation sweep index status must be passed")
+    original_sweep_dir = Path(
+        _as_json_string(
+            payload.get("sweep_dir"),
+            "slurm_ablation_sweep_index.sweep_dir",
+        )
+    )
     raw_modes = payload.get("modes")
     _require(isinstance(raw_modes, list), "slurm_ablation_sweep_index.modes must be a JSON array")
     modes = _normalize_slurm_ablation_sweep_modes(
@@ -8522,6 +8520,10 @@ def verify_slurm_ablation_sweep_index(index_path: Path) -> dict[str, Any]:
             script_record.get("script_path"),
             f"scripts[{index}].script_path",
         )
+        script_fingerprint = _as_json_object(
+            script_record.get("script_fingerprint"),
+            f"scripts[{index}].script_fingerprint",
+        )
         slurm_output_dir = _as_json_string(
             script_record.get("slurm_output_dir"),
             f"scripts[{index}].slurm_output_dir",
@@ -8536,7 +8538,17 @@ def verify_slurm_ablation_sweep_index(index_path: Path) -> dict[str, Any]:
             f"scripts[{index}].verification.{STATUS_KEY}",
         )
         _require(recorded_status == PASSED_STATUS, f"scripts[{index}].verification must be passed")
-        resolved_script_path = _resolve_slurm_sweep_script_path(index_path, script_path_text)
+        _require(
+            _as_json_string(script_fingerprint.get("path"), f"scripts[{index}].script_fingerprint.path")
+            == script_path_text,
+            f"scripts[{index}].script_fingerprint.path must match script_path",
+        )
+        resolved_script_path = _resolve_present_fingerprint_path(
+            script_fingerprint,
+            f"scripts[{index}].script_fingerprint",
+            bundle_root=index_path.parent,
+            original_output_dir=original_sweep_dir,
+        )
         script_text = resolved_script_path.read_text(encoding="utf-8")
         expected_mode_argument = f"COMMON_ARGS+=(--ablation-mode-override {mode})"
         _require(
@@ -8553,6 +8565,7 @@ def verify_slurm_ablation_sweep_index(index_path: Path) -> dict[str, Any]:
             {
                 "mode": mode,
                 "script_path": str(resolved_script_path),
+                "script_fingerprint": generated_artifact_record(resolved_script_path),
                 "slurm_output_dir": slurm_output_dir,
                 "verification": verification,
             }
@@ -8564,6 +8577,7 @@ def verify_slurm_ablation_sweep_index(index_path: Path) -> dict[str, Any]:
         GENERATED_REPORT_COMMENT_KEY: SLURM_ABLATION_SWEEP_VERIFICATION_COMMENT,
         STATUS_KEY: PASSED_STATUS,
         "index_path": str(index_path),
+        "sweep_dir": str(index_path.parent),
         "mode_count": len(modes),
         "script_count": len(verified_scripts),
         "modes": list(modes),

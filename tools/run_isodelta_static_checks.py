@@ -1339,6 +1339,8 @@ def main() -> None:
         and "verify_slurm_script" in cluster_suite
         and "write_slurm_ablation_sweep" in cluster_suite
         and "verify_slurm_ablation_sweep_index" in cluster_suite
+        and "script_fingerprint" in cluster_suite
+        and "sweep_dir" in cluster_suite
         and "--verify-slurm-script" in cluster_suite
         and "--write-slurm-ablation-sweep-dir" in cluster_suite
         and "--slurm-ablation-sweep-modes" in cluster_suite
@@ -1372,6 +1374,7 @@ def main() -> None:
         and "test_write_slurm_ablation_sweep_rejects_single_mode_override"
         in cluster_suite_test
         and "slurm_ablation_sweep_index.json" in cluster_suite_test
+        and "SHA-256 mismatch" in cluster_suite_test
         and "_has_one_sided_ablation_case" in cluster_suite
         and "one-sided ablation suite" in cluster_suite
         and "PIPELINE_REPORT_PASSED_STATUS_ERROR" in cluster_suite
@@ -1560,6 +1563,7 @@ def main() -> None:
         and "`slurm_ablation_sweep_index.json`" in doc
         and "mode-specific" in doc
         and "referenced launcher" in doc
+        and "launcher SHA-256 fingerprint" in doc
         and "final `--verify-pipeline-report` or `--verify-output-bundle`" in doc
         and "one-sided ablation suite" in doc
         and "`--verify-output-bundle`" in doc

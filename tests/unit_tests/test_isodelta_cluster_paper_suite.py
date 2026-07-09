@@ -2547,6 +2547,14 @@ ablation_mode = "paired"
         self.assertEqual(index_path.name, "slurm_ablation_sweep_index.json")
         self.assertEqual(index["status"], "passed")
         self.assertEqual(sweep_verification["status"], "passed")
+        self.assertEqual(index["sweep_dir"], str(sweep_dir))
+        self.assertTrue(
+            all(script["script_fingerprint"]["sha256"] for script in index["scripts"])
+        )
+        self.assertEqual(
+            [script["script_fingerprint"]["path"] for script in index["scripts"]],
+            [script["script_path"] for script in index["scripts"]],
+        )
         self.assertEqual(
             sweep_verification["report_comment"],
             isodelta_cluster_suite.SLURM_ABLATION_SWEEP_VERIFICATION_COMMENT,
@@ -2636,7 +2644,7 @@ enabled_command = "run enabled"
             self.assertEqual(exit_code, 0)
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
-                "launcher missing mode override isodelta-enabled",
+                "SHA-256 mismatch",
             ):
                 isodelta_cluster_suite.verify_slurm_ablation_sweep_index(index_path)
 
