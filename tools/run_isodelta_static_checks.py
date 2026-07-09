@@ -1804,13 +1804,21 @@ def main() -> None:
         and "artifact_fingerprints" in cluster_suite
         and "optional_artifact_paths" in cluster_suite
         and '"preflight_report": config.output_dir / PREFLIGHT_REPORT_NAME' in cluster_suite
-        and '"preflight_environment_snapshot": config.output_dir / PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME'
+        and "PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY" in cluster_suite
+        and "_require_optional_preflight_environment_snapshot_semantics"
+        in cluster_suite
+        and "verified_preflight_environment_snapshot_count" in cluster_suite
+        and "PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY: ("
         in cluster_suite
         and '"run_plan": config.output_dir / PLAN_REPORT_NAME' in cluster_suite
         and "config.output_dir / SLURM_PYTHON_PROVENANCE_NAME" in cluster_suite
         and "_require_slurm_python_provenance_artifact" in cluster_suite
         and "_require_optional_slurm_python_provenance_semantics" in cluster_suite
         and "verified_slurm_python_provenance_count" in cluster_suite
+        and "test_verify_output_bundle_accepts_preflight_environment_snapshot_artifact"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_incomplete_preflight_environment_snapshot"
+        in cluster_suite_test
         and "write_manifest_snapshot" in cluster_suite
         and "_manifest_snapshot_body" in cluster_suite
         and "manifest_snapshot: body SHA-256 must match suite.manifest.sha256"
@@ -2364,6 +2372,9 @@ def main() -> None:
         and "speedup chart must include every measured-speedup" in doc
         and "scatter plots must contain the same" in doc
         and "`environment_snapshot.json` must carry the expected snapshot schema" in doc
+        and "`preflight_environment_snapshot.json`" in doc
+        and "before GPU time" in doc
+        and "package-version map" in doc
         and "matching hash" in doc,
         "IsoDelta-Halo guide must document semantic paper artifact verification",
     )

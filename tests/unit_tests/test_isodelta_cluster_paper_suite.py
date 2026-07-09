@@ -544,6 +544,51 @@ def _case_summary_from_record(
     )
 
 
+def _environment_snapshot_payload(
+    *,
+    suite_name: str = "test-suite",
+    gpu_check: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Build a realistic generated environment snapshot for verifier tests."""
+    return {
+        isodelta_cluster_suite.GENERATED_ARTIFACT_COMMENT_KEY: (
+            isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS["environment_snapshot"]
+        ),
+        "snapshot_schema_version": (
+            isodelta_cluster_suite.ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION
+        ),
+        "suite_name": suite_name,
+        "manifest_path": "isodelta_cluster_suite.toml",
+        "output_dir": "paper_outputs",
+        "provenance": {
+            "suite_schema_version": isodelta_cluster_suite.SUITE_SCHEMA_VERSION,
+            "generated_at": "2026-07-09T00:00:00Z",
+            "git_commit": None,
+            "git_branch": None,
+            "git_dirty": False,
+            "git_status_short": None,
+            "python_executable": "python",
+            "python_version": "3.11.0",
+            "platform": "test-platform",
+        },
+        "gpu_check": gpu_check,
+        "package_versions": {
+            package_name: None
+            for package_name in isodelta_cluster_suite.ENVIRONMENT_PACKAGE_NAMES
+        },
+        "selected_environment": {
+            variable_name: None
+            for variable_name in isodelta_cluster_suite.ENVIRONMENT_VARIABLE_NAMES
+        },
+        "nvidia_smi": {
+            "available": False,
+            "path": None,
+            "query": None,
+            "rows": [],
+        },
+    }
+
+
 def _write_required_paper_artifacts(
     output_dir: Path,
     *,
@@ -576,16 +621,7 @@ def _write_required_paper_artifacts(
     trace_svg = figures_dir / "trace_metadata_fraction_vs_speedup.svg"
     environment_snapshot.write_text(
         json.dumps(
-            {
-                isodelta_cluster_suite.GENERATED_ARTIFACT_COMMENT_KEY: (
-                    isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
-                        "environment_snapshot"
-                    ]
-                ),
-                "snapshot_schema_version": (
-                    isodelta_cluster_suite.ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION
-                )
-            }
+            _environment_snapshot_payload()
         ),
         encoding="utf-8",
     )
@@ -812,9 +848,10 @@ def _pipeline_preflight_report(
     skip_gpu_check: bool = False,
     allow_gpu_mismatch: bool = False,
     skipped: bool = False,
+    environment_snapshot_path: Path | None = None,
 ) -> dict[str, object]:
     """Return preflight evidence for pipeline-report semantic verification."""
-    return {
+    payload = {
         "preflight_report_schema_version": (
             isodelta_cluster_suite.PREFLIGHT_REPORT_SCHEMA_VERSION
         ),
@@ -832,6 +869,24 @@ def _pipeline_preflight_report(
             "skipped": skipped,
         },
     }
+    if environment_snapshot_path is not None:
+        payload["environment_snapshot"] = str(environment_snapshot_path)
+        payload["environment_snapshot_fingerprint"] = (
+            isodelta_cluster_suite.generated_artifact_record(environment_snapshot_path)
+        )
+    return payload
+
+
+def _write_pipeline_preflight_environment_snapshot(output_dir: Path) -> Path:
+    """Create preflight environment evidence for synthetic pipeline reports."""
+    snapshot_path = (
+        output_dir / isodelta_cluster_suite.PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME
+    )
+    snapshot_path.write_text(
+        json.dumps(_environment_snapshot_payload()),
+        encoding="utf-8",
+    )
+    return snapshot_path
 
 
 def _pipeline_readiness_report(
@@ -1253,6 +1308,112 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 "missing runtime provenance comment",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_accepts_preflight_environment_snapshot_artifact(
+        self,
+    ) -> None:
+        """Bundle verification should validate archived preflight environments."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            snapshot_path = (
+                output_dir
+                / isodelta_cluster_suite.PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME
+            )
+            snapshot_path.parent.mkdir(parents=True)
+            snapshot_path.write_text(
+                json.dumps(_environment_snapshot_payload()),
+                encoding="utf-8",
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            artifact_fingerprints[
+                isodelta_cluster_suite.PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY
+            ] = isodelta_cluster_suite.optional_file_fingerprint(snapshot_path)
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            verification = isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+        self.assertEqual(verification["status"], "passed")
+        self.assertEqual(
+            verification["verified_preflight_environment_snapshot_count"],
+            1,
+        )
+
+    def test_verify_output_bundle_rejects_incomplete_preflight_environment_snapshot(
+        self,
+    ) -> None:
+        """Archived preflight environments should preserve reproducibility fields."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            snapshot_path = (
+                output_dir
+                / isodelta_cluster_suite.PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME
+            )
+            snapshot_path.parent.mkdir(parents=True)
+            snapshot_payload = _environment_snapshot_payload()
+            snapshot_payload.pop("provenance")
+            snapshot_path.write_text(
+                json.dumps(snapshot_payload),
+                encoding="utf-8",
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            artifact_fingerprints[
+                isodelta_cluster_suite.PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY
+            ] = isodelta_cluster_suite.optional_file_fingerprint(snapshot_path)
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "preflight_environment_snapshot.provenance",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -4496,6 +4657,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             bundle_count_drift_errors: dict[str, str] = {}
             for count_key in (
                 "verified_slurm_python_provenance_count",
+                "verified_preflight_environment_snapshot_count",
                 "verified_experiment_report_check_count",
             ):
                 count_drift_pipeline_report = json.loads(json.dumps(pipeline_report))
@@ -4613,6 +4775,14 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertEqual(
             pipeline_verification["verified_paper_artifact_semantic_count"],
             verification["verified_paper_artifact_semantic_count"],
+        )
+        self.assertEqual(
+            pipeline_verification["verified_preflight_environment_snapshot_count"],
+            verification["verified_preflight_environment_snapshot_count"],
+        )
+        self.assertEqual(
+            verification["verified_preflight_environment_snapshot_count"],
+            1,
         )
         self.assertGreaterEqual(
             pipeline_verification["verified_artifact_count"],
@@ -5365,12 +5535,16 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(_pipeline_plan_report(suite_record)),
                 encoding="utf-8",
             )
+            preflight_snapshot_path = _write_pipeline_preflight_environment_snapshot(
+                output_dir
+            )
             report_paths[2].write_text(
                 json.dumps(
                     _pipeline_preflight_report(
                         detected_gpus=None,
                         skip_gpu_check=True,
                         skipped=True,
+                        environment_snapshot_path=preflight_snapshot_path,
                     )
                 ),
                 encoding="utf-8",
@@ -5447,8 +5621,15 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 ),
                 encoding="utf-8",
             )
+            preflight_snapshot_path = _write_pipeline_preflight_environment_snapshot(
+                output_dir
+            )
             report_paths[2].write_text(
-                json.dumps(_pipeline_preflight_report()),
+                json.dumps(
+                    _pipeline_preflight_report(
+                        environment_snapshot_path=preflight_snapshot_path
+                    )
+                ),
                 encoding="utf-8",
             )
             stage_names = isodelta_cluster_suite.REQUIRED_PIPELINE_STAGE_NAMES
@@ -5530,8 +5711,15 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 ),
                 encoding="utf-8",
             )
+            preflight_snapshot_path = _write_pipeline_preflight_environment_snapshot(
+                output_dir
+            )
             report_paths[2].write_text(
-                json.dumps(_pipeline_preflight_report()),
+                json.dumps(
+                    _pipeline_preflight_report(
+                        environment_snapshot_path=preflight_snapshot_path
+                    )
+                ),
                 encoding="utf-8",
             )
             stage_names = isodelta_cluster_suite.REQUIRED_PIPELINE_STAGE_NAMES
@@ -5610,8 +5798,15 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(_pipeline_artifact_preparation_report(suite_record)),
                 encoding="utf-8",
             )
+            preflight_snapshot_path = _write_pipeline_preflight_environment_snapshot(
+                output_dir
+            )
             report_paths[2].write_text(
-                json.dumps(_pipeline_preflight_report()),
+                json.dumps(
+                    _pipeline_preflight_report(
+                        environment_snapshot_path=preflight_snapshot_path
+                    )
+                ),
                 encoding="utf-8",
             )
             report_paths[3].write_text(
@@ -5696,8 +5891,15 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(_pipeline_plan_report(suite_record)),
                 encoding="utf-8",
             )
+            preflight_snapshot_path = _write_pipeline_preflight_environment_snapshot(
+                output_dir
+            )
             report_paths[2].write_text(
-                json.dumps(_pipeline_preflight_report()),
+                json.dumps(
+                    _pipeline_preflight_report(
+                        environment_snapshot_path=preflight_snapshot_path
+                    )
+                ),
                 encoding="utf-8",
             )
             stage_names = isodelta_cluster_suite.REQUIRED_PIPELINE_STAGE_NAMES
@@ -6619,6 +6821,10 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             python_provenance_size,
         )
         self.assertEqual(verification["verified_slurm_python_provenance_count"], 1)
+        self.assertEqual(
+            verification["verified_preflight_environment_snapshot_count"],
+            0,
+        )
         self.assertEqual(
             summary["evidence_fingerprints"]["sevennet-existing"]["benchmark_report"]["sha256"],
             benchmark_digest,

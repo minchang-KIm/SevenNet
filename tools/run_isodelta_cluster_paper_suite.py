@@ -302,6 +302,7 @@ MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
 SLURM_PYTHON_PROVENANCE_NAME = "python_runtime_provenance.txt"
 SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY = "slurm_python_provenance"
+PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY = "preflight_environment_snapshot"
 SLURM_ABLATION_SWEEP_INDEX_NAME = "slurm_ablation_sweep_index.json"
 SLURM_ABLATION_SWEEP_SCRIPT_PREFIX = "run_isodelta"
 SLURM_CLUSTER_PATH_SEPARATOR = "/"
@@ -315,6 +316,7 @@ OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS = (
     "verified_artifact_index_count",
     "verified_paper_artifact_semantic_count",
     "verified_slurm_python_provenance_count",
+    "verified_preflight_environment_snapshot_count",
     "verified_evidence_file_count",
     "verified_command_record_count",
     "verified_command_log_count",
@@ -847,6 +849,14 @@ def _as_json_string(value: Any, field_name: str) -> str:
     _require(isinstance(value, str), f"{field_name} must be a string")
     _require(bool(value.strip()), f"{field_name} must not be empty")
     return value.strip()
+
+
+def _as_json_optional_text(value: Any, field_name: str) -> str | None:
+    """Return a nullable JSON text field while preserving empty env values."""
+    if value is None:
+        return None
+    _require(isinstance(value, str), f"{field_name} must be a string or null")
+    return value
 
 
 def _require_report_comment(
@@ -4588,25 +4598,105 @@ def _require_scatter_svg_semantics(
     )
 
 
-def _require_environment_snapshot(path: Path) -> None:
-    """Verify that the environment snapshot has the expected schema marker."""
-    payload = _as_json_object(
-        json.loads(path.read_text(encoding="utf-8")),
-        "environment_snapshot",
-    )
+def _require_environment_snapshot_payload(
+    payload: dict[str, Any],
+    label: str,
+) -> None:
+    """Verify reproducibility fields carried by one environment snapshot."""
     _require_json_artifact_comment(
         payload,
-        "environment_snapshot",
+        label,
         "environment_snapshot",
     )
     schema_version = _as_json_string(
         payload.get("snapshot_schema_version"),
-        "environment_snapshot.snapshot_schema_version",
+        f"{label}.snapshot_schema_version",
     )
     _require(
         schema_version == ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION,
-        f"environment_snapshot.snapshot_schema_version must be {ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION!r}",
+        f"{label}.snapshot_schema_version must be {ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION!r}",
     )
+    _as_json_string(payload.get("suite_name"), f"{label}.suite_name")
+    _as_json_string(payload.get("manifest_path"), f"{label}.manifest_path")
+    _as_json_string(payload.get("output_dir"), f"{label}.output_dir")
+    provenance = _as_json_object(payload.get("provenance"), f"{label}.provenance")
+    _require(
+        _as_json_string(
+            provenance.get("suite_schema_version"),
+            f"{label}.provenance.suite_schema_version",
+        )
+        == SUITE_SCHEMA_VERSION,
+        f"{label}.provenance.suite_schema_version must be {SUITE_SCHEMA_VERSION!r}",
+    )
+    _as_json_string(provenance.get("generated_at"), f"{label}.provenance.generated_at")
+    _as_json_optional_text(provenance.get("git_commit"), f"{label}.provenance.git_commit")
+    _as_json_optional_text(provenance.get("git_branch"), f"{label}.provenance.git_branch")
+    _as_json_bool(provenance.get("git_dirty"), f"{label}.provenance.git_dirty")
+    _as_json_optional_text(
+        provenance.get("git_status_short"),
+        f"{label}.provenance.git_status_short",
+    )
+    _as_json_string(
+        provenance.get("python_executable"),
+        f"{label}.provenance.python_executable",
+    )
+    _as_json_string(provenance.get("python_version"), f"{label}.provenance.python_version")
+    _as_json_string(provenance.get("platform"), f"{label}.provenance.platform")
+
+    gpu_check = payload.get("gpu_check")
+    if gpu_check is not None:
+        gpu_record = _as_json_object(gpu_check, f"{label}.gpu_check")
+        _as_json_nonnegative_int(
+            gpu_record.get("expected_gpus"),
+            f"{label}.gpu_check.expected_gpus",
+        )
+        detected_gpus = gpu_record.get("detected_gpus")
+        if detected_gpus is not None:
+            _as_json_nonnegative_int(detected_gpus, f"{label}.gpu_check.detected_gpus")
+        _as_json_optional_text(gpu_record.get("detector"), f"{label}.gpu_check.detector")
+        _as_json_bool(gpu_record.get("allow_mismatch"), f"{label}.gpu_check.allow_mismatch")
+        skipped = gpu_record.get("skipped")
+        if skipped is not None:
+            _as_json_bool(skipped, f"{label}.gpu_check.skipped")
+        _as_json_optional_text(gpu_record.get("error"), f"{label}.gpu_check.error")
+
+    package_versions = _as_json_object(
+        payload.get("package_versions"),
+        f"{label}.package_versions",
+    )
+    for package_name in ENVIRONMENT_PACKAGE_NAMES:
+        _as_json_optional_text(
+            package_versions.get(package_name),
+            f"{label}.package_versions.{package_name}",
+        )
+
+    selected_environment = _as_json_object(
+        payload.get("selected_environment"),
+        f"{label}.selected_environment",
+    )
+    for variable_name in ENVIRONMENT_VARIABLE_NAMES:
+        _as_json_optional_text(
+            selected_environment.get(variable_name),
+            f"{label}.selected_environment.{variable_name}",
+        )
+
+    nvidia_smi = _as_json_object(payload.get("nvidia_smi"), f"{label}.nvidia_smi")
+    _as_json_bool(nvidia_smi.get("available"), f"{label}.nvidia_smi.available")
+    _as_json_optional_text(nvidia_smi.get("path"), f"{label}.nvidia_smi.path")
+    _as_json_optional_text(nvidia_smi.get("query"), f"{label}.nvidia_smi.query")
+    rows = nvidia_smi.get("rows")
+    _require(isinstance(rows, list), f"{label}.nvidia_smi.rows must be a JSON array")
+    for row_index, row in enumerate(rows):
+        _as_json_string(row, f"{label}.nvidia_smi.rows[{row_index}]")
+
+
+def _require_environment_snapshot(path: Path, *, label: str = "environment_snapshot") -> None:
+    """Verify that an environment snapshot is self-describing and reproducible."""
+    payload = _as_json_object(
+        json.loads(path.read_text(encoding="utf-8")),
+        label,
+    )
+    _require_environment_snapshot_payload(payload, label)
 
 
 def _manifest_snapshot_body(path: Path) -> bytes:
@@ -4748,6 +4838,22 @@ def _require_optional_slurm_python_provenance_semantics(
     return 1
 
 
+def _require_optional_preflight_environment_snapshot_semantics(
+    resolved_artifact_paths: dict[str, Path],
+) -> int:
+    """Validate archived preflight environment semantics when present."""
+    snapshot_path = resolved_artifact_paths.get(
+        PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY
+    )
+    if snapshot_path is None:
+        return 0
+    _require_environment_snapshot(
+        snapshot_path,
+        label=PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY,
+    )
+    return 1
+
+
 def _require_artifact_index_alignment(
     summary_payload: dict[str, Any],
     artifact_fingerprints: dict[str, Any],
@@ -4860,6 +4966,11 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
     verified_slurm_python_provenance_count = (
         _require_optional_slurm_python_provenance_semantics(resolved_artifact_paths)
     )
+    verified_preflight_environment_snapshot_count = (
+        _require_optional_preflight_environment_snapshot_semantics(
+            resolved_artifact_paths
+        )
+    )
 
     verified_log_count = 0
     for index, raw_command_record in enumerate(command_fingerprints):
@@ -4892,6 +5003,9 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         "verified_paper_artifact_semantic_count": verified_paper_artifact_semantic_count,
         "verified_slurm_python_provenance_count": (
             verified_slurm_python_provenance_count
+        ),
+        "verified_preflight_environment_snapshot_count": (
+            verified_preflight_environment_snapshot_count
         ),
         "verified_evidence_file_count": verified_evidence_file_count,
         "verified_command_record_count": verified_command_record_count,
@@ -5587,9 +5701,46 @@ def _require_pipeline_plan_output_alignment(
     return verified_count
 
 
+def _require_pipeline_preflight_environment_snapshot(
+    preflight_payload: dict[str, Any],
+    *,
+    preflight_report_path: Path,
+    original_output_dir: Path,
+) -> None:
+    """Verify the preflight report's archived environment snapshot link."""
+    snapshot_path_text = _as_json_string(
+        preflight_payload.get("environment_snapshot"),
+        "preflight_report.environment_snapshot",
+    )
+    snapshot_record = _as_json_object(
+        preflight_payload.get("environment_snapshot_fingerprint"),
+        "preflight_report.environment_snapshot_fingerprint",
+    )
+    fingerprint_path_text = _as_json_string(
+        snapshot_record.get("path"),
+        "preflight_report.environment_snapshot_fingerprint.path",
+    )
+    _require(
+        snapshot_path_text == fingerprint_path_text,
+        "preflight_report.environment_snapshot must match environment_snapshot_fingerprint.path",
+    )
+    snapshot_path = _resolve_present_fingerprint_path(
+        snapshot_record,
+        "preflight_report.environment_snapshot_fingerprint",
+        bundle_root=preflight_report_path.parent,
+        original_output_dir=original_output_dir,
+    )
+    _require_environment_snapshot(
+        snapshot_path,
+        label=PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY,
+    )
+
+
 def _require_pipeline_preflight_gpu_check(
     stage_report_paths: dict[str, Path],
     suite_record: dict[str, Any],
+    *,
+    original_output_dir: Path,
 ) -> dict[str, Any]:
     """Verify the preflight stage proved the requested GPU allocation."""
     preflight_report_path = stage_report_paths.get(PIPELINE_STAGE_PREFLIGHT)
@@ -5677,6 +5828,11 @@ def _require_pipeline_preflight_gpu_check(
     _as_json_string(
         gpu_check.get("detector"),
         "preflight_report.gpu_check.detector",
+    )
+    _require_pipeline_preflight_environment_snapshot(
+        preflight_payload,
+        preflight_report_path=preflight_report_path,
+        original_output_dir=original_output_dir,
     )
     return gpu_check
 
@@ -5951,6 +6107,7 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
     preflight_gpu_check = _require_pipeline_preflight_gpu_check(
         stage_report_paths,
         suite_record,
+        original_output_dir=original_output_dir,
     )
     bundle_verification = _require_pipeline_bundle_verification(
         pipeline_payload,
@@ -8475,7 +8632,9 @@ def write_paper_outputs(
     }
     optional_artifact_paths = {
         "preflight_report": config.output_dir / PREFLIGHT_REPORT_NAME,
-        "preflight_environment_snapshot": config.output_dir / PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME,
+        PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY: (
+            config.output_dir / PREFLIGHT_ENVIRONMENT_SNAPSHOT_NAME
+        ),
         "run_plan": config.output_dir / PLAN_REPORT_NAME,
         SLURM_PYTHON_PROVENANCE_ARTIFACT_KEY: (
             config.output_dir / SLURM_PYTHON_PROVENANCE_NAME

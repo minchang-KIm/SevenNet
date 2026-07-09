@@ -852,7 +852,11 @@ distinguish a direct run from a missing archived file. If the Python provenance
 file is present, `--verify-output-bundle` also reopens it and requires the
 comment header plus the `PYTHON_BIN`, `SUITE_RUNNER`, `Python`, and
 `sys.executable` markers, so an archived cluster result shows which interpreter
-actually executed the experiment. This lets reviewers verify that the submitted
+actually executed the experiment. If `preflight_environment_snapshot.json` is
+present, the verifier reopens it as the "before GPU time" environment photo and
+requires the generated artifact comment, snapshot schema, run provenance,
+package-version map, selected environment variables, GPU check record, and
+`nvidia-smi` snapshot fields to remain parseable. This lets reviewers verify that the submitted
 paper artifacts match the archived run.
 The sibling `artifacts` index must carry the same artifact names and paths as
 `artifact_fingerprints`; `--verify-output-bundle` rejects the bundle if the
