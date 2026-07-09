@@ -80,6 +80,19 @@ constexpr const char *kIsoDeltaHaloCommBrickRequiredError =
 constexpr double kIsoDeltaHaloPercentScale = 100.0;
 constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
 constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
+constexpr int kSpatialDimension = 3;
+constexpr int kXCoordinate = 0;
+constexpr int kYCoordinate = 1;
+constexpr int kZCoordinate = 2;
+constexpr int kVoigtStressComponentCount = 6;
+constexpr int kVoigtXX = 0;
+constexpr int kVoigtYY = 1;
+constexpr int kVoigtZZ = 2;
+constexpr int kVoigtXY = 3;
+constexpr int kVoigtYZ = 4;
+constexpr int kVoigtZX = 5;
+constexpr int kAtomTagIndexBase = 1;
+constexpr int kInvalidGraphIndex = -1;
 constexpr long long kEmptyIndexTensorLength = 0;
 constexpr int kIndexTensorRank = 1;
 constexpr int kIndexTensorLengthDimension = 0;
@@ -336,15 +349,16 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   // tag ignore PBC
   tagint *tag = atom->tag;
 
-  // store graph_idx from local to known ghost atoms(ghost atoms inside cutoff)
-  int tag_to_graph_idx[natoms + 1]; // tag starts from 1 not 0
-  std::fill_n(tag_to_graph_idx, natoms + 1, -1);
+  // Store graph_idx from local to known ghost atoms inside the cutoff. The tag
+  // table is heap-backed because paper runs may contain millions of atoms.
+  std::vector<int> tag_to_graph_idx(
+      static_cast<size_t>(natoms) + kAtomTagIndexBase, kInvalidGraphIndex);
 
   // to access tag_to_graph_idx from comm
-  tag_to_graph_idx_ptr = tag_to_graph_idx;
+  tag_to_graph_idx_ptr = tag_to_graph_idx.data();
 
   int graph_indexer = nlocal;
-  int graph_index_to_i[ntotal];
+  std::vector<int> graph_index_to_i(static_cast<size_t>(ntotal));
 
   int *numneigh = list->numneigh;      // j loop cond
   int **firstneigh = list->firstneigh; // j list
@@ -354,17 +368,18 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   std::vector<long> node_type;
   std::vector<long> node_type_ghost;
 
-  float edge_vec[nedges_upper_bound][3];
-  long edge_idx_src[nedges_upper_bound];
-  long edge_idx_dst[nedges_upper_bound];
+  std::vector<float> edge_vec_storage(
+      static_cast<size_t>(nedges_upper_bound) * kSpatialDimension);
+  std::vector<long> edge_idx_src(static_cast<size_t>(nedges_upper_bound));
+  std::vector<long> edge_idx_dst(static_cast<size_t>(nedges_upper_bound));
 
   int nedges = 0;
   for (int ii = 0; ii < inum; ii++) {
     // populate tag_to_graph_idx of local atoms
     const int i = ilist[ii];
-    const int itag = tag[i];
+    const tagint itag = tag[i];
     const int itype = type[i];
-    tag_to_graph_idx[itag] = ii;
+    tag_to_graph_idx[static_cast<size_t>(itag)] = ii;
     graph_index_to_i[ii] = i;
     node_type.push_back(map[itype]);
   }
@@ -378,32 +393,40 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
 
     for (int jj = 0; jj < jnum; jj++) {
       int j = jlist[jj];
-      const int jtag = tag[j];
       j &= NEIGHMASK;
+      const tagint jtag = tag[j];
       const int jtype = type[j];
       // we have to calculate Rij to check cutoff in lammps side
-      const double delij[3] = {x[j][0] - x[i][0], x[j][1] - x[i][1],
-                               x[j][2] - x[i][2]};
-      const double Rij =
-          delij[0] * delij[0] + delij[1] * delij[1] + delij[2] * delij[2];
+      const double delij[kSpatialDimension] = {
+          x[j][kXCoordinate] - x[i][kXCoordinate],
+          x[j][kYCoordinate] - x[i][kYCoordinate],
+          x[j][kZCoordinate] - x[i][kZCoordinate]};
+      const double Rij = delij[kXCoordinate] * delij[kXCoordinate] +
+                         delij[kYCoordinate] * delij[kYCoordinate] +
+                         delij[kZCoordinate] * delij[kZCoordinate];
 
       int j_graph_idx;
       if (Rij < cutoff_square) {
         // if given j is not local atom and inside cutoff
-        if (tag_to_graph_idx[jtag] == -1) {
+        if (tag_to_graph_idx[static_cast<size_t>(jtag)] == kInvalidGraphIndex) {
           // if j is ghost atom inside cutoff but first seen
-          tag_to_graph_idx[jtag] = graph_indexer;
+          tag_to_graph_idx[static_cast<size_t>(jtag)] = graph_indexer;
           graph_index_to_i[graph_indexer] = j;
           node_type_ghost.push_back(map[jtype]);
           graph_indexer++;
         }
 
-        j_graph_idx = tag_to_graph_idx[jtag];
+        j_graph_idx = tag_to_graph_idx[static_cast<size_t>(jtag)];
         edge_idx_src[nedges] = i_graph_idx;
         edge_idx_dst[nedges] = j_graph_idx;
-        edge_vec[nedges][0] = delij[0];
-        edge_vec[nedges][1] = delij[1];
-        edge_vec[nedges][2] = delij[2];
+        const size_t edge_offset =
+            static_cast<size_t>(nedges) * kSpatialDimension;
+        edge_vec_storage[edge_offset + kXCoordinate] =
+            static_cast<float>(delij[kXCoordinate]);
+        edge_vec_storage[edge_offset + kYCoordinate] =
+            static_cast<float>(delij[kYCoordinate]);
+        edge_vec_storage[edge_offset + kZCoordinate] =
+            static_cast<float>(delij[kZCoordinate]);
         nedges++;
       }
     } // j loop end
@@ -422,13 +445,14 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   auto inp_num_atoms = torch::from_blob(num_nodes, {1}, INTEGER_TYPE);
 
   auto edge_idx_src_tensor =
-      torch::from_blob(edge_idx_src, {nedges}, INTEGER_TYPE);
+      torch::from_blob(edge_idx_src.data(), {nedges}, INTEGER_TYPE);
   auto edge_idx_dst_tensor =
-      torch::from_blob(edge_idx_dst, {nedges}, INTEGER_TYPE);
+      torch::from_blob(edge_idx_dst.data(), {nedges}, INTEGER_TYPE);
   auto inp_edge_index =
       torch::stack({edge_idx_src_tensor, edge_idx_dst_tensor});
 
-  auto inp_edge_vec = torch::from_blob(edge_vec, {nedges, 3}, FLOAT_TYPE);
+  auto inp_edge_vec = torch::from_blob(
+      edge_vec_storage.data(), {nedges, kSpatialDimension}, FLOAT_TYPE);
   if (print_info) {
     std::cout << world_rank << " Nlocal: " << nlocal << std::endl;
     std::cout << world_rank << " Graph_size: " << graph_size << std::endl;
@@ -456,11 +480,11 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   auto output = model_part.forward({input_dict}).toGenericDict();
 
   if (!try_reuse_comm_preprocess_cache(nlocal, ghost_node_num, nedges,
-                                       graph_index_to_i)) {
+                                       graph_index_to_i.data())) {
     comm_preprocess();
     if (iso_delta_halo_enabled) {
       store_comm_preprocess_cache(nlocal, ghost_node_num, nedges,
-                                  graph_index_to_i);
+                                  graph_index_to_i.data());
     }
   }
 
@@ -508,7 +532,8 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
       output.at("inferred_total_energy").toTensor().squeeze();
 
   torch::Tensor dE_dr =
-      torch::zeros({nedges, 3}, FLOAT_TYPE.device(device)); // create on device
+      torch::zeros({nedges, kSpatialDimension},
+                   FLOAT_TYPE.device(device)); // create on device
   torch::Tensor x_local_save; // holds grad info of x_local (it loses its grad
                               // when sends to CPU)
   torch::Tensor self_conn_grads;
@@ -575,12 +600,15 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   eng_vdwl += energy_tensor.item<float>(); // accumulate energy
 
   dE_dr = dE_dr.to(torch::kCPU);
-  torch::Tensor force_tensor = torch::zeros({graph_indexer, 3});
+  torch::Tensor force_tensor =
+      torch::zeros({graph_indexer, kSpatialDimension});
 
   auto _edge_idx_src_tensor =
-      edge_idx_src_tensor.repeat_interleave(3).view({nedges, 3});
+      edge_idx_src_tensor.repeat_interleave(kSpatialDimension)
+          .view({nedges, kSpatialDimension});
   auto _edge_idx_dst_tensor =
-      edge_idx_dst_tensor.repeat_interleave(3).view({nedges, 3});
+      edge_idx_dst_tensor.repeat_interleave(kSpatialDimension)
+          .view({nedges, kSpatialDimension});
 
   force_tensor.scatter_reduce_(0, _edge_idx_src_tensor, dE_dr, "sum");
   force_tensor.scatter_reduce_(0, _edge_idx_dst_tensor, torch::neg(dE_dr),
@@ -590,35 +618,40 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
 
   for (int graph_idx = 0; graph_idx < graph_indexer; graph_idx++) {
     int i = graph_index_to_i[graph_idx];
-    f[i][0] += forces[graph_idx][0];
-    f[i][1] += forces[graph_idx][1];
-    f[i][2] += forces[graph_idx][2];
+    f[i][kXCoordinate] += forces[graph_idx][kXCoordinate];
+    f[i][kYCoordinate] += forces[graph_idx][kYCoordinate];
+    f[i][kZCoordinate] += forces[graph_idx][kZCoordinate];
   }
 
   if (vflag) {
     auto diag = inp_edge_vec * dE_dr;
-    auto s12 = inp_edge_vec.select(1, 0) * dE_dr.select(1, 1);
-    auto s23 = inp_edge_vec.select(1, 1) * dE_dr.select(1, 2);
-    auto s31 = inp_edge_vec.select(1, 2) * dE_dr.select(1, 0);
+    auto s12 = inp_edge_vec.select(1, kXCoordinate) *
+               dE_dr.select(1, kYCoordinate);
+    auto s23 = inp_edge_vec.select(1, kYCoordinate) *
+               dE_dr.select(1, kZCoordinate);
+    auto s31 = inp_edge_vec.select(1, kZCoordinate) *
+               dE_dr.select(1, kXCoordinate);
     std::vector<torch::Tensor> voigt_list = {
         diag, s12.unsqueeze(-1), s23.unsqueeze(-1), s31.unsqueeze(-1)};
     auto voigt = torch::cat(voigt_list, 1);
 
-    torch::Tensor per_atom_stress_tensor = torch::zeros({graph_indexer, 6});
+    torch::Tensor per_atom_stress_tensor =
+        torch::zeros({graph_indexer, kVoigtStressComponentCount});
     auto _edge_idx_dst6_tensor =
-        edge_idx_dst_tensor.repeat_interleave(6).view({nedges, 6});
+        edge_idx_dst_tensor.repeat_interleave(kVoigtStressComponentCount)
+            .view({nedges, kVoigtStressComponentCount});
     per_atom_stress_tensor.scatter_reduce_(0, _edge_idx_dst6_tensor, voigt,
                                            "sum");
     auto virial_stress_tensor =
         torch::neg(torch::sum(per_atom_stress_tensor, 0));
     auto virial_stress = virial_stress_tensor.accessor<float, 1>();
 
-    virial[0] += virial_stress[0];
-    virial[1] += virial_stress[1];
-    virial[2] += virial_stress[2];
-    virial[3] += virial_stress[3];
-    virial[4] += virial_stress[5];
-    virial[5] += virial_stress[4];
+    virial[kVoigtXX] += virial_stress[kVoigtXX];
+    virial[kVoigtYY] += virial_stress[kVoigtYY];
+    virial[kVoigtZZ] += virial_stress[kVoigtZZ];
+    virial[kVoigtXY] += virial_stress[kVoigtXY];
+    virial[kVoigtYZ] += virial_stress[kVoigtZX];
+    virial[kVoigtZX] += virial_stress[kVoigtYZ];
   }
 
   if (eflag_atom) {

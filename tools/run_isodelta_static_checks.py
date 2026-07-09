@@ -120,6 +120,30 @@ def main() -> None:
     )
     _require("[6]" not in cpp, "raw six-phase array/magic count remains in cpp")
     _require("[6]" not in header, "raw six-phase array/magic count remains in header")
+    _require(
+        "kSpatialDimension = 3" in cpp
+        and "kVoigtStressComponentCount = 6" in cpp
+        and "kAtomTagIndexBase = 1" in cpp
+        and "kInvalidGraphIndex = -1" in cpp
+        and "std::vector<int> tag_to_graph_idx" in cpp
+        and "std::vector<int> graph_index_to_i" in cpp
+        and "std::vector<float> edge_vec_storage" in cpp
+        and "std::vector<long> edge_idx_src" in cpp
+        and "std::vector<long> edge_idx_dst" in cpp
+        and "tag_to_graph_idx.data()" in cpp
+        and "graph_index_to_i.data()" in cpp
+        and "int tag_to_graph_idx[natoms + 1]" not in cpp
+        and "int graph_index_to_i[ntotal]" not in cpp
+        and "float edge_vec[nedges_upper_bound][3]" not in cpp
+        and "long edge_idx_src[nedges_upper_bound]" not in cpp
+        and "long edge_idx_dst[nedges_upper_bound]" not in cpp,
+        "runtime-sized graph buffers must be heap-backed and named",
+    )
+    _require(
+        "j &= NEIGHMASK;\n      const tagint jtag = tag[j];" in cpp
+        and "const int jtag = tag[j];\n      j &= NEIGHMASK;" not in cpp,
+        "neighbor special bits must be masked before tag access",
+    )
     for include_name in (
         "<algorithm>",
         "<cstring>",
@@ -218,6 +242,14 @@ def main() -> None:
         and "store_comm_list_tag_signature" in combined
         and "comm-list-tag-order-changed" in cpp,
         "cache reuse must compare and report send/recv list tag signatures",
+    )
+    _require(
+        "heap-backed `std::vector` storage" in doc
+        and "runtime-sized stack arrays" in doc
+        and "compiler-specific variable-length arrays" in doc
+        and "`NEIGHMASK` before the runtime reads" in doc
+        and "canonical atom index" in doc,
+        "guide must document heap-backed graph buffers and masked neighbor indices",
     )
 
     _require(

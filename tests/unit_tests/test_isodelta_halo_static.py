@@ -56,6 +56,30 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertNotIn("TODO", self.combined)
         self.assertNotIn("temporary", self.combined.lower())
 
+    def test_graph_build_uses_heap_backed_runtime_buffers(self) -> None:
+        """Runtime-sized graph buffers should not rely on stack-only arrays."""
+        self.assertIn("kSpatialDimension = 3", self.cpp)
+        self.assertIn("kVoigtStressComponentCount = 6", self.cpp)
+        self.assertIn("kAtomTagIndexBase = 1", self.cpp)
+        self.assertIn("kInvalidGraphIndex = -1", self.cpp)
+        self.assertIn("std::vector<int> tag_to_graph_idx", self.cpp)
+        self.assertIn("std::vector<int> graph_index_to_i", self.cpp)
+        self.assertIn("std::vector<float> edge_vec_storage", self.cpp)
+        self.assertIn("std::vector<long> edge_idx_src", self.cpp)
+        self.assertIn("std::vector<long> edge_idx_dst", self.cpp)
+        self.assertIn("tag_to_graph_idx.data()", self.cpp)
+        self.assertIn("graph_index_to_i.data()", self.cpp)
+        self.assertNotIn("int tag_to_graph_idx[natoms + 1]", self.cpp)
+        self.assertNotIn("int graph_index_to_i[ntotal]", self.cpp)
+        self.assertNotIn("float edge_vec[nedges_upper_bound][3]", self.cpp)
+        self.assertNotIn("long edge_idx_src[nedges_upper_bound]", self.cpp)
+        self.assertNotIn("long edge_idx_dst[nedges_upper_bound]", self.cpp)
+
+    def test_neighbor_indices_are_masked_before_tag_access(self) -> None:
+        """Special neighbor bits should be stripped before reading atom arrays."""
+        self.assertIn("j &= NEIGHMASK;\n      const tagint jtag = tag[j];", self.cpp)
+        self.assertNotIn("const int jtag = tag[j];\n      j &= NEIGHMASK;", self.cpp)
+
     def test_cache_reuses_only_communication_metadata(self) -> None:
         """Force, message, embedding, and edge-geometry values must not be cached."""
         for term in (

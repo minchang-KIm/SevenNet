@@ -24,6 +24,13 @@ signature. The topology signature includes phase count, send/receive counts,
 send/receive ranks, and first-receive offsets. The cache also compares the
 phase-local sendlist tag order and the contiguous receive-segment tag order so
 pass-through halo entries cannot be reused after atom-list reordering.
+During graph construction the runtime keeps tag lookup, graph-index, edge-index,
+and edge-vector work buffers in heap-backed `std::vector` storage instead of
+runtime-sized stack arrays, which keeps large 8-GPU paper jobs from depending on
+compiler-specific variable-length arrays or small per-rank stack limits. LAMMPS
+neighbor-list special bits are stripped with `NEIGHMASK` before the runtime reads
+atom tags or types, so graph construction and the cached halo guards see the same
+canonical atom index.
 
 ## Why This Is Model-Agnostic
 
