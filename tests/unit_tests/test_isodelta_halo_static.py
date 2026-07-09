@@ -557,14 +557,47 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("cudaGetErrorString(cuda_err)", self.cpp)
         self.assertIn("kCudaSendBufferAllocationError", self.cpp)
         self.assertIn("kCudaRecvBufferAllocationError", self.cpp)
+        self.assertIn("kCudaSendBufferFreeError", self.cpp)
+        self.assertIn("kCudaRecvBufferFreeError", self.cpp)
+        self.assertIn("kCudaBufferSizeError", self.cpp)
+        self.assertIn("kCudaDeviceCountError", self.cpp)
+        self.assertIn("kCudaSetDeviceError", self.cpp)
         self.assertIn("kCudaPackForwardMemcpyError", self.cpp)
         self.assertIn("kCudaPackReverseMemcpyError", self.cpp)
+        self.assertIn("kMinimumCudaBufferElementCount", self.cpp)
+        self.assertIn("kMinimumCudaDeviceCount", self.cpp)
+        self.assertIn("checked_cuda_buffer_byte_count", self.cpp)
         self.assertIn(
-            "check_cuda_status(cuda_err, kCudaSendBufferAllocationError, error);",
+            "buffer_element_count < kMinimumCudaBufferElementCount",
+            self.cpp,
+        )
+        self.assertIn("sizeof(float)", self.cpp)
+        self.assertIn(
+            "checked_cuda_buffer_byte_count(send_size, error)",
             self.cpp,
         )
         self.assertIn(
-            "check_cuda_status(cuda_err, kCudaRecvBufferAllocationError, error);",
+            "checked_cuda_buffer_byte_count(recv_size, error)",
+            self.cpp,
+        )
+        self.assertIn("cuda_free_err = cudaFree(buf_send_device)", self.cpp)
+        self.assertIn("cuda_free_err = cudaFree(buf_recv_device)", self.cpp)
+        self.assertIn("cuda_malloc_err =\n        cudaMalloc(&buf_send_device, send_byte_count)", self.cpp)
+        self.assertIn("cuda_malloc_err =\n        cudaMalloc(&buf_recv_device, recv_byte_count)", self.cpp)
+        self.assertIn(
+            "check_cuda_status(cuda_free_err, kCudaSendBufferFreeError, error);",
+            self.cpp,
+        )
+        self.assertIn(
+            "check_cuda_status(cuda_free_err, kCudaRecvBufferFreeError, error);",
+            self.cpp,
+        )
+        self.assertIn(
+            "check_cuda_status(cuda_malloc_err, kCudaSendBufferAllocationError, error);",
+            self.cpp,
+        )
+        self.assertIn(
+            "check_cuda_status(cuda_malloc_err, kCudaRecvBufferAllocationError, error);",
             self.cpp,
         )
         self.assertIn(
@@ -575,8 +608,14 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
             "check_cuda_status(cuda_err, kCudaPackReverseMemcpyError, error);",
             self.cpp,
         )
+        self.assertIn("num_gpus < kMinimumCudaDeviceCount", self.cpp)
+        self.assertIn("error->all(FLERR, kCudaDeviceCountError)", self.cpp)
+        self.assertIn("check_cuda_status(cuda_err, kCudaSetDeviceError, error);", self.cpp)
         self.assertIn("buf_recv_, error);", self.comm_brick_cpp)
         self.assertNotIn("get_buffer(\n          e3gnn_forward_send_capacity, e3gnn_forward_recv_capacity, buf_send_,\n          buf_recv_);", self.comm_brick_cpp)
+        self.assertNotIn("send_size * sizeof(float)", self.cpp)
+        self.assertNotIn("recv_size * sizeof(float)", self.cpp)
+        self.assertNotIn("std::cerr << \"E3GNN: Failed to set CUDA device", self.cpp)
 
     def test_pair_comm_payload_size_is_guarded(self) -> None:
         """Pack/unpack payload size should use checked element and byte counts."""

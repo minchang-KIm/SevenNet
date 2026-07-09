@@ -407,19 +407,47 @@ def main() -> None:
         and "cudaGetErrorString(cuda_err)" in cpp
         and "kCudaSendBufferAllocationError" in cpp
         and "kCudaRecvBufferAllocationError" in cpp
+        and "kCudaSendBufferFreeError" in cpp
+        and "kCudaRecvBufferFreeError" in cpp
+        and "kCudaBufferSizeError" in cpp
+        and "kCudaDeviceCountError" in cpp
+        and "kCudaSetDeviceError" in cpp
         and "kCudaPackForwardMemcpyError" in cpp
         and "kCudaPackReverseMemcpyError" in cpp
-        and "check_cuda_status(cuda_err, kCudaSendBufferAllocationError, error);"
+        and "kMinimumCudaBufferElementCount" in cpp
+        and "kMinimumCudaDeviceCount" in cpp
+        and "checked_cuda_buffer_byte_count" in cpp
+        and "buffer_element_count < kMinimumCudaBufferElementCount" in cpp
+        and "sizeof(float)" in cpp
+        and "checked_cuda_buffer_byte_count(send_size, error)" in cpp
+        and "checked_cuda_buffer_byte_count(recv_size, error)" in cpp
+        and "cuda_free_err = cudaFree(buf_send_device)" in cpp
+        and "cuda_free_err = cudaFree(buf_recv_device)" in cpp
+        and "cuda_malloc_err =\n        cudaMalloc(&buf_send_device, send_byte_count)"
         in cpp
-        and "check_cuda_status(cuda_err, kCudaRecvBufferAllocationError, error);"
+        and "cuda_malloc_err =\n        cudaMalloc(&buf_recv_device, recv_byte_count)"
+        in cpp
+        and "check_cuda_status(cuda_free_err, kCudaSendBufferFreeError, error);"
+        in cpp
+        and "check_cuda_status(cuda_free_err, kCudaRecvBufferFreeError, error);"
+        in cpp
+        and "check_cuda_status(cuda_malloc_err, kCudaSendBufferAllocationError, error);"
+        in cpp
+        and "check_cuda_status(cuda_malloc_err, kCudaRecvBufferAllocationError, error);"
         in cpp
         and "check_cuda_status(cuda_err, kCudaPackForwardMemcpyError, error);"
         in cpp
         and "check_cuda_status(cuda_err, kCudaPackReverseMemcpyError, error);"
         in cpp
+        and "num_gpus < kMinimumCudaDeviceCount" in cpp
+        and "error->all(FLERR, kCudaDeviceCountError)" in cpp
+        and "check_cuda_status(cuda_err, kCudaSetDeviceError, error);" in cpp
         and "buf_recv_, error);" in comm_brick_cpp
         and "get_buffer(\n          e3gnn_forward_send_capacity, e3gnn_forward_recv_capacity, buf_send_,\n          buf_recv_);"
-        not in comm_brick_cpp,
+        not in comm_brick_cpp
+        and "send_size * sizeof(float)" not in cpp
+        and "recv_size * sizeof(float)" not in cpp
+        and "std::cerr << \"E3GNN: Failed to set CUDA device" not in cpp,
         "CUDA allocation and memcpy errors must be checked in e3gnn communication",
     )
     _require(

@@ -107,6 +107,16 @@ constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
     "PairE3GNNParallel: CUDA receive buffer allocation failed";
+constexpr const char *kCudaSendBufferFreeError =
+    "PairE3GNNParallel: CUDA send buffer release failed";
+constexpr const char *kCudaRecvBufferFreeError =
+    "PairE3GNNParallel: CUDA receive buffer release failed";
+constexpr const char *kCudaBufferSizeError =
+    "PairE3GNNParallel: CUDA communication buffer size is out of range";
+constexpr const char *kCudaDeviceCountError =
+    "PairE3GNNParallel: no CUDA device is available";
+constexpr const char *kCudaSetDeviceError =
+    "PairE3GNNParallel: CUDA device selection failed";
 constexpr const char *kCudaPackForwardMemcpyError =
     "PairE3GNNParallel: CUDA pack-forward buffer copy failed";
 constexpr const char *kCudaPackReverseMemcpyError =
@@ -123,6 +133,8 @@ constexpr int kMinimumAtomArrayIndex = 0;
 constexpr int kMinimumGraphNodeCount = 0;
 constexpr int kMinimumNeighborCount = 0;
 constexpr int kMinimumEdgeIndex = 0;
+constexpr int kMinimumCudaBufferElementCount = 0;
+constexpr int kMinimumCudaDeviceCount = 1;
 constexpr int kFirstLammpsAtomType = 1;
 constexpr int kUnmappedAtomType = -1;
 constexpr int kTrashGraphSlotCount = 1;
@@ -198,6 +210,21 @@ int checked_e3gnn_payload_element_count(int feature_width, int atom_count,
 
 size_t checked_e3gnn_payload_byte_count(int payload_element_count) {
   return static_cast<size_t>(payload_element_count) * sizeof(float);
+}
+
+size_t checked_cuda_buffer_byte_count(int buffer_element_count, Error *error) {
+  if (buffer_element_count < kMinimumCudaBufferElementCount) {
+    error->all(FLERR, kCudaBufferSizeError);
+  }
+  const auto buffer_element_count_unsigned =
+      static_cast<unsigned long long>(buffer_element_count);
+  const auto max_buffer_element_count =
+      static_cast<unsigned long long>(std::numeric_limits<size_t>::max()) /
+      sizeof(float);
+  if (buffer_element_count_unsigned > max_buffer_element_count) {
+    error->all(FLERR, kCudaBufferSizeError);
+  }
+  return static_cast<size_t>(buffer_element_count) * sizeof(float);
 }
 
 int checked_comm_init_count(int count, Error *error) {
@@ -493,18 +520,24 @@ DeviceBuffManager &DeviceBuffManager::getInstance() {
 void DeviceBuffManager::get_buffer(int send_size, int recv_size,
                                    float *&buf_send_ptr, float *&buf_recv_ptr,
                                    Error *error) {
+  const size_t send_byte_count =
+      checked_cuda_buffer_byte_count(send_size, error);
+  const size_t recv_byte_count =
+      checked_cuda_buffer_byte_count(recv_size, error);
   if (send_size > send_buf_size) {
-    cudaFree(buf_send_device);
-    cudaError_t cuda_err =
-        cudaMalloc(&buf_send_device, send_size * sizeof(float));
-    check_cuda_status(cuda_err, kCudaSendBufferAllocationError, error);
+    cudaError_t cuda_free_err = cudaFree(buf_send_device);
+    check_cuda_status(cuda_free_err, kCudaSendBufferFreeError, error);
+    cudaError_t cuda_malloc_err =
+        cudaMalloc(&buf_send_device, send_byte_count);
+    check_cuda_status(cuda_malloc_err, kCudaSendBufferAllocationError, error);
     send_buf_size = send_size;
   }
   if (recv_size > recv_buf_size) {
-    cudaFree(buf_recv_device);
-    cudaError_t cuda_err =
-        cudaMalloc(&buf_recv_device, recv_size * sizeof(float));
-    check_cuda_status(cuda_err, kCudaRecvBufferAllocationError, error);
+    cudaError_t cuda_free_err = cudaFree(buf_recv_device);
+    check_cuda_status(cuda_free_err, kCudaRecvBufferFreeError, error);
+    cudaError_t cuda_malloc_err =
+        cudaMalloc(&buf_recv_device, recv_byte_count);
+    check_cuda_status(cuda_malloc_err, kCudaRecvBufferAllocationError, error);
     recv_buf_size = recv_size;
   }
   buf_send_ptr = buf_send_device;
@@ -604,20 +637,19 @@ PairE3GNNParallel::PairE3GNNParallel(LAMMPS *lmp) : Pair(lmp) {
 }
 
 torch::Device PairE3GNNParallel::get_cuda_device() {
-  char *cuda_visible = std::getenv("CUDA_VISIBLE_DEVICES");
   int num_gpus;
   int idx;
   int rank = comm->me;
   num_gpus = torch::cuda::device_count();
+  if (num_gpus < kMinimumCudaDeviceCount) {
+    error->all(FLERR, kCudaDeviceCountError);
+  }
   idx = rank % num_gpus;
   if (print_info)
     std::cout << world_rank << " Available # of GPUs found: " << num_gpus
               << std::endl;
   cudaError_t cuda_err = cudaSetDevice(idx);
-  if (cuda_err != cudaSuccess) {
-    std::cerr << "E3GNN: Failed to set CUDA device: "
-              << cudaGetErrorString(cuda_err) << std::endl;
-  }
+  check_cuda_status(cuda_err, kCudaSetDeviceError, error);
   return torch::Device(torch::kCUDA, idx);
 }
 
