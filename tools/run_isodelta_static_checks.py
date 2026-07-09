@@ -166,6 +166,26 @@ def main() -> None:
         and "idx == -1" not in cpp,
         "pair communication helpers must validate phase indexes before array access",
     )
+    _require(
+        "kIsoDeltaHaloCommInitCountError" in cpp
+        and "kIsoDeltaHaloCommInitRangeError" in cpp
+        and "kIsoDeltaHaloSendListRequiredError" in cpp
+        and "kMinimumCommInitCount" in cpp
+        and "kMinimumAtomArrayIndex" in cpp
+        and "checked_comm_init_count" in cpp
+        and "checked_comm_init_last_index" in cpp
+        and "validate_comm_atom_index" in cpp
+        and "static_cast<size_t>(checked_count)" in cpp
+        and "checked_count != kMinimumCommInitCount" in cpp
+        and "list_send == nullptr" in cpp
+        and "static_cast<long long>(first)" in cpp
+        and "static_cast<long long>(count)" in cpp
+        and "atom->nmax" in cpp
+        and "validate_comm_atom_index(list_i, atom_array_capacity, error)" in cpp
+        and "idx_map.reserve(n)" not in cpp
+        and "last = first + n" not in cpp,
+        "communication init counts and atom ranges must be checked before use",
+    )
     for include_name in (
         "<algorithm>",
         "<cstring>",

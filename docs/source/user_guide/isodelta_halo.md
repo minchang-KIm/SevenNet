@@ -38,6 +38,10 @@ instead of dereferencing an inactive lookup.
 Every pair-style communication helper also validates the `comm_phase` argument
 before indexing the six-phase communication arrays, which turns an invalid
 phase route into a named runtime error instead of silent metadata corruption.
+The communication preprocessing init path also checks pack/unpack counts,
+nonempty send-list pointers, and atom-array ranges before reserving vectors or
+reading atom tags, so a malformed halo setup cannot turn into an oversized
+allocation or an out-of-bounds tag lookup.
 The `CommBrick` read-only topology accessors used by the cache apply the same
 phase guard and also check sendlist indexes before returning atom ids.
 For the actual halo payload, the e3gnn communication path allocates host and

@@ -110,6 +110,26 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("idx == kInvalidGraphIndex", self.cpp)
         self.assertNotIn("idx == -1", self.cpp)
 
+    def test_comm_init_counts_and_ranges_are_guarded(self) -> None:
+        """Comm preprocessing init should reject invalid counts and atom ranges."""
+        self.assertIn("kIsoDeltaHaloCommInitCountError", self.cpp)
+        self.assertIn("kIsoDeltaHaloCommInitRangeError", self.cpp)
+        self.assertIn("kIsoDeltaHaloSendListRequiredError", self.cpp)
+        self.assertIn("kMinimumCommInitCount", self.cpp)
+        self.assertIn("kMinimumAtomArrayIndex", self.cpp)
+        self.assertIn("checked_comm_init_count", self.cpp)
+        self.assertIn("checked_comm_init_last_index", self.cpp)
+        self.assertIn("validate_comm_atom_index", self.cpp)
+        self.assertIn("static_cast<size_t>(checked_count)", self.cpp)
+        self.assertIn("checked_count != kMinimumCommInitCount", self.cpp)
+        self.assertIn("list_send == nullptr", self.cpp)
+        self.assertIn("static_cast<long long>(first)", self.cpp)
+        self.assertIn("static_cast<long long>(count)", self.cpp)
+        self.assertIn("atom->nmax", self.cpp)
+        self.assertIn("validate_comm_atom_index(list_i, atom_array_capacity, error)", self.cpp)
+        self.assertNotIn("idx_map.reserve(n)", self.cpp)
+        self.assertNotIn("last = first + n", self.cpp)
+
     def test_cache_reuses_only_communication_metadata(self) -> None:
         """Force, message, embedding, and edge-geometry values must not be cached."""
         for term in (

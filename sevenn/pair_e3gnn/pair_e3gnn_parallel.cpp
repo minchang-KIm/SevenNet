@@ -82,6 +82,12 @@ constexpr const char *kIsoDeltaHaloGraphIndexRequiredError =
     "IsoDelta-Halo graph index map must be active before communication preprocessing";
 constexpr const char *kIsoDeltaHaloCommPhaseRangeError =
     "IsoDelta-Halo communication phase index is out of range";
+constexpr const char *kIsoDeltaHaloCommInitCountError =
+    "IsoDelta-Halo communication initialization count is out of range";
+constexpr const char *kIsoDeltaHaloCommInitRangeError =
+    "IsoDelta-Halo communication initialization atom range is out of range";
+constexpr const char *kIsoDeltaHaloSendListRequiredError =
+    "IsoDelta-Halo communication send list is required for nonempty pack init";
 constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
@@ -97,6 +103,8 @@ constexpr double kBytesPerMebibyte = 1024.0 * 1024.0;
 constexpr double kFloatElementBytes = static_cast<double>(sizeof(float));
 constexpr int kMinimumFeatureWidth = 1;
 constexpr int kMinimumPayloadAtomCount = 0;
+constexpr int kMinimumCommInitCount = 0;
+constexpr int kMinimumAtomArrayIndex = 0;
 constexpr int kSpatialDimension = 3;
 constexpr int kXCoordinate = 0;
 constexpr int kYCoordinate = 1;
@@ -166,6 +174,40 @@ int checked_e3gnn_payload_element_count(int feature_width, int atom_count,
 
 size_t checked_e3gnn_payload_byte_count(int payload_element_count) {
   return static_cast<size_t>(payload_element_count) * sizeof(float);
+}
+
+int checked_comm_init_count(int count, Error *error) {
+  if (count < kMinimumCommInitCount) {
+    error->all(FLERR, kIsoDeltaHaloCommInitCountError);
+  }
+  return count;
+}
+
+int checked_comm_init_last_index(int first, int count, int atom_array_capacity,
+                                 Error *error) {
+  if (count == kMinimumCommInitCount) {
+    return first;
+  }
+  if (first < kMinimumAtomArrayIndex ||
+      atom_array_capacity <= kMinimumAtomArrayIndex) {
+    error->all(FLERR, kIsoDeltaHaloCommInitRangeError);
+  }
+
+  const long long last =
+      static_cast<long long>(first) + static_cast<long long>(count);
+  if (last > std::numeric_limits<int>::max() ||
+      last > static_cast<long long>(atom_array_capacity)) {
+    error->all(FLERR, kIsoDeltaHaloCommInitRangeError);
+  }
+  return static_cast<int>(last);
+}
+
+void validate_comm_atom_index(int atom_index, int atom_array_capacity,
+                              Error *error) {
+  if (atom_index < kMinimumAtomArrayIndex ||
+      atom_index >= atom_array_capacity) {
+    error->all(FLERR, kIsoDeltaHaloCommInitRangeError);
+  }
 }
 
 std::string normalize_iso_delta_halo_env_flag_value(const char *value) {
@@ -1351,17 +1393,21 @@ void PairE3GNNParallel::pack_forward_init(int n, int *list_send,
   if (tag_to_graph_idx_ptr == nullptr) {
     error->all(FLERR, kIsoDeltaHaloGraphIndexRequiredError);
   }
+  const int checked_count = checked_comm_init_count(n, error);
+  if (checked_count != kMinimumCommInitCount && list_send == nullptr) {
+    error->all(FLERR, kIsoDeltaHaloSendListRequiredError);
+  }
   std::vector<long> &idx_map = comm_index_pack_forward[comm_phase];
 
-  idx_map.reserve(n);
+  idx_map.reserve(static_cast<size_t>(checked_count));
 
-  int i, j;
-  int nlocal = list->inum;
   tagint *tag = atom->tag;
+  const int atom_array_capacity = atom->nmax;
 
-  for (i = 0; i < n; i++) {
-    int list_i = list_send[i];
-    int graph_idx = tag_to_graph_idx_ptr[tag[list_i]];
+  for (int i = 0; i < checked_count; i++) {
+    const int list_i = list_send[i];
+    validate_comm_atom_index(list_i, atom_array_capacity, error);
+    const int graph_idx = tag_to_graph_idx_ptr[tag[list_i]];
 
     if (graph_idx != kInvalidGraphIndex) {
       // known atom (local atom + ghost atom inside cutoff)
@@ -1387,17 +1433,17 @@ void PairE3GNNParallel::unpack_forward_init(int n, int first, int comm_phase) {
   if (tag_to_graph_idx_ptr == nullptr) {
     error->all(FLERR, kIsoDeltaHaloGraphIndexRequiredError);
   }
+  const int checked_count = checked_comm_init_count(n, error);
+  const int last = checked_comm_init_last_index(
+      first, checked_count, atom->nmax, error);
   std::vector<long> &idx_map = comm_index_unpack_forward[comm_phase];
 
-  idx_map.reserve(n);
+  idx_map.reserve(static_cast<size_t>(checked_count));
 
-  int i, j, last;
-  last = first + n;
-  int nlocal = list->inum;
   tagint *tag = atom->tag;
 
-  for (i = first; i < last; i++) {
-    int graph_idx = tag_to_graph_idx_ptr[tag[i]];
+  for (int i = first; i < last; i++) {
+    const int graph_idx = tag_to_graph_idx_ptr[tag[i]];
     if (graph_idx != kInvalidGraphIndex) {
       idx_map.push_back(graph_idx);
     } else {
