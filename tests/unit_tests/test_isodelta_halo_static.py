@@ -433,6 +433,26 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         )
         self.assertNotIn("(x_dim * n) * sizeof(float)", self.cpp)
 
+    def test_node_feature_width_is_guarded(self) -> None:
+        """Model node feature tensors should be validated before setting x_dim."""
+        self.assertIn("kIsoDeltaHaloNodeFeatureShapeError", self.cpp)
+        self.assertIn("kNodeFeatureTensorRank", self.cpp)
+        self.assertIn("kNodeFeatureWidthDimension", self.cpp)
+        self.assertIn("checked_node_feature_width", self.cpp)
+        self.assertIn("node_feature_tensor.defined()", self.cpp)
+        self.assertIn("node_feature_tensor.dim() != kNodeFeatureTensorRank", self.cpp)
+        self.assertIn(
+            "node_feature_tensor.size(kNodeFeatureWidthDimension)",
+            self.cpp,
+        )
+        self.assertIn("feature_width < kMinimumFeatureWidth", self.cpp)
+        self.assertIn("feature_width > std::numeric_limits<int>::max()", self.cpp)
+        self.assertEqual(
+            self.cpp.count("x_dim = checked_node_feature_width(x_local, error);"),
+            2,
+        )
+        self.assertNotIn("x_dim = x_local.size(1)", self.cpp)
+
     def test_comm_brick_exposes_read_only_topology_accessors(self) -> None:
         """The pair cache should compare current CommBrick topology before reuse."""
         for accessor_name in (

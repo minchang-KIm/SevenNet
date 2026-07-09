@@ -92,6 +92,8 @@ constexpr const char *kIsoDeltaHaloExtraGraphIndexError =
     "IsoDelta-Halo extra graph index is out of range";
 constexpr const char *kIsoDeltaHaloExtraTensorSizeError =
     "IsoDelta-Halo extra communication tensor size is out of range";
+constexpr const char *kIsoDeltaHaloNodeFeatureShapeError =
+    "IsoDelta-Halo node feature tensor shape is invalid for communication";
 constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
@@ -111,6 +113,8 @@ constexpr int kMinimumCommInitCount = 0;
 constexpr int kMinimumAtomArrayIndex = 0;
 constexpr int kTrashGraphSlotCount = 1;
 constexpr int kSpatialDimension = 3;
+constexpr int kNodeFeatureTensorRank = 2;
+constexpr int kNodeFeatureWidthDimension = 1;
 constexpr int kXCoordinate = 0;
 constexpr int kYCoordinate = 1;
 constexpr int kZCoordinate = 2;
@@ -249,6 +253,22 @@ int checked_extra_tensor_size(int ghost_node_count, size_t extra_graph_count,
     error->all(FLERR, kIsoDeltaHaloExtraTensorSizeError);
   }
   return static_cast<int>(extra_size);
+}
+
+int checked_node_feature_width(const torch::Tensor &node_feature_tensor,
+                               Error *error) {
+  if (!node_feature_tensor.defined() ||
+      node_feature_tensor.dim() != kNodeFeatureTensorRank) {
+    error->all(FLERR, kIsoDeltaHaloNodeFeatureShapeError);
+  }
+
+  const long long feature_width =
+      static_cast<long long>(node_feature_tensor.size(kNodeFeatureWidthDimension));
+  if (feature_width < kMinimumFeatureWidth ||
+      feature_width > std::numeric_limits<int>::max()) {
+    error->all(FLERR, kIsoDeltaHaloNodeFeatureShapeError);
+  }
+  return static_cast<int>(feature_width);
 }
 
 std::string normalize_iso_delta_halo_env_flag_value(const char *value) {
@@ -635,7 +655,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
     model_part = *it;
 
     x_local = output.at("x").toTensor().detach().to(device);
-    x_dim = x_local.size(1); // length of per atom vector(node feature)
+    x_dim = checked_node_feature_width(x_local, error);
 
     auto ghost_and_extra_x = torch::zeros({ghost_node_num + extra_size, x_dim},
                                           FLOAT_TYPE.device(device));
@@ -698,7 +718,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
 
     x_local_save = grads.at(1);      // for grads_output
     x_local = x_local_save.detach(); // grad_outputs & communication
-    x_dim = x_local.size(1);
+    x_dim = checked_node_feature_width(x_local, error);
 
     self_conn_grads = grads.at(2); // no communication, for grads_output
 

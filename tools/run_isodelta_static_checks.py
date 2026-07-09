@@ -350,6 +350,21 @@ def main() -> None:
         and "(x_dim * n) * sizeof(float)" not in cpp,
         "e3gnn pack/unpack payload element and byte counts must be checked",
     )
+    _require(
+        "kIsoDeltaHaloNodeFeatureShapeError" in cpp
+        and "kNodeFeatureTensorRank" in cpp
+        and "kNodeFeatureWidthDimension" in cpp
+        and "checked_node_feature_width" in cpp
+        and "node_feature_tensor.defined()" in cpp
+        and "node_feature_tensor.dim() != kNodeFeatureTensorRank" in cpp
+        and "node_feature_tensor.size(kNodeFeatureWidthDimension)" in cpp
+        and "feature_width < kMinimumFeatureWidth" in cpp
+        and "feature_width > std::numeric_limits<int>::max()" in cpp
+        and cpp.count("x_dim = checked_node_feature_width(x_local, error);")
+        == 2
+        and "x_dim = x_local.size(1)" not in cpp,
+        "node feature tensor width must be checked before setting x_dim",
+    )
     for accessor_name in (
         "e3gnn_nswap",
         "e3gnn_sendnum",

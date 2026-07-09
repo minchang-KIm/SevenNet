@@ -45,6 +45,9 @@ allocation or an out-of-bounds tag lookup.
 Extra graph indexes, the trash slot, and the extra communication tensor size
 are computed through checked integer helpers, so large halo maps fail with a
 named error instead of silently wrapping an index or allocating the wrong tensor.
+The node feature tensor produced by each model stage is checked for rank and
+feature width before `x_dim` is updated, so malformed model outputs cannot feed
+an invalid hidden-state width into halo buffer sizing.
 The `CommBrick` read-only topology accessors used by the cache apply the same
 phase guard and also check sendlist indexes before returning atom ids.
 For the actual halo payload, the e3gnn communication path allocates host and
