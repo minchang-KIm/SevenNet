@@ -593,6 +593,27 @@ or `--ablation-mode-override isodelta-enabled`, it runs the one-sided ablation s
 and reopens the result with `--verify-output-bundle` instead of using the
 final-paper `--pipeline` path. That keeps quick ablation timing usable on the
 cluster without weakening the paired readiness gate used for paper numbers.
+For ablation batches, use `--write-slurm-ablation-sweep-dir` with
+`--slurm-ablation-sweep-modes` to generate both one-sided launchers and their
+verification index in one command:
+
+```bash
+python tools/run_isodelta_cluster_paper_suite.py \
+  --manifest isodelta_cluster_suite.toml \
+  --write-slurm-ablation-sweep-dir slurm_ablation_sweep \
+  --slurm-ablation-sweep-modes baseline-disabled isodelta-enabled \
+  --slurm-repo-root /scratch/icpp/SevenNet-main \
+  --slurm-manifest-path /scratch/icpp/SevenNet-main/isodelta_cluster_suite.toml \
+  --slurm-output-dir /scratch/icpp/isodelta_ablation_sweep
+```
+
+The sweep writer creates `run_isodelta_baseline-disabled.sbatch`,
+`run_isodelta_isodelta-enabled.sbatch`, and
+`slurm_ablation_sweep_index.json`. Each generated script gets a mode-specific
+`ISODELTA_OUTPUT_DIR`, records the matching `--ablation-mode-override`, and is
+immediately reopened with `--verify-slurm-script`; the index stores that
+verification evidence so ablation jobs can be submitted or archived without
+guessing which launcher passed the publication-safety checks.
 
 Before submitting a long job, write a preflight plan:
 

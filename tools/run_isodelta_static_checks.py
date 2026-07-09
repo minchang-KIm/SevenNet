@@ -1330,8 +1330,15 @@ def main() -> None:
         and "SLURM_OUTPUT_DIR_ENV_NAME" in cluster_suite
         and "SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION" in cluster_suite
         and "SLURM_SCRIPT_VERIFICATION_COMMENT" in cluster_suite
+        and "SLURM_ABLATION_SWEEP_SCHEMA_VERSION" in cluster_suite
+        and "SLURM_ABLATION_SWEEP_COMMENT" in cluster_suite
+        and "SLURM_ABLATION_SWEEP_INDEX_NAME" in cluster_suite
+        and "DEFAULT_SLURM_ABLATION_SWEEP_MODES" in cluster_suite
         and "verify_slurm_script" in cluster_suite
+        and "write_slurm_ablation_sweep" in cluster_suite
         and "--verify-slurm-script" in cluster_suite
+        and "--write-slurm-ablation-sweep-dir" in cluster_suite
+        and "--slurm-ablation-sweep-modes" in cluster_suite
         and "SLURM_SUITE_RUNNER_RELATIVE_PATH" in cluster_suite
         and "--slurm-repo-root" in cluster_suite
         and "--slurm-manifest-path" in cluster_suite
@@ -1354,6 +1361,11 @@ def main() -> None:
         in cluster_suite_test
         and "pipeline-report or output-bundle verification"
         in cluster_suite_test
+        and "test_write_slurm_ablation_sweep_creates_verified_mode_launchers"
+        in cluster_suite_test
+        and "test_write_slurm_ablation_sweep_rejects_single_mode_override"
+        in cluster_suite_test
+        and "slurm_ablation_sweep_index.json" in cluster_suite_test
         and "_has_one_sided_ablation_case" in cluster_suite
         and "one-sided ablation suite" in cluster_suite
         and "PIPELINE_REPORT_PASSED_STATUS_ERROR" in cluster_suite
@@ -1536,6 +1548,10 @@ def main() -> None:
         and "`--pipeline-report`" in doc
         and "`--verify-pipeline-report \"$PIPELINE_OUTPUT\"`" in doc
         and "`--verify-slurm-script`" in doc
+        and "`--write-slurm-ablation-sweep-dir`" in doc
+        and "`--slurm-ablation-sweep-modes`" in doc
+        and "`slurm_ablation_sweep_index.json`" in doc
+        and "mode-specific" in doc
         and "final `--verify-pipeline-report` or `--verify-output-bundle`" in doc
         and "one-sided ablation suite" in doc
         and "`--verify-output-bundle`" in doc

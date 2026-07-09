@@ -2483,6 +2483,134 @@ enabled_command = "run enabled"
         self.assertNotIn("--pipeline --pipeline-report", script)
         self.assertNotIn("--verify-pipeline-report", script)
 
+    def test_write_slurm_ablation_sweep_creates_verified_mode_launchers(self) -> None:
+        """A sweep directory should contain separately verified ablation launchers."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            sweep_dir = root / "slurm_sweep"
+            manifest_path.write_text(
+                """
+[suite]
+name = "slurm-sweep-suite"
+expected_gpus = 8
+required_models = ["MACE"]
+
+[[cases]]
+name = "mace-ablation"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "run baseline"
+enabled_command = "run enabled"
+ablation_mode = "paired"
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-ablation-sweep-dir",
+                    str(sweep_dir),
+                    "--slurm-ablation-sweep-modes",
+                    "baseline-disabled",
+                    "isodelta-enabled",
+                    "--skip-downloads",
+                    "--slurm-job-name",
+                    "paper sweep",
+                    "--slurm-repo-root",
+                    "/scratch/icpp/SevenNet-main",
+                    "--slurm-manifest-path",
+                    "/scratch/icpp/SevenNet-main/isodelta_cluster_suite.toml",
+                    "--slurm-output-dir",
+                    "/scratch/icpp/ablation_sweep",
+                ]
+            )
+            index_path = sweep_dir / isodelta_cluster_suite.SLURM_ABLATION_SWEEP_INDEX_NAME
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            baseline_script = (
+                sweep_dir / "run_isodelta_baseline-disabled.sbatch"
+            ).read_text(encoding="utf-8")
+            enabled_script = (
+                sweep_dir / "run_isodelta_isodelta-enabled.sbatch"
+            ).read_text(encoding="utf-8")
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(index_path.name, "slurm_ablation_sweep_index.json")
+        self.assertEqual(index["status"], "passed")
+        self.assertEqual(
+            index["report_comment"],
+            isodelta_cluster_suite.SLURM_ABLATION_SWEEP_COMMENT,
+        )
+        self.assertEqual(index["modes"], ["baseline-disabled", "isodelta-enabled"])
+        self.assertEqual(index["script_count"], 2)
+        self.assertEqual(
+            [script["verification"]["status"] for script in index["scripts"]],
+            ["passed", "passed"],
+        )
+        self.assertEqual(
+            [script["slurm_output_dir"] for script in index["scripts"]],
+            [
+                "/scratch/icpp/ablation_sweep/baseline-disabled",
+                "/scratch/icpp/ablation_sweep/isodelta-enabled",
+            ],
+        )
+        self.assertIn(
+            "COMMON_ARGS+=(--ablation-mode-override baseline-disabled)",
+            baseline_script,
+        )
+        self.assertIn(
+            "COMMON_ARGS+=(--ablation-mode-override isodelta-enabled)",
+            enabled_script,
+        )
+        self.assertIn(
+            "ISODELTA_OUTPUT_DIR=/scratch/icpp/ablation_sweep/baseline-disabled",
+            baseline_script,
+        )
+        self.assertIn(
+            "ISODELTA_OUTPUT_DIR=/scratch/icpp/ablation_sweep/isodelta-enabled",
+            enabled_script,
+        )
+        self.assertIn("--verify-output-bundle", baseline_script)
+        self.assertIn("--verify-output-bundle", enabled_script)
+        self.assertNotIn("--pipeline --pipeline-report", baseline_script)
+        self.assertNotIn("--pipeline --pipeline-report", enabled_script)
+
+    def test_write_slurm_ablation_sweep_rejects_single_mode_override(self) -> None:
+        """Sweep generation owns ablation mode selection to avoid ambiguous launchers."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "slurm-sweep-conflict"
+required_models = ["MACE"]
+
+[[cases]]
+name = "mace-ablation"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "run baseline"
+enabled_command = "run enabled"
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = isodelta_cluster_suite.main(
+                [
+                    "--manifest",
+                    str(manifest_path),
+                    "--write-slurm-ablation-sweep-dir",
+                    str(root / "sweep"),
+                    "--ablation-mode-override",
+                    "isodelta-enabled",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+
     def test_reuse_passed_skips_existing_valid_case_outputs(self) -> None:
         """Validated outputs should be reusable after an interrupted cluster run."""
         with tempfile.TemporaryDirectory() as tmpdir:

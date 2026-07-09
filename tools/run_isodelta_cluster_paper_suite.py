@@ -42,6 +42,7 @@ ARTIFACT_PREPARATION_SCHEMA_VERSION = "isodelta-artifact-preparation-v1"
 PREFLIGHT_REPORT_SCHEMA_VERSION = "isodelta-cluster-preflight-v1"
 PIPELINE_REPORT_SCHEMA_VERSION = "isodelta-cluster-pipeline-v1"
 SLURM_SCRIPT_VERIFICATION_SCHEMA_VERSION = "isodelta-slurm-script-verification-v1"
+SLURM_ABLATION_SWEEP_SCHEMA_VERSION = "isodelta-slurm-ablation-sweep-v1"
 EXTERNAL_TIMING_SCHEMA_VERSION = "isodelta-external-pair-timing-v1"
 EXPERIMENT_REPORT_SCHEMA_VERSION = "isodelta-experiment-report-v1"
 EXPERIMENT_REPORT_CHECK_SCHEMA_VERSION = "isodelta-experiment-report-check-v1"
@@ -240,6 +241,9 @@ READINESS_REPORT_NAME = "readiness_report.json"
 PIPELINE_REPORT_NAME = "pipeline_report.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
+SLURM_ABLATION_SWEEP_INDEX_NAME = "slurm_ablation_sweep_index.json"
+SLURM_ABLATION_SWEEP_SCRIPT_PREFIX = "run_isodelta"
+SLURM_CLUSTER_PATH_SEPARATOR = "/"
 SLURM_MANIFEST_PATH_ENV_NAME = "MANIFEST_PATH"
 SLURM_OUTPUT_DIR_ENV_NAME = "ISODELTA_OUTPUT_DIR"
 ENVIRONMENT_SNAPSHOT_NAME = "environment_snapshot.json"
@@ -360,6 +364,11 @@ SLURM_SCRIPT_VERIFICATION_COMMENT = (
     "IsoDelta-Halo SLURM launcher verification report checking scheduler "
     "headers, portable path variables, shared command arguments, and final "
     "publication-verification commands."
+)
+SLURM_ABLATION_SWEEP_COMMENT = (
+    "IsoDelta-Halo SLURM ablation sweep index recording generated baseline "
+    "and enabled launchers, per-mode output directories, and launcher "
+    "verification evidence."
 )
 RUN_PLAN_REPORT_COMMENT = (
     "IsoDelta-Halo execution plan written before cluster jobs so paper runs "
@@ -525,6 +534,10 @@ ABLATION_MODE_EXTERNAL_TIMING_MODES = {
     ABLATION_MODE_BASELINE_ONLY: (EXTERNAL_DISABLED_COMMAND_LABEL,),
     ABLATION_MODE_ENABLED_ONLY: (EXTERNAL_ENABLED_COMMAND_LABEL,),
 }
+DEFAULT_SLURM_ABLATION_SWEEP_MODES = (
+    ABLATION_MODE_BASELINE_ONLY,
+    ABLATION_MODE_ENABLED_ONLY,
+)
 PIPELINE_ALLOWED_RUNTIME_OVERRIDE_KEYS = ("ablation_mode",)
 PIPELINE_UNSUPPORTED_RUNTIME_OVERRIDE_ERROR = (
     "pipeline suite runtime_overrides contains unsupported keys"
@@ -8344,12 +8357,114 @@ def verify_slurm_script(path: Path) -> dict[str, Any]:
     }
 
 
+def _normalize_slurm_ablation_sweep_modes(modes: tuple[str, ...]) -> tuple[str, ...]:
+    """Return validated sweep modes while preserving user-selected order."""
+    _require(bool(modes), "--slurm-ablation-sweep-modes must include at least one mode")
+    seen_modes: set[str] = set()
+    normalized_modes: list[str] = []
+    for mode in modes:
+        _require(mode in ABLATION_MODE_CHOICES, f"unsupported ablation sweep mode: {mode}")
+        _require(mode not in seen_modes, f"duplicate ablation sweep mode: {mode}")
+        seen_modes.add(mode)
+        normalized_modes.append(mode)
+    return tuple(normalized_modes)
+
+
+def _join_slurm_cluster_path(parent: str | Path, child: str) -> str:
+    """Join path fragments for POSIX-style cluster paths embedded in sbatch."""
+    parent_text = str(parent).rstrip("/\\")
+    _require(parent_text, "SLURM sweep output root must not be empty")
+    return f"{parent_text}{SLURM_CLUSTER_PATH_SEPARATOR}{child}"
+
+
+def write_slurm_ablation_sweep(
+    output_dir: Path,
+    config: SuiteConfig,
+    *,
+    modes: tuple[str, ...],
+    collect_only: bool = False,
+    dry_run: bool = False,
+    skip_downloads: bool = False,
+    skip_gpu_check: bool = False,
+    allow_gpu_mismatch: bool = False,
+    keep_going: bool = False,
+    reuse_passed: bool = False,
+    job_name: str = DEFAULT_SLURM_JOB_NAME,
+    time_limit: str = DEFAULT_SLURM_TIME_LIMIT,
+    cpus_per_task: int = DEFAULT_SLURM_CPUS_PER_TASK,
+    slurm_repo_root: str | None = None,
+    slurm_manifest_path: str | None = None,
+    slurm_output_dir: str | None = None,
+) -> dict[str, Any]:
+    """Write a verified set of per-mode SLURM launchers for ablation sweeps."""
+    normalized_modes = _normalize_slurm_ablation_sweep_modes(modes)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    sweep_output_root = str(config.output_dir if slurm_output_dir is None else slurm_output_dir)
+    scripts: list[dict[str, Any]] = []
+    for mode in normalized_modes:
+        mode_config = _apply_ablation_mode_override(config, mode)
+        mode_suffix = _safe_name(mode)
+        script_path = output_dir / f"{SLURM_ABLATION_SWEEP_SCRIPT_PREFIX}_{mode_suffix}.sbatch"
+        mode_slurm_output_dir = _join_slurm_cluster_path(sweep_output_root, mode_suffix)
+        mode_job_name = _safe_name(f"{job_name}-{mode_suffix}")
+        write_slurm_script(
+            script_path,
+            mode_config,
+            ablation_mode_override=mode,
+            collect_only=collect_only,
+            dry_run=dry_run,
+            skip_downloads=skip_downloads,
+            skip_gpu_check=skip_gpu_check,
+            allow_gpu_mismatch=allow_gpu_mismatch,
+            keep_going=keep_going,
+            reuse_passed=reuse_passed,
+            job_name=mode_job_name,
+            time_limit=time_limit,
+            cpus_per_task=cpus_per_task,
+            slurm_repo_root=slurm_repo_root,
+            slurm_manifest_path=slurm_manifest_path,
+            slurm_output_dir=mode_slurm_output_dir,
+        )
+        scripts.append(
+            {
+                "mode": mode,
+                "script_path": str(script_path),
+                "slurm_output_dir": mode_slurm_output_dir,
+                "slurm_job_name": mode_job_name,
+                "verification": verify_slurm_script(script_path),
+            }
+        )
+    index_path = output_dir / SLURM_ABLATION_SWEEP_INDEX_NAME
+    payload = {
+        "slurm_ablation_sweep_schema_version": SLURM_ABLATION_SWEEP_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: SLURM_ABLATION_SWEEP_COMMENT,
+        STATUS_KEY: PASSED_STATUS,
+        "suite": {
+            "name": config.name,
+            "manifest_path": str(config.manifest_path),
+            "manifest": manifest_record(config),
+            "output_dir": str(config.output_dir),
+            "expected_gpus": config.expected_gpus,
+        },
+        "modes": list(normalized_modes),
+        "script_count": len(scripts),
+        "scripts": scripts,
+    }
+    index_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return {"index_path": str(index_path), **payload}
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI options for the cluster paper suite."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, help="TOML suite manifest")
     parser.add_argument("--write-template", type=Path, help="Write a commented TOML template and exit")
     parser.add_argument("--write-slurm-script", type=Path, help="Write a commented SLURM sbatch script and exit")
+    parser.add_argument(
+        "--write-slurm-ablation-sweep-dir",
+        type=Path,
+        help="Write verified per-mode SLURM sbatch scripts for an ablation sweep",
+    )
     parser.add_argument("--verify-slurm-script", type=Path, help="Verify a generated SLURM sbatch script")
     parser.add_argument("--verify-output-bundle", type=Path, help="Verify summary artifact and log fingerprints")
     parser.add_argument("--verify-pipeline-report", type=Path, help="Verify a pipeline report and its stage fingerprints")
@@ -8369,6 +8484,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Temporarily override ablation_mode for sevennet_lammps and "
             "external_pair cases"
+        ),
+    )
+    parser.add_argument(
+        "--slurm-ablation-sweep-modes",
+        nargs="+",
+        choices=ABLATION_MODE_CHOICES,
+        default=DEFAULT_SLURM_ABLATION_SWEEP_MODES,
+        help=(
+            "Ablation modes generated by --write-slurm-ablation-sweep-dir; "
+            "defaults to baseline-disabled and isodelta-enabled"
         ),
     )
     parser.add_argument("--dry-run", action="store_true", help="Validate and print planned outputs without executing commands")
@@ -8410,9 +8535,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _apply_cli_overrides(config: SuiteConfig, args: argparse.Namespace) -> SuiteConfig:
-    """Return a config with CLI output/GPU overrides applied."""
-    overridden_config = SuiteConfig(
+def _apply_output_gpu_overrides(config: SuiteConfig, args: argparse.Namespace) -> SuiteConfig:
+    """Return a config with output directory and GPU CLI overrides applied."""
+    return SuiteConfig(
         name=config.name,
         manifest_path=config.manifest_path,
         output_dir=args.output_dir.resolve() if args.output_dir is not None else config.output_dir,
@@ -8425,6 +8550,11 @@ def _apply_cli_overrides(config: SuiteConfig, args: argparse.Namespace) -> Suite
         cases=config.cases,
         runtime_overrides=dict(config.runtime_overrides),
     )
+
+
+def _apply_cli_overrides(config: SuiteConfig, args: argparse.Namespace) -> SuiteConfig:
+    """Return a config with standard CLI overrides applied."""
+    overridden_config = _apply_output_gpu_overrides(config, args)
     return _apply_ablation_mode_override(
         overridden_config,
         args.ablation_mode_override,
@@ -8465,7 +8595,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.manifest is None:
         raise SystemExit("--manifest is required unless --write-template or a verify mode is used")
     try:
-        config = _apply_cli_overrides(load_manifest(args.manifest), args)
+        base_config = load_manifest(args.manifest)
         _require(
             args.preflight_output is None or args.preflight_only,
             "--preflight-output requires --preflight-only",
@@ -8474,6 +8604,36 @@ def main(argv: list[str] | None = None) -> int:
             args.pipeline_report is None or args.pipeline,
             "--pipeline-report requires --pipeline",
         )
+        if args.write_slurm_ablation_sweep_dir is not None:
+            _require(args.write_slurm_script is None, "--write-slurm-ablation-sweep-dir cannot be combined with --write-slurm-script")
+            _require(args.ablation_mode_override is None, "--write-slurm-ablation-sweep-dir manages ablation modes; do not pass --ablation-mode-override")
+            _require(not args.pipeline, "--write-slurm-ablation-sweep-dir cannot be combined with --pipeline")
+            _require(not args.readiness_check, "--write-slurm-ablation-sweep-dir cannot be combined with --readiness-check")
+            _require(not args.prepare_artifacts, "--write-slurm-ablation-sweep-dir cannot be combined with --prepare-artifacts")
+            _require(not args.preflight_only, "--write-slurm-ablation-sweep-dir cannot be combined with --preflight-only")
+            _require(not args.plan_only, "--write-slurm-ablation-sweep-dir cannot be combined with --plan-only")
+            sweep_config = _apply_output_gpu_overrides(base_config, args)
+            sweep = write_slurm_ablation_sweep(
+                args.write_slurm_ablation_sweep_dir,
+                sweep_config,
+                modes=tuple(args.slurm_ablation_sweep_modes),
+                collect_only=args.collect_only,
+                dry_run=args.dry_run,
+                skip_downloads=args.skip_downloads,
+                skip_gpu_check=args.skip_gpu_check,
+                allow_gpu_mismatch=args.allow_gpu_mismatch,
+                keep_going=args.keep_going,
+                reuse_passed=args.reuse_passed,
+                job_name=args.slurm_job_name,
+                time_limit=args.slurm_time_limit,
+                cpus_per_task=args.slurm_cpus_per_task,
+                slurm_repo_root=args.slurm_repo_root,
+                slurm_manifest_path=args.slurm_manifest_path,
+                slurm_output_dir=args.slurm_output_dir,
+            )
+            print(json.dumps({"slurm_ablation_sweep_index": sweep["index_path"], "status": sweep["status"]}, indent=2))
+            return SUCCESS_RETURN_CODE
+        config = _apply_cli_overrides(base_config, args)
         if args.pipeline:
             _require(args.write_slurm_script is None, "--pipeline cannot be combined with --write-slurm-script")
             _require(not args.readiness_check, "--pipeline cannot be combined with --readiness-check")
