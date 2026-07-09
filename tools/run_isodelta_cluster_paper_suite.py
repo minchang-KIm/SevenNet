@@ -273,6 +273,17 @@ SLURM_OUTPUT_DIR_ENV_NAME = "ISODELTA_OUTPUT_DIR"
 ENVIRONMENT_SNAPSHOT_NAME = "environment_snapshot.json"
 STAGE_REPORT_FINGERPRINTS_KEY = "stage_report_fingerprints"
 OUTPUT_BUNDLE_VERIFICATION_KEY = "output_bundle_verification"
+OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS = (
+    "verified_artifact_count",
+    "verified_artifact_index_count",
+    "verified_paper_artifact_semantic_count",
+    "verified_slurm_python_provenance_count",
+    "verified_evidence_file_count",
+    "verified_command_record_count",
+    "verified_command_log_count",
+    "verified_external_command_log_count",
+    "verified_experiment_report_check_count",
+)
 ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION = "isodelta-cluster-environment-snapshot-v1"
 ENVIRONMENT_PACKAGE_NAMES = (
     "sevenn",
@@ -5628,15 +5639,7 @@ def _require_pipeline_bundle_verification(
         return recorded_verification
     bundle_root = _pipeline_report_output_dir(pipeline_report_path, original_output_dir)
     verification = verify_output_bundle(bundle_root)
-    for count_key in (
-        "verified_artifact_count",
-        "verified_artifact_index_count",
-        "verified_paper_artifact_semantic_count",
-        "verified_evidence_file_count",
-        "verified_command_record_count",
-        "verified_command_log_count",
-        "verified_external_command_log_count",
-    ):
+    for count_key in OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS:
         recorded_count = _as_json_nonnegative_int(
             recorded_verification.get(count_key),
             f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.{count_key}",

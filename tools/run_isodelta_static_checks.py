@@ -1289,6 +1289,11 @@ def main() -> None:
         and "optional_file_fingerprint" in cluster_suite
         and "verify_output_bundle" in cluster_suite
         and "--verify-output-bundle" in cluster_suite
+        and "OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS" in cluster_suite
+        and "must match current bundle verification" in cluster_suite
+        and "bundle_count_drift_errors" in cluster_suite_test
+        and "verified_slurm_python_provenance_count" in cluster_suite_test
+        and "verified_experiment_report_check_count" in cluster_suite_test
         and "SUMMARY_REPORT_NAME" in cluster_suite
         and "_require_command_record_alignment" in cluster_suite
         and "verified_command_record_count" in cluster_suite
@@ -1577,6 +1582,9 @@ def main() -> None:
         and "`pipeline_report.json`" in doc
         and "`--verify-pipeline-report`" in doc
         and "publication-success gate" in doc
+        and "re-runs the current output-bundle verifier" in doc
+        and "SLURM Python provenance" in doc
+        and "experiment-report-check evidence counts" in doc
         and "failed or planned `pipeline_report.json` exits" in doc
         and "full final-paper stage sequence" in doc
         and "non-skipped stage" in doc

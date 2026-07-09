@@ -4271,6 +4271,31 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            bundle_count_drift_errors: dict[str, str] = {}
+            for count_key in (
+                "verified_slurm_python_provenance_count",
+                "verified_experiment_report_check_count",
+            ):
+                count_drift_pipeline_report = json.loads(json.dumps(pipeline_report))
+                count_drift_pipeline_report[
+                    isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY
+                ][count_key] += 1
+                pipeline_report_path.write_text(
+                    json.dumps(count_drift_pipeline_report),
+                    encoding="utf-8",
+                )
+                try:
+                    isodelta_cluster_suite.verify_pipeline_report(
+                        pipeline_report_path
+                    )
+                except isodelta_cluster_suite.ClusterSuiteError as exc:
+                    bundle_count_drift_errors[count_key] = str(exc)
+                else:
+                    bundle_count_drift_errors[count_key] = ""
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             readiness_report_path.write_text(
                 readiness_report_path.read_text(encoding="utf-8") + "\n",
                 encoding="utf-8",
@@ -4359,6 +4384,9 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn("run_plan", summary["artifact_fingerprints"])
         self.assertNotIn("pipeline_report", summary["artifact_fingerprints"])
         self.assertIn("pipeline_report.report_comment", uncommented_pipeline_report_error)
+        for count_key, error in bundle_count_drift_errors.items():
+            self.assertIn(count_key, error)
+            self.assertIn("must match current bundle verification", error)
         self.assertIn("SHA-256 mismatch", mutated_stage_report_error)
 
     def test_pipeline_stops_when_readiness_fails(self) -> None:
