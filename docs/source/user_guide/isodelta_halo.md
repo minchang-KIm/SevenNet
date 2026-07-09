@@ -534,7 +534,10 @@ evidence. Non-skipped stage fingerprints must point to present report files;
 an absent-file fingerprint is accepted only for a skipped artifact-preparation
 stage. Each `stages[*].report_path` entry must also match the paired
 `stage_report_fingerprints[*].report.path`, so the human-facing stage index
-cannot drift away from the protected fingerprint record. The verifier also
+cannot drift away from the protected fingerprint record. The `run_suite` and
+`verify_output_bundle` stage reports must both resolve to the verified output bundle
+summary, so a copied or stale summary cannot masquerade as the final pipeline
+result. The verifier also
 checks pipeline `modes` as booleans, rejects
 `dry_run = true`, `skip_gpu_check = true`, or `allow_gpu_mismatch = true` for a
 passed report, and requires suite metadata to keep `expected_gpus >= 8`, the

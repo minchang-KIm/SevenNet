@@ -4293,6 +4293,36 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            summary_stage_path_drift_report = json.loads(json.dumps(pipeline_report))
+            wrong_stage_summary_path = output_dir / "wrong_stage_summary.json"
+            wrong_stage_summary_path.write_text(summary_report_text, encoding="utf-8")
+            run_suite_stage_index = stage_names.index(
+                isodelta_cluster_suite.PIPELINE_STAGE_RUN_SUITE
+            )
+            summary_stage_path_drift_report["stages"][run_suite_stage_index][
+                "report_path"
+            ] = str(wrong_stage_summary_path)
+            summary_stage_path_drift_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][run_suite_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(
+                    wrong_stage_summary_path
+                )
+            )
+            pipeline_report_path.write_text(
+                json.dumps(summary_stage_path_drift_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                summary_stage_path_drift_error = str(exc)
+            else:
+                summary_stage_path_drift_error = ""
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             plan_output_drift_report = json.loads(json.dumps(plan_report))
             plan_output_drift_report["paper_outputs"]["case_summary_csv"] = str(
                 output_dir / "tables" / "wrong_case_summary.csv"
@@ -4317,9 +4347,6 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
             ][plan_stage_index]["report"] = (
                 isodelta_cluster_suite.generated_artifact_record(plan_path)
-            )
-            run_suite_stage_index = stage_names.index(
-                isodelta_cluster_suite.PIPELINE_STAGE_RUN_SUITE
             )
             run_suite_stage_report_path = Path(
                 plan_output_drift_pipeline_report["stages"][run_suite_stage_index][
@@ -4458,6 +4485,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             len(stage_names),
         )
         self.assertEqual(
+            pipeline_report_verification["verified_summary_stage_count"],
+            len(isodelta_cluster_suite.SUMMARY_PIPELINE_STAGE_NAMES),
+        )
+        self.assertEqual(
             pipeline_report_verification["preflight_gpu_check"]["detected_gpus"],
             isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
         )
@@ -4506,6 +4537,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_STAGE_REPORT_PATH_ALIGNMENT_ERROR,
             stage_path_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR,
+            summary_stage_path_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,

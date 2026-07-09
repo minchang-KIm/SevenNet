@@ -133,6 +133,9 @@ PIPELINE_REQUIRED_STAGES_ERROR = (
 PIPELINE_STAGE_REPORT_PATH_ALIGNMENT_ERROR = (
     "pipeline stage report_path must match its stage report fingerprint path"
 )
+PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR = (
+    "pipeline summary stages must point to the verified output bundle summary"
+)
 PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR = (
     "output_bundle_verification.status must be 'passed' for a passed pipeline report"
 )
@@ -229,6 +232,10 @@ REQUIRED_PIPELINE_STAGE_NAMES = (
     PIPELINE_STAGE_PREPARE_ARTIFACTS,
     PIPELINE_STAGE_PREFLIGHT,
     PIPELINE_STAGE_PLAN,
+    PIPELINE_STAGE_RUN_SUITE,
+    PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE,
+)
+SUMMARY_PIPELINE_STAGE_NAMES = (
     PIPELINE_STAGE_RUN_SUITE,
     PIPELINE_STAGE_VERIFY_OUTPUT_BUNDLE,
 )
@@ -5754,6 +5761,28 @@ def _require_pipeline_bundle_verification(
     return verification
 
 
+def _require_pipeline_summary_stage_alignment(
+    stage_report_paths: dict[str, Path],
+    *,
+    summary_path: Path,
+) -> int:
+    """Verify summary-producing pipeline stages point to the verified summary."""
+    summary_path_key = str(summary_path.resolve())
+    verified_count = 0
+    for stage_name in SUMMARY_PIPELINE_STAGE_NAMES:
+        stage_report_path = stage_report_paths.get(stage_name)
+        _require(
+            stage_report_path is not None,
+            PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR,
+        )
+        _require(
+            str(stage_report_path.resolve()) == summary_path_key,
+            PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR,
+        )
+        verified_count += 1
+    return verified_count
+
+
 def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
     """Verify a pipeline report and all stage reports it fingerprints."""
     _require(pipeline_report_path.exists(), f"missing pipeline report {pipeline_report_path}")
@@ -5814,14 +5843,19 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         and bundle_verification.get("status") == PIPELINE_STATUS_PASSED,
         PIPELINE_BUNDLE_VERIFICATION_REQUIRED_ERROR,
     )
+    summary_path = Path(
+        _as_json_string(
+            bundle_verification.get("summary_json"),
+            f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.summary_json",
+        )
+    )
+    verified_summary_stage_count = _require_pipeline_summary_stage_alignment(
+        stage_report_paths,
+        summary_path=summary_path,
+    )
     verified_paper_output_count = _require_pipeline_plan_output_alignment(
         run_plan_report,
-        summary_path=Path(
-            _as_json_string(
-                bundle_verification.get("summary_json"),
-                f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.summary_json",
-            )
-        ),
+        summary_path=summary_path,
         original_output_dir=original_output_dir,
     )
     run_plan_report["verified_paper_output_count"] = verified_paper_output_count
@@ -5835,6 +5869,7 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "pipeline_report": str(pipeline_report_path),
         "pipeline_status": pipeline_status,
         "verified_stage_report_count": verified_stage_report_count,
+        "verified_summary_stage_count": verified_summary_stage_count,
         "readiness_report": readiness_report,
         "artifact_preparation_report": artifact_preparation_report,
         "run_plan_report": run_plan_report,
