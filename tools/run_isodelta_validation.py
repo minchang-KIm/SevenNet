@@ -62,6 +62,7 @@ VALIDATION_COMMANDS = (
         "tools/run_isodelta_static_checks.py",
         "tools/run_isodelta_sync_gate.py",
         "tools/run_isodelta_validation.py",
+        "sevenn/scripts/deploy.py",
         "tests/unit_tests/test_isodelta_evidence_bundle_check.py",
         "tests/unit_tests/test_isodelta_benchmark_report_check.py",
         "tests/unit_tests/test_isodelta_benchmark_parser.py",

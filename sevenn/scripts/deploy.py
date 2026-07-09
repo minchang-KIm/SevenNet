@@ -1,7 +1,7 @@
 import os
 import pathlib
 from datetime import datetime
-from typing import Optional, Union
+from typing import Mapping, Optional, Union
 
 import e3nn.util.jit
 import torch
@@ -11,6 +11,13 @@ import sevenn._keys as KEY
 from sevenn import __version__
 from sevenn.model_build import build_E3_equivariant_model
 from sevenn.util import load_checkpoint, warn_no_tp_accelerator
+
+
+def _chemical_symbols_to_index_metadata(type_map: Mapping[int, int]) -> str:
+    """Return the LAMMPS metadata species list without boundary whitespace."""
+    return ' '.join(
+        chemical_symbols[atomic_number] for atomic_number in type_map.keys()
+    )
 
 
 def deploy(
@@ -55,10 +62,7 @@ def deploy(
     # make some config need for md
     md_configs = {}
     type_map = config[KEY.TYPE_MAP]
-    chem_list = ''
-    for Z in type_map.keys():
-        chem_list += chemical_symbols[Z] + ' '
-    chem_list.strip()
+    chem_list = _chemical_symbols_to_index_metadata(type_map)
     md_configs.update({'chemical_symbols_to_index': chem_list})
     md_configs.update({'cutoff': str(config[KEY.CUTOFF])})
     md_configs.update({'num_species': str(config[KEY.NUM_SPECIES])})
@@ -140,11 +144,7 @@ def deploy_parallel(
     # prepare some extra information for MD
     md_configs = {}
     type_map = config[KEY.TYPE_MAP]
-
-    chem_list = ''
-    for Z in type_map.keys():
-        chem_list += chemical_symbols[Z] + ' '
-    chem_list.strip()
+    chem_list = _chemical_symbols_to_index_metadata(type_map)
 
     comm_size = max(
         [

@@ -17,6 +17,7 @@ CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.cpp"
 HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "pair_e3gnn_parallel.h"
 COMM_BRICK_CPP_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.cpp"
 COMM_BRICK_HEADER_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "comm_brick.h"
+DEPLOY_PATH = REPO_ROOT / "sevenn" / "scripts" / "deploy.py"
 
 
 class IsoDeltaHaloStaticTest(unittest.TestCase):
@@ -29,6 +30,7 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         cls.header = HEADER_PATH.read_text(encoding="utf-8")
         cls.comm_brick_cpp = COMM_BRICK_CPP_PATH.read_text(encoding="utf-8")
         cls.comm_brick_header = COMM_BRICK_HEADER_PATH.read_text(encoding="utf-8")
+        cls.deploy = DEPLOY_PATH.read_text(encoding="utf-8")
         cls.combined = (
             cls.cpp
             + "\n"
@@ -276,6 +278,24 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertNotIn("std::strtok", self.cpp)
         self.assertNotIn("const_cast<char *>", self.cpp)
         self.assertNotIn('auto delim = " "', self.cpp)
+
+    def test_deploy_metadata_species_list_has_no_boundary_whitespace(self) -> None:
+        """Deployment metadata should match the pair_coeff parser contract."""
+        self.assertIn("def _chemical_symbols_to_index_metadata", self.deploy)
+        self.assertIn("Mapping[int, int]", self.deploy)
+        self.assertIn("' '.join(", self.deploy)
+        self.assertIn(
+            "chemical_symbols[atomic_number] for atomic_number in type_map.keys()",
+            self.deploy,
+        )
+        self.assertEqual(
+            self.deploy.count(
+                "chem_list = _chemical_symbols_to_index_metadata(type_map)"
+            ),
+            2,
+        )
+        self.assertNotIn("chem_list.strip()", self.deploy)
+        self.assertNotIn("chem_list += chemical_symbols", self.deploy)
 
     def test_graph_index_pointer_lifetime_is_guarded(self) -> None:
         """Comm preprocessing should never dereference an inactive lookup map."""

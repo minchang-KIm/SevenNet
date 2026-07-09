@@ -89,6 +89,10 @@ FORBIDDEN_FILE_SNIPPETS = {
         "MPI_Allreduce(&recvneed[0][0],all,6",
         "nswap > 6",
     ),
+    "sevenn/scripts/deploy.py": (
+        "chem_list.strip()",
+        "chem_list += chemical_symbols",
+    ),
 }
 REQUIRED_FILE_SNIPPETS = {
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.cpp": (
@@ -239,6 +243,13 @@ REQUIRED_FILE_SNIPPETS = {
     "sevenn/pair_e3gnn/comm_brick.h": (
         "validate_e3gnn_comm_phase(int iswap) const",
         "validate_e3gnn_sendlist_index(int iswap, int index) const",
+    ),
+    "sevenn/scripts/deploy.py": (
+        "def _chemical_symbols_to_index_metadata",
+        "Mapping[int, int]",
+        "' '.join(",
+        "chemical_symbols[atomic_number] for atomic_number in type_map.keys()",
+        "chem_list = _chemical_symbols_to_index_metadata(type_map)",
     ),
     "tools/check_isodelta_build_prereqs.py": (
         "PREREQ_REPORT_SCHEMA_VERSION",
@@ -455,6 +466,7 @@ REQUIRED_FILE_SNIPPETS = {
         "stdout_tail",
         "stderr_tail",
         "test_isodelta_sync_gate.py",
+        "sevenn/scripts/deploy.py",
     ),
     "tools/run_isodelta_lammps_benchmark.py": (
         "ABLATION_MODE_CHOICES",
@@ -592,6 +604,9 @@ REQUIRED_FILE_SNIPPETS = {
         "canonical atom index",
         "tokenized without mutating",
         "deployed `num_species`",
+        "single space-delimited",
+        "without leading or trailing whitespace",
+        "TorchScript artifacts expose the same metadata contract",
         "--prepare-artifacts",
         "--preflight-only",
         "--pipeline",

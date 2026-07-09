@@ -30,6 +30,7 @@ MLIP_TRACE_DEMO_PATH = REPO_ROOT / "tools" / "run_isodelta_mlip_trace_demo.py"
 VALIDATION_RUNNER_PATH = REPO_ROOT / "tools" / "run_isodelta_validation.py"
 SYNC_GATE_PATH = REPO_ROOT / "tools" / "run_isodelta_sync_gate.py"
 PATCH_SCRIPT_PATH = REPO_ROOT / "sevenn" / "pair_e3gnn" / "patch_lammps.sh"
+DEPLOY_PATH = REPO_ROOT / "sevenn" / "scripts" / "deploy.py"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "isodelta-halo.yml"
 DOC_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "isodelta_halo.md"
 DOC_INDEX_PATH = REPO_ROOT / "docs" / "source" / "user_guide" / "index.rst"
@@ -92,6 +93,7 @@ def main() -> None:
     validation_runner = _read(VALIDATION_RUNNER_PATH)
     sync_gate = _read(SYNC_GATE_PATH)
     patch_script = _read(PATCH_SCRIPT_PATH)
+    deploy = _read(DEPLOY_PATH)
     workflow = _read(WORKFLOW_PATH)
     doc = _read(DOC_PATH)
     doc_index = _read(DOC_INDEX_PATH)
@@ -288,6 +290,18 @@ def main() -> None:
         and "const_cast<char *>" not in cpp
         and 'auto delim = " "' not in cpp,
         "pair_coeff arguments and deployed numeric metadata must be checked",
+    )
+    _require(
+        "def _chemical_symbols_to_index_metadata" in deploy
+        and "Mapping[int, int]" in deploy
+        and "' '.join(" in deploy
+        and "chemical_symbols[atomic_number] for atomic_number in type_map.keys()"
+        in deploy
+        and deploy.count("chem_list = _chemical_symbols_to_index_metadata(type_map)")
+        == 2
+        and "chem_list.strip()" not in deploy
+        and "chem_list += chemical_symbols" not in deploy,
+        "deployment metadata species lists must be normalized before saving",
     )
     _require(
         "kIsoDeltaHaloGraphIndexRequiredError" in cpp
@@ -605,6 +619,12 @@ def main() -> None:
         and "deployed `num_species`" in doc,
         "guide must document graph buffer, neighbor index, and pair_coeff metadata guards",
     )
+    _require(
+        "single space-delimited" in doc
+        and "without leading or trailing whitespace" in doc
+        and "TorchScript artifacts expose the same metadata contract" in doc,
+        "guide must document normalized deployment species metadata",
+    )
 
     _require(
         "try_reuse_comm_preprocess_cache" in combined,
@@ -793,6 +813,10 @@ def main() -> None:
         in validation_runner_test
         and "test_isodelta_validation_runner.py" in validation_runner,
         "validation runner must emit auditable sync reports",
+    )
+    _require(
+        "sevenn/scripts/deploy.py" in validation_runner,
+        "validation runner must py_compile deployment metadata generation",
     )
     _require(
         "SYNC_REPORT_SCHEMA_VERSION" in sync_gate

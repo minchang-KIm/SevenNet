@@ -82,6 +82,9 @@ model list.
 The deployed `chemical_symbols_to_index` string is tokenized without mutating
 the metadata buffer, then cross-checked against the deployed `num_species`
 field and the number of LAMMPS atom types supplied to `pair_coeff`.
+The deployment script writes that species list as a single space-delimited
+string without leading or trailing whitespace, so serial and parallel
+TorchScript artifacts expose the same metadata contract.
 Cached CUDA index tensors are reused only when their length, integer dtype, and
 device still match the current communication path, preventing a stale tensor
 layout from crossing a later `index_select` or `scatter_` call.
