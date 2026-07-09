@@ -2297,6 +2297,10 @@ trace_evidence = ["trace.json"]
                     "12",
                     "--slurm-repo-root",
                     "/scratch/icpp/SevenNet-main",
+                    "--slurm-manifest-path",
+                    "/scratch/icpp/SevenNet-main/isodelta_cluster_suite.toml",
+                    "--slurm-output-dir",
+                    "/scratch/icpp/paper outputs",
                 ]
             )
             script = slurm_path.read_text(encoding="utf-8")
@@ -2310,14 +2314,24 @@ trace_evidence = ["trace.json"]
         self.assertIn("#SBATCH --cpus-per-task=12", script)
         self.assertIn('if [[ -z "${REPO_ROOT:-}" ]]; then', script)
         self.assertIn("  REPO_ROOT=/scratch/icpp/SevenNet-main", script)
+        self.assertIn('if [[ -z "${MANIFEST_PATH:-}" ]]; then', script)
+        self.assertIn(
+            "  MANIFEST_PATH=/scratch/icpp/SevenNet-main/isodelta_cluster_suite.toml",
+            script,
+        )
+        self.assertIn('if [[ -z "${ISODELTA_OUTPUT_DIR:-}" ]]; then', script)
+        self.assertIn("  ISODELTA_OUTPUT_DIR='/scratch/icpp/paper outputs'", script)
         self.assertIn('cd "$REPO_ROOT"', script)
         self.assertIn(
             'SUITE_RUNNER="${SUITE_RUNNER:-$REPO_ROOT/tools/run_isodelta_cluster_paper_suite.py}"',
             script,
         )
         self.assertIn("COMMON_ARGS=(--manifest \"$MANIFEST_PATH\")", script)
-        self.assertIn("PREFLIGHT_OUTPUT=", script)
-        self.assertIn("PIPELINE_OUTPUT=", script)
+        self.assertIn('COMMON_ARGS+=(--output-dir "${ISODELTA_OUTPUT_DIR}")', script)
+        self.assertIn('PLAN_OUTPUT="${ISODELTA_OUTPUT_DIR}/isodelta_cluster_paper_plan.json"', script)
+        self.assertIn('PREFLIGHT_OUTPUT="${ISODELTA_OUTPUT_DIR}/preflight_report.json"', script)
+        self.assertIn('PIPELINE_OUTPUT="${ISODELTA_OUTPUT_DIR}/pipeline_report.json"', script)
+        self.assertNotIn(str(root), script)
         self.assertIn("--preflight-only --preflight-output \"$PREFLIGHT_OUTPUT\"", script)
         self.assertIn("--plan-only --plan-output \"$PLAN_OUTPUT\"", script)
         self.assertIn("--pipeline --pipeline-report \"$PIPELINE_OUTPUT\"", script)

@@ -1326,13 +1326,26 @@ def main() -> None:
         and "CLI runtime overrides" in cluster_suite
         and "runtime_overrides" in cluster_suite
         and "SLURM_REPO_ROOT_ENV_NAME" in cluster_suite
+        and "SLURM_MANIFEST_PATH_ENV_NAME" in cluster_suite
+        and "SLURM_OUTPUT_DIR_ENV_NAME" in cluster_suite
         and "SLURM_SUITE_RUNNER_RELATIVE_PATH" in cluster_suite
         and "--slurm-repo-root" in cluster_suite
+        and "--slurm-manifest-path" in cluster_suite
+        and "--slurm-output-dir" in cluster_suite
         and "SLURM repo root must not be empty" in cluster_suite
+        and "SLURM manifest path must not be empty" in cluster_suite
+        and "SLURM output dir must not be empty" in cluster_suite
         and 'cd "${SLURM_REPO_ROOT_ENV_NAME}"' in cluster_suite
         and 'cd "$REPO_ROOT"' in cluster_suite_test
         and "$REPO_ROOT/tools/run_isodelta_cluster_paper_suite.py" in cluster_suite_test
         and "/scratch/icpp/SevenNet-main" in cluster_suite_test
+        and "/scratch/icpp/SevenNet-main/isodelta_cluster_suite.toml"
+        in cluster_suite_test
+        and "ISODELTA_OUTPUT_DIR='/scratch/icpp/paper outputs'"
+        in cluster_suite_test
+        and 'COMMON_ARGS+=(--output-dir "${ISODELTA_OUTPUT_DIR}")'
+        in cluster_suite_test
+        and "self.assertNotIn(str(root), script)" in cluster_suite_test
         and "_has_one_sided_ablation_case" in cluster_suite
         and "one-sided ablation suite" in cluster_suite
         and "PIPELINE_REPORT_PASSED_STATUS_ERROR" in cluster_suite
@@ -1520,8 +1533,11 @@ def main() -> None:
         and "`--collect-only` is not accepted" in doc
         and "repository root in `REPO_ROOT`" in doc
         and "using `--slurm-repo-root`" in doc
+        and "`--slurm-manifest-path`" in doc
+        and "`--slurm-output-dir`" in doc
         and "/scratch/icpp/SevenNet-main" in doc
-        and "changes into that directory" in doc
+        and "/scratch/icpp/isodelta_cluster_paper_runs" in doc
+        and "changes into `REPO_ROOT`" in doc
         and "PYTHON_BIN" in doc
         and "SUITE_RUNNER" in doc,
         "IsoDelta-Halo guide must document SLURM cluster launch generation",

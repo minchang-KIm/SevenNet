@@ -239,6 +239,8 @@ READINESS_REPORT_NAME = "readiness_report.json"
 PIPELINE_REPORT_NAME = "pipeline_report.json"
 MANIFEST_SNAPSHOT_NAME = "isodelta_cluster_suite_manifest.toml"
 SLURM_LOG_DIR_NAME = "slurm_logs"
+SLURM_MANIFEST_PATH_ENV_NAME = "MANIFEST_PATH"
+SLURM_OUTPUT_DIR_ENV_NAME = "ISODELTA_OUTPUT_DIR"
 ENVIRONMENT_SNAPSHOT_NAME = "environment_snapshot.json"
 STAGE_REPORT_FINGERPRINTS_KEY = "stage_report_fingerprints"
 OUTPUT_BUNDLE_VERIFICATION_KEY = "output_bundle_verification"
@@ -8077,6 +8079,8 @@ def write_slurm_script(
     time_limit: str = DEFAULT_SLURM_TIME_LIMIT,
     cpus_per_task: int = DEFAULT_SLURM_CPUS_PER_TASK,
     slurm_repo_root: str | None = None,
+    slurm_manifest_path: str | None = None,
+    slurm_output_dir: str | None = None,
 ) -> None:
     """Write a commented SLURM wrapper that runs the full paper pipeline."""
     validate_suite_config(config)
@@ -8088,10 +8092,21 @@ def write_slurm_script(
     )
 
     has_one_sided_ablation = _has_one_sided_ablation_case(config)
-    plan_path = config.output_dir / PLAN_REPORT_NAME
     slurm_job_name = _safe_name(job_name)
     slurm_repo_root_default = str(REPO_ROOT) if slurm_repo_root is None else slurm_repo_root
+    slurm_manifest_path_default = (
+        str(config.manifest_path)
+        if slurm_manifest_path is None
+        else slurm_manifest_path
+    )
+    slurm_output_dir_default = (
+        str(config.output_dir)
+        if slurm_output_dir is None
+        else slurm_output_dir
+    )
     _require(slurm_repo_root_default.strip(), "SLURM repo root must not be empty")
+    _require(slurm_manifest_path_default.strip(), "SLURM manifest path must not be empty")
+    _require(slurm_output_dir_default.strip(), "SLURM output dir must not be empty")
     lines = [
         "#!/usr/bin/env bash",
         "# IsoDelta-Halo cluster paper suite launcher.",
@@ -8119,19 +8134,24 @@ def write_slurm_script(
             f"{SLURM_REPO_ROOT_ENV_NAME}/{SLURM_SUITE_RUNNER_RELATIVE_PATH.as_posix()}"
             '}"'
         ),
-        f"MANIFEST_PATH={_bash_quote(config.manifest_path)}",
-        f"PLAN_OUTPUT={_bash_quote(plan_path)}",
-        f"PREFLIGHT_OUTPUT={_bash_quote(config.output_dir / PREFLIGHT_REPORT_NAME)}",
-        f"PIPELINE_OUTPUT={_bash_quote(config.output_dir / PIPELINE_REPORT_NAME)}",
+        f'if [[ -z "${{{SLURM_MANIFEST_PATH_ENV_NAME}:-}}" ]]; then',
+        f"  {SLURM_MANIFEST_PATH_ENV_NAME}={_bash_quote(slurm_manifest_path_default)}",
+        "fi",
+        f'if [[ -z "${{{SLURM_OUTPUT_DIR_ENV_NAME}:-}}" ]]; then',
+        f"  {SLURM_OUTPUT_DIR_ENV_NAME}={_bash_quote(slurm_output_dir_default)}",
+        "fi",
+        f'PLAN_OUTPUT="${{{SLURM_OUTPUT_DIR_ENV_NAME}}}/{PLAN_REPORT_NAME}"',
+        f'PREFLIGHT_OUTPUT="${{{SLURM_OUTPUT_DIR_ENV_NAME}}}/{PREFLIGHT_REPORT_NAME}"',
+        f'PIPELINE_OUTPUT="${{{SLURM_OUTPUT_DIR_ENV_NAME}}}/{PIPELINE_REPORT_NAME}"',
         "",
         "# Keep scheduler stdout/stderr directories explicit and reproducible.",
         f"mkdir -p {_bash_quote(SLURM_LOG_DIR_NAME)}",
-        f"mkdir -p {_bash_quote(config.output_dir)}",
+        f'mkdir -p "${{{SLURM_OUTPUT_DIR_ENV_NAME}}}"',
         "",
         "# COMMON_ARGS is reused for planning and execution to prevent argument drift.",
         'COMMON_ARGS=(--manifest "$MANIFEST_PATH")',
+        f'COMMON_ARGS+=(--output-dir "${{{SLURM_OUTPUT_DIR_ENV_NAME}}}")',
     ]
-    _append_bash_array_args(lines, "--output-dir", config.output_dir)
     _append_bash_array_args(lines, "--expected-gpus", str(config.expected_gpus))
     if ablation_mode_override is not None:
         _append_bash_array_args(lines, "--ablation-mode-override", ablation_mode_override)
@@ -8167,7 +8187,7 @@ def write_slurm_script(
                 '"$PYTHON_BIN" "$SUITE_RUNNER" "${COMMON_ARGS[@]}"',
                 "",
                 "# Re-open the finished output bundle before allowing the SLURM job to succeed.",
-                f'"$PYTHON_BIN" "$SUITE_RUNNER" --verify-output-bundle {_bash_quote(config.output_dir)}',
+                f'"$PYTHON_BIN" "$SUITE_RUNNER" --verify-output-bundle "${{{SLURM_OUTPUT_DIR_ENV_NAME}}}"',
                 "",
             ]
         )
@@ -8226,6 +8246,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Repository checkout path embedded in --write-slurm-script; "
             "REPO_ROOT can still override it at submit time"
+        ),
+    )
+    parser.add_argument(
+        "--slurm-manifest-path",
+        help=(
+            "Manifest path embedded in --write-slurm-script; "
+            "MANIFEST_PATH can still override it at submit time"
+        ),
+    )
+    parser.add_argument(
+        "--slurm-output-dir",
+        help=(
+            "Output directory embedded in --write-slurm-script; "
+            "ISODELTA_OUTPUT_DIR can still override it at submit time"
         ),
     )
     parser.add_argument(
@@ -8360,6 +8394,8 @@ def main(argv: list[str] | None = None) -> int:
                 time_limit=args.slurm_time_limit,
                 cpus_per_task=args.slurm_cpus_per_task,
                 slurm_repo_root=args.slurm_repo_root,
+                slurm_manifest_path=args.slurm_manifest_path,
+                slurm_output_dir=args.slurm_output_dir,
             )
             print(f"Wrote IsoDelta-Halo SLURM launcher to {args.write_slurm_script}")
             return SUCCESS_RETURN_CODE
