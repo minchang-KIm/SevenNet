@@ -119,6 +119,20 @@ REQUIRED_FILE_SNIPPETS = {
         "IsoDelta",
         "metadata",
     ),
+    "sevenn/pair_e3gnn/comm_brick.cpp": (
+        "kE3GnnCommPhaseLimit = 6",
+        "kE3GnnCommPhaseRangeError",
+        "kE3GnnSendlistIndexRangeError",
+        "void CommBrick::validate_e3gnn_comm_phase(int iswap) const",
+        "iswap >= nswap",
+        "iswap >= kE3GnnCommPhaseLimit",
+        "index >= sendnum[iswap]",
+        "validate_e3gnn_sendlist_index(iswap, index);",
+    ),
+    "sevenn/pair_e3gnn/comm_brick.h": (
+        "validate_e3gnn_comm_phase(int iswap) const",
+        "validate_e3gnn_sendlist_index(int iswap, int index) const",
+    ),
     "tools/check_isodelta_build_prereqs.py": (
         "PREREQ_REPORT_SCHEMA_VERSION",
         "REPORT_SCHEMA_VERSION_KEY",

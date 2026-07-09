@@ -38,6 +38,8 @@ instead of dereferencing an inactive lookup.
 Every pair-style communication helper also validates the `comm_phase` argument
 before indexing the six-phase communication arrays, which turns an invalid
 phase route into a named runtime error instead of silent metadata corruption.
+The `CommBrick` read-only topology accessors used by the cache apply the same
+phase guard and also check sendlist indexes before returning atom ids.
 
 ## Why This Is Model-Agnostic
 

@@ -61,6 +61,9 @@ public:
   // patched from SevenNet //
 
 protected:
+  void validate_e3gnn_comm_phase(int iswap) const;
+  void validate_e3gnn_sendlist_index(int iswap, int index) const;
+
   int nswap;                   // # of swaps to perform = sum of maxneed
   int recvneed[3][2];          // # of procs away I recv atoms from
   int sendneed[3][2];          // # of procs away I send atoms to

@@ -267,6 +267,41 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
 
     def test_comm_brick_exposes_read_only_topology_accessors(self) -> None:
         """The pair cache should compare current CommBrick topology before reuse."""
+        self.assertIn("kE3GnnCommPhaseRangeError", self.comm_brick_cpp)
+        self.assertIn("kE3GnnSendlistIndexRangeError", self.comm_brick_cpp)
+        self.assertIn(
+            "validate_e3gnn_comm_phase(int iswap) const",
+            self.comm_brick_header,
+        )
+        self.assertIn(
+            "validate_e3gnn_sendlist_index(int iswap, int index) const",
+            self.comm_brick_header,
+        )
+        self.assertIn(
+            "void CommBrick::validate_e3gnn_comm_phase(int iswap) const",
+            self.comm_brick_cpp,
+        )
+        self.assertIn("iswap < kE3GnnFirstCommPhase", self.comm_brick_cpp)
+        self.assertIn("iswap >= nswap", self.comm_brick_cpp)
+        self.assertIn("iswap >= kE3GnnCommPhaseLimit", self.comm_brick_cpp)
+        self.assertIn(
+            "error->all(FLERR, kE3GnnCommPhaseRangeError)",
+            self.comm_brick_cpp,
+        )
+        self.assertIn("index < kE3GnnFirstSendlistIndex", self.comm_brick_cpp)
+        self.assertIn("index >= sendnum[iswap]", self.comm_brick_cpp)
+        self.assertIn(
+            "error->all(FLERR, kE3GnnSendlistIndexRangeError)",
+            self.comm_brick_cpp,
+        )
+        self.assertGreaterEqual(
+            self.comm_brick_cpp.count("validate_e3gnn_comm_phase(iswap);"),
+            6,
+        )
+        self.assertIn(
+            "validate_e3gnn_sendlist_index(iswap, index);",
+            self.comm_brick_cpp,
+        )
         for accessor_name in (
             "e3gnn_nswap",
             "e3gnn_sendnum",

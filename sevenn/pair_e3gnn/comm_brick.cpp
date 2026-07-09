@@ -47,10 +47,16 @@ constexpr int kSpatialDimensionCount = 3;
 constexpr int kBoundarySideCount = 2;
 constexpr int kNeedAllreduceComponentCount =
     kSpatialDimensionCount * kBoundarySideCount;
+constexpr int kE3GnnFirstCommPhase = 0;
+constexpr int kE3GnnFirstSendlistIndex = 0;
 constexpr int kE3GnnCommPhaseLimit = 6;
 constexpr const char *kE3GnnCommPhaseLimitError =
     "PairE3GNNParallel: Cell size is too small. "
     "Please use a single GPU or make a supercell";
+constexpr const char *kE3GnnCommPhaseRangeError =
+    "PairE3GNNParallel: communication phase index is out of range";
+constexpr const char *kE3GnnSendlistIndexRangeError =
+    "PairE3GNNParallel: sendlist atom index is out of range";
 
 } // namespace
 
@@ -99,18 +105,53 @@ CommBrick::~CommBrick()
 
 int CommBrick::e3gnn_nswap() const { return nswap; }
 
-int CommBrick::e3gnn_sendnum(int iswap) const { return sendnum[iswap]; }
+void CommBrick::validate_e3gnn_comm_phase(int iswap) const
+{
+  if (iswap < kE3GnnFirstCommPhase || iswap >= nswap ||
+      iswap >= kE3GnnCommPhaseLimit)
+    error->all(FLERR, kE3GnnCommPhaseRangeError);
+}
 
-int CommBrick::e3gnn_recvnum(int iswap) const { return recvnum[iswap]; }
+void CommBrick::validate_e3gnn_sendlist_index(int iswap, int index) const
+{
+  validate_e3gnn_comm_phase(iswap);
+  if (index < kE3GnnFirstSendlistIndex || index >= sendnum[iswap])
+    error->all(FLERR, kE3GnnSendlistIndexRangeError);
+}
 
-int CommBrick::e3gnn_sendproc(int iswap) const { return sendproc[iswap]; }
+int CommBrick::e3gnn_sendnum(int iswap) const
+{
+  validate_e3gnn_comm_phase(iswap);
+  return sendnum[iswap];
+}
 
-int CommBrick::e3gnn_recvproc(int iswap) const { return recvproc[iswap]; }
+int CommBrick::e3gnn_recvnum(int iswap) const
+{
+  validate_e3gnn_comm_phase(iswap);
+  return recvnum[iswap];
+}
 
-int CommBrick::e3gnn_firstrecv(int iswap) const { return firstrecv[iswap]; }
+int CommBrick::e3gnn_sendproc(int iswap) const
+{
+  validate_e3gnn_comm_phase(iswap);
+  return sendproc[iswap];
+}
+
+int CommBrick::e3gnn_recvproc(int iswap) const
+{
+  validate_e3gnn_comm_phase(iswap);
+  return recvproc[iswap];
+}
+
+int CommBrick::e3gnn_firstrecv(int iswap) const
+{
+  validate_e3gnn_comm_phase(iswap);
+  return firstrecv[iswap];
+}
 
 int CommBrick::e3gnn_sendlist_atom(int iswap, int index) const
 {
+  validate_e3gnn_sendlist_index(iswap, index);
   return sendlist[iswap][index];
 }
 

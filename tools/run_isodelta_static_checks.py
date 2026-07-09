@@ -240,6 +240,26 @@ def main() -> None:
         "pair->notify_proc_ids(sendproc, recvproc, nswap)" in comm_brick_cpp,
         "CommBrick must pass the active phase count to PairE3GNNParallel",
     )
+    _require(
+        "kE3GnnCommPhaseRangeError" in comm_brick_cpp
+        and "kE3GnnSendlistIndexRangeError" in comm_brick_cpp
+        and "validate_e3gnn_comm_phase(int iswap) const" in comm_brick_header
+        and "validate_e3gnn_sendlist_index(int iswap, int index) const"
+        in comm_brick_header
+        and "void CommBrick::validate_e3gnn_comm_phase(int iswap) const"
+        in comm_brick_cpp
+        and "iswap < kE3GnnFirstCommPhase" in comm_brick_cpp
+        and "iswap >= nswap" in comm_brick_cpp
+        and "iswap >= kE3GnnCommPhaseLimit" in comm_brick_cpp
+        and "error->all(FLERR, kE3GnnCommPhaseRangeError)" in comm_brick_cpp
+        and "index < kE3GnnFirstSendlistIndex" in comm_brick_cpp
+        and "index >= sendnum[iswap]" in comm_brick_cpp
+        and "error->all(FLERR, kE3GnnSendlistIndexRangeError)"
+        in comm_brick_cpp
+        and comm_brick_cpp.count("validate_e3gnn_comm_phase(iswap);") >= 6
+        and "validate_e3gnn_sendlist_index(iswap, index);" in comm_brick_cpp,
+        "CommBrick e3gnn topology accessors must validate phase and list indexes",
+    )
     for accessor_name in (
         "e3gnn_nswap",
         "e3gnn_sendnum",
