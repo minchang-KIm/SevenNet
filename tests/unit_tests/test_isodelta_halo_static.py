@@ -213,11 +213,23 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         """Cache tag signatures should validate atom indexes before tag reads."""
         self.assertIn("kIsoDeltaHaloGraphAtomIndexError", self.cpp)
         self.assertIn("checked_graph_atom_index", self.cpp)
+        self.assertIn("checked_graph_index_capacity", self.cpp)
         self.assertIn("graph_index_to_i == nullptr", self.cpp)
+        self.assertIn("graph_idx >= graph_index_capacity", self.cpp)
+        self.assertIn(
+            "static_cast<long long>(nlocal) + static_cast<long long>(ghost_node_count)",
+            self.cpp,
+        )
+        self.assertIn(
+            "const int graph_index_capacity =\n"
+            "      checked_graph_index_capacity(nlocal, ghost_node_num, error);",
+            self.cpp,
+        )
         self.assertGreaterEqual(
             self.cpp.count(
                 "checked_graph_atom_index(\n"
-                "        graph_index_to_i, graph_idx, atom_array_capacity, error)"
+                "        graph_index_to_i, graph_idx, graph_index_capacity, atom_array_capacity,\n"
+                "        error)"
             ),
             2,
         )

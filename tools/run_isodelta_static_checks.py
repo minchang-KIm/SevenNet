@@ -422,10 +422,17 @@ def main() -> None:
     _require(
         "kIsoDeltaHaloGraphAtomIndexError" in cpp
         and "checked_graph_atom_index" in cpp
+        and "checked_graph_index_capacity" in cpp
         and "graph_index_to_i == nullptr" in cpp
+        and "graph_idx >= graph_index_capacity" in cpp
+        and "static_cast<long long>(nlocal) + static_cast<long long>(ghost_node_count)"
+        in cpp
+        and "const int graph_index_capacity =\n      checked_graph_index_capacity(nlocal, ghost_node_num, error);"
+        in cpp
         and cpp.count(
             "checked_graph_atom_index(\n"
-            "        graph_index_to_i, graph_idx, atom_array_capacity, error)"
+            "        graph_index_to_i, graph_idx, graph_index_capacity, atom_array_capacity,\n"
+            "        error)"
         )
         >= 2
         and cpp.count("validate_comm_atom_index(atom_idx, atom_array_capacity, error);")

@@ -226,9 +226,28 @@ void validate_comm_atom_index(int atom_index, int atom_array_capacity,
   }
 }
 
+int checked_graph_index_capacity(int nlocal, int ghost_node_count,
+                                 Error *error) {
+  if (nlocal < kMinimumAtomArrayIndex ||
+      ghost_node_count < kMinimumAtomArrayIndex) {
+    error->all(FLERR, kIsoDeltaHaloGraphAtomIndexError);
+  }
+  const long long graph_index_capacity =
+      static_cast<long long>(nlocal) + static_cast<long long>(ghost_node_count);
+  if (graph_index_capacity > std::numeric_limits<int>::max()) {
+    error->all(FLERR, kIsoDeltaHaloGraphAtomIndexError);
+  }
+  return static_cast<int>(graph_index_capacity);
+}
+
 int checked_graph_atom_index(const int *graph_index_to_i, int graph_idx,
-                             int atom_array_capacity, Error *error) {
+                             int graph_index_capacity, int atom_array_capacity,
+                             Error *error) {
   if (graph_index_to_i == nullptr) {
+    error->all(FLERR, kIsoDeltaHaloGraphAtomIndexError);
+  }
+  if (graph_idx < kMinimumAtomArrayIndex ||
+      graph_idx >= graph_index_capacity) {
     error->all(FLERR, kIsoDeltaHaloGraphAtomIndexError);
   }
   const int atom_idx = graph_index_to_i[graph_idx];
@@ -1159,9 +1178,12 @@ bool PairE3GNNParallel::try_reuse_comm_preprocess_cache(
 
   tagint *tag = atom->tag;
   const int atom_array_capacity = atom->nmax;
+  const int graph_index_capacity =
+      checked_graph_index_capacity(nlocal, ghost_node_num, error);
   for (int graph_idx = 0; graph_idx < graph_size; graph_idx++) {
     const int atom_idx = checked_graph_atom_index(
-        graph_index_to_i, graph_idx, atom_array_capacity, error);
+        graph_index_to_i, graph_idx, graph_index_capacity, atom_array_capacity,
+        error);
     if (tag[atom_idx] != comm_cache_graph_tags[graph_idx]) {
       record_comm_cache_miss(CommCacheMissReason::kTagOrderChanged);
       invalidate_comm_preprocess_cache();
@@ -1230,11 +1252,14 @@ void PairE3GNNParallel::store_comm_preprocess_cache(
 
   tagint *tag = atom->tag;
   const int atom_array_capacity = atom->nmax;
+  const int graph_index_capacity =
+      checked_graph_index_capacity(nlocal, ghost_node_num, error);
   comm_cache_graph_tags.clear();
   comm_cache_graph_tags.reserve(graph_size);
   for (int graph_idx = 0; graph_idx < graph_size; graph_idx++) {
     const int atom_idx = checked_graph_atom_index(
-        graph_index_to_i, graph_idx, atom_array_capacity, error);
+        graph_index_to_i, graph_idx, graph_index_capacity, atom_array_capacity,
+        error);
     comm_cache_graph_tags.push_back(tag[atom_idx]);
   }
 
