@@ -1220,6 +1220,8 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_repeat_timing_value_drift"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_speedup_uncertainty_drift"
+        in cluster_suite_test
         and "test_run_suite_verifies_output_bundle_after_writing" in cluster_suite_test
         and "test_write_slurm_script_rejects_collect_only_pipeline_launcher" in cluster_suite_test
         and "CASE_STATUS_REUSED" in cluster_suite
@@ -1288,6 +1290,11 @@ def main() -> None:
         and "_repeat_timing_rows_from_summary" in cluster_suite
         and "_require_repeat_timing_csv" in cluster_suite
         and "_require_repeat_timing_markdown" in cluster_suite
+        and "PAPER_SPEEDUP_UNCERTAINTY_COLUMNS" in cluster_suite
+        and "_speedup_uncertainty_rows" in cluster_suite
+        and "_speedup_uncertainty_rows_from_summary" in cluster_suite
+        and "_require_speedup_uncertainty_csv" in cluster_suite
+        and "_require_speedup_uncertainty_markdown" in cluster_suite
         and "_require_paper_artifact_semantics" in cluster_suite
         and "verified_paper_artifact_semantic_count" in cluster_suite
         and "_require_svg_document" in cluster_suite
@@ -1321,6 +1328,8 @@ def main() -> None:
         and "command_timing.md" in cluster_suite
         and "repeat_timing.csv" in cluster_suite
         and "repeat_timing.md" in cluster_suite
+        and "speedup_uncertainty.csv" in cluster_suite
+        and "speedup_uncertainty.md" in cluster_suite
         and "speedup_by_case.svg" in cluster_suite
         and "write_template" in cluster_suite
         and "ABLATION_MODE_CHOICES" in cluster_suite
@@ -1532,6 +1541,7 @@ def main() -> None:
         and "correlation.csv" in doc
         and "command_timing.csv" in doc
         and "repeat_timing.csv" in doc
+        and "speedup_uncertainty.csv" in doc
         and "speedup_by_case.svg" in doc
         and "`ablation_mode = \"paired\"`" in doc
         and "`--ablation-mode-override`" in doc
@@ -1704,6 +1714,8 @@ def main() -> None:
         and "`summary[\"commands\"]`" in doc
         and "`repeat_timing.csv`/`repeat_timing.md` must" in doc
         and "source timing evidence" in doc
+        and "`speedup_uncertainty.csv`/`speedup_uncertainty.md` must" in doc
+        and "paper-ready CI table" in doc
         and "Each SVG figure must parse as an SVG document" in doc
         and "speedup chart must include every measured-speedup" in doc
         and "scatter plots must contain the same" in doc

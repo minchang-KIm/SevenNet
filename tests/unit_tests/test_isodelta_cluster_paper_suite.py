@@ -491,6 +491,8 @@ def _write_required_paper_artifacts(
     command_timing_markdown = tables_dir / "command_timing.md"
     repeat_timing_csv = tables_dir / "repeat_timing.csv"
     repeat_timing_markdown = tables_dir / "repeat_timing.md"
+    speedup_uncertainty_csv = tables_dir / "speedup_uncertainty.csv"
+    speedup_uncertainty_markdown = tables_dir / "speedup_uncertainty.md"
     speedup_svg = figures_dir / "speedup_by_case.svg"
     hit_rate_svg = figures_dir / "hit_rate_vs_speedup.svg"
     trace_svg = figures_dir / "trace_metadata_fraction_vs_speedup.svg"
@@ -547,6 +549,15 @@ def _write_required_paper_artifacts(
         }
         for record in command_records
     ]
+    uncertainty_rows = [
+        {
+            column_name: record.get(
+                isodelta_cluster_suite._case_summary_field(column_name)
+            )
+            for column_name in isodelta_cluster_suite.PAPER_SPEEDUP_UNCERTAINTY_COLUMNS
+        }
+        for record in case_records
+    ]
     isodelta_cluster_suite.write_csv(
         case_summary_csv,
         case_rows,
@@ -596,6 +607,22 @@ def _write_required_paper_artifacts(
             "repeat_timing_markdown"
         ],
     )
+    isodelta_cluster_suite.write_csv(
+        speedup_uncertainty_csv,
+        uncertainty_rows,
+        fieldnames=isodelta_cluster_suite.PAPER_SPEEDUP_UNCERTAINTY_COLUMNS,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+            "speedup_uncertainty_csv"
+        ],
+    )
+    isodelta_cluster_suite.write_markdown_table(
+        speedup_uncertainty_markdown,
+        uncertainty_rows,
+        fieldnames=isodelta_cluster_suite.PAPER_SPEEDUP_UNCERTAINTY_COLUMNS,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+            "speedup_uncertainty_markdown"
+        ],
+    )
     speedup_svg.write_text(
         isodelta_cluster_suite._empty_svg(
             isodelta_cluster_suite.SPEEDUP_SVG_EMPTY_MESSAGE,
@@ -632,6 +659,8 @@ def _write_required_paper_artifacts(
         "command_timing_markdown": command_timing_markdown,
         "repeat_timing_csv": repeat_timing_csv,
         "repeat_timing_markdown": repeat_timing_markdown,
+        "speedup_uncertainty_csv": speedup_uncertainty_csv,
+        "speedup_uncertainty_markdown": speedup_uncertainty_markdown,
         "speedup_svg": speedup_svg,
         "hit_rate_svg": hit_rate_svg,
         "trace_svg": trace_svg,
@@ -1630,6 +1659,81 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 r"repeat_timing\.csv\[0\]\.elapsed_seconds must match source timing evidence",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_speedup_uncertainty_drift(self) -> None:
+        """The uncertainty appendix table should match summary case statistics."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_record = _summary_case_record(
+                "case",
+                model="NequIP",
+                kind="external_pair",
+                baseline_timing_count=2,
+                enabled_timing_count=2,
+                baseline_mean_seconds=BASELINE_LOOP_TIME_SECONDS,
+                enabled_mean_seconds=ISODELTA_LOOP_TIME_SECONDS,
+                baseline_mean_95ci_half_width_seconds=1.0,
+                enabled_mean_95ci_half_width_seconds=1.0,
+                speedup_vs_disabled_cache=EXPECTED_SPEEDUP,
+                speedup_95ci_lower_bound=1.0,
+                speedup_95ci_upper_bound=1.4,
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=(case_record,),
+            )
+            uncertainty_csv = output_dir / "tables" / "speedup_uncertainty.csv"
+            drifted_row = {
+                column_name: case_record.get(
+                    isodelta_cluster_suite._case_summary_field(column_name)
+                )
+                for column_name in isodelta_cluster_suite.PAPER_SPEEDUP_UNCERTAINTY_COLUMNS
+            }
+            drifted_row["speedup_95ci_lower_bound"] = 0.5
+            isodelta_cluster_suite.write_csv(
+                uncertainty_csv,
+                [drifted_row],
+                fieldnames=isodelta_cluster_suite.PAPER_SPEEDUP_UNCERTAINTY_COLUMNS,
+                comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                    "speedup_uncertainty_csv"
+                ],
+            )
+            artifact_fingerprints["speedup_uncertainty_csv"] = (
+                isodelta_cluster_suite.generated_artifact_record(uncertainty_csv)
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [case_record],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    r"speedup_uncertainty\.csv\[0\]\."
+                    r"speedup_95ci_lower_bound must match summary cases"
+                ),
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -5373,6 +5477,7 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             correlation_csv = output_dir / "tables" / "correlation.csv"
             repeat_timing_csv = output_dir / "tables" / "repeat_timing.csv"
             repeat_timing_markdown = output_dir / "tables" / "repeat_timing.md"
+            speedup_uncertainty_csv = output_dir / "tables" / "speedup_uncertainty.csv"
             speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
             manifest_snapshot = output_dir / "isodelta_cluster_suite_manifest.toml"
 
@@ -5383,16 +5488,21 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             correlation_exists = correlation_csv.exists()
             repeat_timing_exists = repeat_timing_csv.exists()
             repeat_timing_markdown_exists = repeat_timing_markdown.exists()
+            speedup_uncertainty_exists = speedup_uncertainty_csv.exists()
             speedup_svg_exists = speedup_svg.exists()
             manifest_snapshot_exists = manifest_snapshot.exists()
             case_summary_text = case_summary_csv.read_text(encoding="utf-8")
             repeat_timing_text = repeat_timing_csv.read_text(encoding="utf-8")
+            speedup_uncertainty_text = speedup_uncertainty_csv.read_text(encoding="utf-8")
             speedup_svg_text = speedup_svg.read_text(encoding="utf-8")
             manifest_snapshot_text = manifest_snapshot.read_text(encoding="utf-8")
             manifest_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
             environment_digest = hashlib.sha256(environment_snapshot.read_bytes()).hexdigest()
             case_summary_digest = hashlib.sha256(case_summary_csv.read_bytes()).hexdigest()
             repeat_timing_digest = hashlib.sha256(repeat_timing_csv.read_bytes()).hexdigest()
+            speedup_uncertainty_digest = hashlib.sha256(
+                speedup_uncertainty_csv.read_bytes()
+            ).hexdigest()
             manifest_snapshot_digest = hashlib.sha256(manifest_snapshot.read_bytes()).hexdigest()
             preflight_digest = hashlib.sha256(preflight_report_path.read_bytes()).hexdigest()
             plan_digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
@@ -5402,6 +5512,7 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             environment_size = environment_snapshot.stat().st_size
             case_summary_size = case_summary_csv.stat().st_size
             repeat_timing_size = repeat_timing_csv.stat().st_size
+            speedup_uncertainty_size = speedup_uncertainty_csv.stat().st_size
             manifest_snapshot_size = manifest_snapshot.stat().st_size
             preflight_size = preflight_report_path.stat().st_size
             plan_size = plan_path.stat().st_size
@@ -5434,6 +5545,7 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertTrue(correlation_exists)
         self.assertTrue(repeat_timing_exists)
         self.assertTrue(repeat_timing_markdown_exists)
+        self.assertTrue(speedup_uncertainty_exists)
         self.assertTrue(speedup_svg_exists)
         self.assertTrue(manifest_snapshot_exists)
         self.assertEqual(
@@ -5486,11 +5598,23 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertIn("external_timing_report", repeat_timing_text)
         self.assertIn("disabled", repeat_timing_text)
         self.assertIn("enabled", repeat_timing_text)
+        self.assertIn("speedup_95ci_lower_bound", speedup_uncertainty_text)
+        self.assertIn("baseline_mean_95ci_half_width_seconds", speedup_uncertainty_text)
+        self.assertIn("nequip-existing", speedup_uncertainty_text)
         self.assertTrue(
             repeat_timing_text.startswith(
                 isodelta_cluster_suite._csv_comment_line(
                     isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
                         "repeat_timing_csv"
+                    ]
+                )
+            )
+        )
+        self.assertTrue(
+            speedup_uncertainty_text.startswith(
+                isodelta_cluster_suite._csv_comment_line(
+                    isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                        "speedup_uncertainty_csv"
                     ]
                 )
             )
@@ -5568,6 +5692,14 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
         self.assertEqual(
             summary["artifact_fingerprints"]["repeat_timing_csv"]["size_bytes"],
             repeat_timing_size,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["speedup_uncertainty_csv"]["sha256"],
+            speedup_uncertainty_digest,
+        )
+        self.assertEqual(
+            summary["artifact_fingerprints"]["speedup_uncertainty_csv"]["size_bytes"],
+            speedup_uncertainty_size,
         )
         self.assertEqual(
             summary["artifact_fingerprints"]["manifest_snapshot"]["sha256"],

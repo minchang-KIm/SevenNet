@@ -718,6 +718,8 @@ After successful collection, the suite writes:
 - `tables/command_timing.md`
 - `tables/repeat_timing.csv`
 - `tables/repeat_timing.md`
+- `tables/speedup_uncertainty.csv`
+- `tables/speedup_uncertainty.md`
 - `figures/speedup_by_case.svg`
 - `figures/hit_rate_vs_speedup.svg`
 - `figures/trace_metadata_fraction_vs_speedup.svg`
@@ -787,6 +789,10 @@ per-repeat source timing evidence itself: SevenNet rows come from benchmark
 `baseline_times_seconds` and `enabled_times_seconds` in the external timing
 report. This gives the paper appendix the disabled/enabled timing samples
 behind the means, confidence intervals, speedup bounds, and correlation tables.
+The generated `speedup_uncertainty.csv` and `speedup_uncertainty.md` tables
+pull the repeat counts, baseline/enabled means, 95% CI half-widths, and
+conservative speedup lower/upper bounds into a compact appendix table for
+checking the numerical claim without scanning the wider case summary.
 Each command record also stores the
 working directory and a focused `tracked_env` snapshot for cache mode, CUDA,
 SLURM, and CPU thread variables. That makes a disabled/enabled MACE, NequIP, or
@@ -813,6 +819,9 @@ contain the same command rows as `summary["commands"]`.
 `repeat_timing.csv`/`repeat_timing.md` must match the raw source timing evidence
 protected by `evidence_fingerprints`, so changing a benchmark report or external
 timing report without regenerating the repeat table is rejected.
+`speedup_uncertainty.csv`/`speedup_uncertainty.md` must match the uncertainty
+fields in `summary["cases"]`, so the paper-ready CI table cannot drift from the
+JSON evidence.
 Every generated table must keep its explanatory comment.
 Each SVG figure must parse as an SVG document with width, height, viewBox, and the expected `<desc>` description;
 the speedup chart must include every measured-speedup case label from

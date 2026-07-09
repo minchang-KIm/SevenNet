@@ -224,6 +224,8 @@ PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS = (
     "case_summary_csv",
     "case_summary_markdown",
     "correlation_csv",
+    "speedup_uncertainty_csv",
+    "speedup_uncertainty_markdown",
     "speedup_svg",
     "hit_rate_svg",
     "trace_svg",
@@ -322,6 +324,8 @@ REQUIRED_PAPER_ARTIFACT_NAMES = (
     "command_timing_markdown",
     "repeat_timing_csv",
     "repeat_timing_markdown",
+    "speedup_uncertainty_csv",
+    "speedup_uncertainty_markdown",
     "speedup_svg",
     "hit_rate_svg",
     "trace_svg",
@@ -414,6 +418,14 @@ PAPER_ARTIFACT_COMMENTS = {
         "IsoDelta-Halo repeat-level timing table in Markdown for checking "
         "per-repeat baseline and enabled measurements."
     ),
+    "speedup_uncertainty_csv": (
+        "IsoDelta-Halo appendix table: per-case timing means, repeat counts, "
+        "and 95% confidence bounds for speedup claims."
+    ),
+    "speedup_uncertainty_markdown": (
+        "IsoDelta-Halo appendix table in Markdown for reviewing per-case "
+        "timing means, repeat counts, and 95% confidence bounds."
+    ),
     "speedup_svg": (
         "IsoDelta-Halo generated figure: measured speedup by case relative to "
         "the disabled-cache baseline."
@@ -448,6 +460,21 @@ PAPER_REPEAT_TIMING_COLUMNS = (
     "repeat_index",
     "elapsed_seconds",
     "returncode",
+)
+PAPER_SPEEDUP_UNCERTAINTY_COLUMNS = (
+    "case",
+    "model",
+    "kind",
+    "status",
+    "baseline_timing_count",
+    "enabled_timing_count",
+    "baseline_mean_seconds",
+    "enabled_mean_seconds",
+    "baseline_mean_95ci_half_width_seconds",
+    "enabled_mean_95ci_half_width_seconds",
+    "speedup_vs_disabled_cache",
+    "speedup_95ci_lower_bound",
+    "speedup_95ci_upper_bound",
 )
 BENCHMARK_TIMING_SOURCE = "benchmark_report"
 EXTERNAL_TIMING_SOURCE = "external_timing_report"
@@ -4161,6 +4188,100 @@ def _require_repeat_timing_markdown(
             )
 
 
+def _speedup_uncertainty_rows_from_summary(
+    summary_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return paper appendix uncertainty rows from summary case records."""
+    rows: list[dict[str, Any]] = []
+    for case_name, case_record in _summary_cases_by_name(summary_payload).items():
+        row: dict[str, Any] = {"case": case_name}
+        for column_name in PAPER_SPEEDUP_UNCERTAINTY_COLUMNS:
+            if column_name == "case":
+                continue
+            row[column_name] = case_record.get(_case_summary_field(column_name))
+        rows.append(row)
+    return rows
+
+
+def _require_speedup_uncertainty_csv(
+    path: Path,
+    summary_payload: dict[str, Any],
+) -> None:
+    """Verify that speedup uncertainty CSV rows match summary case records."""
+    _require_csv_artifact_comment(
+        path,
+        "speedup_uncertainty.csv",
+        "speedup_uncertainty_csv",
+    )
+    fieldnames, rows = _read_csv_rows(path, "speedup_uncertainty.csv")
+    _require_columns(
+        fieldnames,
+        PAPER_SPEEDUP_UNCERTAINTY_COLUMNS,
+        "speedup_uncertainty.csv",
+    )
+    expected_rows = _speedup_uncertainty_rows_from_summary(summary_payload)
+    _require(
+        len(rows) == len(expected_rows),
+        "speedup_uncertainty.csv: row count must match summary cases",
+    )
+    for index, expected_row in enumerate(expected_rows):
+        csv_row = rows[index]
+        for column_name in PAPER_SPEEDUP_UNCERTAINTY_COLUMNS:
+            expected_value = _format_csv_value(expected_row.get(column_name))
+            actual_value = csv_row.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                f"speedup_uncertainty.csv[{index}].{column_name} must match summary cases",
+            )
+
+
+def _require_speedup_uncertainty_markdown(
+    path: Path,
+    summary_payload: dict[str, Any],
+) -> None:
+    """Verify that speedup uncertainty Markdown rows match summary cases."""
+    _require_markdown_artifact_comment(
+        path,
+        "speedup_uncertainty.md",
+        "speedup_uncertainty_markdown",
+    )
+    lines = _markdown_table_lines(path)
+    expected_rows = _speedup_uncertainty_rows_from_summary(summary_payload)
+    _require(
+        len(lines) == len(expected_rows) + 2,
+        "speedup_uncertainty.md: row count must match summary cases plus header",
+    )
+    header = _markdown_cells(lines[0])
+    separator = _markdown_cells(lines[1])
+    _require_columns(
+        tuple(header),
+        PAPER_SPEEDUP_UNCERTAINTY_COLUMNS,
+        "speedup_uncertainty.md",
+    )
+    _require(
+        len(separator) == len(header),
+        "speedup_uncertainty.md: separator width must match header",
+    )
+    _require(
+        all(cell == "---" for cell in separator),
+        "speedup_uncertainty.md: separator row must contain markdown column markers",
+    )
+    for index, expected_row in enumerate(expected_rows):
+        cells = _markdown_cells(lines[index + 2])
+        _require(
+            len(cells) == len(header),
+            f"speedup_uncertainty.md[{index}]: row width must match header",
+        )
+        markdown_row = dict(zip(header, cells, strict=True))
+        for column_name in PAPER_SPEEDUP_UNCERTAINTY_COLUMNS:
+            expected_value = _format_table_value(expected_row.get(column_name))
+            actual_value = markdown_row.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                f"speedup_uncertainty.md[{index}].{column_name} must match summary cases",
+            )
+
+
 def _require_command_timing_csv(
     path: Path,
     summary_payload: dict[str, Any],
@@ -4416,6 +4537,14 @@ def _require_paper_artifact_semantics(
     _require_repeat_timing_markdown(
         resolved_artifact_paths["repeat_timing_markdown"],
         repeat_timing_rows,
+    )
+    _require_speedup_uncertainty_csv(
+        resolved_artifact_paths["speedup_uncertainty_csv"],
+        summary_payload,
+    )
+    _require_speedup_uncertainty_markdown(
+        resolved_artifact_paths["speedup_uncertainty_markdown"],
+        summary_payload,
     )
     _require_speedup_svg_semantics(resolved_artifact_paths["speedup_svg"], cases_by_name)
     _require_scatter_svg_semantics(
@@ -5644,6 +5773,12 @@ def build_run_plan(
             "case_summary_csv": str(config.output_dir / TABLES_DIR_NAME / "case_summary.csv"),
             "case_summary_markdown": str(config.output_dir / TABLES_DIR_NAME / "case_summary.md"),
             "correlation_csv": str(config.output_dir / TABLES_DIR_NAME / "correlation.csv"),
+            "speedup_uncertainty_csv": str(
+                config.output_dir / TABLES_DIR_NAME / "speedup_uncertainty.csv"
+            ),
+            "speedup_uncertainty_markdown": str(
+                config.output_dir / TABLES_DIR_NAME / "speedup_uncertainty.md"
+            ),
             "speedup_svg": str(config.output_dir / FIGURES_DIR_NAME / "speedup_by_case.svg"),
             "hit_rate_svg": str(config.output_dir / FIGURES_DIR_NAME / "hit_rate_vs_speedup.svg"),
             "trace_svg": str(
@@ -7354,6 +7489,34 @@ def _repeat_timing_rows(case_summaries: list[CaseSummary]) -> list[dict[str, Any
     return rows
 
 
+def _speedup_uncertainty_rows(
+    case_summaries: list[CaseSummary],
+) -> list[dict[str, Any]]:
+    """Return per-case timing uncertainty rows for the paper appendix."""
+    return [
+        {
+            "case": summary.case_name,
+            "model": summary.model,
+            "kind": summary.kind,
+            "status": summary.status,
+            "baseline_timing_count": summary.baseline_timing_count,
+            "enabled_timing_count": summary.enabled_timing_count,
+            "baseline_mean_seconds": summary.baseline_mean_seconds,
+            "enabled_mean_seconds": summary.enabled_mean_seconds,
+            "baseline_mean_95ci_half_width_seconds": (
+                summary.baseline_mean_95ci_half_width_seconds
+            ),
+            "enabled_mean_95ci_half_width_seconds": (
+                summary.enabled_mean_95ci_half_width_seconds
+            ),
+            "speedup_vs_disabled_cache": summary.speedup_vs_disabled_cache,
+            "speedup_95ci_lower_bound": summary.speedup_95ci_lower_bound,
+            "speedup_95ci_upper_bound": summary.speedup_95ci_upper_bound,
+        }
+        for summary in case_summaries
+    ]
+
+
 def write_csv(
     path: Path,
     rows: list[dict[str, Any]],
@@ -7657,6 +7820,7 @@ def write_paper_outputs(
     correlation_rows = build_correlation_rows(case_summaries)
     command_timing_rows = _command_timing_rows(command_records)
     repeat_timing_rows = _repeat_timing_rows(case_summaries)
+    speedup_uncertainty_rows = _speedup_uncertainty_rows(case_summaries)
     case_summary_csv = tables_dir / "case_summary.csv"
     case_summary_md = tables_dir / "case_summary.md"
     correlation_csv = tables_dir / "correlation.csv"
@@ -7664,6 +7828,8 @@ def write_paper_outputs(
     command_timing_md = tables_dir / "command_timing.md"
     repeat_timing_csv = tables_dir / "repeat_timing.csv"
     repeat_timing_md = tables_dir / "repeat_timing.md"
+    speedup_uncertainty_csv = tables_dir / "speedup_uncertainty.csv"
+    speedup_uncertainty_md = tables_dir / "speedup_uncertainty.md"
     write_csv(
         case_summary_csv,
         summary_rows,
@@ -7703,6 +7869,18 @@ def write_paper_outputs(
         fieldnames=PAPER_REPEAT_TIMING_COLUMNS,
         comment=PAPER_ARTIFACT_COMMENTS["repeat_timing_markdown"],
     )
+    write_csv(
+        speedup_uncertainty_csv,
+        speedup_uncertainty_rows,
+        fieldnames=PAPER_SPEEDUP_UNCERTAINTY_COLUMNS,
+        comment=PAPER_ARTIFACT_COMMENTS["speedup_uncertainty_csv"],
+    )
+    write_markdown_table(
+        speedup_uncertainty_md,
+        speedup_uncertainty_rows,
+        fieldnames=PAPER_SPEEDUP_UNCERTAINTY_COLUMNS,
+        comment=PAPER_ARTIFACT_COMMENTS["speedup_uncertainty_markdown"],
+    )
     speedup_svg = figures_dir / "speedup_by_case.svg"
     hit_rate_svg = figures_dir / "hit_rate_vs_speedup.svg"
     trace_svg = figures_dir / "trace_metadata_fraction_vs_speedup.svg"
@@ -7739,6 +7917,8 @@ def write_paper_outputs(
         "command_timing_markdown": command_timing_md,
         "repeat_timing_csv": repeat_timing_csv,
         "repeat_timing_markdown": repeat_timing_md,
+        "speedup_uncertainty_csv": speedup_uncertainty_csv,
+        "speedup_uncertainty_markdown": speedup_uncertainty_md,
         "speedup_svg": speedup_svg,
         "hit_rate_svg": hit_rate_svg,
         "trace_svg": trace_svg,
@@ -7800,6 +7980,8 @@ def write_paper_outputs(
         "command_timing_markdown": str(command_timing_md),
         "repeat_timing_csv": str(repeat_timing_csv),
         "repeat_timing_markdown": str(repeat_timing_md),
+        "speedup_uncertainty_csv": str(speedup_uncertainty_csv),
+        "speedup_uncertainty_markdown": str(speedup_uncertainty_md),
         "speedup_svg": str(speedup_svg),
         "hit_rate_svg": str(hit_rate_svg),
         "trace_svg": str(trace_svg),
