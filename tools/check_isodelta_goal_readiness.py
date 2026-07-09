@@ -109,6 +109,7 @@ REQUIRED_FILE_SNIPPETS = {
         "kIsoDeltaHaloAtomTagIndexError",
         "checked_atom_tag_lookup_size",
         "checked_atom_tag_index",
+        "checked_atom_tag_graph_index",
         "j &= NEIGHMASK;\n      const tagint jtag = tag[j];",
         "kIsoDeltaHaloGraphIndexRequiredError",
         "tag_to_graph_idx_ptr = nullptr;",

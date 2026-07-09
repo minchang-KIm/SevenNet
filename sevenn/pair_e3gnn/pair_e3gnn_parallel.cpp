@@ -313,6 +313,11 @@ size_t checked_atom_tag_index(tagint atom_tag, bigint atom_count,
   return static_cast<size_t>(atom_tag_value);
 }
 
+int checked_atom_tag_graph_index(const int *tag_to_graph_idx, tagint atom_tag,
+                                 bigint atom_count, Error *error) {
+  return tag_to_graph_idx[checked_atom_tag_index(atom_tag, atom_count, error)];
+}
+
 std::string normalize_iso_delta_halo_env_flag_value(const char *value) {
   if (value == nullptr) {
     return std::string();
@@ -1532,11 +1537,13 @@ void PairE3GNNParallel::pack_forward_init(int n, int *list_send,
 
   tagint *tag = atom->tag;
   const int atom_array_capacity = atom->nmax;
+  const bigint atom_count = atom->natoms;
 
   for (int i = 0; i < checked_count; i++) {
     const int list_i = list_send[i];
     validate_comm_atom_index(list_i, atom_array_capacity, error);
-    const int graph_idx = tag_to_graph_idx_ptr[tag[list_i]];
+    const int graph_idx = checked_atom_tag_graph_index(
+        tag_to_graph_idx_ptr, tag[list_i], atom_count, error);
 
     if (graph_idx != kInvalidGraphIndex) {
       // known atom (local atom + ghost atom inside cutoff)
@@ -1572,9 +1579,11 @@ void PairE3GNNParallel::unpack_forward_init(int n, int first, int comm_phase) {
   idx_map.reserve(static_cast<size_t>(checked_count));
 
   tagint *tag = atom->tag;
+  const bigint atom_count = atom->natoms;
 
   for (int i = first; i < last; i++) {
-    const int graph_idx = tag_to_graph_idx_ptr[tag[i]];
+    const int graph_idx = checked_atom_tag_graph_index(
+        tag_to_graph_idx_ptr, tag[i], atom_count, error);
     if (graph_idx != kInvalidGraphIndex) {
       idx_map.push_back(graph_idx);
     } else {

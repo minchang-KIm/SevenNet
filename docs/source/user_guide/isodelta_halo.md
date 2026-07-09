@@ -33,6 +33,9 @@ atom tags or types, so graph construction and the cached halo guards see the sam
 canonical atom index.
 The atom-tag lookup table size and every local or ghost atom-tag index are also
 checked before the graph builder writes `tag_to_graph_idx`.
+The communication preprocessing path reuses the same checked atom-tag helper
+before reading through the active `tag_to_graph_idx` pointer for pack and unpack
+index maps.
 The per-step graph-index pointer used by `CommBrick` pack/unpack initialization
 is reset after each compute step. If that communication path is entered without
 an active graph-index map, the runtime aborts with a named IsoDelta-Halo error

@@ -145,6 +145,7 @@ def main() -> None:
         and "kMinimumGlobalAtomCount" in cpp
         and "checked_atom_tag_lookup_size" in cpp
         and "checked_atom_tag_index" in cpp
+        and "checked_atom_tag_graph_index" in cpp
         and "std::numeric_limits<size_t>::max()" in cpp
         and "static_cast<unsigned long long>(atom_count)" in cpp
         and "checked_atom_tag_lookup_size(natoms, error)" in cpp
@@ -153,8 +154,17 @@ def main() -> None:
         and "const size_t jtag_index = checked_atom_tag_index(jtag, natoms, error);"
         in cpp
         and "tag_to_graph_idx[jtag_index]" in cpp
+        and "tag_to_graph_idx[checked_atom_tag_index(atom_tag, atom_count, error)]"
+        in cpp
+        and "const bigint atom_count = atom->natoms;" in cpp
+        and "checked_atom_tag_graph_index(\n        tag_to_graph_idx_ptr, tag[list_i], atom_count, error)"
+        in cpp
+        and "checked_atom_tag_graph_index(\n        tag_to_graph_idx_ptr, tag[i], atom_count, error)"
+        in cpp
         and "tag_to_graph_idx[static_cast<size_t>(itag)]" not in cpp
         and "tag_to_graph_idx[static_cast<size_t>(jtag)]" not in cpp
+        and "tag_to_graph_idx_ptr[tag[list_i]]" not in cpp
+        and "tag_to_graph_idx_ptr[tag[i]]" not in cpp
         and "static_cast<size_t>(natoms) + kAtomTagIndexBase" not in cpp,
         "graph atom tags must be checked before indexing the lookup table",
     )

@@ -82,6 +82,7 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("kMinimumGlobalAtomCount", self.cpp)
         self.assertIn("checked_atom_tag_lookup_size", self.cpp)
         self.assertIn("checked_atom_tag_index", self.cpp)
+        self.assertIn("checked_atom_tag_graph_index", self.cpp)
         self.assertIn("std::numeric_limits<size_t>::max()", self.cpp)
         self.assertIn("static_cast<unsigned long long>(atom_count)", self.cpp)
         self.assertIn("checked_atom_tag_lookup_size(natoms, error)", self.cpp)
@@ -97,6 +98,26 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertNotIn("tag_to_graph_idx[static_cast<size_t>(itag)]", self.cpp)
         self.assertNotIn("tag_to_graph_idx[static_cast<size_t>(jtag)]", self.cpp)
         self.assertNotIn("static_cast<size_t>(natoms) + kAtomTagIndexBase", self.cpp)
+
+    def test_comm_atom_tag_lookup_is_guarded(self) -> None:
+        """Communication preprocessing should validate tags before pointer lookup."""
+        self.assertIn(
+            "tag_to_graph_idx[checked_atom_tag_index(atom_tag, atom_count, error)]",
+            self.cpp,
+        )
+        self.assertIn("const bigint atom_count = atom->natoms;", self.cpp)
+        self.assertIn(
+            "checked_atom_tag_graph_index(\n"
+            "        tag_to_graph_idx_ptr, tag[list_i], atom_count, error)",
+            self.cpp,
+        )
+        self.assertIn(
+            "checked_atom_tag_graph_index(\n"
+            "        tag_to_graph_idx_ptr, tag[i], atom_count, error)",
+            self.cpp,
+        )
+        self.assertNotIn("tag_to_graph_idx_ptr[tag[list_i]]", self.cpp)
+        self.assertNotIn("tag_to_graph_idx_ptr[tag[i]]", self.cpp)
 
     def test_neighbor_indices_are_masked_before_tag_access(self) -> None:
         """Special neighbor bits should be stripped before reading atom arrays."""
