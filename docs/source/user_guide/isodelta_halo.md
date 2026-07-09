@@ -31,6 +31,9 @@ compiler-specific variable-length arrays or small per-rank stack limits. LAMMPS
 neighbor-list special bits are stripped with `NEIGHMASK` before the runtime reads
 atom tags or types, so graph construction and the cached halo guards see the same
 canonical atom index.
+Graph-node capacity, local and ghost atom-array indexes, neighbor-count-derived
+edge capacity, and every edge write index are checked before graph buffers are
+written.
 The atom-tag lookup table size and every local or ghost atom-tag index are also
 checked before the graph builder writes `tag_to_graph_idx`.
 The communication preprocessing path reuses the same checked atom-tag helper

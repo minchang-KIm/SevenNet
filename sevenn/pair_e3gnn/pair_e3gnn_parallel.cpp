@@ -28,7 +28,6 @@
 #include <limits>
 #include <list>
 #include <map>
-#include <numeric>
 #include <set>
 #include <string>
 
@@ -100,6 +99,8 @@ constexpr const char *kIsoDeltaHaloAtomTagLookupSizeError =
     "IsoDelta-Halo atom tag lookup table size is out of range";
 constexpr const char *kIsoDeltaHaloAtomTagIndexError =
     "IsoDelta-Halo atom tag index is out of range";
+constexpr const char *kIsoDeltaHaloEdgeBufferSizeError =
+    "IsoDelta-Halo edge buffer size is out of range";
 constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
@@ -117,6 +118,9 @@ constexpr int kMinimumFeatureWidth = 1;
 constexpr int kMinimumPayloadAtomCount = 0;
 constexpr int kMinimumCommInitCount = 0;
 constexpr int kMinimumAtomArrayIndex = 0;
+constexpr int kMinimumGraphNodeCount = 0;
+constexpr int kMinimumNeighborCount = 0;
+constexpr int kMinimumEdgeIndex = 0;
 constexpr int kTrashGraphSlotCount = 1;
 constexpr int kSpatialDimension = 3;
 constexpr int kNodeFeatureTensorRank = 2;
@@ -228,8 +232,8 @@ void validate_comm_atom_index(int atom_index, int atom_array_capacity,
 
 int checked_graph_index_capacity(int nlocal, int ghost_node_count,
                                  Error *error) {
-  if (nlocal < kMinimumAtomArrayIndex ||
-      ghost_node_count < kMinimumAtomArrayIndex) {
+  if (nlocal < kMinimumGraphNodeCount ||
+      ghost_node_count < kMinimumGraphNodeCount) {
     error->all(FLERR, kIsoDeltaHaloGraphAtomIndexError);
   }
   const long long graph_index_capacity =
@@ -240,19 +244,84 @@ int checked_graph_index_capacity(int nlocal, int ghost_node_count,
   return static_cast<int>(graph_index_capacity);
 }
 
+int checked_graph_buffer_index(int graph_idx, int graph_index_capacity,
+                               Error *error) {
+  if (graph_idx < kMinimumGraphNodeCount ||
+      graph_idx >= graph_index_capacity) {
+    error->all(FLERR, kIsoDeltaHaloGraphAtomIndexError);
+  }
+  return graph_idx;
+}
+
 int checked_graph_atom_index(const int *graph_index_to_i, int graph_idx,
                              int graph_index_capacity, int atom_array_capacity,
                              Error *error) {
   if (graph_index_to_i == nullptr) {
     error->all(FLERR, kIsoDeltaHaloGraphAtomIndexError);
   }
-  if (graph_idx < kMinimumAtomArrayIndex ||
-      graph_idx >= graph_index_capacity) {
-    error->all(FLERR, kIsoDeltaHaloGraphAtomIndexError);
-  }
-  const int atom_idx = graph_index_to_i[graph_idx];
+  const int checked_graph_idx =
+      checked_graph_buffer_index(graph_idx, graph_index_capacity, error);
+  const int atom_idx = graph_index_to_i[checked_graph_idx];
   validate_comm_atom_index(atom_idx, atom_array_capacity, error);
   return atom_idx;
+}
+
+int checked_edge_buffer_capacity(const int *numneigh, int local_atom_count,
+                                 Error *error) {
+  if (numneigh == nullptr || local_atom_count < kMinimumGraphNodeCount) {
+    error->all(FLERR, kIsoDeltaHaloEdgeBufferSizeError);
+  }
+
+  long long edge_capacity = 0;
+  for (int atom_index = 0; atom_index < local_atom_count; atom_index++) {
+    const int neighbor_count = numneigh[atom_index];
+    if (neighbor_count < kMinimumNeighborCount) {
+      error->all(FLERR, kIsoDeltaHaloEdgeBufferSizeError);
+    }
+    edge_capacity += static_cast<long long>(neighbor_count);
+    if (edge_capacity > std::numeric_limits<int>::max()) {
+      error->all(FLERR, kIsoDeltaHaloEdgeBufferSizeError);
+    }
+  }
+  return static_cast<int>(edge_capacity);
+}
+
+int checked_edge_buffer_index(int edge_index, int edge_capacity,
+                              Error *error) {
+  if (edge_index < kMinimumEdgeIndex || edge_index >= edge_capacity) {
+    error->all(FLERR, kIsoDeltaHaloEdgeBufferSizeError);
+  }
+  return edge_index;
+}
+
+size_t checked_edge_storage_element_count(int edge_capacity, Error *error) {
+  if (edge_capacity < kMinimumNeighborCount) {
+    error->all(FLERR, kIsoDeltaHaloEdgeBufferSizeError);
+  }
+  const auto edge_capacity_unsigned =
+      static_cast<unsigned long long>(edge_capacity);
+  const auto max_edge_capacity =
+      static_cast<unsigned long long>(std::numeric_limits<size_t>::max()) /
+      kSpatialDimension;
+  if (edge_capacity_unsigned > max_edge_capacity) {
+    error->all(FLERR, kIsoDeltaHaloEdgeBufferSizeError);
+  }
+  return static_cast<size_t>(edge_capacity) * kSpatialDimension;
+}
+
+size_t checked_edge_storage_offset(int edge_index, Error *error) {
+  if (edge_index < kMinimumEdgeIndex) {
+    error->all(FLERR, kIsoDeltaHaloEdgeBufferSizeError);
+  }
+  const auto edge_index_unsigned =
+      static_cast<unsigned long long>(edge_index);
+  const auto max_edge_index =
+      static_cast<unsigned long long>(std::numeric_limits<size_t>::max()) /
+      kSpatialDimension;
+  if (edge_index_unsigned > max_edge_index) {
+    error->all(FLERR, kIsoDeltaHaloEdgeBufferSizeError);
+  }
+  return static_cast<size_t>(edge_index) * kSpatialDimension;
 }
 
 int checked_extra_graph_index(int graph_size, size_t extra_graph_count,
@@ -554,7 +623,6 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   int *type = atom->type;
   int nlocal = list->inum; // same as nlocal
   int nghost = atom->nghost;
-  int ntotal = nlocal + nghost;
   int *ilist = list->ilist;
   int inum = list->inum;
 
@@ -578,18 +646,20 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   tag_to_graph_idx_ptr = tag_to_graph_idx.data();
 
   int graph_indexer = nlocal;
-  std::vector<int> graph_index_to_i(static_cast<size_t>(ntotal));
+  const int graph_index_capacity =
+      checked_graph_index_capacity(nlocal, nghost, error);
+  std::vector<int> graph_index_to_i(static_cast<size_t>(graph_index_capacity));
 
   int *numneigh = list->numneigh;      // j loop cond
   int **firstneigh = list->firstneigh; // j list
   const int nedges_upper_bound =
-      std::accumulate(numneigh, numneigh + nlocal, 0);
+      checked_edge_buffer_capacity(numneigh, nlocal, error);
 
   std::vector<long> node_type;
   std::vector<long> node_type_ghost;
 
   std::vector<float> edge_vec_storage(
-      static_cast<size_t>(nedges_upper_bound) * kSpatialDimension);
+      checked_edge_storage_element_count(nedges_upper_bound, error));
   std::vector<long> edge_idx_src(static_cast<size_t>(nedges_upper_bound));
   std::vector<long> edge_idx_dst(static_cast<size_t>(nedges_upper_bound));
 
@@ -597,10 +667,14 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   for (int ii = 0; ii < inum; ii++) {
     // populate tag_to_graph_idx of local atoms
     const int i = ilist[ii];
+    validate_comm_atom_index(i, atom->nmax, error);
+    const int local_graph_idx =
+        checked_graph_buffer_index(ii, graph_index_capacity, error);
     const tagint itag = tag[i];
     const int itype = type[i];
-    tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] = ii;
-    graph_index_to_i[ii] = i;
+    tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] =
+        local_graph_idx;
+    graph_index_to_i[local_graph_idx] = i;
     node_type.push_back(map[itype]);
   }
 
@@ -614,6 +688,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
     for (int jj = 0; jj < jnum; jj++) {
       int j = jlist[jj];
       j &= NEIGHMASK;
+      validate_comm_atom_index(j, atom->nmax, error);
       const tagint jtag = tag[j];
       const int jtype = type[j];
       // we have to calculate Rij to check cutoff in lammps side
@@ -631,17 +706,21 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
         const size_t jtag_index = checked_atom_tag_index(jtag, natoms, error);
         if (tag_to_graph_idx[jtag_index] == kInvalidGraphIndex) {
           // if j is ghost atom inside cutoff but first seen
-          tag_to_graph_idx[jtag_index] = graph_indexer;
-          graph_index_to_i[graph_indexer] = j;
+          const int ghost_graph_idx = checked_graph_buffer_index(
+              graph_indexer, graph_index_capacity, error);
+          tag_to_graph_idx[jtag_index] = ghost_graph_idx;
+          graph_index_to_i[ghost_graph_idx] = j;
           node_type_ghost.push_back(map[jtype]);
           graph_indexer++;
         }
 
         j_graph_idx = tag_to_graph_idx[jtag_index];
-        edge_idx_src[nedges] = i_graph_idx;
-        edge_idx_dst[nedges] = j_graph_idx;
+        const int edge_index =
+            checked_edge_buffer_index(nedges, nedges_upper_bound, error);
+        edge_idx_src[edge_index] = i_graph_idx;
+        edge_idx_dst[edge_index] = j_graph_idx;
         const size_t edge_offset =
-            static_cast<size_t>(nedges) * kSpatialDimension;
+            checked_edge_storage_offset(edge_index, error);
         edge_vec_storage[edge_offset + kXCoordinate] =
             static_cast<float>(delij[kXCoordinate]);
         edge_vec_storage[edge_offset + kYCoordinate] =

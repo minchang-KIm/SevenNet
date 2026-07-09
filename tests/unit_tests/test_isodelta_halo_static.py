@@ -69,11 +69,45 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("std::vector<long> edge_idx_dst", self.cpp)
         self.assertIn("tag_to_graph_idx.data()", self.cpp)
         self.assertIn("graph_index_to_i.data()", self.cpp)
+        self.assertIn("kIsoDeltaHaloEdgeBufferSizeError", self.cpp)
+        self.assertIn("kMinimumGraphNodeCount", self.cpp)
+        self.assertIn("kMinimumNeighborCount", self.cpp)
+        self.assertIn("kMinimumEdgeIndex", self.cpp)
+        self.assertIn("checked_graph_index_capacity", self.cpp)
+        self.assertIn("checked_graph_buffer_index", self.cpp)
+        self.assertIn("checked_edge_buffer_capacity", self.cpp)
+        self.assertIn("checked_edge_buffer_index", self.cpp)
+        self.assertIn("checked_edge_storage_element_count", self.cpp)
+        self.assertIn("checked_edge_storage_offset", self.cpp)
+        self.assertIn(
+            "checked_graph_index_capacity(nlocal, nghost, error)",
+            self.cpp,
+        )
+        self.assertIn("checked_edge_buffer_capacity(numneigh, nlocal, error)", self.cpp)
+        self.assertIn(
+            "checked_edge_storage_element_count(nedges_upper_bound, error)",
+            self.cpp,
+        )
+        self.assertIn("checked_graph_buffer_index(ii, graph_index_capacity, error)", self.cpp)
+        self.assertIn(
+            "checked_graph_buffer_index(\n"
+            "              graph_indexer, graph_index_capacity, error)",
+            self.cpp,
+        )
+        self.assertIn("checked_edge_buffer_index(nedges, nedges_upper_bound, error)", self.cpp)
+        self.assertIn("checked_edge_storage_offset(edge_index, error)", self.cpp)
+        self.assertIn("edge_idx_src[edge_index] = i_graph_idx;", self.cpp)
+        self.assertIn("edge_idx_dst[edge_index] = j_graph_idx;", self.cpp)
         self.assertNotIn("int tag_to_graph_idx[natoms + 1]", self.cpp)
+        self.assertNotIn("int ntotal = nlocal + nghost", self.cpp)
+        self.assertNotIn("std::accumulate(numneigh", self.cpp)
         self.assertNotIn("int graph_index_to_i[ntotal]", self.cpp)
+        self.assertNotIn("graph_index_to_i[graph_indexer] = j;", self.cpp)
         self.assertNotIn("float edge_vec[nedges_upper_bound][3]", self.cpp)
         self.assertNotIn("long edge_idx_src[nedges_upper_bound]", self.cpp)
         self.assertNotIn("long edge_idx_dst[nedges_upper_bound]", self.cpp)
+        self.assertNotIn("edge_idx_src[nedges] = i_graph_idx;", self.cpp)
+        self.assertNotIn("edge_idx_dst[nedges] = j_graph_idx;", self.cpp)
 
     def test_graph_build_atom_tag_lookup_is_guarded(self) -> None:
         """Atom tags should be checked before indexing the graph lookup table."""
@@ -87,7 +121,8 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("static_cast<unsigned long long>(atom_count)", self.cpp)
         self.assertIn("checked_atom_tag_lookup_size(natoms, error)", self.cpp)
         self.assertIn(
-            "tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] = ii;",
+            "tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] =\n"
+            "        local_graph_idx;",
             self.cpp,
         )
         self.assertIn(
@@ -121,7 +156,13 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
 
     def test_neighbor_indices_are_masked_before_tag_access(self) -> None:
         """Special neighbor bits should be stripped before reading atom arrays."""
-        self.assertIn("j &= NEIGHMASK;\n      const tagint jtag = tag[j];", self.cpp)
+        self.assertIn(
+            "j &= NEIGHMASK;\n"
+            "      validate_comm_atom_index(j, atom->nmax, error);\n"
+            "      const tagint jtag = tag[j];",
+            self.cpp,
+        )
+        self.assertIn("validate_comm_atom_index(i, atom->nmax, error);", self.cpp)
         self.assertNotIn("const int jtag = tag[j];\n      j &= NEIGHMASK;", self.cpp)
 
     def test_graph_index_pointer_lifetime_is_guarded(self) -> None:

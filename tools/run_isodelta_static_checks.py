@@ -132,11 +132,36 @@ def main() -> None:
         and "std::vector<long> edge_idx_dst" in cpp
         and "tag_to_graph_idx.data()" in cpp
         and "graph_index_to_i.data()" in cpp
+        and "kIsoDeltaHaloEdgeBufferSizeError" in cpp
+        and "kMinimumGraphNodeCount" in cpp
+        and "kMinimumNeighborCount" in cpp
+        and "kMinimumEdgeIndex" in cpp
+        and "checked_graph_index_capacity" in cpp
+        and "checked_graph_buffer_index" in cpp
+        and "checked_edge_buffer_capacity" in cpp
+        and "checked_edge_buffer_index" in cpp
+        and "checked_edge_storage_element_count" in cpp
+        and "checked_edge_storage_offset" in cpp
+        and "checked_graph_index_capacity(nlocal, nghost, error)" in cpp
+        and "checked_edge_buffer_capacity(numneigh, nlocal, error)" in cpp
+        and "checked_edge_storage_element_count(nedges_upper_bound, error)" in cpp
+        and "checked_graph_buffer_index(ii, graph_index_capacity, error)" in cpp
+        and "checked_graph_buffer_index(\n              graph_indexer, graph_index_capacity, error)"
+        in cpp
+        and "checked_edge_buffer_index(nedges, nedges_upper_bound, error)" in cpp
+        and "checked_edge_storage_offset(edge_index, error)" in cpp
+        and "edge_idx_src[edge_index] = i_graph_idx;" in cpp
+        and "edge_idx_dst[edge_index] = j_graph_idx;" in cpp
         and "int tag_to_graph_idx[natoms + 1]" not in cpp
+        and "int ntotal = nlocal + nghost" not in cpp
+        and "std::accumulate(numneigh" not in cpp
         and "int graph_index_to_i[ntotal]" not in cpp
+        and "graph_index_to_i[graph_indexer] = j;" not in cpp
         and "float edge_vec[nedges_upper_bound][3]" not in cpp
         and "long edge_idx_src[nedges_upper_bound]" not in cpp
-        and "long edge_idx_dst[nedges_upper_bound]" not in cpp,
+        and "long edge_idx_dst[nedges_upper_bound]" not in cpp
+        and "edge_idx_src[nedges] = i_graph_idx;" not in cpp
+        and "edge_idx_dst[nedges] = j_graph_idx;" not in cpp,
         "runtime-sized graph buffers must be heap-backed and named",
     )
     _require(
@@ -149,7 +174,7 @@ def main() -> None:
         and "std::numeric_limits<size_t>::max()" in cpp
         and "static_cast<unsigned long long>(atom_count)" in cpp
         and "checked_atom_tag_lookup_size(natoms, error)" in cpp
-        and "tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] = ii;"
+        and "tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] =\n        local_graph_idx;"
         in cpp
         and "const size_t jtag_index = checked_atom_tag_index(jtag, natoms, error);"
         in cpp
@@ -169,7 +194,9 @@ def main() -> None:
         "graph atom tags must be checked before indexing the lookup table",
     )
     _require(
-        "j &= NEIGHMASK;\n      const tagint jtag = tag[j];" in cpp
+        "j &= NEIGHMASK;\n      validate_comm_atom_index(j, atom->nmax, error);\n      const tagint jtag = tag[j];"
+        in cpp
+        and "validate_comm_atom_index(i, atom->nmax, error);" in cpp
         and "const int jtag = tag[j];\n      j &= NEIGHMASK;" not in cpp,
         "neighbor special bits must be masked before tag access",
     )
