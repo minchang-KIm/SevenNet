@@ -201,6 +201,40 @@ def main() -> None:
         "neighbor special bits must be masked before tag access",
     )
     _require(
+        "kIsoDeltaHaloAtomTypeMapError" in cpp
+        and "kFirstLammpsAtomType" in cpp
+        and "kUnmappedAtomType" in cpp
+        and "initialize_atom_type_map" in cpp
+        and "checked_lammps_atom_type" in cpp
+        and "checked_model_atom_type" in cpp
+        and "type_map[atom_type] = kUnmappedAtomType;" in cpp
+        and "atom_type < kFirstLammpsAtomType" in cpp
+        and "atom_type > atom_type_count" in cpp
+        and "model_atom_type == kUnmappedAtomType" in cpp
+        and "n + kFirstLammpsAtomType" in cpp
+        and "initialize_atom_type_map(map, n, error);" in cpp
+        and "const int atom_type_count = atom->ntypes;" in cpp
+        and "checked_model_atom_type(map, itype, atom_type_count, error)" in cpp
+        and "const int j_model_type =\n          checked_model_atom_type(map, jtype, atom_type_count, error);"
+        in cpp
+        and "node_type_ghost.push_back(j_model_type);" in cpp
+        and "i + kFirstLammpsAtomType" in cpp
+        and "map[lammps_atom_type] = j;" in cpp
+        and "map[i] != kUnmappedAtomType" in cpp
+        and "map[j] != kUnmappedAtomType" in cpp
+        and "for (int i = kFirstLammpsAtomType; i <= ntypes; i++)" in cpp
+        and "for (int j = kFirstLammpsAtomType; j <= ntypes; j++)" in cpp
+        and "node_type.push_back(map[itype]);" not in cpp
+        and "node_type_ghost.push_back(map[jtype]);" not in cpp
+        and "map[i + 1] = j" not in cpp
+        and "memory->create(map, n + 1" not in cpp
+        and "for (int i = 1; i <= ntypes; i++)" not in cpp
+        and "for (int j = 1; j <= ntypes; j++)" not in cpp
+        and "map[i] >= 0" not in cpp
+        and "map[j] >= 0" not in cpp,
+        "atom type maps must be initialized and checked before model lookup",
+    )
+    _require(
         "kIsoDeltaHaloGraphIndexRequiredError" in cpp
         and "tag_to_graph_idx_ptr = nullptr;" in cpp
         and "if (tag_to_graph_idx_ptr == nullptr)" in cpp

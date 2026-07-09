@@ -34,6 +34,9 @@ canonical atom index.
 Graph-node capacity, local and ghost atom-array indexes, neighbor-count-derived
 edge capacity, and every edge write index are checked before graph buffers are
 written.
+LAMMPS atom types are mapped to SevenNet species only after the type map is
+initialized, the atom type is confirmed to be in range, and the mapped model
+type is confirmed to exist.
 The atom-tag lookup table size and every local or ghost atom-tag index are also
 checked before the graph builder writes `tag_to_graph_idx`.
 The communication preprocessing path reuses the same checked atom-tag helper

@@ -101,6 +101,8 @@ constexpr const char *kIsoDeltaHaloAtomTagIndexError =
     "IsoDelta-Halo atom tag index is out of range";
 constexpr const char *kIsoDeltaHaloEdgeBufferSizeError =
     "IsoDelta-Halo edge buffer size is out of range";
+constexpr const char *kIsoDeltaHaloAtomTypeMapError =
+    "IsoDelta-Halo atom type map is invalid";
 constexpr const char *kCudaSendBufferAllocationError =
     "PairE3GNNParallel: CUDA send buffer allocation failed";
 constexpr const char *kCudaRecvBufferAllocationError =
@@ -121,6 +123,8 @@ constexpr int kMinimumAtomArrayIndex = 0;
 constexpr int kMinimumGraphNodeCount = 0;
 constexpr int kMinimumNeighborCount = 0;
 constexpr int kMinimumEdgeIndex = 0;
+constexpr int kFirstLammpsAtomType = 1;
+constexpr int kUnmappedAtomType = -1;
 constexpr int kTrashGraphSlotCount = 1;
 constexpr int kSpatialDimension = 3;
 constexpr int kNodeFeatureTensorRank = 2;
@@ -322,6 +326,38 @@ size_t checked_edge_storage_offset(int edge_index, Error *error) {
     error->all(FLERR, kIsoDeltaHaloEdgeBufferSizeError);
   }
   return static_cast<size_t>(edge_index) * kSpatialDimension;
+}
+
+void initialize_atom_type_map(int *type_map, int atom_type_count,
+                              Error *error) {
+  if (type_map == nullptr || atom_type_count < kMinimumGraphNodeCount) {
+    error->all(FLERR, kIsoDeltaHaloAtomTypeMapError);
+  }
+  for (int atom_type = 0; atom_type <= atom_type_count; atom_type++) {
+    type_map[atom_type] = kUnmappedAtomType;
+  }
+}
+
+int checked_lammps_atom_type(int atom_type, int atom_type_count,
+                             Error *error) {
+  if (atom_type < kFirstLammpsAtomType || atom_type > atom_type_count) {
+    error->all(FLERR, kIsoDeltaHaloAtomTypeMapError);
+  }
+  return atom_type;
+}
+
+int checked_model_atom_type(const int *type_map, int atom_type,
+                            int atom_type_count, Error *error) {
+  if (type_map == nullptr) {
+    error->all(FLERR, kIsoDeltaHaloAtomTypeMapError);
+  }
+  const int checked_atom_type =
+      checked_lammps_atom_type(atom_type, atom_type_count, error);
+  const int model_atom_type = type_map[checked_atom_type];
+  if (model_atom_type == kUnmappedAtomType) {
+    error->all(FLERR, kIsoDeltaHaloAtomTypeMapError);
+  }
+  return model_atom_type;
 }
 
 int checked_extra_graph_index(int graph_size, size_t extra_graph_count,
@@ -621,6 +657,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   double **x = atom->x;
   double **f = atom->f;
   int *type = atom->type;
+  const int atom_type_count = atom->ntypes;
   int nlocal = list->inum; // same as nlocal
   int nghost = atom->nghost;
   int *ilist = list->ilist;
@@ -675,7 +712,8 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
     tag_to_graph_idx[checked_atom_tag_index(itag, natoms, error)] =
         local_graph_idx;
     graph_index_to_i[local_graph_idx] = i;
-    node_type.push_back(map[itype]);
+    node_type.push_back(
+        checked_model_atom_type(map, itype, atom_type_count, error));
   }
 
   // loop over neighbors, build graph
@@ -691,6 +729,8 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
       validate_comm_atom_index(j, atom->nmax, error);
       const tagint jtag = tag[j];
       const int jtype = type[j];
+      const int j_model_type =
+          checked_model_atom_type(map, jtype, atom_type_count, error);
       // we have to calculate Rij to check cutoff in lammps side
       const double delij[kSpatialDimension] = {
           x[j][kXCoordinate] - x[i][kXCoordinate],
@@ -710,7 +750,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
               graph_indexer, graph_index_capacity, error);
           tag_to_graph_idx[jtag_index] = ghost_graph_idx;
           graph_index_to_i[ghost_graph_idx] = j;
-          node_type_ghost.push_back(map[jtype]);
+          node_type_ghost.push_back(j_model_type);
           graph_indexer++;
         }
 
@@ -972,9 +1012,12 @@ void PairE3GNNParallel::allocate() {
   allocated = 1;
   int n = atom->ntypes;
 
-  memory->create(setflag, n + 1, n + 1, "pair:setflag");
-  memory->create(cutsq, n + 1, n + 1, "pair:cutsq");
-  memory->create(map, n + 1, "pair:map");
+  memory->create(setflag, n + kFirstLammpsAtomType,
+                 n + kFirstLammpsAtomType, "pair:setflag");
+  memory->create(cutsq, n + kFirstLammpsAtomType,
+                 n + kFirstLammpsAtomType, "pair:cutsq");
+  memory->create(map, n + kFirstLammpsAtomType, "pair:map");
+  initialize_atom_type_map(map, n, error);
 }
 
 // global settings for pair_style
@@ -1081,13 +1124,15 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
     found_flag = false;
     for (int j = 0; j < chem_vec.size(); j++) {
       if (chem_vec[j].compare(arg[i + chem_arg_i]) == 0) {
-        map[i + 1] = j; // store from 1, (not 0)
+        const int lammps_atom_type = checked_lammps_atom_type(
+            i + kFirstLammpsAtomType, ntypes, error);
+        map[lammps_atom_type] = j; // LAMMPS atom types are 1-based.
         found_flag = true;
         if (lmp->logfile) {
           fprintf(lmp->logfile, "Chemical specie '%s' is assigned to type %d\n",
-                  arg[i + chem_arg_i], i + 1);
-          break;
+                  arg[i + chem_arg_i], lammps_atom_type);
         }
+        break;
       }
     }
     if (!found_flag) {
@@ -1096,9 +1141,9 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
     }
   }
 
-  for (int i = 1; i <= ntypes; i++) {
-    for (int j = 1; j <= ntypes; j++) {
-      if ((map[i] >= 0) && (map[j] >= 0)) {
+  for (int i = kFirstLammpsAtomType; i <= ntypes; i++) {
+    for (int j = kFirstLammpsAtomType; j <= ntypes; j++) {
+      if ((map[i] != kUnmappedAtomType) && (map[j] != kUnmappedAtomType)) {
         setflag[i][j] = 1;
         cutsq[i][j] = cutoff * cutoff;
       }

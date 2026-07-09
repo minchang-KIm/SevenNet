@@ -165,6 +165,46 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("validate_comm_atom_index(i, atom->nmax, error);", self.cpp)
         self.assertNotIn("const int jtag = tag[j];\n      j &= NEIGHMASK;", self.cpp)
 
+    def test_atom_type_map_is_guarded(self) -> None:
+        """LAMMPS atom types should be validated before SevenNet type lookup."""
+        self.assertIn("kIsoDeltaHaloAtomTypeMapError", self.cpp)
+        self.assertIn("kFirstLammpsAtomType", self.cpp)
+        self.assertIn("kUnmappedAtomType", self.cpp)
+        self.assertIn("initialize_atom_type_map", self.cpp)
+        self.assertIn("checked_lammps_atom_type", self.cpp)
+        self.assertIn("checked_model_atom_type", self.cpp)
+        self.assertIn("type_map[atom_type] = kUnmappedAtomType;", self.cpp)
+        self.assertIn("atom_type < kFirstLammpsAtomType", self.cpp)
+        self.assertIn("atom_type > atom_type_count", self.cpp)
+        self.assertIn("model_atom_type == kUnmappedAtomType", self.cpp)
+        self.assertIn("n + kFirstLammpsAtomType", self.cpp)
+        self.assertIn("initialize_atom_type_map(map, n, error);", self.cpp)
+        self.assertIn("const int atom_type_count = atom->ntypes;", self.cpp)
+        self.assertIn(
+            "checked_model_atom_type(map, itype, atom_type_count, error)",
+            self.cpp,
+        )
+        self.assertIn(
+            "const int j_model_type =\n"
+            "          checked_model_atom_type(map, jtype, atom_type_count, error);",
+            self.cpp,
+        )
+        self.assertIn("node_type_ghost.push_back(j_model_type);", self.cpp)
+        self.assertIn("i + kFirstLammpsAtomType", self.cpp)
+        self.assertIn("map[lammps_atom_type] = j;", self.cpp)
+        self.assertIn("map[i] != kUnmappedAtomType", self.cpp)
+        self.assertIn("map[j] != kUnmappedAtomType", self.cpp)
+        self.assertIn("for (int i = kFirstLammpsAtomType; i <= ntypes; i++)", self.cpp)
+        self.assertIn("for (int j = kFirstLammpsAtomType; j <= ntypes; j++)", self.cpp)
+        self.assertNotIn("node_type.push_back(map[itype]);", self.cpp)
+        self.assertNotIn("node_type_ghost.push_back(map[jtype]);", self.cpp)
+        self.assertNotIn("map[i + 1] = j", self.cpp)
+        self.assertNotIn("memory->create(map, n + 1", self.cpp)
+        self.assertNotIn("for (int i = 1; i <= ntypes; i++)", self.cpp)
+        self.assertNotIn("for (int j = 1; j <= ntypes; j++)", self.cpp)
+        self.assertNotIn("map[i] >= 0", self.cpp)
+        self.assertNotIn("map[j] >= 0", self.cpp)
+
     def test_graph_index_pointer_lifetime_is_guarded(self) -> None:
         """Comm preprocessing should never dereference an inactive lookup map."""
         self.assertIn("kIsoDeltaHaloGraphIndexRequiredError", self.cpp)
