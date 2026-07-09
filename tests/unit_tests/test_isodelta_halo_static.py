@@ -244,9 +244,16 @@ class IsoDeltaHaloStaticTest(unittest.TestCase):
         self.assertIn("kIndexTensorRank", self.cpp)
         self.assertIn("kIndexTensorLengthDimension", self.cpp)
         self.assertIn("index_tensor.defined()", self.cpp)
+        self.assertIn("const torch::Device &target_device", self.cpp)
+        self.assertIn("index_tensor.scalar_type() == torch::kInt64", self.cpp)
+        self.assertIn("index_tensor.device() == target_device", self.cpp)
         self.assertIn("comm_cache_index_pack_forward_tensor", self.cpp)
         self.assertIn("comm_cache_index_unpack_forward_tensor", self.cpp)
         self.assertIn("comm_cache_index_unpack_reverse_tensor", self.cpp)
+        self.assertGreaterEqual(
+            self.cpp.count("], device)"),
+            3,
+        )
         self.assertIn(
             "if (!cached_comm_tensors_match_vectors())",
             self.cpp,

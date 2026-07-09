@@ -189,6 +189,10 @@ def main() -> None:
         and "kIndexTensorRank" in cpp
         and "kIndexTensorLengthDimension" in cpp
         and "index_tensor_matches_vector" in cpp
+        and "const torch::Device &target_device" in cpp
+        and "index_tensor.scalar_type() == torch::kInt64" in cpp
+        and "index_tensor.device() == target_device" in cpp
+        and cpp.count("], device)") >= 3
         and "cached_comm_tensors_match_vectors" in combined
         and "if (!cached_comm_tensors_match_vectors())" in cpp
         and "kIndexTensorShapeChanged" in header

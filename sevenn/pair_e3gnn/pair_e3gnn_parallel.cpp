@@ -131,8 +131,11 @@ torch::Tensor make_owned_index_tensor(std::vector<long> &index_map,
 }
 
 bool index_tensor_matches_vector(const torch::Tensor &index_tensor,
-                                 const std::vector<long> &index_map) {
+                                 const std::vector<long> &index_map,
+                                 const torch::Device &target_device) {
   return index_tensor.defined() && index_tensor.dim() == kIndexTensorRank &&
+         index_tensor.scalar_type() == torch::kInt64 &&
+         index_tensor.device() == target_device &&
          index_tensor.size(kIndexTensorLengthDimension) ==
              static_cast<long long>(index_map.size());
 }
@@ -1047,13 +1050,13 @@ bool PairE3GNNParallel::cached_comm_tensors_match_vectors() const {
   for (int comm_phase = 0; comm_phase < kCommPhaseCount; comm_phase++) {
     if (!index_tensor_matches_vector(
             comm_cache_index_pack_forward_tensor[comm_phase],
-            comm_cache_index_pack_forward[comm_phase]) ||
+            comm_cache_index_pack_forward[comm_phase], device) ||
         !index_tensor_matches_vector(
             comm_cache_index_unpack_forward_tensor[comm_phase],
-            comm_cache_index_unpack_forward[comm_phase]) ||
+            comm_cache_index_unpack_forward[comm_phase], device) ||
         !index_tensor_matches_vector(
             comm_cache_index_unpack_reverse_tensor[comm_phase],
-            comm_cache_index_unpack_reverse[comm_phase])) {
+            comm_cache_index_unpack_reverse[comm_phase], device)) {
       return false;
     }
   }

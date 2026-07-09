@@ -48,6 +48,9 @@ reported through named LAMMPS errors instead of being ignored by the halo path.
 The pair pack/unpack helpers compute payload element and byte counts through a
 checked helper before MPI or CUDA copy calls, so `x_dim * atom_count` overflow
 cannot silently truncate a communication message.
+Cached CUDA index tensors are reused only when their length, integer dtype, and
+device still match the current communication path, preventing a stale tensor
+layout from crossing a later `index_select` or `scatter_` call.
 
 ## Why This Is Model-Agnostic
 
@@ -1043,8 +1046,9 @@ the measured cache activity. The checker treats `attempts`, `hits`, and every
 miss reason counter as whole nonnegative profiling counts, and each cache
 summary must record at least one attempt.
 On CUDA-aware MPI runs, the runtime also checks that cached index tensors still
-match their cached CPU index-vector lengths before reuse; a mismatch is treated
-as `miss_index-tensor-shape-changed` and the metadata cache is rebuilt.
+match their cached CPU index-vector lengths, integer dtype, and target device
+before reuse; a mismatch is treated as `miss_index-tensor-shape-changed` and the
+metadata cache is rebuilt.
 
 For a publishable performance claim, report the mean and variance across
 multiple repeats, include cache hit rate, and show that final thermodynamic
