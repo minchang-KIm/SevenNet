@@ -472,13 +472,21 @@ def main() -> None:
         and "COMMENT_PREFIX_REQUIREMENTS" in goal_readiness
         and 'EXPECTED_BRANCH = "codex/isodelta-halo-runtime"' in goal_readiness
         and "ISODELTA_PYTHON_GLOB_PATTERNS" in goal_readiness
+        and "ISODELTA_PRODUCTION_GLOB_PATTERNS" in goal_readiness
+        and "FORBIDDEN_IMPLEMENTATION_MARKERS" in goal_readiness
         and "_audit_isodelta_python_headers" in goal_readiness
+        and "_audit_forbidden_implementation_markers" in goal_readiness
+        and "forbidden_implementation_marker:" in goal_readiness
         and "build_goal_readiness_report" in goal_readiness
         and "default=None" in goal_readiness
         and '"goal_readiness_report": str(args.report_path) if args.report_path is not None else None'
         in goal_readiness
         and "test_isodelta_goal_readiness.py" in validation_runner
         and "test_goal_readiness_rejects_isodelta_python_without_header"
+        in goal_readiness_test
+        and "test_goal_readiness_rejects_forbidden_production_marker"
+        in goal_readiness_test
+        and "test_goal_readiness_ignores_marker_string_literals"
         in goal_readiness_test
         and "check_isodelta_goal_readiness.py" in validation_runner,
         "goal readiness audit must be part of the lightweight validation gate",

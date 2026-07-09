@@ -142,6 +142,62 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
             failed_checks,
         )
 
+    def test_goal_readiness_rejects_forbidden_production_marker(self) -> None:
+        """Production IsoDelta files should not carry temporary-work markers."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            tool_path = root / "tools" / "run_isodelta_marker.py"
+            tool_path.parent.mkdir(parents=True)
+            tool_path.write_text(
+                '"""Example tool header."""\n# TODO remove before paper run\nVALUE = 1\n',
+                encoding="utf-8",
+            )
+
+            report = goal_readiness.build_goal_readiness_report(
+                root=root,
+                required_file_snippets={},
+                comment_prefix_requirements={},
+                implementation_marker_glob_patterns=("tools/*isodelta*.py",),
+            )
+
+        self.assertEqual(report["status"], goal_readiness.STATUS_FAILED)
+        failed_checks = [
+            record
+            for record in report["checks"]
+            if record["name"]
+            == "forbidden_implementation_marker:tools/run_isodelta_marker.py"
+        ]
+        self.assertEqual(len(failed_checks), 1)
+        self.assertIn("TODO", failed_checks[0]["detail"])
+
+    def test_goal_readiness_ignores_marker_string_literals(self) -> None:
+        """Static check tools may mention marker text as data without failing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            tool_path = root / "tools" / "run_isodelta_marker_check.py"
+            tool_path.parent.mkdir(parents=True)
+            tool_path.write_text(
+                '"""Example tool header."""\nMARKER = "TODO"\nVALUE = 1\n',
+                encoding="utf-8",
+            )
+
+            report = goal_readiness.build_goal_readiness_report(
+                root=root,
+                required_file_snippets={},
+                comment_prefix_requirements={},
+                implementation_marker_glob_patterns=("tools/*isodelta*.py",),
+            )
+
+        self.assertEqual(report["status"], goal_readiness.STATUS_PASSED)
+        marker_checks = [
+            record
+            for record in report["checks"]
+            if record["name"]
+            == "forbidden_implementation_marker:tools/run_isodelta_marker_check.py"
+        ]
+        self.assertEqual(len(marker_checks), 1)
+        self.assertTrue(marker_checks[0]["passed"])
+
 
 if __name__ == "__main__":
     unittest.main()

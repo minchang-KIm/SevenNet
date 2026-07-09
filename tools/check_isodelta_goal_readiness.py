@@ -10,10 +10,13 @@ present and mutually connected.
 from __future__ import annotations
 
 import argparse
+import ast
+import io
 import json
 from pathlib import Path
 import subprocess
 import time
+import tokenize
 from typing import Any
 
 
@@ -33,6 +36,22 @@ PYTHON_HEADER_PREFIX = '"""'
 ISODELTA_PYTHON_GLOB_PATTERNS = (
     "tools/*isodelta*.py",
     "tests/unit_tests/test_isodelta*.py",
+)
+ISODELTA_PRODUCTION_GLOB_PATTERNS = (
+    "tools/*isodelta*.py",
+    "sevenn/pair_e3gnn/pair_e3gnn_parallel.cpp",
+    "sevenn/pair_e3gnn/pair_e3gnn_parallel.h",
+    "sevenn/pair_e3gnn/comm_brick.cpp",
+    "sevenn/pair_e3gnn/comm_brick.h",
+    "sevenn/pair_e3gnn/patch_lammps.sh",
+)
+FORBIDDEN_IMPLEMENTATION_MARKERS = (
+    "TODO",
+    "FIXME",
+    "HACK",
+    "XXX",
+    "not implemented",
+    "stub",
 )
 REQUIRED_FILE_SNIPPETS = {
     "sevenn/pair_e3gnn/pair_e3gnn_parallel.cpp": (
@@ -341,7 +360,10 @@ REQUIRED_FILE_SNIPPETS = {
     ),
     "tools/check_isodelta_goal_readiness.py": (
         "ISODELTA_PYTHON_GLOB_PATTERNS",
+        "ISODELTA_PRODUCTION_GLOB_PATTERNS",
+        "FORBIDDEN_IMPLEMENTATION_MARKERS",
         "_audit_isodelta_python_headers",
+        "_audit_forbidden_implementation_markers",
     ),
     ".github/workflows/isodelta-halo.yml": (
         "--report-path isodelta_validation_report.json",
@@ -678,6 +700,8 @@ REQUIRED_FILE_SNIPPETS = {
         "test_expected_branch_names_codex_work_branch",
         "test_goal_readiness_accepts_isodelta_python_headers",
         "test_goal_readiness_rejects_isodelta_python_without_header",
+        "test_goal_readiness_rejects_forbidden_production_marker",
+        "test_goal_readiness_ignores_marker_string_literals",
     ),
 }
 COMMENT_PREFIX_REQUIREMENTS = {
@@ -788,6 +812,90 @@ def _audit_isodelta_python_headers(
     return records
 
 
+def _contains_marker(text: str, markers: tuple[str, ...]) -> str | None:
+    """Return the first forbidden marker found in a piece of source text."""
+    lowered_text = text.lower()
+    for marker in markers:
+        if marker.lower() in lowered_text:
+            return marker
+    return None
+
+
+def _python_comment_and_docstring_text(path: Path) -> list[tuple[int, str]]:
+    """Return Python comments and docstrings while ignoring ordinary literals."""
+    source_text = _read_text(path)
+    evidence: list[tuple[int, str]] = []
+    tokens = tokenize.generate_tokens(io.StringIO(source_text).readline)
+    for token in tokens:
+        if token.type == tokenize.COMMENT:
+            evidence.append((token.start[0], token.string))
+    try:
+        module = ast.parse(source_text, filename=str(path))
+    except SyntaxError:
+        return evidence
+    candidate_nodes: list[ast.AST] = [module]
+    candidate_nodes.extend(
+        node
+        for node in ast.walk(module)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    )
+    for node in candidate_nodes:
+        body = getattr(node, "body", [])
+        if not body:
+            continue
+        first_statement = body[0]
+        if (
+            isinstance(first_statement, ast.Expr)
+            and isinstance(first_statement.value, ast.Constant)
+            and isinstance(first_statement.value.value, str)
+        ):
+            evidence.append((first_statement.lineno, first_statement.value.value))
+    return evidence
+
+
+def _forbidden_marker_hits(path: Path, markers: tuple[str, ...]) -> list[str]:
+    """Find implementation markers in comments and other human-authored notes."""
+    suffix = path.suffix.lower()
+    if suffix == ".py":
+        searchable_text = _python_comment_and_docstring_text(path)
+    else:
+        searchable_text = [
+            (line_number, line)
+            for line_number, line in enumerate(_read_text(path).splitlines(), start=1)
+        ]
+    hits: list[str] = []
+    for line_number, text in searchable_text:
+        marker = _contains_marker(text, markers)
+        if marker is not None:
+            hits.append(f"line {line_number}: {marker}")
+    return hits
+
+
+def _audit_forbidden_implementation_markers(
+    root: Path,
+    glob_patterns: tuple[str, ...] = ISODELTA_PRODUCTION_GLOB_PATTERNS,
+    markers: tuple[str, ...] = FORBIDDEN_IMPLEMENTATION_MARKERS,
+) -> list[dict[str, Any]]:
+    """Reject temporary-work markers in production IsoDelta implementation files."""
+    records: list[dict[str, Any]] = []
+    seen_paths: set[Path] = set()
+    for glob_pattern in glob_patterns:
+        for path in sorted(root.glob(glob_pattern)):
+            if not path.is_file() or path in seen_paths:
+                continue
+            seen_paths.add(path)
+            relative_path = path.relative_to(root).as_posix()
+            hits = _forbidden_marker_hits(path, markers)
+            records.append(
+                _check_record(
+                    f"forbidden_implementation_marker:{relative_path}",
+                    not hits,
+                    "no forbidden markers" if not hits else "; ".join(hits),
+                )
+            )
+    return records
+
+
 def build_goal_readiness_report(
     *,
     root: Path = REPO_ROOT,
@@ -795,6 +903,9 @@ def build_goal_readiness_report(
     required_file_snippets: dict[str, tuple[str, ...]] | None = None,
     comment_prefix_requirements: dict[str, str] | None = None,
     isodelta_python_glob_patterns: tuple[str, ...] = ISODELTA_PYTHON_GLOB_PATTERNS,
+    implementation_marker_glob_patterns: tuple[str, ...] = (
+        ISODELTA_PRODUCTION_GLOB_PATTERNS
+    ),
 ) -> dict[str, Any]:
     """Build a report proving local source readiness for the active goal."""
     snippet_requirements = (
@@ -822,6 +933,12 @@ def build_goal_readiness_report(
     checks.extend(_audit_required_snippets(root, snippet_requirements))
     checks.extend(_audit_comment_prefixes(root, prefix_requirements))
     checks.extend(_audit_isodelta_python_headers(root, isodelta_python_glob_patterns))
+    checks.extend(
+        _audit_forbidden_implementation_markers(
+            root,
+            implementation_marker_glob_patterns,
+        )
+    )
     status = STATUS_PASSED if all(record["passed"] for record in checks) else STATUS_FAILED
     return {
         "goal_readiness_schema_version": GOAL_READINESS_SCHEMA_VERSION,
