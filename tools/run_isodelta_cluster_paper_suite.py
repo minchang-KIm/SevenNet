@@ -209,6 +209,9 @@ PIPELINE_PREFLIGHT_GPU_MISMATCH_ERROR = (
 PIPELINE_PREFLIGHT_GPU_COUNT_ERROR = (
     "passed pipeline preflight report must detect the suite expected GPU count"
 )
+PIPELINE_PREFLIGHT_ENVIRONMENT_SNAPSHOT_BUNDLE_ERROR = (
+    "passed pipeline output bundle must archive the preflight environment snapshot"
+)
 PIPELINE_SUITE_GPU_ERROR = (
     f"pipeline suite expected_gpus must be at least {DEFAULT_EXPECTED_GPU_COUNT}"
 )
@@ -5706,7 +5709,7 @@ def _require_pipeline_preflight_environment_snapshot(
     *,
     preflight_report_path: Path,
     original_output_dir: Path,
-) -> None:
+) -> Path:
     """Verify the preflight report's archived environment snapshot link."""
     snapshot_path_text = _as_json_string(
         preflight_payload.get("environment_snapshot"),
@@ -5734,6 +5737,53 @@ def _require_pipeline_preflight_environment_snapshot(
         snapshot_path,
         label=PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY,
     )
+    return snapshot_path
+
+
+def _require_pipeline_preflight_summary_snapshot_alignment(
+    preflight_environment_snapshot_path: Path,
+    *,
+    summary_path: Path,
+    original_output_dir: Path,
+) -> int:
+    """Verify the final summary archives the preflight environment snapshot."""
+    summary_payload = _as_json_object(
+        json.loads(summary_path.read_text(encoding="utf-8")),
+        "summary",
+    )
+    summary_artifacts = _as_json_object(summary_payload.get("artifacts"), "summary.artifacts")
+    summary_fingerprints = _as_json_object(
+        summary_payload.get("artifact_fingerprints"),
+        "summary.artifact_fingerprints",
+    )
+    indexed_path = _as_json_string(
+        summary_artifacts.get(PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY),
+        f"summary.artifacts.{PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY}",
+    )
+    fingerprint_record = _as_json_object(
+        summary_fingerprints.get(PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY),
+        f"summary.artifact_fingerprints.{PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY}",
+    )
+    fingerprint_path = _as_json_string(
+        fingerprint_record.get("path"),
+        f"summary.artifact_fingerprints.{PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY}.path",
+    )
+    _require(
+        indexed_path == fingerprint_path,
+        PIPELINE_PREFLIGHT_ENVIRONMENT_SNAPSHOT_BUNDLE_ERROR,
+    )
+    summary_snapshot_path = _resolve_present_fingerprint_path(
+        fingerprint_record,
+        f"summary.artifact_fingerprints.{PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY}",
+        bundle_root=summary_path.parent,
+        original_output_dir=original_output_dir,
+    )
+    _require(
+        str(summary_snapshot_path.resolve())
+        == str(preflight_environment_snapshot_path.resolve()),
+        PIPELINE_PREFLIGHT_ENVIRONMENT_SNAPSHOT_BUNDLE_ERROR,
+    )
+    return 1
 
 
 def _require_pipeline_preflight_gpu_check(
@@ -5741,7 +5791,7 @@ def _require_pipeline_preflight_gpu_check(
     suite_record: dict[str, Any],
     *,
     original_output_dir: Path,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], Path]:
     """Verify the preflight stage proved the requested GPU allocation."""
     preflight_report_path = stage_report_paths.get(PIPELINE_STAGE_PREFLIGHT)
     _require(
@@ -5829,12 +5879,12 @@ def _require_pipeline_preflight_gpu_check(
         gpu_check.get("detector"),
         "preflight_report.gpu_check.detector",
     )
-    _require_pipeline_preflight_environment_snapshot(
+    preflight_environment_snapshot_path = _require_pipeline_preflight_environment_snapshot(
         preflight_payload,
         preflight_report_path=preflight_report_path,
         original_output_dir=original_output_dir,
     )
-    return gpu_check
+    return gpu_check, preflight_environment_snapshot_path
 
 
 def _require_pipeline_suite_metadata(
@@ -6104,7 +6154,10 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         stage_report_paths,
         suite_record,
     )
-    preflight_gpu_check = _require_pipeline_preflight_gpu_check(
+    (
+        preflight_gpu_check,
+        preflight_environment_snapshot_path,
+    ) = _require_pipeline_preflight_gpu_check(
         stage_report_paths,
         suite_record,
         original_output_dir=original_output_dir,
@@ -6123,6 +6176,13 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         _as_json_string(
             bundle_verification.get("summary_json"),
             f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.summary_json",
+        )
+    )
+    verified_preflight_environment_snapshot_bundle_count = (
+        _require_pipeline_preflight_summary_snapshot_alignment(
+            preflight_environment_snapshot_path,
+            summary_path=summary_path,
+            original_output_dir=original_output_dir,
         )
     )
     verified_summary_stage_count = _require_pipeline_summary_stage_alignment(
@@ -6155,6 +6215,9 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "artifact_preparation_report": artifact_preparation_report,
         "run_plan_report": run_plan_report,
         "preflight_gpu_check": preflight_gpu_check,
+        "verified_preflight_environment_snapshot_bundle_count": (
+            verified_preflight_environment_snapshot_bundle_count
+        ),
         OUTPUT_BUNDLE_VERIFICATION_KEY: bundle_verification,
     }
 

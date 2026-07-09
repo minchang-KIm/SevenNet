@@ -1805,9 +1805,14 @@ def main() -> None:
         and "optional_artifact_paths" in cluster_suite
         and '"preflight_report": config.output_dir / PREFLIGHT_REPORT_NAME' in cluster_suite
         and "PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY" in cluster_suite
+        and "PIPELINE_PREFLIGHT_ENVIRONMENT_SNAPSHOT_BUNDLE_ERROR"
+        in cluster_suite
         and "_require_optional_preflight_environment_snapshot_semantics"
         in cluster_suite
+        and "_require_pipeline_preflight_summary_snapshot_alignment"
+        in cluster_suite
         and "verified_preflight_environment_snapshot_count" in cluster_suite
+        and "verified_preflight_environment_snapshot_bundle_count" in cluster_suite
         and "PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY: ("
         in cluster_suite
         and '"run_plan": config.output_dir / PLAN_REPORT_NAME' in cluster_suite
@@ -1819,6 +1824,7 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_incomplete_preflight_environment_snapshot"
         in cluster_suite_test
+        and "wrong_preflight_environment_snapshot.json" in cluster_suite_test
         and "write_manifest_snapshot" in cluster_suite
         and "_manifest_snapshot_body" in cluster_suite
         and "manifest_snapshot: body SHA-256 must match suite.manifest.sha256"
@@ -2375,6 +2381,8 @@ def main() -> None:
         and "`preflight_environment_snapshot.json`" in doc
         and "before GPU time" in doc
         and "package-version map" in doc
+        and "same preflight snapshot" in doc
+        and "replacement file" in doc
         and "matching hash" in doc,
         "IsoDelta-Halo guide must document semantic paper artifact verification",
     )

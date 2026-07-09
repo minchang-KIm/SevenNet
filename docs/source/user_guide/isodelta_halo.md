@@ -856,7 +856,10 @@ actually executed the experiment. If `preflight_environment_snapshot.json` is
 present, the verifier reopens it as the "before GPU time" environment photo and
 requires the generated artifact comment, snapshot schema, run provenance,
 package-version map, selected environment variables, GPU check record, and
-`nvidia-smi` snapshot fields to remain parseable. This lets reviewers verify that the submitted
+`nvidia-smi` snapshot fields to remain parseable. For passed pipeline reports,
+the final summary must archive that same preflight snapshot, not a merely valid
+replacement file, so the preflight environment and the submitted bundle stay
+bound to the same evidence. This lets reviewers verify that the submitted
 paper artifacts match the archived run.
 The sibling `artifacts` index must carry the same artifact names and paths as
 `artifact_fingerprints`; `--verify-output-bundle` rejects the bundle if the

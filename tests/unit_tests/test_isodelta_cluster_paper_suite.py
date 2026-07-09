@@ -4680,6 +4680,57 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            alternate_preflight_snapshot_path = (
+                output_dir / "wrong_preflight_environment_snapshot.json"
+            )
+            alternate_preflight_snapshot_path.write_text(
+                json.dumps(_environment_snapshot_payload()),
+                encoding="utf-8",
+            )
+            preflight_snapshot_drift_summary = json.loads(json.dumps(summary))
+            preflight_snapshot_drift_summary["artifacts"][
+                isodelta_cluster_suite.PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY
+            ] = str(alternate_preflight_snapshot_path)
+            preflight_snapshot_drift_summary["artifact_fingerprints"][
+                isodelta_cluster_suite.PREFLIGHT_ENVIRONMENT_SNAPSHOT_ARTIFACT_KEY
+            ] = isodelta_cluster_suite.generated_artifact_record(
+                alternate_preflight_snapshot_path
+            )
+            summary_path.write_text(
+                json.dumps(preflight_snapshot_drift_summary),
+                encoding="utf-8",
+            )
+            preflight_snapshot_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            for stage_index in (run_suite_stage_index, verify_stage_index):
+                stage_report_path = Path(
+                    preflight_snapshot_drift_pipeline_report["stages"][
+                        stage_index
+                    ]["report_path"]
+                )
+                preflight_snapshot_drift_pipeline_report[
+                    isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+                ][stage_index]["report"] = (
+                    isodelta_cluster_suite.generated_artifact_record(
+                        stage_report_path
+                    )
+                )
+            pipeline_report_path.write_text(
+                json.dumps(preflight_snapshot_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                preflight_snapshot_drift_error = str(exc)
+            else:
+                preflight_snapshot_drift_error = ""
+            summary_path.write_text(summary_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             readiness_report_path.write_text(
                 readiness_report_path.read_text(encoding="utf-8") + "\n",
                 encoding="utf-8",
@@ -4742,6 +4793,12 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertEqual(
             pipeline_report_verification["preflight_gpu_check"]["detected_gpus"],
             isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
+        )
+        self.assertEqual(
+            pipeline_report_verification[
+                "verified_preflight_environment_snapshot_bundle_count"
+            ],
+            1,
         )
         self.assertEqual(
             pipeline_report_verification["readiness_report"]["verified_check_count"],
@@ -4820,6 +4877,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         for count_key, error in bundle_count_drift_errors.items():
             self.assertIn(count_key, error)
             self.assertIn("must match current bundle verification", error)
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_PREFLIGHT_ENVIRONMENT_SNAPSHOT_BUNDLE_ERROR,
+            preflight_snapshot_drift_error,
+        )
         self.assertIn("SHA-256 mismatch", mutated_stage_report_error)
 
     def test_pipeline_stops_when_readiness_fails(self) -> None:
