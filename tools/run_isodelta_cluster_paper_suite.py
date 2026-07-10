@@ -484,12 +484,12 @@ PAPER_ARTIFACT_COMMENTS = {
         "timing, cache, trace, and confidence-interval metrics."
     ),
     "required_model_coverage_csv": (
-        "IsoDelta-Halo required-model coverage table: per-model pass, trace, "
-        "measured speedup, and confidence-interval evidence for final-paper scope."
+        "IsoDelta-Halo required-model coverage table: per-model pass, passed/reused "
+        "trace, measured speedup, and confidence-interval evidence for final-paper scope."
     ),
     "required_model_coverage_markdown": (
         "IsoDelta-Halo required-model coverage table in Markdown for reviewing "
-        "per-model pass, trace, measured speedup, and confidence-interval evidence."
+        "per-model pass, passed/reused trace, measured speedup, and confidence-interval evidence."
     ),
     "correlation_csv": (
         "IsoDelta-Halo appendix table: Pearson and Spearman correlations "
@@ -3632,7 +3632,7 @@ def _required_model_coverage_rows_from_case_records(
                 case_record,
                 f"case_records.{case_record.get('case_name', '<unknown>')}",
             )
-            for case_record in model_records
+            for case_record in passed_records
         )
         is_covered = (
             len(passed_records) >= MIN_REQUIRED_CASE_COUNT

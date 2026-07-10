@@ -940,8 +940,8 @@ It also performs semantic paper-artifact checks after the SHA-256 pass:
 summary case and the same cell values as `summary["cases"]`.
 `required_model_coverage.csv` and `required_model_coverage.md` are the model coverage table:
 one row per required model, showing whether that model has a passed case,
-trace evidence count, measured speedup count, speedup CI count, best measured
-speedup, and the weakest speedup-CI lower bound.
+passed/reused trace evidence count, measured speedup count, speedup CI count,
+best measured speedup, and the weakest speedup-CI lower bound.
 The verifier recomputes those rows from `summary["suite"]["required_models"]`
 and `summary["cases"]`, so a reviewer-facing coverage table cannot be edited
 away from the JSON evidence.

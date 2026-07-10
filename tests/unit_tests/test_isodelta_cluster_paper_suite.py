@@ -1911,6 +1911,59 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
+    def test_verify_output_bundle_rejects_failed_trace_coverage_drift(
+        self,
+    ) -> None:
+        """Failed-case trace files should not inflate model coverage evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_records = (
+                _summary_case_record(
+                    "sevennet-pass",
+                    model="SevenNet",
+                    trace_evidence=["sevennet-pass-trace.json"],
+                ),
+                _summary_case_record(
+                    "sevennet-failed",
+                    model="SevenNet",
+                    status="failed: trace command failed",
+                    trace_evidence=["sevennet-failed-trace.json"],
+                ),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            coverage_csv = output_dir / "tables" / "required_model_coverage.csv"
+            coverage_csv.write_text(
+                coverage_csv.read_text(encoding="utf-8").replace(
+                    "SevenNet,covered,2,1,1,1,1",
+                    "SevenNet,covered,2,1,2,1,1",
+                ),
+                encoding="utf-8",
+            )
+            artifact_fingerprints["required_model_coverage_csv"] = (
+                isodelta_cluster_suite.generated_artifact_record(coverage_csv)
+            )
+            _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    r"required_model_coverage\.csv\[0\]\.trace_evidence_count "
+                    "must match summary required-model evidence"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
     def test_verify_output_bundle_rejects_speedup_svg_label_drift(self) -> None:
         """The speedup figure should label every case with measured speedup data."""
         with tempfile.TemporaryDirectory() as tmpdir:
