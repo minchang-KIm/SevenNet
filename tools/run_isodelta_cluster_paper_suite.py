@@ -3601,7 +3601,7 @@ def _required_model_coverage_rows_from_case_records(
         ]
         measured_records = [
             case_record
-            for case_record in model_records
+            for case_record in passed_records
             if _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY)
             is not None
         ]
@@ -3944,6 +3944,20 @@ def _summary_numeric_value(case_record: dict[str, Any], field_name: str) -> floa
     return numeric_value if math.isfinite(numeric_value) else None
 
 
+def _summary_case_has_passing_status(
+    case_name: str,
+    case_record: dict[str, Any],
+) -> bool:
+    """Return whether a summary case can support final-paper claims."""
+    return (
+        _as_json_string(
+            case_record.get(STATUS_KEY),
+            f"cases.{case_name}.{STATUS_KEY}",
+        )
+        in PASSING_CASE_STATUSES
+    )
+
+
 def _summary_measured_speedup_case_names(
     cases_by_name: dict[str, dict[str, Any]],
 ) -> list[str]:
@@ -3955,6 +3969,18 @@ def _summary_measured_speedup_case_names(
     ]
 
 
+def _summary_passing_measured_speedup_case_names(
+    cases_by_name: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Return passed case names that can support measured speedup claims."""
+    return [
+        case_name
+        for case_name, case_record in cases_by_name.items()
+        if _summary_case_has_passing_status(case_name, case_record)
+        and _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
+    ]
+
+
 def _summary_speedup_ci_case_names(
     cases_by_name: dict[str, dict[str, Any]],
 ) -> list[str]:
@@ -3963,6 +3989,20 @@ def _summary_speedup_ci_case_names(
         case_name
         for case_name, case_record in cases_by_name.items()
         if _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
+        and _summary_numeric_value(case_record, "speedup_95ci_lower_bound") is not None
+        and _summary_numeric_value(case_record, "speedup_95ci_upper_bound") is not None
+    ]
+
+
+def _summary_passing_speedup_ci_case_names(
+    cases_by_name: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Return passed case names that can support speedup CI claims."""
+    return [
+        case_name
+        for case_name, case_record in cases_by_name.items()
+        if _summary_case_has_passing_status(case_name, case_record)
+        and _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
         and _summary_numeric_value(case_record, "speedup_95ci_lower_bound") is not None
         and _summary_numeric_value(case_record, "speedup_95ci_upper_bound") is not None
     ]
@@ -4017,15 +4057,15 @@ def _require_summary_speedup_measurements(
     cases_by_name: dict[str, dict[str, Any]],
 ) -> None:
     """Require final paper bundles to contain actual measured speedup evidence."""
-    measured_case_names = _summary_measured_speedup_case_names(cases_by_name)
+    measured_case_names = _summary_passing_measured_speedup_case_names(cases_by_name)
     _require(
         len(measured_case_names) >= MIN_REQUIRED_MEASURED_SPEEDUP_CASES,
-        "paper output bundle must include at least one measured speedup case",
+        "paper output bundle must include at least one passed measured speedup case",
     )
-    ci_case_names = _summary_speedup_ci_case_names(cases_by_name)
+    ci_case_names = _summary_passing_speedup_ci_case_names(cases_by_name)
     _require(
         len(ci_case_names) >= MIN_REQUIRED_SPEEDUP_CI_CASES,
-        "paper output bundle must include at least one speedup confidence interval case",
+        "paper output bundle must include at least one passed speedup confidence interval case",
     )
     _require_required_model_speedup_coverage(
         required_models=_summary_required_models(summary_payload),

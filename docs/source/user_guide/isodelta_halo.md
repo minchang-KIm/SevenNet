@@ -957,7 +957,7 @@ JSON evidence.
 `speedup_uncertainty.svg` is also a required paper artifact, not an optional
 side figure; it must carry the expected `<desc>` text and one lower/upper error
 bar marker for every case with a finite speedup confidence interval.
-The verifier also requires `summary["cases"]` to contain at least one finite measured speedup and at least one finite speedup confidence interval, and when `summary["suite"]["required_models"]` is recorded it requires every required model to contribute measured speedup and speedup confidence interval evidence. A run that only produced empty figure shells or skipped a required model cannot pass as a paper output bundle.
+The verifier also requires `summary["cases"]` to contain at least one finite measured speedup and at least one finite speedup confidence interval from passed or reused cases, and when `summary["suite"]["required_models"]` is recorded it requires every required model to contribute passed measured speedup and passed speedup confidence interval evidence. A run that only produced empty figure shells, skipped a required model, or kept speedup numbers only on a failed case cannot pass as a paper output bundle.
 Every generated table must keep its explanatory comment.
 Each SVG figure must parse as an SVG document with width, height, viewBox, and the expected `<desc>` description;
 the speedup chart must include every measured-speedup case label from

@@ -1619,7 +1619,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
-                "paper output bundle must include at least one measured speedup case",
+                "paper output bundle must include at least one passed measured speedup case",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -1649,7 +1649,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 (
-                    "paper output bundle must include at least one speedup "
+                    "paper output bundle must include at least one passed speedup "
                     "confidence interval case"
                 ),
             ):
@@ -1700,6 +1700,42 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 (
                     "paper output bundle is missing measured speedup cases "
                     "for required models: MACE, NequIP"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_failed_required_model_speedup(
+        self,
+    ) -> None:
+        """Failed cases should not satisfy final-paper speedup coverage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_records = (
+                _summary_case_record(
+                    "sevennet",
+                    model="SevenNet",
+                    status="failed: preflight command failed",
+                ),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "paper output bundle is missing measured speedup cases "
+                    "for required models: SevenNet"
                 ),
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)

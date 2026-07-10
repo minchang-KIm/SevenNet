@@ -1798,6 +1798,8 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_missing_required_model_speedup"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_failed_required_model_speedup"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_missing_required_model_speedup_ci"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_required_model_coverage_value_drift"
@@ -1936,13 +1938,16 @@ def main() -> None:
         and "_require_speedup_uncertainty_svg_semantics" in cluster_suite
         and "_require_summary_speedup_measurements" in cluster_suite
         and "_summary_required_models" in cluster_suite
+        and "_summary_case_has_passing_status" in cluster_suite
+        and "_summary_passing_measured_speedup_case_names" in cluster_suite
+        and "_summary_passing_speedup_ci_case_names" in cluster_suite
         and "_summary_models_for_cases" in cluster_suite
         and "_require_required_model_speedup_coverage" in cluster_suite
         and "MIN_REQUIRED_MEASURED_SPEEDUP_CASES" in cluster_suite
         and "MIN_REQUIRED_SPEEDUP_CI_CASES" in cluster_suite
-        and "paper output bundle must include at least one measured speedup case"
+        and "paper output bundle must include at least one passed measured speedup case"
         in cluster_suite
-        and "paper output bundle must include at least one speedup confidence interval case"
+        and "paper output bundle must include at least one passed speedup confidence interval case"
         in cluster_suite
         and "paper output bundle is missing measured speedup cases for required models"
         in cluster_suite
@@ -2245,7 +2250,8 @@ def main() -> None:
         and "expected `<desc>` description" in doc
         and "at least one finite measured speedup" in doc
         and "at least one finite speedup confidence interval" in doc
-        and "every required model to contribute measured speedup" in doc
+        and "every required model to contribute passed measured speedup" in doc
+        and "speedup numbers only on a failed case" in doc
         and "required_model_coverage.csv" in doc
         and "required_model_coverage.md" in doc
         and "model coverage table" in doc
