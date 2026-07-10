@@ -276,8 +276,9 @@ validation or push when tracked or untracked files are present. It also stores
 `git_provenance` fields for the current branch, validated HEAD commit, local
 target branch commit, remote URL, and locally known remote-tracking commit. It
 also writes `remote_ref_verification` and only reports `synced` when the remote
-branch resolves to the same commit that was pushed. A mismatch is reported as
-`remote_verification_failed`. The report writes a `push_failure` object when
+branch resolves to the same full Git object id that was pushed. A malformed
+validation or remote commit, or a well-formed mismatch, is reported as
+`remote_verification_failed` or `validation_report_invalid`. The report writes a `push_failure` object when
 the push fails. That object classifies common failures as `auth-prompt-disabled`,
 `network-unreachable`, or `unknown`, and adds a `suggested_action` so a
 non-interactive GitHub credential failure is actionable from the report itself.

@@ -899,6 +899,10 @@ def main() -> None:
         and "_validation_report_summary" in sync_gate
         and "command_failure_count" in sync_gate
         and "VALIDATION_REPORT_COMMAND_REQUIRED_FIELDS" in sync_gate
+        and "GIT_OBJECT_ID_HEX_LENGTHS" in sync_gate
+        and "_is_git_object_id" in sync_gate
+        and "validation report git_commit is not a full Git object id" in sync_gate
+        and "remote branch commit is not a full Git object id" in sync_gate
         and "command_missing_field_count" in sync_gate
         and "_validation_command_record_has_valid_shape" in sync_gate
         and "command_invalid_field_count" in sync_gate
@@ -929,6 +933,10 @@ def main() -> None:
         and "test_validation_command_enforces_target_branch" in sync_gate_test
         and "test_run_sync_records_git_provenance_for_push_target" in sync_gate_test
         and "test_run_sync_fails_when_remote_ref_does_not_match" in sync_gate_test
+        and "test_run_sync_fails_when_remote_ref_commit_is_malformed"
+        in sync_gate_test
+        and "test_run_sync_rejects_validation_report_malformed_commit"
+        in sync_gate_test
         and "test_run_sync_rejects_missing_validation_report" in sync_gate_test
         and "test_run_sync_rejects_failed_validation_report_json" in sync_gate_test
         and "test_run_sync_rejects_failed_validation_report_command" in sync_gate_test
@@ -2509,6 +2517,8 @@ def main() -> None:
         and "`git ls-remote --heads`" in doc
         and "`remote_ref_verification`" in doc
         and "`remote_verification_failed`" in doc
+        and "full Git object id" in doc
+        and "malformed" in doc
         and "`--push-failure-bundle`" in doc
         and "`push_failure_bundle`" in doc
         and "`git bundle verify` `verify_returncode`" in doc

@@ -42,6 +42,10 @@ FAILURE_RETURN_CODE = 1
 COMMAND_OUTPUT_TAIL_CHARS = 4000
 AUDIT_FILE_HASH_READ_CHUNK_BYTES = 1024 * 1024
 BUNDLE_HASH_READ_CHUNK_BYTES = AUDIT_FILE_HASH_READ_CHUNK_BYTES
+GIT_SHA1_HEX_LENGTH = 40
+GIT_SHA256_HEX_LENGTH = 64
+GIT_OBJECT_ID_HEX_LENGTHS = frozenset((GIT_SHA1_HEX_LENGTH, GIT_SHA256_HEX_LENGTH))
+LOWERCASE_HEX_DIGITS = frozenset("0123456789abcdef")
 STATUS_SYNCED = "synced"
 STATUS_VALIDATED = "validated"
 STATUS_VALIDATION_FAILED = "validation_failed"
@@ -155,6 +159,17 @@ def _metadata_command(command: tuple[str, ...]) -> str | None:
     if record["returncode"] != SUCCESS_RETURN_CODE:
         return None
     return str(record["stdout_tail"]).strip()
+
+
+def _is_git_object_id(value: Any) -> bool:
+    """Return whether a value is a full SHA-1 or SHA-256 Git object id."""
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().lower()
+    return (
+        len(normalized) in GIT_OBJECT_ID_HEX_LENGTHS
+        and all(character in LOWERCASE_HEX_DIGITS for character in normalized)
+    )
 
 
 def _current_branch() -> str | None:
@@ -432,6 +447,9 @@ def _validation_report_summary(
     if expected_branch is not None and recorded_expected_branch != expected_branch:
         summary["detail"] = "validation report expected_branch does not match push branch"
         return summary
+    if expected_commit is not None and not _is_git_object_id(git_commit):
+        summary["detail"] = "validation report git_commit is not a full Git object id"
+        return summary
     if expected_commit is not None and git_commit != expected_commit:
         summary["detail"] = "validation report git_commit does not match current HEAD"
         return summary
@@ -526,9 +544,12 @@ def _verify_remote_ref(
         if record["returncode"] == SUCCESS_RETURN_CODE
         else None
     )
+    expected_commit_valid = _is_git_object_id(expected_commit)
+    observed_commit_valid = _is_git_object_id(observed_commit)
     verified = (
         record["returncode"] == SUCCESS_RETURN_CODE
-        and expected_commit is not None
+        and expected_commit_valid
+        and observed_commit_valid
         and observed_commit == expected_commit
     )
     report = {
@@ -538,8 +559,12 @@ def _verify_remote_ref(
         "returncode": record["returncode"],
         "verified": verified,
     }
-    if record["returncode"] == SUCCESS_RETURN_CODE and observed_commit is None:
+    if record["returncode"] == SUCCESS_RETURN_CODE and not expected_commit_valid:
+        report["detail"] = "expected commit is not a full Git object id"
+    elif record["returncode"] == SUCCESS_RETURN_CODE and observed_commit is None:
         report["detail"] = "remote branch was not present in git ls-remote output"
+    elif record["returncode"] == SUCCESS_RETURN_CODE and not observed_commit_valid:
+        report["detail"] = "remote branch commit is not a full Git object id"
     elif record["returncode"] == SUCCESS_RETURN_CODE and not verified:
         report["detail"] = "remote branch commit does not match the pushed branch"
     return named_record, report

@@ -54,13 +54,17 @@ assert SPEC is not None and SPEC.loader is not None
 sync_gate = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = sync_gate
 SPEC.loader.exec_module(sync_gate)
+FEATURE_COMMIT = "a" * sync_gate.GIT_SHA1_HEX_LENGTH
+OTHER_COMMIT = "b" * sync_gate.GIT_SHA1_HEX_LENGTH
+REMOTE_TRACKING_COMMIT = "c" * sync_gate.GIT_SHA1_HEX_LENGTH
+MALFORMED_REMOTE_COMMIT = "feature-sha"
 
 
 def _validation_report_command(
     validation_report_path: Path,
     *,
     expected_branch: str | None = "feature",
-    git_commit: str = "feature-sha",
+    git_commit: str = FEATURE_COMMIT,
     status: str | None = None,
     report_comment: str | None = None,
     command_returncode: int = sync_gate.SUCCESS_RETURN_CODE,
@@ -121,7 +125,7 @@ def _validation_report_fingerprint(validation_report_path: Path) -> dict[str, ob
 def _passed_validation_report_summary(
     validation_report_path: Path,
     *,
-    git_commit: str = "feature-sha",
+    git_commit: str = FEATURE_COMMIT,
 ) -> dict[str, object]:
     """Return the expected sync-gate summary for a passing test report."""
     return {
@@ -204,10 +208,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         original_metadata_command = sync_gate._metadata_command
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "feature-sha",
-            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
-            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "feature-sha",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): FEATURE_COMMIT,
             ("git", "status", "--short"): "",
         }
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -230,7 +234,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                         remote_ref_verify_command=(
                             sys.executable,
                             "-c",
-                            "print('feature-sha\\trefs/heads/feature')",
+                            f"print('{FEATURE_COMMIT}\\trefs/heads/feature')",
                         ),
                     )
             finally:
@@ -269,8 +273,8 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             report[sync_gate.REMOTE_REF_VERIFICATION_KEY],
             {
                 "remote_ref": "refs/heads/feature",
-                "expected_commit": "feature-sha",
-                "observed_commit": "feature-sha",
+                "expected_commit": FEATURE_COMMIT,
+                "observed_commit": FEATURE_COMMIT,
                 "returncode": sync_gate.SUCCESS_RETURN_CODE,
                 "verified": True,
             },
@@ -301,7 +305,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         original_metadata_command = sync_gate._metadata_command
         fake_metadata = {
             ("git", "branch", "--show-current"): None,
-            ("git", "rev-parse", "HEAD"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
             ("git", "status", "--short"): "",
         }
@@ -372,10 +376,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         expected_remote_ref = "refs/remotes/origin/feature"
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "feature-sha",
-            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
-            ("git", "rev-parse", "--verify", expected_remote_ref): "remote-feature-sha",
+            ("git", "rev-parse", "--verify", expected_remote_ref): REMOTE_TRACKING_COMMIT,
             ("git", "status", "--short"): "",
         }
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -398,7 +402,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                         remote_ref_verify_command=(
                             sys.executable,
                             "-c",
-                            "print('feature-sha\\trefs/heads/feature')",
+                            f"print('{FEATURE_COMMIT}\\trefs/heads/feature')",
                         ),
                     )
             finally:
@@ -417,11 +421,11 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             report["git_provenance"],
             {
                 "current_branch": "feature",
-                "head_commit": "feature-sha",
-                "target_branch_commit": "feature-sha",
+                "head_commit": FEATURE_COMMIT,
+                "target_branch_commit": FEATURE_COMMIT,
                 "remote_url": "https://example.invalid/repo.git",
                 "remote_tracking_ref": expected_remote_ref,
-                "remote_tracking_commit": "remote-feature-sha",
+                "remote_tracking_commit": REMOTE_TRACKING_COMMIT,
             },
         )
         self.assertEqual(
@@ -440,10 +444,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         status_short = " M tools/run.py\n?? scratch.txt"
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "feature-sha",
-            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
-            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
             ("git", "status", "--short"): status_short,
         }
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -506,10 +510,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         original_metadata_command = sync_gate._metadata_command
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "feature-sha",
-            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
-            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
             ("git", "status", "--short"): "",
         }
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -532,7 +536,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                         remote_ref_verify_command=(
                             sys.executable,
                             "-c",
-                            "print('other-sha\\trefs/heads/feature')",
+                            f"print('{OTHER_COMMIT}\\trefs/heads/feature')",
                         ),
                     )
             finally:
@@ -549,8 +553,8 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             report[sync_gate.REMOTE_REF_VERIFICATION_KEY],
             {
                 "remote_ref": "refs/heads/feature",
-                "expected_commit": "feature-sha",
-                "observed_commit": "other-sha",
+                "expected_commit": FEATURE_COMMIT,
+                "observed_commit": OTHER_COMMIT,
                 "returncode": sync_gate.SUCCESS_RETURN_CODE,
                 "verified": False,
                 "detail": "remote branch commit does not match the pushed branch",
@@ -562,16 +566,67 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         )
         self.assertIsNone(report["push_failure"])
 
+    def test_run_sync_fails_when_remote_ref_commit_is_malformed(self) -> None:
+        """Remote ref verification should require a full Git object id."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path
+                        ),
+                        push_command=(sys.executable, "-c", "print('pushed')"),
+                        remote_ref_verify_command=(
+                            sys.executable,
+                            "-c",
+                            f"print('{MALFORMED_REMOTE_COMMIT}\\trefs/heads/feature')",
+                        ),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_REMOTE_VERIFICATION_FAILED)
+        self.assertEqual(
+            report[sync_gate.REMOTE_REF_VERIFICATION_KEY]["detail"],
+            "remote branch commit is not a full Git object id",
+        )
+        self.assertEqual(
+            report[sync_gate.REMOTE_REF_VERIFICATION_KEY]["observed_commit"],
+            MALFORMED_REMOTE_COMMIT,
+        )
+
     def test_run_sync_rejects_failed_validation_report_json(self) -> None:
         """A zero exit code cannot override a failed validation report payload."""
         original_root = sync_gate.REPO_ROOT
         original_metadata_command = sync_gate._metadata_command
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "feature-sha",
-            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
-            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
             ("git", "status", "--short"): "",
         }
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -606,16 +661,59 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             "validation report status is not passed",
         )
 
+    def test_run_sync_rejects_validation_report_malformed_commit(self) -> None:
+        """Validation reports should record a full Git object id for HEAD."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            git_commit=MALFORMED_REMOTE_COMMIT,
+                        ),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_REPORT_INVALID)
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
+            "validation report git_commit is not a full Git object id",
+        )
+
     def test_run_sync_rejects_validation_report_without_comment(self) -> None:
         """A passed validation report should describe what evidence it contains."""
         original_root = sync_gate.REPO_ROOT
         original_metadata_command = sync_gate._metadata_command
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "feature-sha",
-            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
-            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
             ("git", "status", "--short"): "",
         }
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -656,10 +754,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         original_metadata_command = sync_gate._metadata_command
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "feature-sha",
-            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
-            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
             ("git", "status", "--short"): "",
         }
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -704,10 +802,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         original_metadata_command = sync_gate._metadata_command
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "feature-sha",
-            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
-            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
             ("git", "status", "--short"): "",
         }
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -753,10 +851,10 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         original_metadata_command = sync_gate._metadata_command
         fake_metadata = {
             ("git", "branch", "--show-current"): "feature",
-            ("git", "rev-parse", "HEAD"): "feature-sha",
-            ("git", "rev-parse", "feature"): "feature-sha",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
             ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
-            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): "old-sha",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
             ("git", "status", "--short"): "",
         }
         with tempfile.TemporaryDirectory() as tmpdir:
