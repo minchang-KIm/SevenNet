@@ -963,6 +963,9 @@ The same final verification also checks those recomputed trace counts against
 `suite_evidence.min_trace_count` and `suite_evidence.min_distinct_trace_models`,
 so lowering the evidence while leaving stronger suite thresholds in the summary
 is rejected after archiving.
+When `summary.suite` records `min_trace_count` and
+`min_distinct_trace_models`, `suite_evidence` must keep the same threshold
+values, so an archive cannot silently lower the suite thresholds after the run.
 `correlation.csv` must contain the configured metric-pair rows recomputed from
 passed or reused `summary["cases"]`; `summary["correlations"]` and the CSV must
 both match those recomputed values, so a failed case cannot be counted by making

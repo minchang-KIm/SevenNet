@@ -1685,7 +1685,14 @@ def main() -> None:
         and "_suite_evidence_from_summary" in cluster_suite
         and "_require_suite_evidence_alignment" in cluster_suite
         and "verified_suite_evidence_count" in cluster_suite
+        and "SUITE_EVIDENCE_THRESHOLD_ORIGIN_VERIFICATION_COUNT" in cluster_suite
         and "suite_evidence.{field_name} must match passed summary cases"
+        in cluster_suite
+        and "summary.suite trace thresholds are required when"
+        in cluster_suite
+        and "suite_evidence.min_trace_count must match summary.suite.min_trace_count"
+        in cluster_suite
+        and "suite_evidence.min_distinct_trace_models must match"
         in cluster_suite
         and "suite_evidence.trace_evidence_count must satisfy"
         in cluster_suite
@@ -1827,7 +1834,13 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_suite_evidence_trace_count_drift"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_missing_suite_evidence_threshold_origin"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_suite_evidence_min_trace_origin_drift"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_suite_evidence_min_trace_drift"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_suite_evidence_min_model_origin_drift"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_suite_evidence_min_model_drift"
         in cluster_suite_test
@@ -2166,6 +2179,10 @@ def main() -> None:
         and "PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_SUITE_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS" in cluster_suite
+        and "summary.suite.min_trace_count" in cluster_suite
+        and "suite.min_trace_count" in cluster_suite
+        and "summary.suite.min_distinct_trace_models" in cluster_suite
+        and "suite.min_distinct_trace_models" in cluster_suite
         and "PIPELINE_BUNDLE_SUMMARY_PATH_ALIGNMENT_ERROR" in cluster_suite
         and "_as_json_bool" in cluster_suite
         and "_require_pipeline_report_modes" in cluster_suite
@@ -2190,6 +2207,7 @@ def main() -> None:
         and "# CLI runtime overrides: ablation_mode=isodelta-enabled." in cluster_suite_test
         and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
         and "uncommented_pipeline_report_error" in cluster_suite_test
+        and "summary_threshold_drift_error" in cluster_suite_test
         and "PREFLIGHT_REPORT_COMMENT" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
         in cluster_suite_test
@@ -2322,6 +2340,8 @@ def main() -> None:
         and "distinct trace-model counts" in doc
         and "`suite_evidence.min_trace_count`" in doc
         and "`suite_evidence.min_distinct_trace_models`" in doc
+        and "same threshold" in doc
+        and "silently lower the suite thresholds" in doc
         and "stronger suite thresholds" in doc
         and "skipped a required model" in doc
         and "reopens the fingerprinted preflight report" in doc

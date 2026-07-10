@@ -257,6 +257,8 @@ PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS = (
     "output_dir",
     "expected_gpus",
     "required_models",
+    "min_trace_count",
+    "min_distinct_trace_models",
     "runtime_overrides",
     "require_artifact_sha256",
 )
@@ -333,6 +335,7 @@ OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS = (
 )
 SUITE_EVIDENCE_THRESHOLD_FIELD_VERIFICATION_COUNT = 2
 SUITE_EVIDENCE_THRESHOLD_SATISFACTION_VERIFICATION_COUNT = 2
+SUITE_EVIDENCE_THRESHOLD_ORIGIN_VERIFICATION_COUNT = 2
 ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION = "isodelta-cluster-environment-snapshot-v1"
 ENVIRONMENT_PACKAGE_NAMES = (
     "sevenn",
@@ -1794,6 +1797,8 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
             "final_paper_required_models": list(FINAL_PAPER_REQUIRED_MODELS),
+            "min_trace_count": config.min_trace_count,
+            "min_distinct_trace_models": config.min_distinct_trace_models,
             "runtime_overrides": dict(config.runtime_overrides),
         },
         "checks": checks,
@@ -2496,6 +2501,8 @@ def run_preflight_only(
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
+            "min_trace_count": config.min_trace_count,
+            "min_distinct_trace_models": config.min_distinct_trace_models,
             "require_artifact_sha256": config.require_artifact_sha256,
             "runtime_overrides": dict(config.runtime_overrides),
         },
@@ -2601,6 +2608,8 @@ def _write_pipeline_report(
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
+            "min_trace_count": config.min_trace_count,
+            "min_distinct_trace_models": config.min_distinct_trace_models,
             "require_artifact_sha256": config.require_artifact_sha256,
             "runtime_overrides": dict(config.runtime_overrides),
         },
@@ -3614,6 +3623,52 @@ def _summary_required_models(summary_payload: dict[str, Any]) -> tuple[str, ...]
     )
 
 
+def _summary_suite_thresholds(
+    summary_payload: dict[str, Any],
+    *,
+    required_models: tuple[str, ...],
+) -> tuple[int, int] | None:
+    """Return recorded suite thresholds when a final-paper summary carries them."""
+    suite_record = summary_payload.get("suite")
+    if not isinstance(suite_record, dict):
+        return None
+    raw_min_trace_count = suite_record.get("min_trace_count")
+    raw_min_distinct_trace_models = suite_record.get("min_distinct_trace_models")
+    if raw_min_trace_count is None and raw_min_distinct_trace_models is None:
+        _require(
+            not required_models,
+            (
+                "summary.suite trace thresholds are required when "
+                "summary.suite.required_models is recorded"
+            ),
+        )
+        return None
+    _require(
+        raw_min_trace_count is not None,
+        (
+            "summary.suite.min_trace_count is required when "
+            "summary.suite.required_models is recorded"
+        ),
+    )
+    _require(
+        raw_min_distinct_trace_models is not None,
+        (
+            "summary.suite.min_distinct_trace_models is required when "
+            "summary.suite.required_models is recorded"
+        ),
+    )
+    return (
+        _as_json_nonnegative_int(
+            raw_min_trace_count,
+            "summary.suite.min_trace_count",
+        ),
+        _as_json_nonnegative_int(
+            raw_min_distinct_trace_models,
+            "summary.suite.min_distinct_trace_models",
+        ),
+    )
+
+
 def _case_record_trace_evidence_paths(
     case_record: dict[str, Any],
     field_label: str,
@@ -3848,6 +3903,27 @@ def _require_suite_evidence_alignment(
         suite_evidence.get("min_distinct_trace_models"),
         "suite_evidence.min_distinct_trace_models",
     )
+    summary_thresholds = _summary_suite_thresholds(
+        summary_payload,
+        required_models=required_models,
+    )
+    verified_threshold_origin_count = 0
+    if summary_thresholds is not None:
+        summary_min_trace_count, summary_min_distinct_trace_models = summary_thresholds
+        _require(
+            min_trace_count == summary_min_trace_count,
+            "suite_evidence.min_trace_count must match summary.suite.min_trace_count",
+        )
+        _require(
+            min_distinct_trace_models == summary_min_distinct_trace_models,
+            (
+                "suite_evidence.min_distinct_trace_models must match "
+                "summary.suite.min_distinct_trace_models"
+            ),
+        )
+        verified_threshold_origin_count = (
+            SUITE_EVIDENCE_THRESHOLD_ORIGIN_VERIFICATION_COUNT
+        )
     _require(
         min_trace_count >= 0,
         "suite_evidence.min_trace_count must be nonnegative",
@@ -3874,6 +3950,7 @@ def _require_suite_evidence_alignment(
         len(expected_evidence)
         + SUITE_EVIDENCE_THRESHOLD_FIELD_VERIFICATION_COUNT
         + SUITE_EVIDENCE_THRESHOLD_SATISFACTION_VERIFICATION_COUNT
+        + verified_threshold_origin_count
     )
 
 
@@ -6778,6 +6855,28 @@ def _require_pipeline_summary_suite_report(
         PIPELINE_SUMMARY_SUITE_ERROR,
     )
     _require(
+        _as_json_nonnegative_int(
+            summary_suite.get("min_trace_count"),
+            "summary.suite.min_trace_count",
+        )
+        == _as_json_nonnegative_int(
+            suite_record.get("min_trace_count"),
+            "suite.min_trace_count",
+        ),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
+        _as_json_nonnegative_int(
+            summary_suite.get("min_distinct_trace_models"),
+            "summary.suite.min_distinct_trace_models",
+        )
+        == _as_json_nonnegative_int(
+            suite_record.get("min_distinct_trace_models"),
+            "suite.min_distinct_trace_models",
+        ),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
         _as_json_object(
             summary_suite.get("runtime_overrides"),
             "summary.suite.runtime_overrides",
@@ -9525,6 +9624,8 @@ def write_paper_outputs(
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
+            "min_trace_count": config.min_trace_count,
+            "min_distinct_trace_models": config.min_distinct_trace_models,
             "require_artifact_sha256": config.require_artifact_sha256,
             "runtime_overrides": dict(config.runtime_overrides),
         },

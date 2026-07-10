@@ -882,6 +882,8 @@ def _write_minimal_output_summary(
     suite_record: dict[str, object] = {"output_dir": str(output_dir)}
     if required_models is not None:
         suite_record["required_models"] = list(required_models)
+        suite_record["min_trace_count"] = 0
+        suite_record["min_distinct_trace_models"] = 0
     summary_payload: dict[str, object] = {
         "suite": suite_record,
         "cases": list(case_records),
@@ -944,6 +946,10 @@ def _pipeline_suite_record(root: Path, output_dir: Path) -> dict[str, object]:
         "output_dir": str(output_dir),
         "expected_gpus": isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
         "required_models": list(isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS),
+        "min_trace_count": isodelta_cluster_suite.DEFAULT_MIN_TRACE_COUNT,
+        "min_distinct_trace_models": (
+            isodelta_cluster_suite.DEFAULT_MIN_DISTINCT_TRACE_MODELS
+        ),
         "require_artifact_sha256": True,
         "runtime_overrides": {},
     }
@@ -1541,6 +1547,45 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
+    def test_verify_output_bundle_rejects_missing_suite_evidence_threshold_origin(
+        self,
+    ) -> None:
+        """Required-model summaries should retain their suite threshold origin."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_records = (
+                _summary_case_record("sevennet", model="SevenNet"),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_path = _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            del summary_payload["suite"]["min_trace_count"]
+            del summary_payload["suite"]["min_distinct_trace_models"]
+            summary_path.write_text(
+                json.dumps(summary_payload, indent=2),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "summary.suite trace thresholds are required when "
+                    "summary.suite.required_models is recorded"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
     def test_verify_output_bundle_rejects_suite_evidence_trace_count_drift(
         self,
     ) -> None:
@@ -1593,6 +1638,52 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
+    def test_verify_output_bundle_rejects_suite_evidence_min_trace_origin_drift(
+        self,
+    ) -> None:
+        """Suite evidence should keep the summary-recorded trace threshold."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            trace_path = root / "sevennet_trace.json"
+            trace_path.write_text(
+                json.dumps(_trace_evidence("SevenNet")),
+                encoding="utf-8",
+            )
+            case_records = (
+                _summary_case_record(
+                    "sevennet",
+                    model="SevenNet",
+                    trace_evidence=[str(trace_path)],
+                ),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_path = _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            suite_evidence = summary_payload["suite_evidence"]
+            suite_evidence["min_trace_count"] += THRESHOLD_DRIFT_INCREMENT
+            summary_path.write_text(
+                json.dumps(summary_payload, indent=2),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "suite_evidence.min_trace_count must match summary.suite.min_trace_count",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
     def test_verify_output_bundle_rejects_suite_evidence_min_trace_drift(
         self,
     ) -> None:
@@ -1627,9 +1718,11 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             )
             summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
             suite_evidence = summary_payload["suite_evidence"]
-            suite_evidence["min_trace_count"] = (
+            drifted_min_trace_count = (
                 suite_evidence["trace_evidence_count"] + THRESHOLD_DRIFT_INCREMENT
             )
+            suite_evidence["min_trace_count"] = drifted_min_trace_count
+            summary_payload["suite"]["min_trace_count"] = drifted_min_trace_count
             summary_path.write_text(
                 json.dumps(summary_payload, indent=2),
                 encoding="utf-8",
@@ -1640,6 +1733,55 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 (
                     "suite_evidence.trace_evidence_count must satisfy "
                     "suite_evidence.min_trace_count"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_suite_evidence_min_model_origin_drift(
+        self,
+    ) -> None:
+        """Suite evidence should keep the summary-recorded model threshold."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            trace_path = root / "sevennet_trace.json"
+            trace_path.write_text(
+                json.dumps(_trace_evidence("SevenNet")),
+                encoding="utf-8",
+            )
+            case_records = (
+                _summary_case_record(
+                    "sevennet",
+                    model="SevenNet",
+                    trace_evidence=[str(trace_path)],
+                ),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_path = _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            suite_evidence = summary_payload["suite_evidence"]
+            suite_evidence["min_distinct_trace_models"] += THRESHOLD_DRIFT_INCREMENT
+            summary_path.write_text(
+                json.dumps(summary_payload, indent=2),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "suite_evidence.min_distinct_trace_models must match "
+                    "summary.suite.min_distinct_trace_models"
                 ),
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
@@ -1678,9 +1820,15 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             )
             summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
             suite_evidence = summary_payload["suite_evidence"]
-            suite_evidence["min_distinct_trace_models"] = (
+            drifted_min_distinct_trace_models = (
                 suite_evidence["distinct_trace_model_count"]
                 + THRESHOLD_DRIFT_INCREMENT
+            )
+            suite_evidence["min_distinct_trace_models"] = (
+                drifted_min_distinct_trace_models
+            )
+            summary_payload["suite"]["min_distinct_trace_models"] = (
+                drifted_min_distinct_trace_models
             )
             summary_path.write_text(
                 json.dumps(summary_payload, indent=2),
@@ -5475,6 +5623,27 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            summary_threshold_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            summary_threshold_drift_pipeline_report["suite"]["min_trace_count"] += (
+                THRESHOLD_DRIFT_INCREMENT
+            )
+            pipeline_report_path.write_text(
+                json.dumps(summary_threshold_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                summary_threshold_drift_error = str(exc)
+            else:
+                summary_threshold_drift_error = ""
+            summary_path.write_text(summary_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             summary_artifact_sha_gate_drift_summary = json.loads(json.dumps(summary))
             summary_artifact_sha_gate_drift_summary["suite"][
                 "require_artifact_sha256"
@@ -5801,6 +5970,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
             summary_suite_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
+            summary_threshold_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
