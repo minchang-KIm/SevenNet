@@ -452,6 +452,7 @@ def _validation_report_summary(
         "expected_branch": None,
         "git_branch": None,
         "git_commit": None,
+        "git_status_short": None,
         "command_count": None,
         "command_failure_count": None,
         "command_missing_field_count": None,
@@ -472,6 +473,8 @@ def _validation_report_summary(
     recorded_expected_branch = payload.get("expected_branch")
     recorded_git_branch = payload.get("git_branch")
     git_commit = payload.get("git_commit")
+    has_git_status_short = "git_status_short" in payload
+    git_status_short = payload.get("git_status_short")
     commands = payload.get("commands")
     command_count = len(commands) if isinstance(commands, list) else None
     command_failure_count = (
@@ -515,6 +518,7 @@ def _validation_report_summary(
             "expected_branch": recorded_expected_branch,
             "git_branch": recorded_git_branch,
             "git_commit": git_commit,
+            "git_status_short": git_status_short,
             "command_count": command_count,
             "command_failure_count": command_failure_count,
             "command_missing_field_count": command_missing_field_count,
@@ -541,6 +545,12 @@ def _validation_report_summary(
         return summary
     if _is_git_object_id(expected_commit) and git_commit != expected_commit:
         summary["detail"] = "validation report git_commit does not match current HEAD"
+        return summary
+    if not has_git_status_short:
+        summary["detail"] = "validation report git_status_short is missing"
+        return summary
+    if git_status_short is not None and not isinstance(git_status_short, str):
+        summary["detail"] = "validation report git_status_short must be a string or null"
         return summary
     if command_count is None:
         summary["detail"] = "validation report commands must be a JSON array"

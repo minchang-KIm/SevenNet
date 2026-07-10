@@ -70,6 +70,8 @@ def _validation_report_command(
     expected_branch: str | None = "feature",
     git_branch: str | None = "feature",
     git_commit: str = FEATURE_COMMIT,
+    git_status_short: object = "",
+    include_git_status_short: bool = True,
     status: str | None = None,
     report_comment: str | None = None,
     command_returncode: int = sync_gate.SUCCESS_RETURN_CODE,
@@ -108,6 +110,8 @@ def _validation_report_command(
         "git_commit": git_commit,
         "commands": [command_record],
     }
+    if include_git_status_short:
+        report_payload["git_status_short"] = git_status_short
     report_text = json.dumps(report_payload, indent=2)
     script = (
         "from pathlib import Path; "
@@ -133,6 +137,7 @@ def _passed_validation_report_summary(
     *,
     git_branch: str | None = "feature",
     git_commit: str = FEATURE_COMMIT,
+    git_status_short: str | None = "",
 ) -> dict[str, object]:
     """Return the expected sync-gate summary for a passing test report."""
     return {
@@ -146,6 +151,7 @@ def _passed_validation_report_summary(
         "expected_branch": "feature",
         "git_branch": git_branch,
         "git_commit": git_commit,
+        "git_status_short": git_status_short,
         "command_count": VALIDATION_REPORT_COMMAND_COUNT,
         "command_failure_count": 0,
         "command_missing_field_count": 0,
@@ -778,6 +784,94 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertEqual(
             report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
             "validation report git_branch does not match push branch",
+        )
+
+    def test_run_sync_rejects_validation_report_without_git_status(self) -> None:
+        """Validation reports should preserve git status provenance."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            include_git_status_short=False,
+                        ),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_REPORT_INVALID)
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
+            "validation report git_status_short is missing",
+        )
+
+    def test_run_sync_rejects_validation_report_invalid_git_status(self) -> None:
+        """Validation report git status must be text or null provenance."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            git_status_short=["not", "text"],
+                        ),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_REPORT_INVALID)
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
+            "validation report git_status_short must be a string or null",
         )
 
     def test_run_sync_requires_full_report_commit_without_local_head(self) -> None:
