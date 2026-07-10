@@ -888,6 +888,78 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             ],
         )
 
+    def test_remote_verification_uses_prechecked_target_commit(self) -> None:
+        """Remote verification should not follow a branch that changes after push."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        branch_commit_reads = 0
+        stable_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
+            ("git", "status", "--short"): "",
+        }
+
+        def fake_metadata(command: tuple[str, ...]) -> str | None:
+            """Return a branch commit that changes after the pre-push check."""
+            nonlocal branch_commit_reads
+            if command == ("git", "rev-parse", "feature"):
+                branch_commit_reads += 1
+                if branch_commit_reads == 1:
+                    return FEATURE_COMMIT
+                return OTHER_COMMIT
+            return stable_metadata.get(command)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            git_commit=FEATURE_COMMIT,
+                        ),
+                        push_command=(sys.executable, "-c", "print('pushed')"),
+                        remote_ref_verify_command=(
+                            sys.executable,
+                            "-c",
+                            f"print('{OTHER_COMMIT}\\trefs/heads/feature')",
+                        ),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_REMOTE_VERIFICATION_FAILED)
+        self.assertEqual(
+            report[sync_gate.TARGET_BRANCH_PRECONDITION_KEY][
+                "target_branch_commit"
+            ],
+            FEATURE_COMMIT,
+        )
+        self.assertEqual(
+            report[sync_gate.REMOTE_REF_VERIFICATION_KEY],
+            {
+                "remote_ref": "refs/heads/feature",
+                "expected_commit": FEATURE_COMMIT,
+                "observed_commit": OTHER_COMMIT,
+                "returncode": sync_gate.SUCCESS_RETURN_CODE,
+                "verified": False,
+                "detail": "remote branch commit does not match the pushed branch",
+            },
+        )
+
     def test_run_sync_rejects_validation_report_without_comment(self) -> None:
         """A passed validation report should describe what evidence it contains."""
         original_root = sync_gate.REPO_ROOT

@@ -809,9 +809,7 @@ def run_sync(
                     else STATUS_PUSH_FAILED
                 )
                 if status == STATUS_SYNCED:
-                    expected_commit = _metadata_command(
-                        _target_branch_commit_command(resolved_branch)
-                    )
+                    expected_commit = target_branch_commit
                     (
                         remote_ref_record,
                         remote_ref_verification_report,
