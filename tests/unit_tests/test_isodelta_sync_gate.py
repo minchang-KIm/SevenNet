@@ -704,6 +704,39 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             "validation report git_commit is not a full Git object id",
         )
 
+    def test_run_sync_requires_full_report_commit_without_local_head(self) -> None:
+        """A report commit is still mandatory when local HEAD metadata is absent."""
+        original_root = sync_gate.REPO_ROOT
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            sync_gate.REPO_ROOT = root
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            git_commit=MALFORMED_REMOTE_COMMIT,
+                        ),
+                        push_command=(sys.executable, "-c", "print('should-not-push')"),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertEqual(report["status"], sync_gate.STATUS_VALIDATION_REPORT_INVALID)
+        self.assertEqual(len(report["commands"]), COMMAND_COUNT_AFTER_VALIDATION_FAILURE)
+        self.assertEqual(
+            report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY]["detail"],
+            "validation report git_commit is not a full Git object id",
+        )
+
     def test_run_sync_rejects_validation_report_without_comment(self) -> None:
         """A passed validation report should describe what evidence it contains."""
         original_root = sync_gate.REPO_ROOT

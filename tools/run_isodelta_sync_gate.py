@@ -447,7 +447,7 @@ def _validation_report_summary(
     if expected_branch is not None and recorded_expected_branch != expected_branch:
         summary["detail"] = "validation report expected_branch does not match push branch"
         return summary
-    if expected_commit is not None and not _is_git_object_id(git_commit):
+    if not _is_git_object_id(git_commit):
         summary["detail"] = "validation report git_commit is not a full Git object id"
         return summary
     if expected_commit is not None and git_commit != expected_commit:

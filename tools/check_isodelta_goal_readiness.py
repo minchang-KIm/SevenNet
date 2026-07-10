@@ -1033,6 +1033,7 @@ REQUIRED_FILE_SNIPPETS = {
         "test_run_sync_fails_when_remote_ref_does_not_match",
         "test_run_sync_fails_when_remote_ref_commit_is_malformed",
         "test_run_sync_rejects_validation_report_malformed_commit",
+        "test_run_sync_requires_full_report_commit_without_local_head",
         "test_run_sync_rejects_missing_validation_report",
         "test_run_sync_rejects_failed_validation_report_json",
         "test_run_sync_rejects_failed_validation_report_command",

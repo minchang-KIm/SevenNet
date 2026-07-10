@@ -937,6 +937,8 @@ def main() -> None:
         in sync_gate_test
         and "test_run_sync_rejects_validation_report_malformed_commit"
         in sync_gate_test
+        and "test_run_sync_requires_full_report_commit_without_local_head"
+        in sync_gate_test
         and "test_run_sync_rejects_missing_validation_report" in sync_gate_test
         and "test_run_sync_rejects_failed_validation_report_json" in sync_gate_test
         and "test_run_sync_rejects_failed_validation_report_command" in sync_gate_test
