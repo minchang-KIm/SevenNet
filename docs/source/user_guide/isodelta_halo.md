@@ -261,8 +261,9 @@ validation report file is missing, the sync gate reports
 `validation_report_missing` and does not push. It also parses the validation
 report JSON into `validation_report_summary`; if that summary does not show
 the expected schema version, required validation command fields,
-`status = "passed"` for the same expected branch, a full Git object id for
-`git_commit`, the current HEAD commit when it can be compared, and
+`status = "passed"` for the same expected branch, `git_branch` matching the
+push branch, a full Git object id for `git_commit`, the current HEAD commit
+when it can be compared, and
 zero failed validation command return codes, the gate reports
 `validation_report_invalid` and does not push. The required command fields
 must use valid types and values. The report also stores `sync_command_summary`,

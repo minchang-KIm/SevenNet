@@ -450,6 +450,7 @@ def _validation_report_summary(
         GENERATED_REPORT_COMMENT_KEY: None,
         "status": None,
         "expected_branch": None,
+        "git_branch": None,
         "git_commit": None,
         "command_count": None,
         "command_failure_count": None,
@@ -469,6 +470,7 @@ def _validation_report_summary(
     report_comment = payload.get(GENERATED_REPORT_COMMENT_KEY)
     status = payload.get("status")
     recorded_expected_branch = payload.get("expected_branch")
+    recorded_git_branch = payload.get("git_branch")
     git_commit = payload.get("git_commit")
     commands = payload.get("commands")
     command_count = len(commands) if isinstance(commands, list) else None
@@ -511,6 +513,7 @@ def _validation_report_summary(
             GENERATED_REPORT_COMMENT_KEY: report_comment,
             "status": status,
             "expected_branch": recorded_expected_branch,
+            "git_branch": recorded_git_branch,
             "git_commit": git_commit,
             "command_count": command_count,
             "command_failure_count": command_failure_count,
@@ -529,6 +532,9 @@ def _validation_report_summary(
         return summary
     if expected_branch is not None and recorded_expected_branch != expected_branch:
         summary["detail"] = "validation report expected_branch does not match push branch"
+        return summary
+    if expected_branch is not None and recorded_git_branch != expected_branch:
+        summary["detail"] = "validation report git_branch does not match push branch"
         return summary
     if not _is_git_object_id(git_commit):
         summary["detail"] = "validation report git_commit is not a full Git object id"
