@@ -1794,9 +1794,13 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_missing_speedup_confidence_interval"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_missing_speedup_uncertainty_svg"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_missing_required_model_speedup"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_missing_required_model_speedup_ci"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_required_model_coverage_value_drift"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_speedup_svg_label_drift"
         in cluster_suite_test
@@ -1901,6 +1905,14 @@ def main() -> None:
         and "_require_artifact_index_alignment" in cluster_suite
         and "verified_artifact_index_count" in cluster_suite
         and "_require_case_summary_cell_values" in cluster_suite
+        and "PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS" in cluster_suite
+        and "MODEL_COVERAGE_STATUS_COVERED" in cluster_suite
+        and "_required_model_coverage_rows_from_case_records" in cluster_suite
+        and "_required_model_coverage_rows_from_summary" in cluster_suite
+        and "_require_required_model_coverage_csv" in cluster_suite
+        and "_require_required_model_coverage_markdown" in cluster_suite
+        and "required_model_coverage.csv" in cluster_suite
+        and "required_model_coverage.md" in cluster_suite
         and "_summary_correlations_by_metric_pair" in cluster_suite
         and "_format_csv_value" in cluster_suite
         and "PAPER_COMMAND_TIMING_COLUMNS" in cluster_suite
@@ -2234,6 +2246,9 @@ def main() -> None:
         and "at least one finite measured speedup" in doc
         and "at least one finite speedup confidence interval" in doc
         and "every required model to contribute measured speedup" in doc
+        and "required_model_coverage.csv" in doc
+        and "required_model_coverage.md" in doc
+        and "model coverage table" in doc
         and "skipped a required model" in doc
         and "reopens the fingerprinted preflight report" in doc
         and "checks `gpu_check`" in doc

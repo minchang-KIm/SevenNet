@@ -602,6 +602,7 @@ def _write_required_paper_artifacts(
     case_records: tuple[dict[str, object], ...] | None = None,
     command_records: tuple[dict[str, object], ...] = (),
     repeat_timing_rows: tuple[dict[str, object], ...] = (),
+    required_models: tuple[str, ...] = (),
 ) -> dict[str, dict[str, object]]:
     """Create the required paper artifacts that bundle verification expects."""
     if case_records is None:
@@ -614,6 +615,8 @@ def _write_required_paper_artifacts(
     manifest_snapshot = output_dir / isodelta_cluster_suite.MANIFEST_SNAPSHOT_NAME
     case_summary_csv = tables_dir / "case_summary.csv"
     case_summary_markdown = tables_dir / "case_summary.md"
+    required_model_coverage_csv = tables_dir / "required_model_coverage.csv"
+    required_model_coverage_markdown = tables_dir / "required_model_coverage.md"
     correlation_csv = tables_dir / "correlation.csv"
     command_timing_csv = tables_dir / "command_timing.csv"
     command_timing_markdown = tables_dir / "command_timing.md"
@@ -678,6 +681,12 @@ def _write_required_paper_artifacts(
         }
         for record in case_records
     ]
+    coverage_rows = (
+        isodelta_cluster_suite._required_model_coverage_rows_from_case_records(
+            required_models,
+            [dict(record) for record in case_records],
+        )
+    )
     isodelta_cluster_suite.write_csv(
         case_summary_csv,
         case_rows,
@@ -688,6 +697,22 @@ def _write_required_paper_artifacts(
         case_rows,
         comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
             "case_summary_markdown"
+        ],
+    )
+    isodelta_cluster_suite.write_csv(
+        required_model_coverage_csv,
+        coverage_rows,
+        fieldnames=isodelta_cluster_suite.PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+            "required_model_coverage_csv"
+        ],
+    )
+    isodelta_cluster_suite.write_markdown_table(
+        required_model_coverage_markdown,
+        coverage_rows,
+        fieldnames=isodelta_cluster_suite.PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS,
+        comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+            "required_model_coverage_markdown"
         ],
     )
     isodelta_cluster_suite.write_csv(
@@ -776,6 +801,8 @@ def _write_required_paper_artifacts(
         "environment_snapshot": environment_snapshot,
         "case_summary_csv": case_summary_csv,
         "case_summary_markdown": case_summary_markdown,
+        "required_model_coverage_csv": required_model_coverage_csv,
+        "required_model_coverage_markdown": required_model_coverage_markdown,
         "correlation_csv": correlation_csv,
         "command_timing_csv": command_timing_csv,
         "command_timing_markdown": command_timing_markdown,
@@ -1582,6 +1609,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             artifact_fingerprints = _write_required_paper_artifacts(
                 output_dir,
                 case_records=(case_record,),
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
             )
             _write_minimal_output_summary(
                 output_dir,
@@ -1610,6 +1638,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             artifact_fingerprints = _write_required_paper_artifacts(
                 output_dir,
                 case_records=(case_record,),
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
             )
             _write_minimal_output_summary(
                 output_dir,
@@ -1623,6 +1652,30 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                     "paper output bundle must include at least one speedup "
                     "confidence interval case"
                 ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_missing_speedup_uncertainty_svg(
+        self,
+    ) -> None:
+        """The speedup CI figure should be a required paper artifact."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_record = _summary_case_record("case")
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=(case_record,),
+            )
+            del artifact_fingerprints["speedup_uncertainty_svg"]
+            _write_minimal_output_summary(
+                output_dir,
+                case_records=(case_record,),
+                artifact_fingerprints=artifact_fingerprints,
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "speedup_uncertainty_svg",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -1670,6 +1723,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             artifact_fingerprints = _write_required_paper_artifacts(
                 output_dir,
                 case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
             )
             _write_minimal_output_summary(
                 output_dir,
@@ -1683,6 +1737,49 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 (
                     "paper output bundle is missing speedup confidence "
                     "intervals for required models: NequIP"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_required_model_coverage_value_drift(
+        self,
+    ) -> None:
+        """Required-model coverage tables should match summary evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_records = (
+                _summary_case_record("sevennet", model="SevenNet"),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            coverage_csv = output_dir / "tables" / "required_model_coverage.csv"
+            coverage_csv.write_text(
+                coverage_csv.read_text(encoding="utf-8").replace(
+                    "MACE,covered,1,1,0,1,1",
+                    "MACE,incomplete,1,1,0,0,1",
+                ),
+                encoding="utf-8",
+            )
+            artifact_fingerprints["required_model_coverage_csv"] = (
+                isodelta_cluster_suite.generated_artifact_record(coverage_csv)
+            )
+            _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    r"required_model_coverage\.csv\[1\]\.coverage_status "
+                    "must match summary required-model evidence"
                 ),
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)

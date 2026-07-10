@@ -938,6 +938,13 @@ command log fingerprint no longer matches the filesystem.
 It also performs semantic paper-artifact checks after the SHA-256 pass:
 `case_summary.csv` and `case_summary.md` must contain exactly one row per
 summary case and the same cell values as `summary["cases"]`.
+`required_model_coverage.csv` and `required_model_coverage.md` are the model coverage table:
+one row per required model, showing whether that model has a passed case,
+trace evidence count, measured speedup count, speedup CI count, best measured
+speedup, and the weakest speedup-CI lower bound.
+The verifier recomputes those rows from `summary["suite"]["required_models"]`
+and `summary["cases"]`, so a reviewer-facing coverage table cannot be edited
+away from the JSON evidence.
 `correlation.csv` must contain the configured metric-pair rows and the same values as
 `summary["correlations"]`, and `command_timing.csv`/`command_timing.md` must
 contain the same command rows as `summary["commands"]`.
@@ -947,6 +954,9 @@ timing report without regenerating the repeat table is rejected.
 `speedup_uncertainty.csv`/`speedup_uncertainty.md` must match the uncertainty
 fields in `summary["cases"]`, so the paper-ready CI table cannot drift from the
 JSON evidence.
+`speedup_uncertainty.svg` is also a required paper artifact, not an optional
+side figure; it must carry the expected `<desc>` text and one lower/upper error
+bar marker for every case with a finite speedup confidence interval.
 The verifier also requires `summary["cases"]` to contain at least one finite measured speedup and at least one finite speedup confidence interval, and when `summary["suite"]["required_models"]` is recorded it requires every required model to contribute measured speedup and speedup confidence interval evidence. A run that only produced empty figure shells or skipped a required model cannot pass as a paper output bundle.
 Every generated table must keep its explanatory comment.
 Each SVG figure must parse as an SVG document with width, height, viewBox, and the expected `<desc>` description;

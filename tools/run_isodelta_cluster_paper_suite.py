@@ -115,6 +115,8 @@ DEFAULT_PREFLIGHT_TIMEOUT_SECONDS = 300.0
 CASE_STATUS_PASSED = "passed"
 CASE_STATUS_REUSED = "reused"
 PASSING_CASE_STATUSES = frozenset((CASE_STATUS_PASSED, CASE_STATUS_REUSED))
+MODEL_COVERAGE_STATUS_COVERED = "covered"
+MODEL_COVERAGE_STATUS_INCOMPLETE = "incomplete"
 PREFLIGHT_STATUS_PASSED = "passed"
 PREFLIGHT_STATUS_FAILED = "failed"
 PREFLIGHT_STATUS_PLANNED = "planned"
@@ -274,6 +276,8 @@ PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS = (
     "environment_snapshot",
     "case_summary_csv",
     "case_summary_markdown",
+    "required_model_coverage_csv",
+    "required_model_coverage_markdown",
     "correlation_csv",
     "command_timing_csv",
     "command_timing_markdown",
@@ -393,6 +397,8 @@ REQUIRED_PAPER_ARTIFACT_NAMES = (
     "environment_snapshot",
     "case_summary_csv",
     "case_summary_markdown",
+    "required_model_coverage_csv",
+    "required_model_coverage_markdown",
     "correlation_csv",
     "command_timing_csv",
     "command_timing_markdown",
@@ -400,6 +406,7 @@ REQUIRED_PAPER_ARTIFACT_NAMES = (
     "repeat_timing_markdown",
     "speedup_uncertainty_csv",
     "speedup_uncertainty_markdown",
+    "speedup_uncertainty_svg",
     "speedup_svg",
     "hit_rate_svg",
     "trace_svg",
@@ -476,6 +483,14 @@ PAPER_ARTIFACT_COMMENTS = {
         "IsoDelta-Halo paper table in Markdown for quick review of case-level "
         "timing, cache, trace, and confidence-interval metrics."
     ),
+    "required_model_coverage_csv": (
+        "IsoDelta-Halo required-model coverage table: per-model pass, trace, "
+        "measured speedup, and confidence-interval evidence for final-paper scope."
+    ),
+    "required_model_coverage_markdown": (
+        "IsoDelta-Halo required-model coverage table in Markdown for reviewing "
+        "per-model pass, trace, measured speedup, and confidence-interval evidence."
+    ),
     "correlation_csv": (
         "IsoDelta-Halo appendix table: Pearson and Spearman correlations "
         "between cache, trace, and speedup metrics."
@@ -524,6 +539,17 @@ PAPER_ARTIFACT_COMMENTS = {
 }
 PAPER_CASE_SUMMARY_COLUMNS = ("case", "model", "kind", "status")
 PAPER_CASE_SUMMARY_FIELD_MAP = {"case": "case_name"}
+PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS = (
+    "model",
+    "coverage_status",
+    "case_count",
+    "passed_case_count",
+    "trace_evidence_count",
+    "measured_speedup_case_count",
+    "speedup_ci_case_count",
+    "best_speedup_vs_disabled_cache",
+    "worst_speedup_95ci_lower_bound",
+)
 PAPER_CORRELATION_COLUMNS = ("x_metric", "y_metric", "n", "pearson", "spearman")
 PAPER_COMMAND_TIMING_COLUMNS = (
     "name",
@@ -3532,6 +3558,123 @@ def _summary_required_models(summary_payload: dict[str, Any]) -> tuple[str, ...]
     )
 
 
+def _case_record_trace_evidence_count(
+    case_record: dict[str, Any],
+    field_label: str,
+) -> int:
+    """Return trace-evidence path count from a summary-style case record."""
+    raw_trace_evidence = case_record.get(TRACE_EVIDENCE_KEY, ())
+    if raw_trace_evidence is None:
+        return 0
+    _require(
+        isinstance(raw_trace_evidence, (list, tuple)),
+        f"{field_label}.{TRACE_EVIDENCE_KEY} must be an array",
+    )
+    for trace_index, raw_path in enumerate(raw_trace_evidence):
+        _as_json_string(
+            raw_path,
+            f"{field_label}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
+        )
+    return len(raw_trace_evidence)
+
+
+def _required_model_coverage_rows_from_case_records(
+    required_models: tuple[str, ...],
+    case_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Summarize model-by-model evidence coverage for final-paper review."""
+    rows: list[dict[str, Any]] = []
+    for required_model in required_models:
+        model_records = [
+            case_record
+            for case_record in case_records
+            if _as_json_string(
+                case_record.get(MODEL_KEY),
+                f"case_records.{case_record.get('case_name', '<unknown>')}.{MODEL_KEY}",
+            )
+            == required_model
+        ]
+        passed_records = [
+            case_record
+            for case_record in model_records
+            if case_record.get(STATUS_KEY) in PASSING_CASE_STATUSES
+        ]
+        measured_records = [
+            case_record
+            for case_record in model_records
+            if _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY)
+            is not None
+        ]
+        ci_records = [
+            case_record
+            for case_record in measured_records
+            if _summary_numeric_value(case_record, "speedup_95ci_lower_bound")
+            is not None
+            and _summary_numeric_value(case_record, "speedup_95ci_upper_bound")
+            is not None
+        ]
+        measured_speedups = [
+            _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY)
+            for case_record in measured_records
+        ]
+        ci_lower_bounds = [
+            _summary_numeric_value(case_record, "speedup_95ci_lower_bound")
+            for case_record in ci_records
+        ]
+        trace_evidence_count = sum(
+            _case_record_trace_evidence_count(
+                case_record,
+                f"case_records.{case_record.get('case_name', '<unknown>')}",
+            )
+            for case_record in model_records
+        )
+        is_covered = (
+            len(passed_records) >= MIN_REQUIRED_CASE_COUNT
+            and len(measured_records) >= MIN_REQUIRED_MEASURED_SPEEDUP_CASES
+            and len(ci_records) >= MIN_REQUIRED_SPEEDUP_CI_CASES
+        )
+        rows.append(
+            {
+                "model": required_model,
+                "coverage_status": (
+                    MODEL_COVERAGE_STATUS_COVERED
+                    if is_covered
+                    else MODEL_COVERAGE_STATUS_INCOMPLETE
+                ),
+                "case_count": len(model_records),
+                "passed_case_count": len(passed_records),
+                "trace_evidence_count": trace_evidence_count,
+                "measured_speedup_case_count": len(measured_records),
+                "speedup_ci_case_count": len(ci_records),
+                "best_speedup_vs_disabled_cache": (
+                    max(speedup for speedup in measured_speedups if speedup is not None)
+                    if measured_speedups
+                    else None
+                ),
+                "worst_speedup_95ci_lower_bound": (
+                    min(
+                        lower_bound
+                        for lower_bound in ci_lower_bounds
+                        if lower_bound is not None
+                    )
+                    if ci_lower_bounds
+                    else None
+                ),
+            }
+        )
+    return rows
+
+
+def _required_model_coverage_rows_from_summary(
+    summary_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return expected required-model coverage rows from summary JSON."""
+    return _required_model_coverage_rows_from_case_records(
+        _summary_required_models(summary_payload),
+        list(_summary_cases_by_name(summary_payload).values()),
+    )
+
+
 def _case_config_from_external_summary(
     *,
     case_name: str,
@@ -4025,6 +4168,91 @@ def _require_case_summary_markdown(
         label="case_summary.md",
         formatter=_format_table_value,
     )
+
+
+def _require_required_model_coverage_csv(
+    path: Path,
+    summary_payload: dict[str, Any],
+) -> None:
+    """Verify model coverage CSV rows match summary-required model evidence."""
+    _require_csv_artifact_comment(
+        path,
+        "required_model_coverage.csv",
+        "required_model_coverage_csv",
+    )
+    fieldnames, rows = _read_csv_rows(path, "required_model_coverage.csv")
+    _require_columns(
+        fieldnames,
+        PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS,
+        "required_model_coverage.csv",
+    )
+    expected_rows = _required_model_coverage_rows_from_summary(summary_payload)
+    _require(
+        len(rows) == len(expected_rows),
+        "required_model_coverage.csv: row count must match required models",
+    )
+    for index, expected_row in enumerate(expected_rows):
+        csv_row = rows[index]
+        for column_name in PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS:
+            expected_value = _format_csv_value(expected_row.get(column_name))
+            actual_value = csv_row.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                (
+                    f"required_model_coverage.csv[{index}].{column_name} "
+                    "must match summary required-model evidence"
+                ),
+            )
+
+
+def _require_required_model_coverage_markdown(
+    path: Path,
+    summary_payload: dict[str, Any],
+) -> None:
+    """Verify model coverage Markdown rows match summary-required evidence."""
+    _require_markdown_artifact_comment(
+        path,
+        "required_model_coverage.md",
+        "required_model_coverage_markdown",
+    )
+    lines = _markdown_table_lines(path)
+    expected_rows = _required_model_coverage_rows_from_summary(summary_payload)
+    _require(
+        len(lines) == len(expected_rows) + 2,
+        "required_model_coverage.md: row count must match required models plus header",
+    )
+    header = _markdown_cells(lines[0])
+    separator = _markdown_cells(lines[1])
+    _require_columns(
+        tuple(header),
+        PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS,
+        "required_model_coverage.md",
+    )
+    _require(
+        len(separator) == len(header),
+        "required_model_coverage.md: separator width must match header",
+    )
+    _require(
+        all(cell == "---" for cell in separator),
+        "required_model_coverage.md: separator row must contain markdown column markers",
+    )
+    for index, expected_row in enumerate(expected_rows):
+        cells = _markdown_cells(lines[index + 2])
+        _require(
+            len(cells) == len(header),
+            f"required_model_coverage.md[{index}]: row width must match header",
+        )
+        markdown_row = dict(zip(header, cells, strict=True))
+        for column_name in PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS:
+            expected_value = _format_table_value(expected_row.get(column_name))
+            actual_value = markdown_row.get(column_name, "")
+            _require(
+                actual_value == expected_value,
+                (
+                    f"required_model_coverage.md[{index}].{column_name} "
+                    "must match summary required-model evidence"
+                ),
+            )
 
 
 def _require_correlation_csv(path: Path, summary_payload: dict[str, Any]) -> None:
@@ -4872,6 +5100,14 @@ def _require_paper_artifact_semantics(
     _require_case_summary_markdown(
         resolved_artifact_paths["case_summary_markdown"],
         cases_by_name,
+    )
+    _require_required_model_coverage_csv(
+        resolved_artifact_paths["required_model_coverage_csv"],
+        summary_payload,
+    )
+    _require_required_model_coverage_markdown(
+        resolved_artifact_paths["required_model_coverage_markdown"],
+        summary_payload,
     )
     _require_correlation_csv(resolved_artifact_paths["correlation_csv"], summary_payload)
     _require_command_timing_csv(
@@ -6490,6 +6726,12 @@ def build_run_plan(
             "environment_snapshot": str(config.output_dir / ENVIRONMENT_SNAPSHOT_NAME),
             "case_summary_csv": str(config.output_dir / TABLES_DIR_NAME / "case_summary.csv"),
             "case_summary_markdown": str(config.output_dir / TABLES_DIR_NAME / "case_summary.md"),
+            "required_model_coverage_csv": str(
+                config.output_dir / TABLES_DIR_NAME / "required_model_coverage.csv"
+            ),
+            "required_model_coverage_markdown": str(
+                config.output_dir / TABLES_DIR_NAME / "required_model_coverage.md"
+            ),
             "correlation_csv": str(config.output_dir / TABLES_DIR_NAME / "correlation.csv"),
             "command_timing_csv": str(
                 config.output_dir / TABLES_DIR_NAME / "command_timing.csv"
@@ -8303,6 +8545,17 @@ def _speedup_uncertainty_rows(
     ]
 
 
+def _required_model_coverage_rows(
+    config: SuiteConfig,
+    case_summaries: list[CaseSummary],
+) -> list[dict[str, Any]]:
+    """Return per-required-model evidence rows for paper scope auditing."""
+    return _required_model_coverage_rows_from_case_records(
+        config.required_models,
+        [asdict(summary) for summary in case_summaries],
+    )
+
+
 def write_csv(
     path: Path,
     rows: list[dict[str, Any]],
@@ -8679,12 +8932,15 @@ def write_paper_outputs(
     tables_dir = config.output_dir / TABLES_DIR_NAME
     figures_dir = config.output_dir / FIGURES_DIR_NAME
     summary_rows = _summary_rows(case_summaries)
+    required_model_coverage_rows = _required_model_coverage_rows(config, case_summaries)
     correlation_rows = build_correlation_rows(case_summaries)
     command_timing_rows = _command_timing_rows(command_records)
     repeat_timing_rows = _repeat_timing_rows(case_summaries)
     speedup_uncertainty_rows = _speedup_uncertainty_rows(case_summaries)
     case_summary_csv = tables_dir / "case_summary.csv"
     case_summary_md = tables_dir / "case_summary.md"
+    required_model_coverage_csv = tables_dir / "required_model_coverage.csv"
+    required_model_coverage_md = tables_dir / "required_model_coverage.md"
     correlation_csv = tables_dir / "correlation.csv"
     command_timing_csv = tables_dir / "command_timing.csv"
     command_timing_md = tables_dir / "command_timing.md"
@@ -8701,6 +8957,18 @@ def write_paper_outputs(
         case_summary_md,
         summary_rows,
         comment=PAPER_ARTIFACT_COMMENTS["case_summary_markdown"],
+    )
+    write_csv(
+        required_model_coverage_csv,
+        required_model_coverage_rows,
+        fieldnames=PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS,
+        comment=PAPER_ARTIFACT_COMMENTS["required_model_coverage_csv"],
+    )
+    write_markdown_table(
+        required_model_coverage_md,
+        required_model_coverage_rows,
+        fieldnames=PAPER_REQUIRED_MODEL_COVERAGE_COLUMNS,
+        comment=PAPER_ARTIFACT_COMMENTS["required_model_coverage_markdown"],
     )
     write_csv(
         correlation_csv,
@@ -8776,6 +9044,8 @@ def write_paper_outputs(
         "environment_snapshot": environment_snapshot_path,
         "case_summary_csv": case_summary_csv,
         "case_summary_markdown": case_summary_md,
+        "required_model_coverage_csv": required_model_coverage_csv,
+        "required_model_coverage_markdown": required_model_coverage_md,
         "correlation_csv": correlation_csv,
         "command_timing_csv": command_timing_csv,
         "command_timing_markdown": command_timing_md,
@@ -8845,6 +9115,8 @@ def write_paper_outputs(
         "environment_snapshot": str(environment_snapshot_path),
         "case_summary_csv": str(case_summary_csv),
         "case_summary_markdown": str(case_summary_md),
+        "required_model_coverage_csv": str(required_model_coverage_csv),
+        "required_model_coverage_markdown": str(required_model_coverage_md),
         "correlation_csv": str(correlation_csv),
         "command_timing_csv": str(command_timing_csv),
         "command_timing_markdown": str(command_timing_md),
