@@ -1682,6 +1682,11 @@ def main() -> None:
         and "build_correlation_rows" in cluster_suite
         and "validate_suite_evidence" in cluster_suite
         and "suite_evidence" in cluster_suite
+        and "_suite_evidence_from_summary" in cluster_suite
+        and "_require_suite_evidence_alignment" in cluster_suite
+        and "verified_suite_evidence_count" in cluster_suite
+        and "suite_evidence.{field_name} must match passed summary cases"
+        in cluster_suite
         and "build_run_plan" in cluster_suite
         and "write_run_plan" in cluster_suite
         and "PLAN_REPORT_NAME" in cluster_suite
@@ -1813,6 +1818,10 @@ def main() -> None:
         and "test_validate_case_outputs_rejects_missing_required_trace_model_label"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_required_trace_model_label_drift"
+        in cluster_suite_test
+        and "test_verify_output_bundle_requires_suite_evidence_for_required_models"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_suite_evidence_trace_count_drift"
         in cluster_suite_test
         and "test_build_correlation_rows_ignores_failed_case_metrics"
         in cluster_suite_test
@@ -2299,6 +2308,8 @@ def main() -> None:
         and "fingerprinted trace JSON through the MLIP trace checker" in doc
         and "required_trace_models" in doc
         and "attributing a MACE trace to a NequIP case" in doc
+        and "The final `suite_evidence` block is recomputed" in doc
+        and "distinct trace-model counts" in doc
         and "skipped a required model" in doc
         and "reopens the fingerprinted preflight report" in doc
         and "checks `gpu_check`" in doc

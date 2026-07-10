@@ -833,45 +833,86 @@ def _artifact_index(
     }
 
 
+def _suite_evidence_from_records(
+    case_records: tuple[dict[str, object], ...],
+    required_models: tuple[str, ...],
+) -> dict[str, object]:
+    """Return compact suite evidence derived from synthetic case records."""
+    passed_records = [
+        record
+        for record in case_records
+        if record["status"] in isodelta_cluster_suite.PASSING_CASE_STATUSES
+    ]
+    trace_paths = sorted(
+        {
+            str(trace_path)
+            for record in passed_records
+            for trace_path in record.get("trace_evidence", ())
+        }
+    )
+    trace_models = sorted(
+        {
+            str(json.loads(Path(trace_path).read_text(encoding="utf-8"))["model"])
+            for trace_path in trace_paths
+            if Path(trace_path).exists()
+        }
+    )
+    return {
+        "required_models": list(required_models),
+        "passed_models": sorted({str(record["model"]) for record in passed_records}),
+        "trace_evidence_count": len(trace_paths),
+        "distinct_trace_model_count": len(trace_models),
+        "trace_models": trace_models,
+        "min_trace_count": 0,
+        "min_distinct_trace_models": 0,
+    }
+
+
 def _write_minimal_output_summary(
     output_dir: Path,
     *,
     case_records: tuple[dict[str, object], ...],
     artifact_fingerprints: dict[str, dict[str, object]],
     required_models: tuple[str, ...] | None = None,
+    suite_evidence: dict[str, object] | None = None,
 ) -> Path:
     """Write a compact summary JSON for output-bundle verifier tests."""
     summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
     suite_record: dict[str, object] = {"output_dir": str(output_dir)}
     if required_models is not None:
         suite_record["required_models"] = list(required_models)
+    summary_payload: dict[str, object] = {
+        "suite": suite_record,
+        "cases": list(case_records),
+        "correlations": _summary_correlations_from_records(case_records),
+        "commands": [],
+        "command_log_fingerprints": [],
+        "artifacts": _artifact_index(artifact_fingerprints),
+        "artifact_fingerprints": artifact_fingerprints,
+        "evidence_fingerprints": {
+            str(case_record["case_name"]): {
+                "benchmark_report": None,
+                "bundle_evidence": None,
+                "external_timing_report": None,
+                "trace_evidence": [
+                    isodelta_cluster_suite.generated_artifact_record(
+                        Path(str(trace_path))
+                    )
+                    for trace_path in case_record.get("trace_evidence", ())
+                ],
+            }
+            for case_record in case_records
+        },
+    }
+    if suite_evidence is not None:
+        summary_payload["suite_evidence"] = suite_evidence
+    elif required_models is not None:
+        summary_payload["suite_evidence"] = _suite_evidence_from_records(
+            case_records,
+            required_models,
+        )
     summary_path.write_text(
-        json.dumps(
-            {
-                "suite": suite_record,
-                "cases": list(case_records),
-                "correlations": _summary_correlations_from_records(case_records),
-                "commands": [],
-                "command_log_fingerprints": [],
-                "artifacts": _artifact_index(artifact_fingerprints),
-                "artifact_fingerprints": artifact_fingerprints,
-                "evidence_fingerprints": {
-                    str(case_record["case_name"]): {
-                        "benchmark_report": None,
-                        "bundle_evidence": None,
-                        "external_timing_report": None,
-                        "trace_evidence": [
-                            isodelta_cluster_suite.generated_artifact_record(
-                                Path(str(trace_path))
-                            )
-                            for trace_path in case_record.get("trace_evidence", ())
-                        ],
-                    }
-                    for case_record in case_records
-                },
-            },
-            indent=2,
-        ),
+        json.dumps(summary_payload, indent=2),
         encoding="utf-8",
     )
     return summary_path
@@ -1460,6 +1501,96 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 "trace evidence is missing required model labels: NequIP",
             ):
                 isodelta_cluster_suite.verify_output_bundle(summary_path)
+
+    def test_verify_output_bundle_requires_suite_evidence_for_required_models(
+        self,
+    ) -> None:
+        """Final paper summaries should keep suite-level evidence explicit."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_records = (
+                _summary_case_record("sevennet", model="SevenNet"),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_path = _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            del summary_payload["suite_evidence"]
+            summary_path.write_text(
+                json.dumps(summary_payload, indent=2),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "suite_evidence is required when "
+                    "summary.suite.required_models is recorded"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_suite_evidence_trace_count_drift(
+        self,
+    ) -> None:
+        """Suite evidence should be recomputed from passed trace files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            trace_records = {
+                "sevennet": ("SevenNet", root / "sevennet_trace.json"),
+                "mace": ("MACE", root / "mace_trace.json"),
+                "nequip": ("NequIP", root / "nequip_trace.json"),
+            }
+            for model_name, trace_path in trace_records.values():
+                trace_path.write_text(
+                    json.dumps(_trace_evidence(model_name)),
+                    encoding="utf-8",
+                )
+            case_records = tuple(
+                _summary_case_record(
+                    case_name,
+                    model=model_name,
+                    trace_evidence=[str(trace_path)],
+                )
+                for case_name, (model_name, trace_path) in trace_records.items()
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_path = _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary_payload["suite_evidence"]["trace_evidence_count"] += 1
+            summary_path.write_text(
+                json.dumps(summary_payload, indent=2),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "suite_evidence.trace_evidence_count "
+                    "must match passed summary cases"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
 
     def test_verify_output_bundle_accepts_slurm_python_provenance_artifact(self) -> None:
         """Bundle verification should validate archived SLURM Python provenance."""

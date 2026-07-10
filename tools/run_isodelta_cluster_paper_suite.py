@@ -321,6 +321,7 @@ OUTPUT_BUNDLE_VERIFICATION_KEY = "output_bundle_verification"
 OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS = (
     "verified_artifact_count",
     "verified_artifact_index_count",
+    "verified_suite_evidence_count",
     "verified_paper_artifact_semantic_count",
     "verified_slurm_python_provenance_count",
     "verified_preflight_environment_snapshot_count",
@@ -3743,6 +3744,119 @@ def _required_model_coverage_rows_from_summary(
     )
 
 
+def _suite_evidence_from_summary(
+    summary_payload: dict[str, Any],
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> dict[str, Any]:
+    """Recompute suite-level evidence from passed cases and trace files."""
+    cases_by_name = _summary_cases_by_name(summary_payload)
+    raw_evidence_records = _as_json_object(
+        summary_payload.get(EVIDENCE_FINGERPRINTS_KEY),
+        EVIDENCE_FINGERPRINTS_KEY,
+    )
+    passed_models: set[str] = set()
+    trace_paths: set[str] = set()
+    trace_models: set[str] = set()
+    for case_name, case_record in cases_by_name.items():
+        if not _summary_case_has_passing_status(case_name, case_record):
+            continue
+        passed_models.add(
+            _as_json_string(
+                case_record.get(MODEL_KEY),
+                f"cases.{case_name}.{MODEL_KEY}",
+            )
+        )
+        trace_paths.update(
+            _case_record_trace_evidence_paths(case_record, f"cases.{case_name}")
+        )
+        case_evidence = _as_json_object(
+            raw_evidence_records.get(case_name),
+            f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}",
+        )
+        trace_records = case_evidence.get(TRACE_EVIDENCE_KEY)
+        _require(
+            isinstance(trace_records, list),
+            f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{TRACE_EVIDENCE_KEY} must be a JSON array",
+        )
+        for trace_index, raw_record in enumerate(trace_records):
+            record = _as_json_object(
+                raw_record,
+                f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
+            )
+            trace_path = _resolve_present_fingerprint_path(
+                record,
+                f"{case_name}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
+                bundle_root=bundle_root,
+                original_output_dir=original_output_dir,
+            )
+            trace_payload = _as_json_object(
+                json.loads(trace_path.read_text(encoding="utf-8")),
+                f"{case_name}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
+            )
+            trace_models.add(
+                _validated_trace_payload_model_label(
+                    trace_payload,
+                    trace_check.TraceThresholds(),
+                    f"{case_name}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
+                )
+            )
+    return {
+        "required_models": list(_summary_required_models(summary_payload)),
+        "passed_models": sorted(passed_models),
+        "trace_evidence_count": len(trace_paths),
+        "distinct_trace_model_count": len(trace_models),
+        "trace_models": sorted(trace_models),
+    }
+
+
+def _require_suite_evidence_alignment(
+    summary_payload: dict[str, Any],
+    *,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> int:
+    """Verify recorded suite-level claims match recomputed summary evidence."""
+    required_models = _summary_required_models(summary_payload)
+    raw_suite_evidence = summary_payload.get("suite_evidence")
+    if raw_suite_evidence is None:
+        _require(
+            not required_models,
+            "suite_evidence is required when summary.suite.required_models is recorded",
+        )
+        return 0
+    suite_evidence = _as_json_object(raw_suite_evidence, "suite_evidence")
+    expected_evidence = _suite_evidence_from_summary(
+        summary_payload,
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
+    for field_name, expected_value in expected_evidence.items():
+        actual_value = suite_evidence.get(field_name)
+        _require(
+            actual_value == expected_value,
+            f"suite_evidence.{field_name} must match passed summary cases",
+        )
+    min_trace_count = _as_json_nonnegative_int(
+        suite_evidence.get("min_trace_count"),
+        "suite_evidence.min_trace_count",
+    )
+    min_distinct_trace_models = _as_json_nonnegative_int(
+        suite_evidence.get("min_distinct_trace_models"),
+        "suite_evidence.min_distinct_trace_models",
+    )
+    _require(
+        min_trace_count >= 0,
+        "suite_evidence.min_trace_count must be nonnegative",
+    )
+    _require(
+        min_distinct_trace_models >= 0,
+        "suite_evidence.min_distinct_trace_models must be nonnegative",
+    )
+    return len(expected_evidence) + 2
+
+
 def _case_config_from_external_summary(
     *,
     case_name: str,
@@ -5481,6 +5595,11 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         bundle_root=bundle_root,
         original_output_dir=original_output_dir,
     )
+    verified_suite_evidence_count = _require_suite_evidence_alignment(
+        summary_payload,
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
     verified_external_command_log_count = _require_external_timing_reports_from_summary(
         summary_payload,
         bundle_root=bundle_root,
@@ -5557,6 +5676,7 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
         "summary_json": str(summary_path),
         "verified_artifact_count": verified_artifact_count,
         "verified_artifact_index_count": verified_artifact_index_count,
+        "verified_suite_evidence_count": verified_suite_evidence_count,
         "verified_paper_artifact_semantic_count": verified_paper_artifact_semantic_count,
         "verified_slurm_python_provenance_count": (
             verified_slurm_python_provenance_count

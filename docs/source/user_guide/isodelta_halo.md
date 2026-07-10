@@ -954,6 +954,10 @@ This prevents a coverage table from counting a trace path that is not the same
 validated trace file archived in the bundle.
 It also prevents attributing a MACE trace to a NequIP case just because the
 filename or manifest entry says NequIP.
+The final `suite_evidence` block is recomputed from the passed or reused
+summary cases and the fingerprinted trace JSON files, so passed model lists,
+trace evidence counts, distinct trace-model counts, and trace model labels
+cannot drift from the archived evidence.
 `correlation.csv` must contain the configured metric-pair rows recomputed from
 passed or reused `summary["cases"]`; `summary["correlations"]` and the CSV must
 both match those recomputed values, so a failed case cannot be counted by making
