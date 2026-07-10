@@ -5623,6 +5623,46 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            summary_manifest_path_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            summary_manifest_path_drift_pipeline_report["suite"]["manifest"][
+                "path"
+            ] = str(output_dir / "wrong_manifest.toml")
+            pipeline_report_path.write_text(
+                json.dumps(summary_manifest_path_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                summary_manifest_path_drift_error = str(exc)
+            else:
+                summary_manifest_path_drift_error = ""
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
+            summary_manifest_size_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            summary_manifest_size_drift_pipeline_report["suite"]["manifest"][
+                "size_bytes"
+            ] += THRESHOLD_DRIFT_INCREMENT
+            pipeline_report_path.write_text(
+                json.dumps(summary_manifest_size_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                summary_manifest_size_drift_error = str(exc)
+            else:
+                summary_manifest_size_drift_error = ""
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             summary_threshold_drift_pipeline_report = json.loads(
                 json.dumps(pipeline_report)
             )
@@ -5970,6 +6010,14 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
             summary_suite_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
+            summary_manifest_path_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
+            summary_manifest_size_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,

@@ -253,7 +253,9 @@ SUMMARY_PIPELINE_STAGE_NAMES = (
 PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS = (
     "name",
     "manifest_path",
+    "manifest.path",
     "manifest.sha256",
+    "manifest.size_bytes",
     "output_dir",
     "expected_gpus",
     "required_models",
@@ -6826,11 +6828,27 @@ def _require_pipeline_summary_suite_report(
         "summary.suite.manifest",
     )
     _require(
+        _as_json_string(summary_manifest.get("path"), "summary.suite.manifest.path")
+        == _as_json_string(suite_manifest.get("path"), "suite.manifest.path"),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
         _require_sha256_digest(
             summary_manifest.get("sha256"),
             "summary.suite.manifest.sha256",
         )
         == _require_sha256_digest(suite_manifest.get("sha256"), "suite.manifest.sha256"),
+        PIPELINE_SUMMARY_SUITE_ERROR,
+    )
+    _require(
+        _as_json_nonnegative_int(
+            summary_manifest.get("size_bytes"),
+            "summary.suite.manifest.size_bytes",
+        )
+        == _as_json_nonnegative_int(
+            suite_manifest.get("size_bytes"),
+            "suite.manifest.size_bytes",
+        ),
         PIPELINE_SUMMARY_SUITE_ERROR,
     )
     _require(

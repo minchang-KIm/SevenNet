@@ -2179,6 +2179,10 @@ def main() -> None:
         and "PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_SUITE_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS" in cluster_suite
+        and "summary.suite.manifest.path" in cluster_suite
+        and "suite.manifest.path" in cluster_suite
+        and "summary.suite.manifest.size_bytes" in cluster_suite
+        and "suite.manifest.size_bytes" in cluster_suite
         and "summary.suite.min_trace_count" in cluster_suite
         and "suite.min_trace_count" in cluster_suite
         and "summary.suite.min_distinct_trace_models" in cluster_suite
@@ -2207,6 +2211,8 @@ def main() -> None:
         and "# CLI runtime overrides: ablation_mode=isodelta-enabled." in cluster_suite_test
         and "test_cli_ablation_override_is_recorded_in_run_plan" in cluster_suite_test
         and "uncommented_pipeline_report_error" in cluster_suite_test
+        and "summary_manifest_path_drift_error" in cluster_suite_test
+        and "summary_manifest_size_drift_error" in cluster_suite_test
         and "summary_threshold_drift_error" in cluster_suite_test
         and "PREFLIGHT_REPORT_COMMENT" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
@@ -2282,6 +2288,7 @@ def main() -> None:
         and "full final-paper stage sequence" in doc
         and "non-skipped stage" in doc
         and "present report files" in doc
+        and "manifest path, SHA-256, byte size" in doc
         and "skipped artifact-preparation" in doc
         and "`stages[*].report_path`" in doc
         and "`stage_report_fingerprints[*].report.path`" in doc
