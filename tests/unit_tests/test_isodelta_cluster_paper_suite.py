@@ -63,6 +63,7 @@ PRINT_INFO_ENV = "SEVENN_PRINT_INFO"
 DISABLE_CACHE_ENV = "SEVENN_ISODELTA_HALO_DISABLE"
 PROFILE_CACHE_ENV = "SEVENN_ISODELTA_HALO_PROFILE"
 ENV_FLAG_ENABLED = "1"
+THRESHOLD_DRIFT_INCREMENT = 1
 
 
 def _slurm_python_provenance_text() -> str:
@@ -1588,6 +1589,109 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 (
                     "suite_evidence.trace_evidence_count "
                     "must match passed summary cases"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_suite_evidence_min_trace_drift(
+        self,
+    ) -> None:
+        """Recorded minimum trace thresholds should be enforced on archives."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            trace_path = root / "sevennet_trace.json"
+            trace_path.write_text(
+                json.dumps(_trace_evidence("SevenNet")),
+                encoding="utf-8",
+            )
+            case_records = (
+                _summary_case_record(
+                    "sevennet",
+                    model="SevenNet",
+                    trace_evidence=[str(trace_path)],
+                ),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_path = _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            suite_evidence = summary_payload["suite_evidence"]
+            suite_evidence["min_trace_count"] = (
+                suite_evidence["trace_evidence_count"] + THRESHOLD_DRIFT_INCREMENT
+            )
+            summary_path.write_text(
+                json.dumps(summary_payload, indent=2),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "suite_evidence.trace_evidence_count must satisfy "
+                    "suite_evidence.min_trace_count"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_suite_evidence_min_model_drift(
+        self,
+    ) -> None:
+        """Distinct trace-model thresholds should survive bundle verification."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            trace_path = root / "sevennet_trace.json"
+            trace_path.write_text(
+                json.dumps(_trace_evidence("SevenNet")),
+                encoding="utf-8",
+            )
+            case_records = (
+                _summary_case_record(
+                    "sevennet",
+                    model="SevenNet",
+                    trace_evidence=[str(trace_path)],
+                ),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_path = _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            suite_evidence = summary_payload["suite_evidence"]
+            suite_evidence["min_distinct_trace_models"] = (
+                suite_evidence["distinct_trace_model_count"]
+                + THRESHOLD_DRIFT_INCREMENT
+            )
+            summary_path.write_text(
+                json.dumps(summary_payload, indent=2),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "suite_evidence.distinct_trace_model_count must satisfy "
+                    "suite_evidence.min_distinct_trace_models"
                 ),
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)

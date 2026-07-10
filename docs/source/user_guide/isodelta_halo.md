@@ -958,6 +958,10 @@ The final `suite_evidence` block is recomputed from the passed or reused
 summary cases and the fingerprinted trace JSON files, so passed model lists,
 trace evidence counts, distinct trace-model counts, and trace model labels
 cannot drift from the archived evidence.
+The same final verification also checks those recomputed trace counts against
+`suite_evidence.min_trace_count` and `suite_evidence.min_distinct_trace_models`,
+so lowering the evidence while leaving stronger suite thresholds in the summary
+is rejected after archiving.
 `correlation.csv` must contain the configured metric-pair rows recomputed from
 passed or reused `summary["cases"]`; `summary["correlations"]` and the CSV must
 both match those recomputed values, so a failed case cannot be counted by making

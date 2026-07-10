@@ -331,6 +331,8 @@ OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS = (
     "verified_external_command_log_count",
     "verified_experiment_report_check_count",
 )
+SUITE_EVIDENCE_THRESHOLD_FIELD_VERIFICATION_COUNT = 2
+SUITE_EVIDENCE_THRESHOLD_SATISFACTION_VERIFICATION_COUNT = 2
 ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION = "isodelta-cluster-environment-snapshot-v1"
 ENVIRONMENT_PACKAGE_NAMES = (
     "sevenn",
@@ -3854,7 +3856,25 @@ def _require_suite_evidence_alignment(
         min_distinct_trace_models >= 0,
         "suite_evidence.min_distinct_trace_models must be nonnegative",
     )
-    return len(expected_evidence) + 2
+    _require(
+        expected_evidence["trace_evidence_count"] >= min_trace_count,
+        (
+            "suite_evidence.trace_evidence_count must satisfy "
+            "suite_evidence.min_trace_count"
+        ),
+    )
+    _require(
+        expected_evidence["distinct_trace_model_count"] >= min_distinct_trace_models,
+        (
+            "suite_evidence.distinct_trace_model_count must satisfy "
+            "suite_evidence.min_distinct_trace_models"
+        ),
+    )
+    return (
+        len(expected_evidence)
+        + SUITE_EVIDENCE_THRESHOLD_FIELD_VERIFICATION_COUNT
+        + SUITE_EVIDENCE_THRESHOLD_SATISFACTION_VERIFICATION_COUNT
+    )
 
 
 def _case_config_from_external_summary(
