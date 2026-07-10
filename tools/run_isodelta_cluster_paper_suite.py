@@ -493,7 +493,7 @@ PAPER_ARTIFACT_COMMENTS = {
     ),
     "correlation_csv": (
         "IsoDelta-Halo appendix table: Pearson and Spearman correlations "
-        "between cache, trace, and speedup metrics."
+        "between passed-case cache, trace, and speedup metrics."
     ),
     "command_timing_csv": (
         "IsoDelta-Halo command audit table: elapsed time, return code, "
@@ -521,18 +521,18 @@ PAPER_ARTIFACT_COMMENTS = {
     ),
     "speedup_uncertainty_svg": (
         "IsoDelta-Halo generated figure: measured speedup with 95% confidence "
-        "interval bounds for each case."
+        "interval bounds for each passed or reused case."
     ),
     "speedup_svg": (
         "IsoDelta-Halo generated figure: measured speedup by case relative to "
-        "the disabled-cache baseline."
+        "the disabled-cache baseline for passed or reused cases."
     ),
     "hit_rate_svg": (
-        "IsoDelta-Halo generated figure: cache hit rate plotted against "
+        "IsoDelta-Halo generated figure: passed-case cache hit rate plotted against "
         "measured speedup."
     ),
     "trace_svg": (
-        "IsoDelta-Halo generated figure: trace-estimated metadata fraction "
+        "IsoDelta-Halo generated figure: passed-case trace-estimated metadata fraction "
         "plotted against estimated speedup."
     ),
     "manifest_snapshot": MANIFEST_SNAPSHOT_COMMENT,
@@ -3597,7 +3597,13 @@ def _required_model_coverage_rows_from_case_records(
         passed_records = [
             case_record
             for case_record in model_records
-            if case_record.get(STATUS_KEY) in PASSING_CASE_STATUSES
+            if _summary_case_has_passing_status(
+                _as_json_string(
+                    case_record.get(CASE_NAME_KEY),
+                    f"case_records.{required_model}.{CASE_NAME_KEY}",
+                ),
+                case_record,
+            )
         ]
         measured_records = [
             case_record
@@ -3935,6 +3941,39 @@ def _summary_correlations_by_metric_pair(
     return correlations_by_pair
 
 
+def _correlation_rows_from_summary(
+    summary_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Recompute paper correlations from passed summary case records."""
+    cases_by_name = _summary_cases_by_name(summary_payload)
+    rows: list[dict[str, Any]] = []
+    for x_name, y_name in CORRELATION_METRIC_PAIRS:
+        xs: list[float] = []
+        ys: list[float] = []
+        for case_name in _summary_passing_numeric_pair_case_names(
+            cases_by_name,
+            x_name,
+            y_name,
+        ):
+            case_record = cases_by_name[case_name]
+            x_value = _summary_numeric_value(case_record, x_name)
+            y_value = _summary_numeric_value(case_record, y_name)
+            _require(x_value is not None, f"cases.{case_name}.{x_name} must be numeric")
+            _require(y_value is not None, f"cases.{case_name}.{y_name} must be numeric")
+            xs.append(x_value)
+            ys.append(y_value)
+        rows.append(
+            {
+                "x_metric": x_name,
+                "y_metric": y_name,
+                "n": len(xs),
+                "pearson": _pearson(xs, ys),
+                "spearman": _spearman(xs, ys),
+            }
+        )
+    return rows
+
+
 def _summary_numeric_value(case_record: dict[str, Any], field_name: str) -> float | None:
     """Return a finite numeric case field when a paper figure can plot it."""
     value = case_record.get(field_name)
@@ -4005,6 +4044,21 @@ def _summary_passing_speedup_ci_case_names(
         and _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
         and _summary_numeric_value(case_record, "speedup_95ci_lower_bound") is not None
         and _summary_numeric_value(case_record, "speedup_95ci_upper_bound") is not None
+    ]
+
+
+def _summary_passing_numeric_pair_case_names(
+    cases_by_name: dict[str, dict[str, Any]],
+    x_field: str,
+    y_field: str,
+) -> list[str]:
+    """Return passed case names carrying both metrics for paper correlations."""
+    return [
+        case_name
+        for case_name, case_record in cases_by_name.items()
+        if _summary_case_has_passing_status(case_name, case_record)
+        and _summary_numeric_value(case_record, x_field) is not None
+        and _summary_numeric_value(case_record, y_field) is not None
     ]
 
 
@@ -4108,6 +4162,28 @@ def _svg_element_count_with_attribute(
         if _svg_local_name(element) == element_name
         and element.attrib.get(attribute_name) == attribute_value
     )
+
+
+def _svg_case_values_for_role(
+    root: Any,
+    element_name: str,
+    role_name: str,
+) -> list[str]:
+    """Return plotted case labels from SVG elements with a semantic role."""
+    case_values: list[str] = []
+    for element in root.iter():
+        if (
+            _svg_local_name(element) != element_name
+            or element.attrib.get("data-role") != role_name
+        ):
+            continue
+        case_value = element.attrib.get("data-case")
+        _require(
+            case_value is not None,
+            f"{role_name} SVG element must carry data-case",
+        )
+        case_values.append(str(case_value))
+    return case_values
 
 
 def _svg_desc_content(root: Any) -> str:
@@ -4296,11 +4372,18 @@ def _require_required_model_coverage_markdown(
 
 
 def _require_correlation_csv(path: Path, summary_payload: dict[str, Any]) -> None:
-    """Verify that the correlation table matches summary JSON correlation rows."""
+    """Verify that the correlation table matches recomputed passed-case rows."""
     _require_csv_artifact_comment(path, "correlation.csv", "correlation_csv")
     fieldnames, rows = _read_csv_rows(path, "correlation.csv")
     _require_columns(fieldnames, PAPER_CORRELATION_COLUMNS, "correlation.csv")
     summary_correlations = _summary_correlations_by_metric_pair(summary_payload)
+    expected_correlations = {
+        (
+            _as_json_string(row.get("x_metric"), "expected_correlation.x_metric"),
+            _as_json_string(row.get("y_metric"), "expected_correlation.y_metric"),
+        ): row
+        for row in _correlation_rows_from_summary(summary_payload)
+    }
     _require(
         len(rows) == len(summary_correlations),
         "correlation.csv: row count must match summary correlations",
@@ -4318,12 +4401,21 @@ def _require_correlation_csv(path: Path, summary_payload: dict[str, Any]) -> Non
             summary_correlations.get(metric_pair),
             f"correlations.{metric_pair}",
         )
+        expected_row = _as_json_object(
+            expected_correlations.get(metric_pair),
+            f"expected_correlations.{metric_pair}",
+        )
         for column_name in fieldnames:
-            expected_value = _format_csv_value(summary_row.get(column_name))
+            expected_value = _format_csv_value(expected_row.get(column_name))
+            summary_value = _format_csv_value(summary_row.get(column_name))
             actual_value = row.get(column_name, "")
             _require(
+                summary_value == expected_value,
+                f"summary correlations.{metric_pair}.{column_name} must match passed cases",
+            )
+            _require(
                 actual_value == expected_value,
-                f"correlation.csv.{metric_pair}.{column_name} must match summary correlations",
+                f"correlation.csv.{metric_pair}.{column_name} must match passed cases",
             )
     _require(
         observed_pairs == expected_pairs,
@@ -4874,10 +4966,15 @@ def _require_speedup_svg_semantics(
     path: Path,
     cases_by_name: dict[str, dict[str, Any]],
 ) -> None:
-    """Verify that the speedup bar chart labels every measured-speedup case."""
+    """Verify that the speedup bar chart labels passed measured-speedup cases."""
     root = _require_svg_document(path, "speedup_svg")
     text_content = _svg_text_content(root)
-    expected_case_names = _summary_measured_speedup_case_names(cases_by_name)
+    expected_case_names = _summary_passing_measured_speedup_case_names(cases_by_name)
+    observed_case_names = _svg_case_values_for_role(root, "rect", "speedup-bar")
+    _require(
+        observed_case_names == expected_case_names,
+        "speedup_svg data-case markers must match passed measured-speedup cases",
+    )
     if not expected_case_names:
         _require(
             SPEEDUP_SVG_EMPTY_MESSAGE in text_content,
@@ -4895,10 +4992,24 @@ def _require_speedup_uncertainty_svg_semantics(
     path: Path,
     cases_by_name: dict[str, dict[str, Any]],
 ) -> None:
-    """Verify the speedup uncertainty chart has one point and CI per case."""
+    """Verify the speedup uncertainty chart has one point and CI per passed case."""
     root = _require_svg_document(path, "speedup_uncertainty_svg")
     text_content = _svg_text_content(root)
-    expected_case_names = _summary_speedup_ci_case_names(cases_by_name)
+    expected_case_names = _summary_passing_speedup_ci_case_names(cases_by_name)
+    observed_ci_case_names = _svg_case_values_for_role(root, "line", "speedup-ci")
+    _require(
+        observed_ci_case_names == expected_case_names,
+        "speedup_uncertainty_svg CI data-case markers must match passed CI cases",
+    )
+    observed_point_case_names = _svg_case_values_for_role(
+        root,
+        "circle",
+        "speedup-ci-point",
+    )
+    _require(
+        observed_point_case_names == expected_case_names,
+        "speedup_uncertainty_svg point data-case markers must match passed CI cases",
+    )
     if not expected_case_names:
         _require(
             SPEEDUP_UNCERTAINTY_SVG_EMPTY_MESSAGE in text_content,
@@ -4940,14 +5051,19 @@ def _require_scatter_svg_semantics(
     y_field: str,
     title: str,
 ) -> None:
-    """Verify that a scatter figure has one plotted point per summary data pair."""
+    """Verify that a scatter figure has one plotted point per passed data pair."""
     root = _require_svg_document(path, label)
     text_content = _svg_text_content(root)
-    expected_point_count = sum(
-        1
-        for case_record in cases_by_name.values()
-        if _summary_numeric_value(case_record, x_field) is not None
-        and _summary_numeric_value(case_record, y_field) is not None
+    expected_case_names = _summary_passing_numeric_pair_case_names(
+        cases_by_name,
+        x_field,
+        y_field,
+    )
+    expected_point_count = len(expected_case_names)
+    observed_case_names = _svg_case_values_for_role(root, "circle", "scatter-point")
+    _require(
+        observed_case_names == expected_case_names,
+        f"{label} data-case markers must match passed summary data pairs",
     )
     if expected_point_count == 0:
         empty_message = f"No paired values for {title}"
@@ -8696,6 +8812,22 @@ def _spearman(xs: list[float], ys: list[float]) -> float | None:
     return _pearson(_ranks(xs), _ranks(ys))
 
 
+def _case_summary_has_passing_status(summary: CaseSummary) -> bool:
+    """Return whether a generated case summary can support paper claims."""
+    return summary.status in PASSING_CASE_STATUSES
+
+
+def _paper_claim_case_summaries(
+    case_summaries: list[CaseSummary],
+) -> list[CaseSummary]:
+    """Return case summaries eligible for figures and correlation claims."""
+    return [
+        summary
+        for summary in case_summaries
+        if _case_summary_has_passing_status(summary)
+    ]
+
+
 def _metric_pairs(
     case_summaries: list[CaseSummary],
     x_name: str,
@@ -8714,10 +8846,11 @@ def _metric_pairs(
 
 
 def build_correlation_rows(case_summaries: list[CaseSummary]) -> list[dict[str, Any]]:
-    """Build correlation rows for the paper appendix."""
+    """Build paper-claim correlation rows from passed or reused cases."""
     rows: list[dict[str, Any]] = []
+    claim_summaries = _paper_claim_case_summaries(case_summaries)
     for x_name, y_name in CORRELATION_METRIC_PAIRS:
-        xs, ys = _metric_pairs(case_summaries, x_name, y_name)
+        xs, ys = _metric_pairs(claim_summaries, x_name, y_name)
         rows.append(
             {
                 "x_metric": x_name,
@@ -8741,10 +8874,10 @@ def _svg_escape(text: str) -> str:
 
 
 def write_speedup_svg(path: Path, case_summaries: list[CaseSummary]) -> None:
-    """Write a dependency-free bar chart of measured speedup by case."""
+    """Write a dependency-free bar chart of passed measured speedup by case."""
     points = [
         (summary.case_name, summary.speedup_vs_disabled_cache)
-        for summary in case_summaries
+        for summary in _paper_claim_case_summaries(case_summaries)
         if summary.speedup_vs_disabled_cache is not None
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -8769,7 +8902,8 @@ def write_speedup_svg(path: Path, case_summaries: list[CaseSummary]) -> None:
         y_pos = SVG_MARGIN_TOP + plot_height - bar_height
         bars.append(
             f'<rect x="{x_pos:.2f}" y="{y_pos:.2f}" width="{bar_width:.2f}" '
-            f'height="{bar_height:.2f}" fill="#2f6f9f"/>'
+            f'height="{bar_height:.2f}" fill="#2f6f9f" '
+            f'data-role="speedup-bar" data-case="{_svg_escape(label)}"/>'
         )
         bars.append(
             f'<text x="{x_pos + bar_width / 2.0:.2f}" y="{y_pos - 8:.2f}" '
@@ -8794,9 +8928,9 @@ def write_speedup_uncertainty_svg(
     path: Path,
     case_summaries: list[CaseSummary],
 ) -> None:
-    """Write a dependency-free error-bar chart for measured speedup bounds."""
+    """Write a dependency-free error-bar chart for passed speedup bounds."""
     points: list[tuple[str, float, float, float]] = []
-    for summary in case_summaries:
+    for summary in _paper_claim_case_summaries(case_summaries):
         speedup = _coerce_optional_float(summary.speedup_vs_disabled_cache)
         lower_bound = _coerce_optional_float(summary.speedup_95ci_lower_bound)
         upper_bound = _coerce_optional_float(summary.speedup_95ci_upper_bound)
@@ -8833,7 +8967,7 @@ def write_speedup_uncertainty_svg(
         elements.append(
             f'<line x1="{x_pos:.2f}" y1="{upper_y:.2f}" x2="{x_pos:.2f}" '
             f'y2="{lower_y:.2f}" stroke="#2f6f9f" stroke-width="2.2" '
-            'data-role="speedup-ci"/>'
+            f'data-role="speedup-ci" data-case="{_svg_escape(label)}"/>'
         )
         elements.append(
             f'<line x1="{cap_left:.2f}" y1="{upper_y:.2f}" x2="{cap_right:.2f}" '
@@ -8845,7 +8979,8 @@ def write_speedup_uncertainty_svg(
         )
         elements.append(
             f'<circle cx="{x_pos:.2f}" cy="{speedup_y:.2f}" '
-            f'r="{SCATTER_POINT_RADIUS}" fill="#b23a48"/>'
+            f'r="{SCATTER_POINT_RADIUS}" fill="#b23a48" '
+            f'data-role="speedup-ci-point" data-case="{_svg_escape(label)}"/>'
         )
         elements.append(
             f'<text x="{x_pos + 8:.2f}" y="{speedup_y - 8:.2f}" '
@@ -8877,9 +9012,9 @@ def write_scatter_svg(
     y_label: str,
     description: str,
 ) -> None:
-    """Write a dependency-free scatter plot for correlation inspection."""
+    """Write a dependency-free scatter plot for passed-case correlation inspection."""
     points = []
-    for summary in case_summaries:
+    for summary in _paper_claim_case_summaries(case_summaries):
         x_value = getattr(summary, x_field)
         y_value = getattr(summary, y_field)
         if isinstance(x_value, (int, float)) and isinstance(y_value, (int, float)):
@@ -8898,14 +9033,18 @@ def write_scatter_svg(
     x_min, x_max = _expanded_range(min(x_values), max(x_values))
     y_min, y_max = _expanded_range(min(y_values), max(y_values))
     circles: list[str] = []
-    for label, x_value, y_value in points:
+    for case_label, x_value, y_value in points:
         x_pos = SVG_MARGIN_LEFT + plot_width * (x_value - x_min) / (x_max - x_min)
         y_pos = SVG_MARGIN_TOP + plot_height - plot_height * (y_value - y_min) / (y_max - y_min)
         circles.append(
-            f'<circle cx="{x_pos:.2f}" cy="{y_pos:.2f}" r="{SCATTER_POINT_RADIUS}" fill="#b23a48"/>'
+            f'<circle cx="{x_pos:.2f}" cy="{y_pos:.2f}" '
+            f'r="{SCATTER_POINT_RADIUS}" fill="#b23a48" '
+            'data-role="scatter-point" '
+            f'data-case="{_svg_escape(case_label)}"/>'
         )
         circles.append(
-            f'<text x="{x_pos + 8:.2f}" y="{y_pos - 8:.2f}" font-size="12">{_svg_escape(label)}</text>'
+            f'<text x="{x_pos + 8:.2f}" y="{y_pos - 8:.2f}" '
+            f'font-size="12">{_svg_escape(case_label)}</text>'
         )
     axis = _svg_axes(title, x_label, y_label)
     path.write_text(

@@ -945,9 +945,12 @@ speedup, and the weakest speedup-CI lower bound.
 The verifier recomputes those rows from `summary["suite"]["required_models"]`
 and `summary["cases"]`, so a reviewer-facing coverage table cannot be edited
 away from the JSON evidence.
-`correlation.csv` must contain the configured metric-pair rows and the same values as
-`summary["correlations"]`, and `command_timing.csv`/`command_timing.md` must
-contain the same command rows as `summary["commands"]`.
+`correlation.csv` must contain the configured metric-pair rows recomputed from
+passed or reused `summary["cases"]`; `summary["correlations"]` and the CSV must
+both match those recomputed values, so a failed case cannot be counted by making
+the JSON and CSV drift together.
+`command_timing.csv`/`command_timing.md` must contain the same command rows as
+`summary["commands"]`.
 `repeat_timing.csv`/`repeat_timing.md` must match the raw source timing evidence
 protected by `evidence_fingerprints`, so changing a benchmark report or external
 timing report without regenerating the repeat table is rejected.
@@ -956,13 +959,15 @@ fields in `summary["cases"]`, so the paper-ready CI table cannot drift from the
 JSON evidence.
 `speedup_uncertainty.svg` is also a required paper artifact, not an optional
 side figure; it must carry the expected `<desc>` text and one lower/upper error
-bar marker for every case with a finite speedup confidence interval.
+bar marker for every passed or reused case with a finite speedup confidence
+interval.
 The verifier also requires `summary["cases"]` to contain at least one finite measured speedup and at least one finite speedup confidence interval from passed or reused cases, and when `summary["suite"]["required_models"]` is recorded it requires every required model to contribute passed measured speedup and passed speedup confidence interval evidence. A run that only produced empty figure shells, skipped a required model, or kept speedup numbers only on a failed case cannot pass as a paper output bundle.
 Every generated table must keep its explanatory comment.
 Each SVG figure must parse as an SVG document with width, height, viewBox, and the expected `<desc>` description;
-the speedup chart must include every measured-speedup case label from
-`summary["cases"]`, and scatter plots must contain the same number of plotted
-points as the summary data pairs they visualize.
+figures and correlations use only passed or reused cases for paper claims.
+The speedup, uncertainty, and scatter SVGs also carry `data-case` markers on
+their plotted elements, and the verifier compares those markers against the
+passed summary data pairs they visualize.
 `environment_snapshot.json` must carry the expected snapshot schema and `artifact_comment`, stage reports
 must carry the expected `report_comment`, and the manifest snapshot must contain both the generated-file comment and the `[suite]` table.
 When the summary records `suite.manifest`, the verifier also hashes the manifest snapshot body after the generated comment and requires that SHA-256 digest and byte size to match the recorded manifest provenance.

@@ -1804,6 +1804,10 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_required_model_coverage_value_drift"
         in cluster_suite_test
+        and "test_build_correlation_rows_ignores_failed_case_metrics"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_failed_case_speedup_svg_marker"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_speedup_svg_label_drift"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_speedup_uncertainty_svg_point_drift"
@@ -1817,6 +1821,8 @@ def main() -> None:
         and "test_verify_output_bundle_rejects_case_summary_value_drift"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_correlation_value_drift"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_summary_correlation_drift"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_command_timing_value_drift"
         in cluster_suite_test
@@ -1916,7 +1922,10 @@ def main() -> None:
         and "required_model_coverage.csv" in cluster_suite
         and "required_model_coverage.md" in cluster_suite
         and "_summary_correlations_by_metric_pair" in cluster_suite
+        and "_correlation_rows_from_summary" in cluster_suite
         and "_format_csv_value" in cluster_suite
+        and "summary correlations." in cluster_suite
+        and "must match passed cases" in cluster_suite
         and "PAPER_COMMAND_TIMING_COLUMNS" in cluster_suite
         and "_command_timing_rows" in cluster_suite
         and "_require_command_timing_csv" in cluster_suite
@@ -1941,6 +1950,9 @@ def main() -> None:
         and "_summary_case_has_passing_status" in cluster_suite
         and "_summary_passing_measured_speedup_case_names" in cluster_suite
         and "_summary_passing_speedup_ci_case_names" in cluster_suite
+        and "_summary_passing_numeric_pair_case_names" in cluster_suite
+        and "_case_summary_has_passing_status" in cluster_suite
+        and "_paper_claim_case_summaries" in cluster_suite
         and "_summary_models_for_cases" in cluster_suite
         and "_require_required_model_speedup_coverage" in cluster_suite
         and "MIN_REQUIRED_MEASURED_SPEEDUP_CASES" in cluster_suite
@@ -1956,9 +1968,17 @@ def main() -> None:
         and "_require_scatter_svg_semantics" in cluster_suite
         and "_svg_element_count" in cluster_suite
         and "_svg_element_count_with_attribute" in cluster_suite
+        and "_svg_case_values_for_role" in cluster_suite
+        and "speedup_svg data-case markers must match passed measured-speedup cases"
+        in cluster_suite
+        and "speedup_uncertainty_svg CI data-case markers must match passed CI cases"
+        in cluster_suite
+        and "data-case markers must match passed summary data pairs" in cluster_suite
         and "write_speedup_uncertainty_svg" in cluster_suite
         and "SPEEDUP_UNCERTAINTY_TITLE" in cluster_suite
         and 'data-role="speedup-ci"' in cluster_suite
+        and 'data-role="speedup-bar"' in cluster_suite
+        and 'data-role="scatter-point"' in cluster_suite
         and "verify_output" in cluster_suite
         and "verifying output bundle" in cluster_suite
         and "CORRELATION_METRIC_PAIRS" in cluster_suite
@@ -2252,6 +2272,8 @@ def main() -> None:
         and "at least one finite speedup confidence interval" in doc
         and "every required model to contribute passed measured speedup" in doc
         and "speedup numbers only on a failed case" in doc
+        and "figures and correlations use only passed or reused cases" in doc
+        and "`data-case` markers" in doc
         and "required_model_coverage.csv" in doc
         and "required_model_coverage.md" in doc
         and "model coverage table" in doc
@@ -2454,8 +2476,8 @@ def main() -> None:
         "semantic paper-artifact checks" in doc
         and "`case_summary.csv` and `case_summary.md` must contain exactly one row per" in doc
         and "same cell values as `summary[\"cases\"]`" in doc
-        and "`correlation.csv` must contain the configured metric-pair rows" in doc
-        and "same values as" in doc
+        and "`correlation.csv` must contain the configured metric-pair rows recomputed" in doc
+        and "both match those recomputed values" in doc
         and "`summary[\"correlations\"]`" in doc
         and "`command_timing.csv`/`command_timing.md` must" in doc
         and "`summary[\"commands\"]`" in doc
@@ -2464,8 +2486,8 @@ def main() -> None:
         and "`speedup_uncertainty.csv`/`speedup_uncertainty.md` must" in doc
         and "paper-ready CI table" in doc
         and "Each SVG figure must parse as an SVG document" in doc
-        and "speedup chart must include every measured-speedup" in doc
-        and "scatter plots must contain the same" in doc
+        and "figures and correlations use only passed or reused cases" in doc
+        and "`data-case` markers" in doc
         and "`environment_snapshot.json` must carry the expected snapshot schema" in doc
         and "`preflight_environment_snapshot.json`" in doc
         and "before GPU time" in doc

@@ -484,17 +484,27 @@ def _summary_case_record(
 
 
 def _summary_correlations(case_count: int) -> list[dict[str, object]]:
-    """Return correlation rows matching the generated minimal CSV table."""
+    """Return empty-metric correlation rows for compact verifier fixtures."""
+    _ = case_count
     return [
         {
             "x_metric": x_metric,
             "y_metric": y_metric,
-            "n": case_count,
+            "n": 0,
             "pearson": None,
             "spearman": None,
         }
         for x_metric, y_metric in isodelta_cluster_suite.CORRELATION_METRIC_PAIRS
     ]
+
+
+def _summary_correlations_from_records(
+    case_records: tuple[dict[str, object], ...],
+) -> list[dict[str, object]]:
+    """Return correlation rows recomputed from synthetic summary records."""
+    return isodelta_cluster_suite.build_correlation_rows(
+        [_case_summary_from_record(record) for record in case_records]
+    )
 
 
 def _case_summary_from_record(
@@ -651,16 +661,7 @@ def _write_required_paper_artifacts(
         }
         for record in case_records
     ]
-    correlation_rows = [
-        {
-            "x_metric": x_metric,
-            "y_metric": y_metric,
-            "n": len(case_records),
-            "pearson": "",
-            "spearman": "",
-        }
-        for x_metric, y_metric in isodelta_cluster_suite.CORRELATION_METRIC_PAIRS
-    ]
+    correlation_rows = _summary_correlations_from_records(case_records)
     command_rows = [
         {
             "name": record["name"],
@@ -849,7 +850,7 @@ def _write_minimal_output_summary(
             {
                 "suite": suite_record,
                 "cases": list(case_records),
-                "correlations": _summary_correlations(len(case_records)),
+                "correlations": _summary_correlations_from_records(case_records),
                 "commands": [],
                 "command_log_fingerprints": [],
                 "artifacts": _artifact_index(artifact_fingerprints),
@@ -1740,6 +1741,96 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
+    def test_build_correlation_rows_ignores_failed_case_metrics(self) -> None:
+        """Failed case metrics should not enter final-paper correlations."""
+        case_summaries = [
+            _case_summary_from_record(
+                _summary_case_record(
+                    "passed-a",
+                    cache_hit_rate_percent=10.0,
+                    speedup_vs_disabled_cache=1.1,
+                )
+            ),
+            _case_summary_from_record(
+                _summary_case_record(
+                    "passed-b",
+                    cache_hit_rate_percent=20.0,
+                    speedup_vs_disabled_cache=1.2,
+                )
+            ),
+            _case_summary_from_record(
+                _summary_case_record(
+                    "failed-c",
+                    status="failed: timing command failed",
+                    cache_hit_rate_percent=100.0,
+                    speedup_vs_disabled_cache=9.9,
+                )
+            ),
+        ]
+
+        rows = isodelta_cluster_suite.build_correlation_rows(case_summaries)
+        cache_speedup_row = next(
+            row
+            for row in rows
+            if row["x_metric"] == "cache_hit_rate_percent"
+            and row["y_metric"] == "speedup_vs_disabled_cache"
+        )
+
+        self.assertEqual(cache_speedup_row["n"], 2)
+
+    def test_verify_output_bundle_rejects_failed_case_speedup_svg_marker(
+        self,
+    ) -> None:
+        """Speedup figures should not plot failed cases as paper evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            failed_case_name = "failed-sevennet-repeat"
+            case_records = (
+                _summary_case_record("sevennet", model="SevenNet"),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record("nequip", model="NequIP"),
+                _summary_case_record(
+                    failed_case_name,
+                    model="SevenNet",
+                    status="failed: timing command failed",
+                ),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+            speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
+            speedup_svg.write_text(
+                speedup_svg.read_text(encoding="utf-8").replace(
+                    "</svg>",
+                    (
+                        '<rect x="1" y="1" width="1" height="1" '
+                        'data-role="speedup-bar" '
+                        f'data-case="{failed_case_name}"/></svg>'
+                    ),
+                ),
+                encoding="utf-8",
+            )
+            artifact_fingerprints["speedup_svg"] = (
+                isodelta_cluster_suite.generated_artifact_record(speedup_svg)
+            )
+            _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "speedup_svg data-case markers must match passed "
+                    "measured-speedup cases"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
     def test_verify_output_bundle_rejects_missing_required_model_speedup_ci(
         self,
     ) -> None:
@@ -1851,7 +1942,9 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                     {
                         "suite": {"output_dir": str(output_dir)},
                         "cases": [case_record],
-                        "correlations": _summary_correlations(1),
+                        "correlations": _summary_correlations_from_records(
+                            (case_record,)
+                        ),
                         "commands": [],
                         "command_log_fingerprints": [],
                         "artifacts": _artifact_index(artifact_fingerprints),
@@ -1872,7 +1965,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
-                "speedup_svg must include case label case",
+                "speedup_svg data-case markers must match passed measured-speedup cases",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -1915,7 +2008,9 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                     {
                         "suite": {"output_dir": str(output_dir)},
                         "cases": [case_record],
-                        "correlations": _summary_correlations(1),
+                        "correlations": _summary_correlations_from_records(
+                            (case_record,)
+                        ),
                         "commands": [],
                         "command_log_fingerprints": [],
                         "artifacts": _artifact_index(artifact_fingerprints),
@@ -1936,7 +2031,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
-                "speedup_uncertainty_svg circle count must match summary CI cases",
+                "speedup_uncertainty_svg CI data-case markers must match passed CI cases",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -1952,19 +2047,6 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             artifact_fingerprints = _write_required_paper_artifacts(
                 output_dir,
                 case_records=(case_record,),
-            )
-            speedup_svg = output_dir / "figures" / "speedup_by_case.svg"
-            speedup_svg.write_text(
-                _minimal_svg(
-                    "case",
-                    description=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
-                        "speedup_svg"
-                    ],
-                ),
-                encoding="utf-8",
-            )
-            artifact_fingerprints["speedup_svg"] = (
-                isodelta_cluster_suite.generated_artifact_record(speedup_svg)
             )
             hit_rate_svg = output_dir / "figures" / "hit_rate_vs_speedup.svg"
             hit_rate_svg.write_text(
@@ -1985,7 +2067,9 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                     {
                         "suite": {"output_dir": str(output_dir)},
                         "cases": [case_record],
-                        "correlations": _summary_correlations(1),
+                        "correlations": _summary_correlations_from_records(
+                            (case_record,)
+                        ),
                         "commands": [],
                         "command_log_fingerprints": [],
                         "artifacts": _artifact_index(artifact_fingerprints),
@@ -2006,7 +2090,7 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
-                "hit_rate_svg circle count must match summary data pairs",
+                "hit_rate_svg data-case markers must match passed summary data pairs",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -2219,7 +2303,67 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 (
                     "correlation.csv."
                     + re.escape(str(first_metric_pair))
-                    + ".n must match summary correlations"
+                    + ".n must match passed cases"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_summary_correlation_drift(
+        self,
+    ) -> None:
+        """Summary correlations should be recomputed from passed cases."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            correlation_csv = output_dir / "tables" / "correlation.csv"
+            drifted_rows = _summary_correlations(1)
+            drifted_rows[0] = dict(drifted_rows[0])
+            drifted_rows[0]["n"] = 2
+            isodelta_cluster_suite.write_csv(
+                correlation_csv,
+                drifted_rows,
+                comment=isodelta_cluster_suite.PAPER_ARTIFACT_COMMENTS[
+                    "correlation_csv"
+                ],
+            )
+            artifact_fingerprints["correlation_csv"] = (
+                isodelta_cluster_suite.generated_artifact_record(correlation_csv)
+            )
+            first_metric_pair = (
+                drifted_rows[0]["x_metric"],
+                drifted_rows[0]["y_metric"],
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": drifted_rows,
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "summary correlations."
+                    + re.escape(str(first_metric_pair))
+                    + ".n must match passed cases"
                 ),
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
