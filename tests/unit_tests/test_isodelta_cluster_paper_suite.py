@@ -5599,11 +5599,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 encoding="utf-8",
             )
             bundle_count_drift_errors: dict[str, str] = {}
-            for count_key in (
-                "verified_slurm_python_provenance_count",
-                "verified_preflight_environment_snapshot_count",
-                "verified_experiment_report_check_count",
-            ):
+            for count_key in isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS:
                 count_drift_pipeline_report = json.loads(json.dumps(pipeline_report))
                 count_drift_pipeline_report[
                     isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY
@@ -5821,6 +5817,11 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         for count_key, error in bundle_count_drift_errors.items():
             self.assertIn(count_key, error)
             self.assertIn("must match current bundle verification", error)
+        self.assertEqual(
+            set(bundle_count_drift_errors),
+            set(isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS),
+        )
+        self.assertIn("verified_suite_evidence_count", bundle_count_drift_errors)
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PREFLIGHT_ENVIRONMENT_SNAPSHOT_BUNDLE_ERROR,
             preflight_snapshot_drift_error,

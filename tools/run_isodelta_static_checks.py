@@ -1879,7 +1879,9 @@ def main() -> None:
         and "--verify-output-bundle" in cluster_suite
         and "OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS" in cluster_suite
         and "must match current bundle verification" in cluster_suite
+        and "OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS" in cluster_suite_test
         and "bundle_count_drift_errors" in cluster_suite_test
+        and "verified_suite_evidence_count" in cluster_suite_test
         and "verified_slurm_python_provenance_count" in cluster_suite_test
         and "verified_experiment_report_check_count" in cluster_suite_test
         and "SUMMARY_REPORT_NAME" in cluster_suite
@@ -2328,6 +2330,7 @@ def main() -> None:
         and "changing only" in doc
         and "stage report fingerprints" in doc
         and "final bundle verification counts" in doc
+        and "including suite evidence counts" in doc
         and "`artifact_preparation_report.json`" in doc
         and "does not probe GPUs" in doc
         and "uses `trace_only` instead of paired" in doc

@@ -583,8 +583,9 @@ artifacts, runs the cluster preflight gate, writes the plan JSON, executes the
 full suite, and then verifies the output bundle fingerprints. Its
 `pipeline_report.json` records every stage, stage report path, selected modes,
 manifest fingerprint, suite artifact SHA gate, stage report fingerprints,
-final bundle verification counts, and final status. If the readiness gate fails, the pipeline writes
-`readiness_report.json` and stops before downloads, preflight commands, timing runs, or summary generation. Use `--reuse-passed` with
+final bundle verification counts, including suite evidence counts, and final
+status. If the readiness gate fails, the pipeline writes `readiness_report.json`
+and stops before downloads, preflight commands, timing runs, or summary generation. Use `--reuse-passed` with
 `--pipeline` after an interrupted run to reuse already validated case outputs
 while still rerunning readiness, preflight, summary generation, and bundle
 verification.
