@@ -3521,6 +3521,17 @@ def _summary_cases_by_name(summary_payload: dict[str, Any]) -> dict[str, dict[st
     return cases_by_name
 
 
+def _summary_required_models(summary_payload: dict[str, Any]) -> tuple[str, ...]:
+    """Return final-paper required models when the summary records them."""
+    suite_record = summary_payload.get("suite")
+    if not isinstance(suite_record, dict):
+        return ()
+    return _as_string_tuple(
+        suite_record.get("required_models"),
+        "summary.suite.required_models",
+    )
+
+
 def _case_config_from_external_summary(
     *,
     case_name: str,
@@ -3814,7 +3825,52 @@ def _summary_speedup_ci_case_names(
     ]
 
 
+def _summary_models_for_cases(
+    case_names: list[str],
+    cases_by_name: dict[str, dict[str, Any]],
+) -> set[str]:
+    """Return model labels represented by a selected summary case list."""
+    return {
+        _as_json_string(
+            cases_by_name[case_name].get(MODEL_KEY),
+            f"cases.{case_name}.{MODEL_KEY}",
+        )
+        for case_name in case_names
+    }
+
+
+def _require_required_model_speedup_coverage(
+    *,
+    required_models: tuple[str, ...],
+    measured_case_names: list[str],
+    ci_case_names: list[str],
+    cases_by_name: dict[str, dict[str, Any]],
+) -> None:
+    """Require every recorded final-paper model to have speedup and CI evidence."""
+    if not required_models:
+        return
+    measured_models = _summary_models_for_cases(measured_case_names, cases_by_name)
+    missing_measured_models = [
+        model_name for model_name in required_models if model_name not in measured_models
+    ]
+    _require(
+        not missing_measured_models,
+        "paper output bundle is missing measured speedup cases for required models: "
+        + MODEL_NAME_JOINER.join(missing_measured_models),
+    )
+    ci_models = _summary_models_for_cases(ci_case_names, cases_by_name)
+    missing_ci_models = [
+        model_name for model_name in required_models if model_name not in ci_models
+    ]
+    _require(
+        not missing_ci_models,
+        "paper output bundle is missing speedup confidence intervals for required models: "
+        + MODEL_NAME_JOINER.join(missing_ci_models),
+    )
+
+
 def _require_summary_speedup_measurements(
+    summary_payload: dict[str, Any],
     cases_by_name: dict[str, dict[str, Any]],
 ) -> None:
     """Require final paper bundles to contain actual measured speedup evidence."""
@@ -3828,6 +3884,13 @@ def _require_summary_speedup_measurements(
         len(ci_case_names) >= MIN_REQUIRED_SPEEDUP_CI_CASES,
         "paper output bundle must include at least one speedup confidence interval case",
     )
+    _require_required_model_speedup_coverage(
+        required_models=_summary_required_models(summary_payload),
+        measured_case_names=measured_case_names,
+        ci_case_names=ci_case_names,
+        cases_by_name=cases_by_name,
+    )
+
 
 
 def _svg_local_name(element: Any) -> str:
@@ -4791,7 +4854,7 @@ def _require_paper_artifact_semantics(
 ) -> int:
     """Verify that required paper artifacts are not only hashed but readable."""
     cases_by_name = _summary_cases_by_name(summary_payload)
-    _require_summary_speedup_measurements(cases_by_name)
+    _require_summary_speedup_measurements(summary_payload, cases_by_name)
     repeat_timing_rows = _repeat_timing_rows_from_summary(
         summary_payload,
         bundle_root=bundle_root,

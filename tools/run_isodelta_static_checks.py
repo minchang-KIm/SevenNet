@@ -1794,6 +1794,10 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_missing_speedup_confidence_interval"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_missing_required_model_speedup"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_missing_required_model_speedup_ci"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_speedup_svg_label_drift"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_speedup_uncertainty_svg_point_drift"
@@ -1919,11 +1923,18 @@ def main() -> None:
         and "_require_speedup_svg_semantics" in cluster_suite
         and "_require_speedup_uncertainty_svg_semantics" in cluster_suite
         and "_require_summary_speedup_measurements" in cluster_suite
+        and "_summary_required_models" in cluster_suite
+        and "_summary_models_for_cases" in cluster_suite
+        and "_require_required_model_speedup_coverage" in cluster_suite
         and "MIN_REQUIRED_MEASURED_SPEEDUP_CASES" in cluster_suite
         and "MIN_REQUIRED_SPEEDUP_CI_CASES" in cluster_suite
         and "paper output bundle must include at least one measured speedup case"
         in cluster_suite
         and "paper output bundle must include at least one speedup confidence interval case"
+        in cluster_suite
+        and "paper output bundle is missing measured speedup cases for required models"
+        in cluster_suite
+        and "paper output bundle is missing speedup confidence intervals for required models"
         in cluster_suite
         and "_require_scatter_svg_semantics" in cluster_suite
         and "_svg_element_count" in cluster_suite
@@ -2222,6 +2233,8 @@ def main() -> None:
         and "expected `<desc>` description" in doc
         and "at least one finite measured speedup" in doc
         and "at least one finite speedup confidence interval" in doc
+        and "every required model to contribute measured speedup" in doc
+        and "skipped a required model" in doc
         and "reopens the fingerprinted preflight report" in doc
         and "checks `gpu_check`" in doc
         and "requested GPU count was actually detected" in doc

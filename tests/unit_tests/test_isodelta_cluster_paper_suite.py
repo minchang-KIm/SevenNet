@@ -40,6 +40,7 @@ EXPECTED_SPEEDUP = BASELINE_LOOP_TIME_SECONDS / ISODELTA_LOOP_TIME_SECONDS
 EXPECTED_SPEEDUP_CI_LOWER_BOUND = 1.0
 EXPECTED_SPEEDUP_CI_UPPER_BOUND = 1.4
 EXPECTED_RESULT_COUNT = 4
+EXPECTED_COLLECT_ONLY_EVIDENCE_FILE_COUNT = 6
 ENABLED_ATTEMPTS = 10.0
 ENABLED_HITS = 8.0
 DISABLED_ATTEMPTS = 10.0
@@ -809,13 +810,17 @@ def _write_minimal_output_summary(
     *,
     case_records: tuple[dict[str, object], ...],
     artifact_fingerprints: dict[str, dict[str, object]],
+    required_models: tuple[str, ...] | None = None,
 ) -> Path:
     """Write a compact summary JSON for output-bundle verifier tests."""
     summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+    suite_record: dict[str, object] = {"output_dir": str(output_dir)}
+    if required_models is not None:
+        suite_record["required_models"] = list(required_models)
     summary_path.write_text(
         json.dumps(
             {
-                "suite": {"output_dir": str(output_dir)},
+                "suite": suite_record,
                 "cases": list(case_records),
                 "correlations": _summary_correlations(len(case_records)),
                 "commands": [],
@@ -1617,6 +1622,67 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 (
                     "paper output bundle must include at least one speedup "
                     "confidence interval case"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_missing_required_model_speedup(self) -> None:
+        """Each required model should contribute measured speedup evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_record = _summary_case_record("sevennet", model="SevenNet")
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=(case_record,),
+            )
+            _write_minimal_output_summary(
+                output_dir,
+                case_records=(case_record,),
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "paper output bundle is missing measured speedup cases "
+                    "for required models: MACE, NequIP"
+                ),
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_missing_required_model_speedup_ci(
+        self,
+    ) -> None:
+        """Each required model should contribute speedup uncertainty evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_records = (
+                _summary_case_record("sevennet", model="SevenNet"),
+                _summary_case_record("mace", model="MACE"),
+                _summary_case_record(
+                    "nequip",
+                    model="NequIP",
+                    speedup_95ci_lower_bound=None,
+                    speedup_95ci_upper_bound=None,
+                ),
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=case_records,
+            )
+            _write_minimal_output_summary(
+                output_dir,
+                case_records=case_records,
+                artifact_fingerprints=artifact_fingerprints,
+                required_models=isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS,
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "paper output bundle is missing speedup confidence "
+                    "intervals for required models: NequIP"
                 ),
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
@@ -6590,12 +6656,24 @@ min_speedup_95ci_lower_bound = 1.1
             benchmark_path = root / "sevennet_benchmark.json"
             sevennet_trace_path = root / "sevennet_trace.json"
             mace_trace_path = root / "mace_trace.json"
+            mace_timing_path = root / "mace_timing.json"
             nequip_trace_path = root / "nequip_trace.json"
             nequip_timing_path = root / "nequip_timing.json"
             output_dir = root / "paper_outputs"
             benchmark_path.write_text(json.dumps(_benchmark_report()), encoding="utf-8")
             sevennet_trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
             mace_trace_path.write_text(json.dumps(_trace_evidence("MACE")), encoding="utf-8")
+            mace_timing_path.write_text(
+                json.dumps(
+                    _external_timing_report(
+                        "MACE",
+                        disabled_command="python -c print('mace baseline')",
+                        enabled_command="python -c print('mace enabled')",
+                        log_dir=mace_timing_path.parent / "mace_external_logs",
+                    )
+                ),
+                encoding="utf-8",
+            )
             nequip_trace_path.write_text(json.dumps(_trace_evidence("NequIP")), encoding="utf-8")
             nequip_timing_path.write_text(
                 json.dumps(
@@ -6652,7 +6730,11 @@ min_enabled_cache_hits = 8
 [[cases]]
 name = "mace-existing"
 model = "MACE"
-kind = "trace_only"
+kind = "external_pair"
+disabled_command = "python -c print('mace baseline')"
+enabled_command = "python -c print('mace enabled')"
+repeat_count = 2
+external_timing_report = "{mace_timing_path.as_posix()}"
 trace_evidence = ["{mace_trace_path.as_posix()}"]
 
 [[cases]]
@@ -6758,7 +6840,10 @@ trace_evidence = ["{nequip_trace_path.as_posix()}"]
             verification["verified_paper_artifact_semantic_count"],
             len(isodelta_cluster_suite.REQUIRED_PAPER_ARTIFACT_NAMES),
         )
-        self.assertEqual(verification["verified_evidence_file_count"], 5)
+        self.assertEqual(
+            verification["verified_evidence_file_count"],
+            EXPECTED_COLLECT_ONLY_EVIDENCE_FILE_COUNT,
+        )
         self.assertTrue(environment_snapshot_exists)
         self.assertTrue(case_summary_exists)
         self.assertTrue(correlation_exists)
