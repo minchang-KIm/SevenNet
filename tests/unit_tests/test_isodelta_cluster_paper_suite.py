@@ -520,7 +520,7 @@ def _case_summary_from_record(
         bundle_evidence=None,
         experiment_report=None,
         experiment_report_check=None,
-        trace_evidence=(),
+        trace_evidence=tuple(str(path) for path in record.get("trace_evidence", ())),
         external_timing_report=None,
         baseline_mean_seconds=record.get("baseline_mean_seconds"),
         enabled_mean_seconds=record.get("enabled_mean_seconds"),
@@ -860,7 +860,12 @@ def _write_minimal_output_summary(
                         "benchmark_report": None,
                         "bundle_evidence": None,
                         "external_timing_report": None,
-                        "trace_evidence": [],
+                        "trace_evidence": [
+                            isodelta_cluster_suite.generated_artifact_record(
+                                Path(str(trace_path))
+                            )
+                            for trace_path in case_record.get("trace_evidence", ())
+                        ],
                     }
                     for case_record in case_records
                 },
@@ -1250,12 +1255,16 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             trace_path = root / "trace_evidence.json"
             trace_path.write_text(json.dumps(_trace_evidence("SevenNet")), encoding="utf-8")
             artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            case_record = _summary_case_record(
+                "case",
+                trace_evidence=[str(trace_path)],
+            )
             summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
             summary_path.write_text(
                 json.dumps(
                     {
                         "suite": {"output_dir": str(output_dir)},
-                        "cases": [_summary_case_record("case")],
+                        "cases": [case_record],
                         "correlations": _summary_correlations(1),
                         "commands": [],
                         "command_log_fingerprints": [],
@@ -1286,6 +1295,111 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
                 isodelta_cluster_suite.verify_output_bundle(summary_path)
 
         self.assertEqual(verification["verified_evidence_file_count"], 1)
+
+    def test_verify_output_bundle_rejects_trace_evidence_path_drift(self) -> None:
+        """Summary trace paths should match their fingerprinted evidence files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            summary_trace_path = root / "summary_trace_evidence.json"
+            fingerprint_trace_path = root / "fingerprinted_trace_evidence.json"
+            summary_trace_path.write_text(
+                json.dumps(_trace_evidence("SevenNet")),
+                encoding="utf-8",
+            )
+            fingerprint_trace_path.write_text(
+                json.dumps(_trace_evidence("SevenNet")),
+                encoding="utf-8",
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            case_record = _summary_case_record(
+                "case",
+                trace_evidence=[str(summary_trace_path)],
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [case_record],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [
+                                    isodelta_cluster_suite.generated_artifact_record(
+                                        fingerprint_trace_path
+                                    )
+                                ],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "trace_evidence paths must match cases.case.trace_evidence",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(summary_path)
+
+    def test_verify_output_bundle_rejects_invalid_fingerprinted_trace(self) -> None:
+        """Fingerprinting a trace file is not enough unless the JSON is valid."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            trace_path = root / "invalid_trace_evidence.json"
+            trace_path.write_text(
+                json.dumps({"status": "passed", "model": "SevenNet"}),
+                encoding="utf-8",
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            case_record = _summary_case_record(
+                "case",
+                trace_evidence=[str(trace_path)],
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [case_record],
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [
+                                    isodelta_cluster_suite.generated_artifact_record(
+                                        trace_path
+                                    )
+                                ],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "invalid trace evidence",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(summary_path)
 
     def test_verify_output_bundle_accepts_slurm_python_provenance_artifact(self) -> None:
         """Bundle verification should validate archived SLURM Python provenance."""
@@ -1916,18 +2030,29 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
     ) -> None:
         """Failed-case trace files should not inflate model coverage evidence."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_dir = Path(tmpdir) / "paper_outputs"
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            passed_trace_path = root / "sevennet-pass-trace.json"
+            failed_trace_path = root / "sevennet-failed-trace.json"
+            passed_trace_path.write_text(
+                json.dumps(_trace_evidence("SevenNet")),
+                encoding="utf-8",
+            )
+            failed_trace_path.write_text(
+                json.dumps(_trace_evidence("SevenNet")),
+                encoding="utf-8",
+            )
             case_records = (
                 _summary_case_record(
                     "sevennet-pass",
                     model="SevenNet",
-                    trace_evidence=["sevennet-pass-trace.json"],
+                    trace_evidence=[str(passed_trace_path)],
                 ),
                 _summary_case_record(
                     "sevennet-failed",
                     model="SevenNet",
                     status="failed: trace command failed",
-                    trace_evidence=["sevennet-failed-trace.json"],
+                    trace_evidence=[str(failed_trace_path)],
                 ),
                 _summary_case_record("mace", model="MACE"),
                 _summary_case_record("nequip", model="NequIP"),

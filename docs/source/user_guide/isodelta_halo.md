@@ -945,6 +945,11 @@ best measured speedup, and the weakest speedup-CI lower bound.
 The verifier recomputes those rows from `summary["suite"]["required_models"]`
 and `summary["cases"]`, so a reviewer-facing coverage table cannot be edited
 away from the JSON evidence.
+For trace evidence, the verifier also requires the trace paths in
+`summary["cases"]` to match the fingerprinted files in `evidence_fingerprints`,
+then reloads each fingerprinted trace JSON through the MLIP trace checker.
+This prevents a coverage table from counting a trace path that is not the same
+validated trace file archived in the bundle.
 `correlation.csv` must contain the configured metric-pair rows recomputed from
 passed or reused `summary["cases"]`; `summary["correlations"]` and the CSV must
 both match those recomputed values, so a failed case cannot be counted by making

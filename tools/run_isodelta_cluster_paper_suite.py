@@ -3481,7 +3481,8 @@ def _require_evidence_fingerprint_matches(
     original_output_dir: Path | None,
 ) -> int:
     """Verify source evidence fingerprints that feed the paper tables."""
-    case_names = _summary_case_names(summary_payload)
+    cases_by_name = _summary_cases_by_name(summary_payload)
+    case_names = list(cases_by_name)
     raw_evidence_records = summary_payload.get(EVIDENCE_FINGERPRINTS_KEY)
     _require(
         isinstance(raw_evidence_records, dict),
@@ -3519,18 +3520,53 @@ def _require_evidence_fingerprint_matches(
             isinstance(trace_records, list),
             f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{TRACE_EVIDENCE_KEY} must be a JSON array",
         )
+        expected_trace_paths = _case_record_trace_evidence_paths(
+            cases_by_name[case_name],
+            f"cases.{case_name}",
+        )
+        observed_trace_paths: list[str] = []
         for trace_index, raw_record in enumerate(trace_records):
             record = _as_json_object(
                 raw_record,
                 f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
             )
-            _require_present_fingerprint_match(
+            trace_label = f"{case_name}.{TRACE_EVIDENCE_KEY}[{trace_index}]"
+            observed_trace_paths.append(
+                _as_json_string(
+                    record.get("path"),
+                    (
+                        f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}."
+                        f"{TRACE_EVIDENCE_KEY}[{trace_index}].path"
+                    ),
+                )
+            )
+            trace_path = _resolve_present_fingerprint_path(
                 record,
-                f"{case_name}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
+                trace_label,
                 bundle_root=bundle_root,
                 original_output_dir=original_output_dir,
             )
+            trace_payload = _as_json_object(
+                json.loads(trace_path.read_text(encoding="utf-8")),
+                trace_label,
+            )
+            try:
+                trace_check.validate_trace_evidence(
+                    trace_payload,
+                    trace_check.TraceThresholds(),
+                )
+            except trace_check.TraceCheckError as exc:
+                raise ClusterSuiteError(
+                    f"{trace_label}: invalid trace evidence: {exc}"
+                ) from exc
             verified_count += 1
+        _require(
+            observed_trace_paths == expected_trace_paths,
+            (
+                f"{EVIDENCE_FINGERPRINTS_KEY}.{case_name}.{TRACE_EVIDENCE_KEY} "
+                f"paths must match cases.{case_name}.{TRACE_EVIDENCE_KEY}"
+            ),
+        )
     return verified_count
 
 
@@ -3558,24 +3594,33 @@ def _summary_required_models(summary_payload: dict[str, Any]) -> tuple[str, ...]
     )
 
 
+def _case_record_trace_evidence_paths(
+    case_record: dict[str, Any],
+    field_label: str,
+) -> list[str]:
+    """Return summary trace-evidence paths after validating their JSON shape."""
+    raw_trace_evidence = case_record.get(TRACE_EVIDENCE_KEY, ())
+    if raw_trace_evidence is None:
+        return []
+    _require(
+        isinstance(raw_trace_evidence, (list, tuple)),
+        f"{field_label}.{TRACE_EVIDENCE_KEY} must be an array",
+    )
+    return [
+        _as_json_string(
+            raw_path,
+            f"{field_label}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
+        )
+        for trace_index, raw_path in enumerate(raw_trace_evidence)
+    ]
+
+
 def _case_record_trace_evidence_count(
     case_record: dict[str, Any],
     field_label: str,
 ) -> int:
     """Return trace-evidence path count from a summary-style case record."""
-    raw_trace_evidence = case_record.get(TRACE_EVIDENCE_KEY, ())
-    if raw_trace_evidence is None:
-        return 0
-    _require(
-        isinstance(raw_trace_evidence, (list, tuple)),
-        f"{field_label}.{TRACE_EVIDENCE_KEY} must be an array",
-    )
-    for trace_index, raw_path in enumerate(raw_trace_evidence):
-        _as_json_string(
-            raw_path,
-            f"{field_label}.{TRACE_EVIDENCE_KEY}[{trace_index}]",
-        )
-    return len(raw_trace_evidence)
+    return len(_case_record_trace_evidence_paths(case_record, field_label))
 
 
 def _required_model_coverage_rows_from_case_records(

@@ -1806,6 +1806,10 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_failed_trace_coverage_drift"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_trace_evidence_path_drift"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_invalid_fingerprinted_trace"
+        in cluster_suite_test
         and "test_build_correlation_rows_ignores_failed_case_metrics"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_failed_case_speedup_svg_marker"
@@ -1924,6 +1928,10 @@ def main() -> None:
         and "required_model_coverage.csv" in cluster_suite
         and "required_model_coverage.md" in cluster_suite
         and "passed/reused trace" in cluster_suite
+        and "_case_record_trace_evidence_paths" in cluster_suite
+        and "trace_check.validate_trace_evidence" in cluster_suite
+        and "paths must match cases." in cluster_suite
+        and "invalid trace evidence" in cluster_suite
         and "_summary_correlations_by_metric_pair" in cluster_suite
         and "_correlation_rows_from_summary" in cluster_suite
         and "_format_csv_value" in cluster_suite
@@ -2281,6 +2289,7 @@ def main() -> None:
         and "required_model_coverage.md" in doc
         and "model coverage table" in doc
         and "passed/reused trace evidence count" in doc
+        and "fingerprinted trace JSON through the MLIP trace checker" in doc
         and "skipped a required model" in doc
         and "reopens the fingerprinted preflight report" in doc
         and "checks `gpu_check`" in doc
