@@ -269,6 +269,18 @@ PIPELINE_STAGE_SUITE_MANIFEST_ALIGNMENT_KEYS = (
     "manifest.sha256",
     "manifest.size_bytes",
 )
+PIPELINE_STAGE_SUITE_ALIGNMENT_KEYS = (
+    "name",
+    "manifest_path",
+    *PIPELINE_STAGE_SUITE_MANIFEST_ALIGNMENT_KEYS,
+    "output_dir",
+    "expected_gpus",
+    "required_models",
+    "min_trace_count",
+    "min_distinct_trace_models",
+    "runtime_overrides",
+    "require_artifact_sha256",
+)
 PIPELINE_SUCCESS_STAGE_STATUSES = {
     PIPELINE_STAGE_READINESS: (PIPELINE_STAGE_STATUS_READY,),
     PIPELINE_STAGE_PREPARE_ARTIFACTS: (
@@ -1807,6 +1819,7 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
             "final_paper_required_models": list(FINAL_PAPER_REQUIRED_MODELS),
             "min_trace_count": config.min_trace_count,
             "min_distinct_trace_models": config.min_distinct_trace_models,
+            "require_artifact_sha256": config.require_artifact_sha256,
             "runtime_overrides": dict(config.runtime_overrides),
         },
         "checks": checks,
@@ -2262,6 +2275,10 @@ def prepare_artifacts(config: SuiteConfig, *, dry_run: bool = False) -> dict[str
             "manifest_path": str(config.manifest_path),
             "manifest": manifest_record(config),
             "output_dir": str(config.output_dir),
+            "expected_gpus": config.expected_gpus,
+            "required_models": list(config.required_models),
+            "min_trace_count": config.min_trace_count,
+            "min_distinct_trace_models": config.min_distinct_trace_models,
             "require_artifact_sha256": config.require_artifact_sha256,
             "runtime_overrides": dict(config.runtime_overrides),
         },
@@ -6051,6 +6068,12 @@ def _require_pipeline_readiness_report(
         suite_label="suite.manifest",
         error_message=PIPELINE_READINESS_SUITE_ERROR,
     )
+    verified_suite_field_count = _require_stage_suite_metadata_alignment(
+        readiness_suite,
+        suite_record,
+        stage_label="readiness_report.suite",
+        error_message=PIPELINE_READINESS_SUITE_ERROR,
+    )
     raw_checks = readiness_payload.get("checks")
     _require(isinstance(raw_checks, list), "readiness_report.checks must be a JSON array")
     checks_by_name: dict[str, bool] = {}
@@ -6078,6 +6101,7 @@ def _require_pipeline_readiness_report(
         "status": readiness_status,
         "readiness_report": str(readiness_report_path),
         "verified_manifest_field_count": verified_manifest_field_count,
+        "verified_suite_field_count": verified_suite_field_count,
         "verified_check_count": len(FINAL_PAPER_READINESS_CHECK_NAMES),
     }
 
@@ -6129,6 +6153,72 @@ def _require_suite_manifest_alignment(
         error_message,
     )
     return len(PIPELINE_STAGE_SUITE_MANIFEST_ALIGNMENT_KEYS)
+
+
+def _require_stage_suite_metadata_alignment(
+    stage_suite: dict[str, Any],
+    suite_record: dict[str, Any],
+    *,
+    stage_label: str,
+    error_message: str,
+) -> int:
+    """Require a stage report to carry the same suite-level provenance."""
+    for field_name in ("name", "manifest_path", "output_dir"):
+        _require(
+            _as_json_string(
+                stage_suite.get(field_name),
+                f"{stage_label}.{field_name}",
+            )
+            == _as_json_string(suite_record.get(field_name), f"suite.{field_name}"),
+            error_message,
+        )
+    for field_name in ("expected_gpus", "min_trace_count", "min_distinct_trace_models"):
+        _require(
+            _as_json_nonnegative_int(
+                stage_suite.get(field_name),
+                f"{stage_label}.{field_name}",
+            )
+            == _as_json_nonnegative_int(
+                suite_record.get(field_name),
+                f"suite.{field_name}",
+            ),
+            error_message,
+        )
+    _require(
+        _as_string_tuple(
+            stage_suite.get("required_models"),
+            f"{stage_label}.required_models",
+        )
+        == _as_string_tuple(suite_record.get("required_models"), "suite.required_models"),
+        error_message,
+    )
+    _require(
+        _as_json_object(
+            stage_suite.get("runtime_overrides"),
+            f"{stage_label}.runtime_overrides",
+        )
+        == _as_json_object(suite_record.get("runtime_overrides"), "suite.runtime_overrides"),
+        error_message,
+    )
+    _require(
+        _as_json_bool(
+            stage_suite.get("require_artifact_sha256"),
+            f"{stage_label}.require_artifact_sha256",
+        )
+        == _as_json_bool(
+            suite_record.get("require_artifact_sha256"),
+            "suite.require_artifact_sha256",
+        ),
+        error_message,
+    )
+    _require_suite_manifest_alignment(
+        _as_json_object(stage_suite.get("manifest"), f"{stage_label}.manifest"),
+        _as_json_object(suite_record.get("manifest"), "suite.manifest"),
+        stage_label=f"{stage_label}.manifest",
+        suite_label="suite.manifest",
+        error_message=error_message,
+    )
+    return len(PIPELINE_STAGE_SUITE_ALIGNMENT_KEYS)
 
 
 def _require_pipeline_artifact_preparation_report(
@@ -6201,6 +6291,12 @@ def _require_pipeline_artifact_preparation_report(
         suite_manifest,
         stage_label="artifact_preparation_report.suite.manifest",
         suite_label="suite.manifest",
+        error_message=PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
+    )
+    verified_suite_field_count = _require_stage_suite_metadata_alignment(
+        artifact_suite,
+        suite_record,
+        stage_label="artifact_preparation_report.suite",
         error_message=PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
     )
     runtime_overrides = _as_json_object(
@@ -6278,6 +6374,7 @@ def _require_pipeline_artifact_preparation_report(
         "status": status,
         "artifact_preparation_report": str(artifact_report_path),
         "verified_manifest_field_count": verified_manifest_field_count,
+        "verified_suite_field_count": verified_suite_field_count,
         "verified_artifact_record_count": len(raw_artifacts),
         "verified_required_artifact_count": verified_required_count,
     }
@@ -6359,6 +6456,12 @@ def _require_pipeline_plan_report(
         suite_manifest,
         stage_label="run_plan.suite.manifest",
         suite_label="suite.manifest",
+        error_message=PIPELINE_PLAN_SUITE_ERROR,
+    )
+    verified_suite_field_count = _require_stage_suite_metadata_alignment(
+        plan_suite,
+        suite_record,
+        stage_label="run_plan.suite",
         error_message=PIPELINE_PLAN_SUITE_ERROR,
     )
     modes = _as_json_object(plan_payload.get("modes"), "run_plan.modes")
@@ -6479,6 +6582,7 @@ def _require_pipeline_plan_report(
         "run_plan_report": str(plan_report_path),
         "gpu_check_planned": True,
         "verified_manifest_field_count": verified_manifest_field_count,
+        "verified_suite_field_count": verified_suite_field_count,
         "verified_required_artifact_plan_count": verified_required_artifact_count,
         "verified_case_plan_count": len(raw_cases),
         "paper_outputs": dict(paper_outputs),

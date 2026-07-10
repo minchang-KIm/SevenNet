@@ -636,9 +636,10 @@ only record `ablation_mode = "paired"`; a one-sided ablation override must stay
 in the ablation-only path instead of being accepted as final paper evidence. It
 also reopens the fingerprinted readiness report and requires every final-paper readiness check to be present and passed.
 The readiness report, artifact-preparation report, and run plan must each carry
-the same manifest path, SHA-256 digest, and byte size as the pipeline suite
-record, so a stage report copied from a different manifest cannot pass by
-sharing only the same output directory or status label.
+the same suite name, manifest path, manifest SHA-256 digest, manifest byte size,
+output directory, requested GPU count, required model scope, trace thresholds, runtime overrides, and artifact SHA gate as the pipeline suite record, so a
+stage report copied from a different manifest cannot pass by sharing only the
+same output directory or status label.
 It reopens the fingerprinted artifact preparation report, requires `dry_run = false`,
 and checks `missing_required_artifacts` plus each required artifact SHA-256 digest.
 It also reopens the fingerprinted run plan report, requires final-paper execution modes,

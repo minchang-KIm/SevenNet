@@ -1025,23 +1025,49 @@ def _pipeline_readiness_report(
     runtime_overrides: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Return readiness evidence for pipeline-report semantic verification."""
-    suite_manifest = (
-        suite_record["manifest"]
-        if suite_record is not None
-        else {"path": "unit-test-suite.toml", "sha256": "0" * 64, "size_bytes": 0}
-    )
+    if suite_record is None:
+        suite_payload = {
+            "name": "unit-test-suite",
+            "manifest_path": "unit-test-suite.toml",
+            "manifest": {
+                "path": "unit-test-suite.toml",
+                "sha256": "0" * 64,
+                "size_bytes": 0,
+            },
+            "output_dir": "paper_outputs",
+            "expected_gpus": expected_gpus,
+            "required_models": list(required_models),
+            "min_trace_count": isodelta_cluster_suite.DEFAULT_MIN_TRACE_COUNT,
+            "min_distinct_trace_models": (
+                isodelta_cluster_suite.DEFAULT_MIN_DISTINCT_TRACE_MODELS
+            ),
+            "require_artifact_sha256": True,
+            "runtime_overrides": {} if runtime_overrides is None else runtime_overrides,
+        }
+    else:
+        suite_payload = {
+            "name": suite_record["name"],
+            "manifest_path": suite_record["manifest_path"],
+            "manifest": suite_record["manifest"],
+            "output_dir": suite_record["output_dir"],
+            "expected_gpus": suite_record["expected_gpus"],
+            "required_models": suite_record["required_models"],
+            "min_trace_count": suite_record["min_trace_count"],
+            "min_distinct_trace_models": suite_record["min_distinct_trace_models"],
+            "require_artifact_sha256": suite_record["require_artifact_sha256"],
+            "runtime_overrides": (
+                suite_record["runtime_overrides"]
+                if runtime_overrides is None
+                else runtime_overrides
+            ),
+        }
     return {
         "readiness_schema_version": isodelta_cluster_suite.READINESS_SCHEMA_VERSION,
         isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
             isodelta_cluster_suite.READINESS_REPORT_COMMENT
         ),
         "status": status,
-        "suite": {
-            "manifest": suite_manifest,
-            "expected_gpus": expected_gpus,
-            "required_models": list(required_models),
-            "runtime_overrides": {} if runtime_overrides is None else runtime_overrides,
-        },
+        "suite": suite_payload,
         "checks": [
             {
                 "name": check_name,
@@ -1070,7 +1096,14 @@ def _pipeline_artifact_preparation_report(
         "status": isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
         "dry_run": dry_run,
         "suite": {
+            "name": suite_record["name"],
+            "manifest_path": suite_record["manifest_path"],
             "manifest": suite_record["manifest"],
+            "output_dir": suite_record["output_dir"],
+            "expected_gpus": suite_record["expected_gpus"],
+            "required_models": suite_record["required_models"],
+            "min_trace_count": suite_record["min_trace_count"],
+            "min_distinct_trace_models": suite_record["min_distinct_trace_models"],
             "require_artifact_sha256": suite_record["require_artifact_sha256"],
             "runtime_overrides": suite_record["runtime_overrides"],
         },
@@ -1106,9 +1139,14 @@ def _pipeline_plan_report(
             isodelta_cluster_suite.RUN_PLAN_REPORT_COMMENT
         ),
         "suite": {
+            "name": suite_record["name"],
+            "manifest_path": suite_record["manifest_path"],
             "manifest": suite_record["manifest"],
+            "output_dir": suite_record["output_dir"],
             "expected_gpus": suite_record["expected_gpus"],
             "required_models": suite_record["required_models"],
+            "min_trace_count": suite_record["min_trace_count"],
+            "min_distinct_trace_models": suite_record["min_distinct_trace_models"],
             "require_artifact_sha256": suite_record["require_artifact_sha256"],
             "runtime_overrides": suite_record["runtime_overrides"],
         },
@@ -5708,12 +5746,29 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            summary_threshold_drift_summary = json.loads(json.dumps(summary))
+            summary_threshold_drift_summary["suite"]["min_trace_count"] += (
+                THRESHOLD_DRIFT_INCREMENT
+            )
+            summary_path.write_text(
+                json.dumps(summary_threshold_drift_summary),
+                encoding="utf-8",
+            )
             summary_threshold_drift_pipeline_report = json.loads(
                 json.dumps(pipeline_report)
             )
-            summary_threshold_drift_pipeline_report["suite"]["min_trace_count"] += (
-                THRESHOLD_DRIFT_INCREMENT
-            )
+            for stage_index in (run_suite_stage_index, verify_stage_index):
+                summary_threshold_drift_pipeline_report[
+                    isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+                ][stage_index]["report"] = (
+                    isodelta_cluster_suite.generated_artifact_record(
+                        Path(
+                            summary_threshold_drift_pipeline_report["stages"][
+                                stage_index
+                            ]["report_path"]
+                        )
+                    )
+                )
             pipeline_report_path.write_text(
                 json.dumps(summary_threshold_drift_pipeline_report),
                 encoding="utf-8",
@@ -5868,6 +5923,101 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 plan_manifest_size_drift_error = str(exc)
             else:
                 plan_manifest_size_drift_error = ""
+            plan_path.write_text(plan_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
+            readiness_threshold_drift_report = json.loads(
+                json.dumps(readiness_report)
+            )
+            readiness_threshold_drift_report["suite"]["min_trace_count"] += (
+                THRESHOLD_DRIFT_INCREMENT
+            )
+            readiness_report_path.write_text(
+                json.dumps(readiness_threshold_drift_report),
+                encoding="utf-8",
+            )
+            readiness_threshold_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            readiness_threshold_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][readiness_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(readiness_report_path)
+            )
+            pipeline_report_path.write_text(
+                json.dumps(readiness_threshold_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                readiness_threshold_drift_error = str(exc)
+            else:
+                readiness_threshold_drift_error = ""
+            readiness_report_path.write_text(readiness_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
+            artifact_output_dir_drift_report = json.loads(
+                json.dumps(artifact_report)
+            )
+            artifact_output_dir_drift_report["suite"]["output_dir"] = str(
+                output_dir / "wrong_artifact_output"
+            )
+            artifact_report_path.write_text(
+                json.dumps(artifact_output_dir_drift_report),
+                encoding="utf-8",
+            )
+            artifact_output_dir_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            artifact_output_dir_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][artifact_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(artifact_report_path)
+            )
+            pipeline_report_path.write_text(
+                json.dumps(artifact_output_dir_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                artifact_output_dir_drift_error = str(exc)
+            else:
+                artifact_output_dir_drift_error = ""
+            artifact_report_path.write_text(artifact_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
+            plan_threshold_drift_report = json.loads(json.dumps(plan_report))
+            plan_threshold_drift_report["suite"][
+                "min_distinct_trace_models"
+            ] += THRESHOLD_DRIFT_INCREMENT
+            plan_path.write_text(
+                json.dumps(plan_threshold_drift_report),
+                encoding="utf-8",
+            )
+            plan_threshold_drift_pipeline_report = json.loads(json.dumps(pipeline_report))
+            plan_threshold_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][plan_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(plan_path)
+            )
+            pipeline_report_path.write_text(
+                json.dumps(plan_threshold_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                plan_threshold_drift_error = str(exc)
+            else:
+                plan_threshold_drift_error = ""
             plan_path.write_text(plan_report_text, encoding="utf-8")
             pipeline_report_path.write_text(
                 json.dumps(pipeline_report),
@@ -6171,7 +6321,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             summary_manifest_size_drift_error,
         )
         self.assertIn(
-            isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
+            "suite_evidence.min_trace_count must match summary.suite.min_trace_count",
             summary_threshold_drift_error,
         )
         self.assertIn(
@@ -6189,6 +6339,18 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PLAN_SUITE_ERROR,
             plan_manifest_size_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_READINESS_SUITE_ERROR,
+            readiness_threshold_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
+            artifact_output_dir_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_PLAN_SUITE_ERROR,
+            plan_threshold_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,
