@@ -910,6 +910,12 @@ def main() -> None:
         and "validation report commands have invalid field values" in sync_gate
         and "validation report commands include nonzero returncodes" in sync_gate
         and "STATUS_DIRTY_WORKTREE" in sync_gate
+        and "STATUS_GIT_HEAD_UNAVAILABLE" in sync_gate
+        and "LOCAL_HEAD_PRECONDITION_KEY" in sync_gate
+        and "LOCAL_HEAD_PRECONDITION_COMMAND_NAME" in sync_gate
+        and "HEAD_COMMIT_COMMAND" in sync_gate
+        and "_local_head_precondition_report" in sync_gate
+        and "_local_head_precondition_failure_record" in sync_gate
         and "WORKTREE_STATUS_KEY" in sync_gate
         and "_parse_status_short" in sync_gate
         and "_worktree_status" in sync_gate
@@ -938,6 +944,8 @@ def main() -> None:
         and "test_run_sync_rejects_validation_report_malformed_commit"
         in sync_gate_test
         and "test_run_sync_requires_full_report_commit_without_local_head"
+        in sync_gate_test
+        and "test_run_sync_rejects_push_when_local_head_is_unavailable"
         in sync_gate_test
         and "test_run_sync_rejects_missing_validation_report" in sync_gate_test
         and "test_run_sync_rejects_failed_validation_report_json" in sync_gate_test
@@ -2515,6 +2523,8 @@ def main() -> None:
         and "`worktree_status`" in doc
         and "`--require-clean-worktree`" in doc
         and "`dirty_worktree`" in doc
+        and "`local_head_precondition`" in doc
+        and "`git_head_unavailable`" in doc
         and "`git_provenance` fields" in doc
         and "`git ls-remote --heads`" in doc
         and "`remote_ref_verification`" in doc

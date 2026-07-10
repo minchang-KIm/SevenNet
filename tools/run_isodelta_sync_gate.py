@@ -52,11 +52,16 @@ STATUS_VALIDATION_FAILED = "validation_failed"
 STATUS_VALIDATION_REPORT_MISSING = "validation_report_missing"
 STATUS_VALIDATION_REPORT_INVALID = "validation_report_invalid"
 STATUS_DIRTY_WORKTREE = "dirty_worktree"
+STATUS_GIT_HEAD_UNAVAILABLE = "git_head_unavailable"
 STATUS_PUSH_FAILED = "push_failed"
 STATUS_REMOTE_VERIFICATION_FAILED = "remote_verification_failed"
+LOCAL_HEAD_PRECONDITION_KEY = "local_head_precondition"
+LOCAL_HEAD_PRECONDITION_COMMAND_NAME = "local_head_precondition"
+LOCAL_HEAD_PRECONDITION_DETAIL = "current HEAD commit is unavailable or malformed"
 REMOTE_REF_VERIFICATION_KEY = "remote_ref_verification"
 REMOTE_REF_VERIFY_COMMAND_NAME = "remote_ref_verify"
 CURRENT_BRANCH_COMMAND = ("git", "branch", "--show-current")
+HEAD_COMMIT_COMMAND = ("git", "rev-parse", "HEAD")
 VALIDATION_REPORT_FINGERPRINT_KEY = "validation_report_fingerprint"
 VALIDATION_REPORT_SUMMARY_KEY = "validation_report_summary"
 SYNC_COMMAND_SUMMARY_KEY = "sync_command_summary"
@@ -353,6 +358,30 @@ def _branch_precondition_failure_record(name: str, detail: str) -> dict[str, Any
     return {"name": name, **record}
 
 
+def _local_head_precondition_report(head_commit: str | None) -> dict[str, Any]:
+    """Describe whether the current checkout exposes a full HEAD object id."""
+    verified = _is_git_object_id(head_commit)
+    return {
+        "command": list(HEAD_COMMIT_COMMAND),
+        "head_commit": head_commit,
+        "verified": verified,
+        "detail": None if verified else LOCAL_HEAD_PRECONDITION_DETAIL,
+    }
+
+
+def _local_head_precondition_failure_record(head_commit: str | None) -> dict[str, Any]:
+    """Record a replayable local-HEAD precondition failure."""
+    record = _run_command(HEAD_COMMIT_COMMAND)
+    if record["returncode"] == SUCCESS_RETURN_CODE:
+        record["returncode"] = FAILURE_RETURN_CODE
+    stderr_tail = str(record["stderr_tail"])
+    detail = f"{LOCAL_HEAD_PRECONDITION_DETAIL}; observed={head_commit!r}"
+    record["stderr_tail"] = _tail(
+        "\n".join(part for part in (stderr_tail, detail) if part)
+    )
+    return {"name": LOCAL_HEAD_PRECONDITION_COMMAND_NAME, **record}
+
+
 def _validation_report_summary(
     validation_report_path: Path,
     *,
@@ -450,7 +479,7 @@ def _validation_report_summary(
     if not _is_git_object_id(git_commit):
         summary["detail"] = "validation report git_commit is not a full Git object id"
         return summary
-    if expected_commit is not None and git_commit != expected_commit:
+    if _is_git_object_id(expected_commit) and git_commit != expected_commit:
         summary["detail"] = "validation report git_commit does not match current HEAD"
         return summary
     if command_count is None:
@@ -477,7 +506,7 @@ def _sync_git_provenance(remote: str, branch: str | None) -> dict[str, str | Non
     remote_tracking_ref = f"refs/remotes/{remote}/{branch}" if branch else None
     return {
         "current_branch": _current_branch(),
-        "head_commit": _metadata_command(("git", "rev-parse", "HEAD")),
+        "head_commit": _metadata_command(HEAD_COMMIT_COMMAND),
         "target_branch_commit": (
             _metadata_command(("git", "rev-parse", branch)) if branch else None
         ),
@@ -655,7 +684,10 @@ def run_sync(
     validation_report_summary: dict[str, Any] | None = None
     push_record: dict[str, Any] | None = None
     remote_ref_verification_report: dict[str, Any] | None = None
-    expected_head_commit = _metadata_command(("git", "rev-parse", "HEAD"))
+    expected_head_commit = _metadata_command(HEAD_COMMIT_COMMAND)
+    local_head_precondition_report = _local_head_precondition_report(
+        expected_head_commit
+    )
     status = (
         STATUS_DIRTY_WORKTREE
         if require_clean_worktree and not worktree_report["clean"]
@@ -685,6 +717,11 @@ def run_sync(
             status = STATUS_VALIDATION_REPORT_MISSING
         elif validation_report_summary is None or not validation_report_summary["valid"]:
             status = STATUS_VALIDATION_REPORT_INVALID
+        elif not local_head_precondition_report["verified"]:
+            status = STATUS_GIT_HEAD_UNAVAILABLE
+            command_records.append(
+                _local_head_precondition_failure_record(expected_head_commit)
+            )
         elif skip_push:
             status = STATUS_VALIDATED
         elif resolved_branch:
@@ -740,8 +777,9 @@ def run_sync(
         "validation_report_path": str(validation_report_path),
         VALIDATION_REPORT_FINGERPRINT_KEY: validation_report_fingerprint,
         VALIDATION_REPORT_SUMMARY_KEY: validation_report_summary,
+        LOCAL_HEAD_PRECONDITION_KEY: local_head_precondition_report,
         WORKTREE_STATUS_KEY: worktree_report,
-        "git_commit": _metadata_command(("git", "rev-parse", "HEAD")),
+        "git_commit": expected_head_commit,
         "git_status_short": _metadata_command(("git", "status", "--short")),
         "git_provenance": _sync_git_provenance(remote, resolved_branch),
         "commands": command_records,

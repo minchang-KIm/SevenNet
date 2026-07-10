@@ -22,10 +22,12 @@ REPO_ROOT_PARENT_DEPTH = 2
 VALIDATION_COMMAND_INDEX = 0
 PUSH_COMMAND_INDEX = 1
 REMOTE_REF_VERIFY_COMMAND_INDEX = 2
+LOCAL_HEAD_PRECONDITION_COMMAND_INDEX = 1
 BRANCH_PRECONDITION_COMMAND_INDEX = 1
 BRANCH_PRECONDITION_BUNDLE_COMMAND_INDEX = 2
 COMMAND_COUNT_AFTER_VALIDATION_FAILURE = 1
 COMMAND_COUNT_AFTER_DIRTY_WORKTREE = 0
+COMMAND_COUNT_AFTER_LOCAL_HEAD_PRECONDITION_FAILURE = 2
 COMMAND_COUNT_AFTER_BRANCH_PRECONDITION_FAILURE = 3
 COMMAND_FAILURE_COUNT_AFTER_BRANCH_PRECONDITION_FAILURE = 2
 SUCCESSFUL_SYNC_COMMAND_COUNT = 3
@@ -286,6 +288,15 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertEqual(
             report[sync_gate.VALIDATION_REPORT_SUMMARY_KEY],
             expected_validation_summary,
+        )
+        self.assertEqual(
+            report[sync_gate.LOCAL_HEAD_PRECONDITION_KEY],
+            {
+                "command": list(sync_gate.HEAD_COMMIT_COMMAND),
+                "head_commit": FEATURE_COMMIT,
+                "verified": True,
+                "detail": None,
+            },
         )
         self.assertEqual(
             report[sync_gate.WORKTREE_STATUS_KEY],
@@ -737,6 +748,62 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             "validation report git_commit is not a full Git object id",
         )
 
+    def test_run_sync_rejects_push_when_local_head_is_unavailable(self) -> None:
+        """A valid report cannot be pushed without local HEAD provenance."""
+        original_root = sync_gate.REPO_ROOT
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            forbidden_push_marker = root / "push-ran"
+            forbidden_push_script = (
+                "from pathlib import Path; "
+                f"Path({str(forbidden_push_marker)!r}).write_text('ran', "
+                "encoding='utf-8')"
+            )
+            sync_gate.REPO_ROOT = root
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            git_commit=FEATURE_COMMIT,
+                        ),
+                        push_command=(sys.executable, "-c", forbidden_push_script),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertFalse(forbidden_push_marker.exists())
+        self.assertEqual(report["status"], sync_gate.STATUS_GIT_HEAD_UNAVAILABLE)
+        self.assertEqual(
+            [record["name"] for record in report["commands"]],
+            ["validation", sync_gate.LOCAL_HEAD_PRECONDITION_COMMAND_NAME],
+        )
+        self.assertEqual(
+            len(report["commands"]),
+            COMMAND_COUNT_AFTER_LOCAL_HEAD_PRECONDITION_FAILURE,
+        )
+        self.assertEqual(
+            report[sync_gate.LOCAL_HEAD_PRECONDITION_KEY],
+            {
+                "command": list(sync_gate.HEAD_COMMIT_COMMAND),
+                "head_commit": None,
+                "verified": False,
+                "detail": sync_gate.LOCAL_HEAD_PRECONDITION_DETAIL,
+            },
+        )
+        self.assertIn(
+            sync_gate.LOCAL_HEAD_PRECONDITION_DETAIL,
+            report["commands"][LOCAL_HEAD_PRECONDITION_COMMAND_INDEX]["stderr_tail"],
+        )
+
     def test_run_sync_rejects_validation_report_without_comment(self) -> None:
         """A passed validation report should describe what evidence it contains."""
         original_root = sync_gate.REPO_ROOT
@@ -1000,11 +1067,21 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
     def test_run_sync_classifies_noninteractive_auth_push_failure(self) -> None:
         """Credential prompts disabled by the sync gate should be explicit."""
         original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
+            ("git", "status", "--short"): "",
+        }
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             report_path = root / "sync_report.json"
             validation_report_path = root / "validation_report.json"
             sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
             try:
                 with contextlib.redirect_stdout(io.StringIO()):
                     exit_code = sync_gate.run_sync(
@@ -1031,6 +1108,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                     )
             finally:
                 sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
@@ -1047,6 +1125,15 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
     def test_run_sync_can_write_bundle_after_push_failure(self) -> None:
         """A failed push can still produce a portable bundle for handoff."""
         original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): FEATURE_COMMIT,
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
+            ("git", "status", "--short"): "",
+        }
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             report_path = root / "sync_report.json"
@@ -1057,6 +1144,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                 f"Path({str(bundle_path)!r}).write_text('bundle', encoding='utf-8')"
             )
             sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
             try:
                 with contextlib.redirect_stdout(io.StringIO()):
                     exit_code = sync_gate.run_sync(
@@ -1082,6 +1170,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                     )
             finally:
                 sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
             bundle_exists = bundle_path.exists()
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
