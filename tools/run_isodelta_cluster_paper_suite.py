@@ -362,6 +362,8 @@ ENABLED_SAMPLE_VARIANCE_SECONDS_KEY = "enabled_sample_variance_seconds"
 BASELINE_SAMPLE_STDDEV_SECONDS_KEY = "baseline_sample_stddev_seconds"
 ENABLED_SAMPLE_STDDEV_SECONDS_KEY = "enabled_sample_stddev_seconds"
 SPEEDUP_VS_DISABLED_CACHE_KEY = "speedup_vs_disabled_cache"
+MIN_REQUIRED_MEASURED_SPEEDUP_CASES = 1
+MIN_REQUIRED_SPEEDUP_CI_CASES = 1
 MODE_CONTROLS_KEY = "mode_controls"
 TIMING_MODES_KEY = "timing_modes"
 ENV_FLAG_FALSE_VALUES_KEY = "env_flag_false_values"
@@ -3788,6 +3790,46 @@ def _summary_numeric_value(case_record: dict[str, Any], field_name: str) -> floa
     return numeric_value if math.isfinite(numeric_value) else None
 
 
+def _summary_measured_speedup_case_names(
+    cases_by_name: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Return case names that carry a plottable paired-cache speedup."""
+    return [
+        case_name
+        for case_name, case_record in cases_by_name.items()
+        if _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
+    ]
+
+
+def _summary_speedup_ci_case_names(
+    cases_by_name: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Return case names that carry a plottable speedup confidence interval."""
+    return [
+        case_name
+        for case_name, case_record in cases_by_name.items()
+        if _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
+        and _summary_numeric_value(case_record, "speedup_95ci_lower_bound") is not None
+        and _summary_numeric_value(case_record, "speedup_95ci_upper_bound") is not None
+    ]
+
+
+def _require_summary_speedup_measurements(
+    cases_by_name: dict[str, dict[str, Any]],
+) -> None:
+    """Require final paper bundles to contain actual measured speedup evidence."""
+    measured_case_names = _summary_measured_speedup_case_names(cases_by_name)
+    _require(
+        len(measured_case_names) >= MIN_REQUIRED_MEASURED_SPEEDUP_CASES,
+        "paper output bundle must include at least one measured speedup case",
+    )
+    ci_case_names = _summary_speedup_ci_case_names(cases_by_name)
+    _require(
+        len(ci_case_names) >= MIN_REQUIRED_SPEEDUP_CI_CASES,
+        "paper output bundle must include at least one speedup confidence interval case",
+    )
+
+
 def _svg_local_name(element: Any) -> str:
     """Return an SVG element tag without an XML namespace prefix."""
     return str(element.tag).rsplit("}", maxsplit=1)[-1]
@@ -4504,11 +4546,7 @@ def _require_speedup_svg_semantics(
     """Verify that the speedup bar chart labels every measured-speedup case."""
     root = _require_svg_document(path, "speedup_svg")
     text_content = _svg_text_content(root)
-    expected_case_names = [
-        case_name
-        for case_name, case_record in cases_by_name.items()
-        if _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
-    ]
+    expected_case_names = _summary_measured_speedup_case_names(cases_by_name)
     if not expected_case_names:
         _require(
             SPEEDUP_SVG_EMPTY_MESSAGE in text_content,
@@ -4529,13 +4567,7 @@ def _require_speedup_uncertainty_svg_semantics(
     """Verify the speedup uncertainty chart has one point and CI per case."""
     root = _require_svg_document(path, "speedup_uncertainty_svg")
     text_content = _svg_text_content(root)
-    expected_case_names = [
-        case_name
-        for case_name, case_record in cases_by_name.items()
-        if _summary_numeric_value(case_record, SPEEDUP_VS_DISABLED_CACHE_KEY) is not None
-        and _summary_numeric_value(case_record, "speedup_95ci_lower_bound") is not None
-        and _summary_numeric_value(case_record, "speedup_95ci_upper_bound") is not None
-    ]
+    expected_case_names = _summary_speedup_ci_case_names(cases_by_name)
     if not expected_case_names:
         _require(
             SPEEDUP_UNCERTAINTY_SVG_EMPTY_MESSAGE in text_content,
@@ -4759,6 +4791,7 @@ def _require_paper_artifact_semantics(
 ) -> int:
     """Verify that required paper artifacts are not only hashed but readable."""
     cases_by_name = _summary_cases_by_name(summary_payload)
+    _require_summary_speedup_measurements(cases_by_name)
     repeat_timing_rows = _repeat_timing_rows_from_summary(
         summary_payload,
         bundle_root=bundle_root,

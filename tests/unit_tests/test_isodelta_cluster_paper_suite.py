@@ -37,6 +37,8 @@ RUN_TIMEOUT_SECONDS = 3600.0
 BASELINE_LOOP_TIME_SECONDS = 12.0
 ISODELTA_LOOP_TIME_SECONDS = 10.0
 EXPECTED_SPEEDUP = BASELINE_LOOP_TIME_SECONDS / ISODELTA_LOOP_TIME_SECONDS
+EXPECTED_SPEEDUP_CI_LOWER_BOUND = 1.0
+EXPECTED_SPEEDUP_CI_UPPER_BOUND = 1.4
 EXPECTED_RESULT_COUNT = 4
 ENABLED_ATTEMPTS = 10.0
 ENABLED_HITS = 8.0
@@ -472,6 +474,9 @@ def _summary_case_record(
         "model": model,
         "kind": kind,
         "status": status,
+        "speedup_vs_disabled_cache": EXPECTED_SPEEDUP,
+        "speedup_95ci_lower_bound": EXPECTED_SPEEDUP_CI_LOWER_BOUND,
+        "speedup_95ci_upper_bound": EXPECTED_SPEEDUP_CI_UPPER_BOUND,
     }
     record.update(metrics)
     return record
@@ -797,6 +802,41 @@ def _artifact_index(
         name: str(record["path"])
         for name, record in artifact_fingerprints.items()
     }
+
+
+def _write_minimal_output_summary(
+    output_dir: Path,
+    *,
+    case_records: tuple[dict[str, object], ...],
+    artifact_fingerprints: dict[str, dict[str, object]],
+) -> Path:
+    """Write a compact summary JSON for output-bundle verifier tests."""
+    summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+    summary_path.write_text(
+        json.dumps(
+            {
+                "suite": {"output_dir": str(output_dir)},
+                "cases": list(case_records),
+                "correlations": _summary_correlations(len(case_records)),
+                "commands": [],
+                "command_log_fingerprints": [],
+                "artifacts": _artifact_index(artifact_fingerprints),
+                "artifact_fingerprints": artifact_fingerprints,
+                "evidence_fingerprints": {
+                    str(case_record["case_name"]): {
+                        "benchmark_report": None,
+                        "bundle_evidence": None,
+                        "external_timing_report": None,
+                        "trace_evidence": [],
+                    }
+                    for case_record in case_records
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return summary_path
 
 
 def _pipeline_report_modes(**overrides: bool) -> dict[str, bool]:
@@ -1521,6 +1561,63 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 "speedup_svg: invalid SVG XML",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_missing_measured_speedup(self) -> None:
+        """Final paper bundles should not pass with only empty speedup figures."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_record = _summary_case_record(
+                "case",
+                speedup_vs_disabled_cache=None,
+                speedup_95ci_lower_bound=None,
+                speedup_95ci_upper_bound=None,
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=(case_record,),
+            )
+            _write_minimal_output_summary(
+                output_dir,
+                case_records=(case_record,),
+                artifact_fingerprints=artifact_fingerprints,
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "paper output bundle must include at least one measured speedup case",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_missing_speedup_confidence_interval(
+        self,
+    ) -> None:
+        """Final paper bundles should include uncertainty evidence for speedup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "paper_outputs"
+            case_record = _summary_case_record(
+                "case",
+                speedup_vs_disabled_cache=EXPECTED_SPEEDUP,
+                speedup_95ci_lower_bound=None,
+                speedup_95ci_upper_bound=None,
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                case_records=(case_record,),
+            )
+            _write_minimal_output_summary(
+                output_dir,
+                case_records=(case_record,),
+                artifact_fingerprints=artifact_fingerprints,
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                (
+                    "paper output bundle must include at least one speedup "
+                    "confidence interval case"
+                ),
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 

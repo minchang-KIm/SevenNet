@@ -1790,6 +1790,10 @@ def main() -> None:
         and "test_verify_output_bundle_rejects_mutated_external_command_log" in cluster_suite_test
         and "test_verify_output_bundle_rejects_semantically_invalid_svg_artifact"
         in cluster_suite_test
+        and "test_verify_output_bundle_rejects_missing_measured_speedup"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_missing_speedup_confidence_interval"
+        in cluster_suite_test
         and "test_verify_output_bundle_rejects_speedup_svg_label_drift"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_speedup_uncertainty_svg_point_drift"
@@ -1914,6 +1918,13 @@ def main() -> None:
         and "_require_svg_document" in cluster_suite
         and "_require_speedup_svg_semantics" in cluster_suite
         and "_require_speedup_uncertainty_svg_semantics" in cluster_suite
+        and "_require_summary_speedup_measurements" in cluster_suite
+        and "MIN_REQUIRED_MEASURED_SPEEDUP_CASES" in cluster_suite
+        and "MIN_REQUIRED_SPEEDUP_CI_CASES" in cluster_suite
+        and "paper output bundle must include at least one measured speedup case"
+        in cluster_suite
+        and "paper output bundle must include at least one speedup confidence interval case"
+        in cluster_suite
         and "_require_scatter_svg_semantics" in cluster_suite
         and "_svg_element_count" in cluster_suite
         and "_svg_element_count_with_attribute" in cluster_suite
@@ -2209,6 +2220,8 @@ def main() -> None:
         and "`artifact_comment` or `report_comment`" in doc
         and "Every generated table must keep its explanatory comment" in doc
         and "expected `<desc>` description" in doc
+        and "at least one finite measured speedup" in doc
+        and "at least one finite speedup confidence interval" in doc
         and "reopens the fingerprinted preflight report" in doc
         and "checks `gpu_check`" in doc
         and "requested GPU count was actually detected" in doc

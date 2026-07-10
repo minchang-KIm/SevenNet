@@ -947,6 +947,7 @@ timing report without regenerating the repeat table is rejected.
 `speedup_uncertainty.csv`/`speedup_uncertainty.md` must match the uncertainty
 fields in `summary["cases"]`, so the paper-ready CI table cannot drift from the
 JSON evidence.
+The verifier also requires `summary["cases"]` to contain at least one finite measured speedup and at least one finite speedup confidence interval, so a run that only produced empty figure shells cannot pass as a paper output bundle.
 Every generated table must keep its explanatory comment.
 Each SVG figure must parse as an SVG document with width, height, viewBox, and the expected `<desc>` description;
 the speedup chart must include every measured-speedup case label from
