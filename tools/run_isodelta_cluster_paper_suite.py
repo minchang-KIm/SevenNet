@@ -264,6 +264,11 @@ PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS = (
     "runtime_overrides",
     "require_artifact_sha256",
 )
+PIPELINE_STAGE_SUITE_MANIFEST_ALIGNMENT_KEYS = (
+    "manifest.path",
+    "manifest.sha256",
+    "manifest.size_bytes",
+)
 PIPELINE_SUCCESS_STAGE_STATUSES = {
     PIPELINE_STAGE_READINESS: (PIPELINE_STAGE_STATUS_READY,),
     PIPELINE_STAGE_PREPARE_ARTIFACTS: (
@@ -1795,6 +1800,7 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
         "suite": {
             "name": config.name,
             "manifest_path": str(config.manifest_path),
+            "manifest": manifest_record(config),
             "output_dir": str(config.output_dir),
             "expected_gpus": config.expected_gpus,
             "required_models": list(config.required_models),
@@ -6033,6 +6039,18 @@ def _require_pipeline_readiness_report(
         readiness_runtime_overrides == runtime_overrides,
         PIPELINE_READINESS_SUITE_ERROR,
     )
+    suite_manifest = _as_json_object(suite_record.get("manifest"), "suite.manifest")
+    readiness_manifest = _as_json_object(
+        readiness_suite.get("manifest"),
+        "readiness_report.suite.manifest",
+    )
+    verified_manifest_field_count = _require_suite_manifest_alignment(
+        readiness_manifest,
+        suite_manifest,
+        stage_label="readiness_report.suite.manifest",
+        suite_label="suite.manifest",
+        error_message=PIPELINE_READINESS_SUITE_ERROR,
+    )
     raw_checks = readiness_payload.get("checks")
     _require(isinstance(raw_checks, list), "readiness_report.checks must be a JSON array")
     checks_by_name: dict[str, bool] = {}
@@ -6059,6 +6077,7 @@ def _require_pipeline_readiness_report(
     return {
         "status": readiness_status,
         "readiness_report": str(readiness_report_path),
+        "verified_manifest_field_count": verified_manifest_field_count,
         "verified_check_count": len(FINAL_PAPER_READINESS_CHECK_NAMES),
     }
 
@@ -6071,6 +6090,45 @@ def _require_sha256_digest(value: Any, field_name: str) -> str:
         f"{field_name} must be a 64-character hexadecimal SHA-256 digest",
     )
     return digest
+
+
+def _require_suite_manifest_alignment(
+    stage_manifest: dict[str, Any],
+    suite_manifest: dict[str, Any],
+    *,
+    stage_label: str,
+    suite_label: str,
+    error_message: str,
+) -> int:
+    """Require one stage report to carry the same manifest provenance."""
+    _require(
+        _as_json_string(stage_manifest.get("path"), f"{stage_label}.path")
+        == _as_json_string(suite_manifest.get("path"), f"{suite_label}.path"),
+        error_message,
+    )
+    _require(
+        _require_sha256_digest(
+            stage_manifest.get("sha256"),
+            f"{stage_label}.sha256",
+        )
+        == _require_sha256_digest(
+            suite_manifest.get("sha256"),
+            f"{suite_label}.sha256",
+        ),
+        error_message,
+    )
+    _require(
+        _as_json_nonnegative_int(
+            stage_manifest.get("size_bytes"),
+            f"{stage_label}.size_bytes",
+        )
+        == _as_json_nonnegative_int(
+            suite_manifest.get("size_bytes"),
+            f"{suite_label}.size_bytes",
+        ),
+        error_message,
+    )
+    return len(PIPELINE_STAGE_SUITE_MANIFEST_ALIGNMENT_KEYS)
 
 
 def _require_pipeline_artifact_preparation_report(
@@ -6134,21 +6192,16 @@ def _require_pipeline_artifact_preparation_report(
         PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
     )
     suite_manifest = _as_json_object(suite_record.get("manifest"), "suite.manifest")
-    suite_manifest_digest = _require_sha256_digest(
-        suite_manifest.get("sha256"),
-        "suite.manifest.sha256",
-    )
     artifact_manifest = _as_json_object(
         artifact_suite.get("manifest"),
         "artifact_preparation_report.suite.manifest",
     )
-    artifact_manifest_digest = _require_sha256_digest(
-        artifact_manifest.get("sha256"),
-        "artifact_preparation_report.suite.manifest.sha256",
-    )
-    _require(
-        artifact_manifest_digest == suite_manifest_digest,
-        PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
+    verified_manifest_field_count = _require_suite_manifest_alignment(
+        artifact_manifest,
+        suite_manifest,
+        stage_label="artifact_preparation_report.suite.manifest",
+        suite_label="suite.manifest",
+        error_message=PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
     )
     runtime_overrides = _as_json_object(
         suite_record.get("runtime_overrides"),
@@ -6224,6 +6277,7 @@ def _require_pipeline_artifact_preparation_report(
     return {
         "status": status,
         "artifact_preparation_report": str(artifact_report_path),
+        "verified_manifest_field_count": verified_manifest_field_count,
         "verified_artifact_record_count": len(raw_artifacts),
         "verified_required_artifact_count": verified_required_count,
     }
@@ -6299,16 +6353,14 @@ def _require_pipeline_plan_report(
     )
     _require(plan_runtime_overrides == runtime_overrides, PIPELINE_PLAN_SUITE_ERROR)
     suite_manifest = _as_json_object(suite_record.get("manifest"), "suite.manifest")
-    suite_manifest_digest = _require_sha256_digest(
-        suite_manifest.get("sha256"),
-        "suite.manifest.sha256",
-    )
     plan_manifest = _as_json_object(plan_suite.get("manifest"), "run_plan.suite.manifest")
-    plan_manifest_digest = _require_sha256_digest(
-        plan_manifest.get("sha256"),
-        "run_plan.suite.manifest.sha256",
+    verified_manifest_field_count = _require_suite_manifest_alignment(
+        plan_manifest,
+        suite_manifest,
+        stage_label="run_plan.suite.manifest",
+        suite_label="suite.manifest",
+        error_message=PIPELINE_PLAN_SUITE_ERROR,
     )
-    _require(plan_manifest_digest == suite_manifest_digest, PIPELINE_PLAN_SUITE_ERROR)
     modes = _as_json_object(plan_payload.get("modes"), "run_plan.modes")
     _require(
         not _as_json_bool(modes.get("collect_only"), "run_plan.modes.collect_only"),
@@ -6426,6 +6478,7 @@ def _require_pipeline_plan_report(
         "status": "passed",
         "run_plan_report": str(plan_report_path),
         "gpu_check_planned": True,
+        "verified_manifest_field_count": verified_manifest_field_count,
         "verified_required_artifact_plan_count": verified_required_artifact_count,
         "verified_case_plan_count": len(raw_cases),
         "paper_outputs": dict(paper_outputs),

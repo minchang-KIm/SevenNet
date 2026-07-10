@@ -2179,10 +2179,15 @@ def main() -> None:
         and "PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_SUITE_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS" in cluster_suite
+        and "PIPELINE_STAGE_SUITE_MANIFEST_ALIGNMENT_KEYS" in cluster_suite
+        and "_require_suite_manifest_alignment" in cluster_suite
         and "summary.suite.manifest.path" in cluster_suite
         and "suite.manifest.path" in cluster_suite
         and "summary.suite.manifest.size_bytes" in cluster_suite
         and "suite.manifest.size_bytes" in cluster_suite
+        and "readiness_report.suite.manifest" in cluster_suite
+        and "artifact_preparation_report.suite.manifest" in cluster_suite
+        and "run_plan.suite.manifest" in cluster_suite
         and "summary.suite.min_trace_count" in cluster_suite
         and "suite.min_trace_count" in cluster_suite
         and "summary.suite.min_distinct_trace_models" in cluster_suite
@@ -2213,6 +2218,9 @@ def main() -> None:
         and "uncommented_pipeline_report_error" in cluster_suite_test
         and "summary_manifest_path_drift_error" in cluster_suite_test
         and "summary_manifest_size_drift_error" in cluster_suite_test
+        and "readiness_manifest_path_drift_error" in cluster_suite_test
+        and "artifact_manifest_size_drift_error" in cluster_suite_test
+        and "plan_manifest_size_drift_error" in cluster_suite_test
         and "summary_threshold_drift_error" in cluster_suite_test
         and "PREFLIGHT_REPORT_COMMENT" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
@@ -2289,6 +2297,9 @@ def main() -> None:
         and "non-skipped stage" in doc
         and "present report files" in doc
         and "manifest path, SHA-256, byte size" in doc
+        and "readiness report, artifact-preparation report, and run plan"
+        in doc
+        and "same manifest path, SHA-256 digest, and byte size" in doc
         and "skipped artifact-preparation" in doc
         and "`stages[*].report_path`" in doc
         and "`stage_report_fingerprints[*].report.path`" in doc

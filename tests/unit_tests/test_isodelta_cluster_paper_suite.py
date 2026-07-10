@@ -1017,6 +1017,7 @@ def _write_pipeline_preflight_environment_snapshot(output_dir: Path) -> Path:
 
 def _pipeline_readiness_report(
     *,
+    suite_record: dict[str, object] | None = None,
     status: str = isodelta_cluster_suite.PIPELINE_STAGE_STATUS_READY,
     failed_check: str | None = None,
     expected_gpus: int = isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
@@ -1024,6 +1025,11 @@ def _pipeline_readiness_report(
     runtime_overrides: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Return readiness evidence for pipeline-report semantic verification."""
+    suite_manifest = (
+        suite_record["manifest"]
+        if suite_record is not None
+        else {"path": "unit-test-suite.toml", "sha256": "0" * 64, "size_bytes": 0}
+    )
     return {
         "readiness_schema_version": isodelta_cluster_suite.READINESS_SCHEMA_VERSION,
         isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY: (
@@ -1031,6 +1037,7 @@ def _pipeline_readiness_report(
         ),
         "status": status,
         "suite": {
+            "manifest": suite_manifest,
             "expected_gpus": expected_gpus,
             "required_models": list(required_models),
             "runtime_overrides": {} if runtime_overrides is None else runtime_overrides,
@@ -5509,8 +5516,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             )
             preflight_report_path = output_dir / isodelta_cluster_suite.PREFLIGHT_REPORT_NAME
             plan_path = output_dir / isodelta_cluster_suite.PLAN_REPORT_NAME
-            readiness_report = json.loads(readiness_report_path.read_text(encoding="utf-8"))
-            artifact_report = json.loads(artifact_report_path.read_text(encoding="utf-8"))
+            readiness_report_text = readiness_report_path.read_text(encoding="utf-8")
+            artifact_report_text = artifact_report_path.read_text(encoding="utf-8")
+            readiness_report = json.loads(readiness_report_text)
+            artifact_report = json.loads(artifact_report_text)
             preflight_report = json.loads(preflight_report_path.read_text(encoding="utf-8"))
             plan_report_text = plan_path.read_text(encoding="utf-8")
             plan_report = json.loads(plan_report_text)
@@ -5623,12 +5632,29 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            summary_manifest_path_drift_summary = json.loads(json.dumps(summary))
+            summary_manifest_path_drift_summary["suite"]["manifest"]["path"] = str(
+                output_dir / "wrong_manifest.toml"
+            )
+            summary_path.write_text(
+                json.dumps(summary_manifest_path_drift_summary),
+                encoding="utf-8",
+            )
             summary_manifest_path_drift_pipeline_report = json.loads(
                 json.dumps(pipeline_report)
             )
-            summary_manifest_path_drift_pipeline_report["suite"]["manifest"][
-                "path"
-            ] = str(output_dir / "wrong_manifest.toml")
+            for stage_index in (run_suite_stage_index, verify_stage_index):
+                summary_manifest_path_drift_pipeline_report[
+                    isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+                ][stage_index]["report"] = (
+                    isodelta_cluster_suite.generated_artifact_record(
+                        Path(
+                            summary_manifest_path_drift_pipeline_report["stages"][
+                                stage_index
+                            ]["report_path"]
+                        )
+                    )
+                )
             pipeline_report_path.write_text(
                 json.dumps(summary_manifest_path_drift_pipeline_report),
                 encoding="utf-8",
@@ -5639,16 +5665,34 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 summary_manifest_path_drift_error = str(exc)
             else:
                 summary_manifest_path_drift_error = ""
+            summary_path.write_text(summary_report_text, encoding="utf-8")
             pipeline_report_path.write_text(
                 json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
+            summary_manifest_size_drift_summary = json.loads(json.dumps(summary))
+            summary_manifest_size_drift_summary["suite"]["manifest"][
+                "size_bytes"
+            ] += THRESHOLD_DRIFT_INCREMENT
+            summary_path.write_text(
+                json.dumps(summary_manifest_size_drift_summary),
                 encoding="utf-8",
             )
             summary_manifest_size_drift_pipeline_report = json.loads(
                 json.dumps(pipeline_report)
             )
-            summary_manifest_size_drift_pipeline_report["suite"]["manifest"][
-                "size_bytes"
-            ] += THRESHOLD_DRIFT_INCREMENT
+            for stage_index in (run_suite_stage_index, verify_stage_index):
+                summary_manifest_size_drift_pipeline_report[
+                    isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+                ][stage_index]["report"] = (
+                    isodelta_cluster_suite.generated_artifact_record(
+                        Path(
+                            summary_manifest_size_drift_pipeline_report["stages"][
+                                stage_index
+                            ]["report_path"]
+                        )
+                    )
+                )
             pipeline_report_path.write_text(
                 json.dumps(summary_manifest_size_drift_pipeline_report),
                 encoding="utf-8",
@@ -5659,6 +5703,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 summary_manifest_size_drift_error = str(exc)
             else:
                 summary_manifest_size_drift_error = ""
+            summary_path.write_text(summary_report_text, encoding="utf-8")
             pipeline_report_path.write_text(
                 json.dumps(pipeline_report),
                 encoding="utf-8",
@@ -5718,6 +5763,112 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             else:
                 summary_artifact_sha_gate_drift_error = ""
             summary_path.write_text(summary_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
+            readiness_manifest_path_drift_report = json.loads(
+                json.dumps(readiness_report)
+            )
+            readiness_manifest_path_drift_report["suite"]["manifest"]["path"] = str(
+                output_dir / "wrong_readiness_manifest.toml"
+            )
+            readiness_report_path.write_text(
+                json.dumps(readiness_manifest_path_drift_report),
+                encoding="utf-8",
+            )
+            readiness_manifest_path_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            readiness_stage_index = stage_names.index(
+                isodelta_cluster_suite.PIPELINE_STAGE_READINESS
+            )
+            readiness_manifest_path_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][readiness_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(readiness_report_path)
+            )
+            pipeline_report_path.write_text(
+                json.dumps(readiness_manifest_path_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                readiness_manifest_path_drift_error = str(exc)
+            else:
+                readiness_manifest_path_drift_error = ""
+            readiness_report_path.write_text(readiness_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
+            artifact_manifest_size_drift_report = json.loads(
+                json.dumps(artifact_report)
+            )
+            artifact_manifest_size_drift_report["suite"]["manifest"][
+                "size_bytes"
+            ] += THRESHOLD_DRIFT_INCREMENT
+            artifact_report_path.write_text(
+                json.dumps(artifact_manifest_size_drift_report),
+                encoding="utf-8",
+            )
+            artifact_manifest_size_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            artifact_stage_index = stage_names.index(
+                isodelta_cluster_suite.PIPELINE_STAGE_PREPARE_ARTIFACTS
+            )
+            artifact_manifest_size_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][artifact_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(artifact_report_path)
+            )
+            pipeline_report_path.write_text(
+                json.dumps(artifact_manifest_size_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                artifact_manifest_size_drift_error = str(exc)
+            else:
+                artifact_manifest_size_drift_error = ""
+            artifact_report_path.write_text(artifact_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
+            plan_manifest_size_drift_report = json.loads(json.dumps(plan_report))
+            plan_manifest_size_drift_report["suite"]["manifest"]["size_bytes"] += (
+                THRESHOLD_DRIFT_INCREMENT
+            )
+            plan_path.write_text(
+                json.dumps(plan_manifest_size_drift_report),
+                encoding="utf-8",
+            )
+            plan_manifest_size_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            plan_stage_index = stage_names.index(
+                isodelta_cluster_suite.PIPELINE_STAGE_PLAN
+            )
+            plan_manifest_size_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][plan_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(plan_path)
+            )
+            pipeline_report_path.write_text(
+                json.dumps(plan_manifest_size_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                plan_manifest_size_drift_error = str(exc)
+            else:
+                plan_manifest_size_drift_error = ""
+            plan_path.write_text(plan_report_text, encoding="utf-8")
             pipeline_report_path.write_text(
                 json.dumps(pipeline_report),
                 encoding="utf-8",
@@ -6016,7 +6167,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             summary_manifest_path_drift_error,
         )
         self.assertIn(
-            isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
+            "manifest_snapshot: body size must match suite.manifest.size_bytes",
             summary_manifest_size_drift_error,
         )
         self.assertIn(
@@ -6026,6 +6177,18 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_SUMMARY_SUITE_ERROR,
             summary_artifact_sha_gate_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_READINESS_SUITE_ERROR,
+            readiness_manifest_path_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR,
+            artifact_manifest_size_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_PLAN_SUITE_ERROR,
+            plan_manifest_size_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,
@@ -6751,7 +6914,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             for report_path in set(report_paths):
                 report_path.write_text("{}", encoding="utf-8")
             report_paths[0].write_text(
-                json.dumps(_pipeline_readiness_report()),
+                json.dumps(_pipeline_readiness_report(suite_record=suite_record)),
                 encoding="utf-8",
             )
             report_paths[1].write_text(
@@ -6844,7 +7007,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 report_path.write_text("{}", encoding="utf-8")
             report_paths[0].write_text(
                 json.dumps(
-                    _pipeline_readiness_report(failed_check="artifact_sha256_gate")
+                    _pipeline_readiness_report(
+                        suite_record=suite_record,
+                        failed_check="artifact_sha256_gate",
+                    )
                 ),
                 encoding="utf-8",
             )
@@ -6926,7 +7092,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             for report_path in set(report_paths):
                 report_path.write_text("{}", encoding="utf-8")
             report_paths[0].write_text(
-                json.dumps(_pipeline_readiness_report()),
+                json.dumps(_pipeline_readiness_report(suite_record=suite_record)),
                 encoding="utf-8",
             )
             report_paths[1].write_text(
@@ -7018,7 +7184,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             for report_path in set(report_paths):
                 report_path.write_text("{}", encoding="utf-8")
             report_paths[0].write_text(
-                json.dumps(_pipeline_readiness_report()),
+                json.dumps(_pipeline_readiness_report(suite_record=suite_record)),
                 encoding="utf-8",
             )
             report_paths[1].write_text(
@@ -7107,7 +7273,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             for report_path in set(report_paths):
                 report_path.write_text("{}", encoding="utf-8")
             report_paths[0].write_text(
-                json.dumps(_pipeline_readiness_report()),
+                json.dumps(_pipeline_readiness_report(suite_record=suite_record)),
                 encoding="utf-8",
             )
             report_paths[1].write_text(
