@@ -23,11 +23,13 @@ VALIDATION_COMMAND_INDEX = 0
 PUSH_COMMAND_INDEX = 1
 REMOTE_REF_VERIFY_COMMAND_INDEX = 2
 LOCAL_HEAD_PRECONDITION_COMMAND_INDEX = 1
+TARGET_BRANCH_PRECONDITION_COMMAND_INDEX = 1
 BRANCH_PRECONDITION_COMMAND_INDEX = 1
 BRANCH_PRECONDITION_BUNDLE_COMMAND_INDEX = 2
 COMMAND_COUNT_AFTER_VALIDATION_FAILURE = 1
 COMMAND_COUNT_AFTER_DIRTY_WORKTREE = 0
 COMMAND_COUNT_AFTER_LOCAL_HEAD_PRECONDITION_FAILURE = 2
+COMMAND_COUNT_AFTER_TARGET_BRANCH_PRECONDITION_FAILURE = 2
 COMMAND_COUNT_AFTER_BRANCH_PRECONDITION_FAILURE = 3
 COMMAND_FAILURE_COUNT_AFTER_BRANCH_PRECONDITION_FAILURE = 2
 SUCCESSFUL_SYNC_COMMAND_COUNT = 3
@@ -294,6 +296,17 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             {
                 "command": list(sync_gate.HEAD_COMMIT_COMMAND),
                 "head_commit": FEATURE_COMMIT,
+                "verified": True,
+                "detail": None,
+            },
+        )
+        self.assertEqual(
+            report[sync_gate.TARGET_BRANCH_PRECONDITION_KEY],
+            {
+                "command": list(sync_gate._target_branch_commit_command("feature")),
+                "branch": "feature",
+                "expected_head_commit": FEATURE_COMMIT,
+                "target_branch_commit": FEATURE_COMMIT,
                 "verified": True,
                 "detail": None,
             },
@@ -802,6 +815,77 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
         self.assertIn(
             sync_gate.LOCAL_HEAD_PRECONDITION_DETAIL,
             report["commands"][LOCAL_HEAD_PRECONDITION_COMMAND_INDEX]["stderr_tail"],
+        )
+
+    def test_run_sync_rejects_push_when_target_branch_differs_from_head(self) -> None:
+        """The pushed branch must resolve to the same commit that validation checked."""
+        original_root = sync_gate.REPO_ROOT
+        original_metadata_command = sync_gate._metadata_command
+        fake_metadata = {
+            ("git", "branch", "--show-current"): "feature",
+            ("git", "rev-parse", "HEAD"): FEATURE_COMMIT,
+            ("git", "rev-parse", "feature"): OTHER_COMMIT,
+            ("git", "remote", "get-url", "origin"): "https://example.invalid/repo.git",
+            ("git", "rev-parse", "--verify", "refs/remotes/origin/feature"): OTHER_COMMIT,
+            ("git", "status", "--short"): "",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            report_path = root / "sync_report.json"
+            validation_report_path = root / "validation_report.json"
+            forbidden_push_marker = root / "push-ran"
+            forbidden_push_script = (
+                "from pathlib import Path; "
+                f"Path({str(forbidden_push_marker)!r}).write_text('ran', "
+                "encoding='utf-8')"
+            )
+            sync_gate.REPO_ROOT = root
+            sync_gate._metadata_command = fake_metadata.get
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = sync_gate.run_sync(
+                        remote="origin",
+                        branch="feature",
+                        report_path=report_path,
+                        validation_report_path=validation_report_path,
+                        validation_command=_validation_report_command(
+                            validation_report_path,
+                            git_commit=FEATURE_COMMIT,
+                        ),
+                        push_command=(sys.executable, "-c", forbidden_push_script),
+                    )
+            finally:
+                sync_gate.REPO_ROOT = original_root
+                sync_gate._metadata_command = original_metadata_command
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
+        self.assertFalse(forbidden_push_marker.exists())
+        self.assertEqual(report["status"], sync_gate.STATUS_TARGET_BRANCH_MISMATCH)
+        self.assertEqual(
+            [record["name"] for record in report["commands"]],
+            ["validation", sync_gate.TARGET_BRANCH_PRECONDITION_COMMAND_NAME],
+        )
+        self.assertEqual(
+            len(report["commands"]),
+            COMMAND_COUNT_AFTER_TARGET_BRANCH_PRECONDITION_FAILURE,
+        )
+        self.assertEqual(
+            report[sync_gate.TARGET_BRANCH_PRECONDITION_KEY],
+            {
+                "command": list(sync_gate._target_branch_commit_command("feature")),
+                "branch": "feature",
+                "expected_head_commit": FEATURE_COMMIT,
+                "target_branch_commit": OTHER_COMMIT,
+                "verified": False,
+                "detail": sync_gate.TARGET_BRANCH_PRECONDITION_DETAIL,
+            },
+        )
+        self.assertIn(
+            sync_gate.TARGET_BRANCH_PRECONDITION_DETAIL,
+            report["commands"][TARGET_BRANCH_PRECONDITION_COMMAND_INDEX][
+                "stderr_tail"
+            ],
         )
 
     def test_run_sync_rejects_validation_report_without_comment(self) -> None:

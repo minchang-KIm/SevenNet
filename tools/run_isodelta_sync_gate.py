@@ -53,11 +53,17 @@ STATUS_VALIDATION_REPORT_MISSING = "validation_report_missing"
 STATUS_VALIDATION_REPORT_INVALID = "validation_report_invalid"
 STATUS_DIRTY_WORKTREE = "dirty_worktree"
 STATUS_GIT_HEAD_UNAVAILABLE = "git_head_unavailable"
+STATUS_TARGET_BRANCH_MISMATCH = "target_branch_mismatch"
 STATUS_PUSH_FAILED = "push_failed"
 STATUS_REMOTE_VERIFICATION_FAILED = "remote_verification_failed"
 LOCAL_HEAD_PRECONDITION_KEY = "local_head_precondition"
 LOCAL_HEAD_PRECONDITION_COMMAND_NAME = "local_head_precondition"
 LOCAL_HEAD_PRECONDITION_DETAIL = "current HEAD commit is unavailable or malformed"
+TARGET_BRANCH_PRECONDITION_KEY = "target_branch_precondition"
+TARGET_BRANCH_PRECONDITION_COMMAND_NAME = "target_branch_precondition"
+TARGET_BRANCH_PRECONDITION_DETAIL = (
+    "target branch commit is unavailable, malformed, or different from validated HEAD"
+)
 REMOTE_REF_VERIFICATION_KEY = "remote_ref_verification"
 REMOTE_REF_VERIFY_COMMAND_NAME = "remote_ref_verify"
 CURRENT_BRANCH_COMMAND = ("git", "branch", "--show-current")
@@ -180,6 +186,11 @@ def _is_git_object_id(value: Any) -> bool:
 def _current_branch() -> str | None:
     """Return the currently checked-out branch name for the default push target."""
     return _metadata_command(CURRENT_BRANCH_COMMAND)
+
+
+def _target_branch_commit_command(branch: str) -> tuple[str, str, str]:
+    """Build the git command that resolves the branch intended for push."""
+    return ("git", "rev-parse", branch)
 
 
 def _parse_status_short(status_short: str | None) -> list[dict[str, str]]:
@@ -380,6 +391,49 @@ def _local_head_precondition_failure_record(head_commit: str | None) -> dict[str
         "\n".join(part for part in (stderr_tail, detail) if part)
     )
     return {"name": LOCAL_HEAD_PRECONDITION_COMMAND_NAME, **record}
+
+
+def _target_branch_precondition_report(
+    *,
+    branch: str,
+    head_commit: str | None,
+    target_branch_commit: str | None,
+) -> dict[str, Any]:
+    """Describe whether the push target resolves to the validated HEAD."""
+    verified = (
+        _is_git_object_id(head_commit)
+        and _is_git_object_id(target_branch_commit)
+        and target_branch_commit == head_commit
+    )
+    return {
+        "command": list(_target_branch_commit_command(branch)),
+        "branch": branch,
+        "expected_head_commit": head_commit,
+        "target_branch_commit": target_branch_commit,
+        "verified": verified,
+        "detail": None if verified else TARGET_BRANCH_PRECONDITION_DETAIL,
+    }
+
+
+def _target_branch_precondition_failure_record(
+    *,
+    branch: str,
+    head_commit: str | None,
+    target_branch_commit: str | None,
+) -> dict[str, Any]:
+    """Record a replayable target-branch precondition failure."""
+    record = _run_command(_target_branch_commit_command(branch))
+    if record["returncode"] == SUCCESS_RETURN_CODE:
+        record["returncode"] = FAILURE_RETURN_CODE
+    stderr_tail = str(record["stderr_tail"])
+    detail = (
+        f"{TARGET_BRANCH_PRECONDITION_DETAIL}; "
+        f"expected_head={head_commit!r}; observed_target={target_branch_commit!r}"
+    )
+    record["stderr_tail"] = _tail(
+        "\n".join(part for part in (stderr_tail, detail) if part)
+    )
+    return {"name": TARGET_BRANCH_PRECONDITION_COMMAND_NAME, **record}
 
 
 def _validation_report_summary(
@@ -684,6 +738,7 @@ def run_sync(
     validation_report_summary: dict[str, Any] | None = None
     push_record: dict[str, Any] | None = None
     remote_ref_verification_report: dict[str, Any] | None = None
+    target_branch_precondition_report: dict[str, Any] | None = None
     expected_head_commit = _metadata_command(HEAD_COMMIT_COMMAND)
     local_head_precondition_report = _local_head_precondition_report(
         expected_head_commit
@@ -722,33 +777,55 @@ def run_sync(
             command_records.append(
                 _local_head_precondition_failure_record(expected_head_commit)
             )
+        elif resolved_branch:
+            target_branch_commit = _metadata_command(
+                _target_branch_commit_command(resolved_branch)
+            )
+            target_branch_precondition_report = _target_branch_precondition_report(
+                branch=resolved_branch,
+                head_commit=expected_head_commit,
+                target_branch_commit=target_branch_commit,
+            )
+            if not target_branch_precondition_report["verified"]:
+                status = STATUS_TARGET_BRANCH_MISMATCH
+                command_records.append(
+                    _target_branch_precondition_failure_record(
+                        branch=resolved_branch,
+                        head_commit=expected_head_commit,
+                        target_branch_commit=target_branch_commit,
+                    )
+                )
+            elif skip_push:
+                status = STATUS_VALIDATED
+            else:
+                push_record = _run_command(
+                    push_command or _push_command(remote, resolved_branch),
+                    env_overrides=PUSH_AUTH_ENVIRONMENT,
+                )
+                command_records.append({"name": "push", **push_record})
+                status = (
+                    STATUS_SYNCED
+                    if push_record["returncode"] == SUCCESS_RETURN_CODE
+                    else STATUS_PUSH_FAILED
+                )
+                if status == STATUS_SYNCED:
+                    expected_commit = _metadata_command(
+                        _target_branch_commit_command(resolved_branch)
+                    )
+                    (
+                        remote_ref_record,
+                        remote_ref_verification_report,
+                    ) = _verify_remote_ref(
+                        remote=remote,
+                        branch=resolved_branch,
+                        expected_commit=expected_commit,
+                        remote_ref_verify_command=remote_ref_verify_command,
+                    )
+                    command_records.append(remote_ref_record)
+                    if not remote_ref_verification_report["verified"]:
+                        status = STATUS_REMOTE_VERIFICATION_FAILED
         elif skip_push:
             status = STATUS_VALIDATED
-        elif resolved_branch:
-            push_record = _run_command(
-                push_command or _push_command(remote, resolved_branch),
-                env_overrides=PUSH_AUTH_ENVIRONMENT,
-            )
-            command_records.append({"name": "push", **push_record})
-            status = (
-                STATUS_SYNCED
-                if push_record["returncode"] == SUCCESS_RETURN_CODE
-                else STATUS_PUSH_FAILED
-            )
-            if status == STATUS_SYNCED:
-                expected_commit = _metadata_command(("git", "rev-parse", resolved_branch))
-                (
-                    remote_ref_record,
-                    remote_ref_verification_report,
-                ) = _verify_remote_ref(
-                    remote=remote,
-                    branch=resolved_branch,
-                    expected_commit=expected_commit,
-                    remote_ref_verify_command=remote_ref_verify_command,
-                )
-                command_records.append(remote_ref_record)
-                if not remote_ref_verification_report["verified"]:
-                    status = STATUS_REMOTE_VERIFICATION_FAILED
         else:
             status = STATUS_PUSH_FAILED
             push_record = _branch_precondition_failure_record(
@@ -778,6 +855,7 @@ def run_sync(
         VALIDATION_REPORT_FINGERPRINT_KEY: validation_report_fingerprint,
         VALIDATION_REPORT_SUMMARY_KEY: validation_report_summary,
         LOCAL_HEAD_PRECONDITION_KEY: local_head_precondition_report,
+        TARGET_BRANCH_PRECONDITION_KEY: target_branch_precondition_report,
         WORKTREE_STATUS_KEY: worktree_report,
         "git_commit": expected_head_commit,
         "git_status_short": _metadata_command(("git", "status", "--short")),

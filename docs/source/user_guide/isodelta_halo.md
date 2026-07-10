@@ -277,7 +277,11 @@ validation or push when tracked or untracked files are present. It also stores
 `local_head_precondition`; if `git rev-parse HEAD` is unavailable or does not
 return a full object id, the gate records a replayable `local_head_precondition`
 command, reports `git_head_unavailable`, and refuses both `validated` and push
-states. It also stores
+states. Before reporting `validated` or attempting a push for a named branch,
+it also stores `target_branch_precondition`; if `git rev-parse <branch>` is
+missing, malformed, or different from the validated HEAD, the gate reports
+`target_branch_mismatch` and records a replayable `target_branch_precondition`
+command instead of pushing the wrong ref. It also stores
 `git_provenance` fields for the current branch, validated HEAD commit, local
 target branch commit, remote URL, and locally known remote-tracking commit. It
 also writes `remote_ref_verification` and only reports `synced` when the remote
