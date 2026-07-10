@@ -1810,6 +1810,10 @@ def main() -> None:
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_invalid_fingerprinted_trace"
         in cluster_suite_test
+        and "test_validate_case_outputs_rejects_missing_required_trace_model_label"
+        in cluster_suite_test
+        and "test_verify_output_bundle_rejects_required_trace_model_label_drift"
+        in cluster_suite_test
         and "test_build_correlation_rows_ignores_failed_case_metrics"
         in cluster_suite_test
         and "test_verify_output_bundle_rejects_failed_case_speedup_svg_marker"
@@ -1932,6 +1936,9 @@ def main() -> None:
         and "trace_check.validate_trace_evidence" in cluster_suite
         and "paths must match cases." in cluster_suite
         and "invalid trace evidence" in cluster_suite
+        and "_require_required_trace_model_labels" in cluster_suite
+        and "trace evidence is missing required model labels" in cluster_suite
+        and "required_trace_models" in cluster_suite
         and "_summary_correlations_by_metric_pair" in cluster_suite
         and "_correlation_rows_from_summary" in cluster_suite
         and "_format_csv_value" in cluster_suite
@@ -2290,6 +2297,8 @@ def main() -> None:
         and "model coverage table" in doc
         and "passed/reused trace evidence count" in doc
         and "fingerprinted trace JSON through the MLIP trace checker" in doc
+        and "required_trace_models" in doc
+        and "attributing a MACE trace to a NequIP case" in doc
         and "skipped a required model" in doc
         and "reopens the fingerprinted preflight report" in doc
         and "checks `gpu_check`" in doc

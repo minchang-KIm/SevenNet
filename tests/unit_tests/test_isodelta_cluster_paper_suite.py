@@ -1401,6 +1401,66 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             ):
                 isodelta_cluster_suite.verify_output_bundle(summary_path)
 
+    def test_verify_output_bundle_rejects_required_trace_model_label_drift(
+        self,
+    ) -> None:
+        """Fingerprint-validated traces should satisfy required trace labels."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            trace_path = root / "nequip_trace_evidence.json"
+            trace_path.write_text(
+                json.dumps(_trace_evidence("MACE")),
+                encoding="utf-8",
+            )
+            artifact_fingerprints = _write_required_paper_artifacts(output_dir)
+            case_record = _summary_case_record(
+                "nequip-case",
+                model="NequIP",
+                trace_evidence=[str(trace_path)],
+            )
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [case_record],
+                        "case_mode_controls": {
+                            "nequip-case": {
+                                "kind": "trace_only",
+                                "paired_mode_source": None,
+                                "required_trace_models": ["NequIP"],
+                            }
+                        },
+                        "correlations": _summary_correlations(1),
+                        "commands": [],
+                        "command_log_fingerprints": [],
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "evidence_fingerprints": {
+                            "nequip-case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [
+                                    isodelta_cluster_suite.generated_artifact_record(
+                                        trace_path
+                                    )
+                                ],
+                            }
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "trace evidence is missing required model labels: NequIP",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(summary_path)
+
     def test_verify_output_bundle_accepts_slurm_python_provenance_artifact(self) -> None:
         """Bundle verification should validate archived SLURM Python provenance."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2957,6 +3017,37 @@ min_speedup = 1.2
                 None,
                 dry_run=False,
             )
+
+    def test_validate_case_outputs_rejects_missing_required_trace_model_label(
+        self,
+    ) -> None:
+        """Case-level required trace labels should come from trace JSON."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            trace_path = root / "nequip_trace_evidence.json"
+            trace_path.write_text(
+                json.dumps(_trace_evidence("MACE")),
+                encoding="utf-8",
+            )
+            case = isodelta_cluster_suite.CaseConfig(
+                name="nequip-paper",
+                model="NequIP",
+                kind="trace_only",
+                required_trace_models=("NequIP",),
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "trace evidence is missing required model labels: NequIP",
+            ):
+                isodelta_cluster_suite.validate_case_outputs(
+                    case,
+                    None,
+                    None,
+                    (trace_path,),
+                    None,
+                    dry_run=False,
+                )
 
     def test_validate_case_outputs_rejects_uncommented_bundle_evidence(self) -> None:
         """Archived bundle evidence should not pass as anonymous JSON."""

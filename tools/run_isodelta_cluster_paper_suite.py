@@ -3483,6 +3483,10 @@ def _require_evidence_fingerprint_matches(
     """Verify source evidence fingerprints that feed the paper tables."""
     cases_by_name = _summary_cases_by_name(summary_payload)
     case_names = list(cases_by_name)
+    raw_mode_controls = _as_json_object(
+        summary_payload.get("case_mode_controls", {}),
+        "case_mode_controls",
+    )
     raw_evidence_records = summary_payload.get(EVIDENCE_FINGERPRINTS_KEY)
     _require(
         isinstance(raw_evidence_records, dict),
@@ -3525,6 +3529,7 @@ def _require_evidence_fingerprint_matches(
             f"cases.{case_name}",
         )
         observed_trace_paths: list[str] = []
+        trace_model_labels: list[str] = []
         for trace_index, raw_record in enumerate(trace_records):
             record = _as_json_object(
                 raw_record,
@@ -3550,15 +3555,13 @@ def _require_evidence_fingerprint_matches(
                 json.loads(trace_path.read_text(encoding="utf-8")),
                 trace_label,
             )
-            try:
-                trace_check.validate_trace_evidence(
+            trace_model_labels.append(
+                _validated_trace_payload_model_label(
                     trace_payload,
                     trace_check.TraceThresholds(),
+                    trace_label,
                 )
-            except trace_check.TraceCheckError as exc:
-                raise ClusterSuiteError(
-                    f"{trace_label}: invalid trace evidence: {exc}"
-                ) from exc
+            )
             verified_count += 1
         _require(
             observed_trace_paths == expected_trace_paths,
@@ -3567,6 +3570,20 @@ def _require_evidence_fingerprint_matches(
                 f"paths must match cases.{case_name}.{TRACE_EVIDENCE_KEY}"
             ),
         )
+        raw_mode_control = raw_mode_controls.get(case_name)
+        if raw_mode_control is not None:
+            mode_control = _as_json_object(
+                raw_mode_control,
+                f"case_mode_controls.{case_name}",
+            )
+            _require_required_trace_model_labels(
+                _as_string_tuple(
+                    mode_control.get("required_trace_models"),
+                    f"case_mode_controls.{case_name}.required_trace_models",
+                ),
+                trace_model_labels,
+                f"{case_name}.{TRACE_EVIDENCE_KEY}",
+            )
     return verified_count
 
 
@@ -3765,6 +3782,10 @@ def _case_config_from_external_summary(
         repeat_count=_as_json_nonnegative_int(
             timing_payload.get(REPEAT_COUNT_KEY),
             f"{case_name}.{REPEAT_COUNT_KEY}",
+        ),
+        required_trace_models=_as_string_tuple(
+            mode_controls.get("required_trace_models"),
+            f"case_mode_controls.{case_name}.required_trace_models",
         ),
     )
 
@@ -7061,9 +7082,9 @@ def _external_pair_mode_control_errors(case: CaseConfig) -> list[str]:
 def case_mode_control_record(case: CaseConfig) -> dict[str, Any]:
     """Return a compact mode-control record for plan and summary artifacts."""
     if case.kind == "external_pair":
-        return _external_pair_mode_control_record(case)
-    if case.kind == "sevennet_lammps":
-        return {
+        record = _external_pair_mode_control_record(case)
+    elif case.kind == "sevennet_lammps":
+        record = {
             "kind": case.kind,
             "paired_mode_source": str(EXPERIMENT_DRIVER_PATH),
             "ablation_mode": case.ablation_mode,
@@ -7073,7 +7094,10 @@ def case_mode_control_record(case: CaseConfig) -> dict[str, Any]:
             "enabled_env": {SEVENNET_DISABLE_ENV: None},
             ENV_FLAG_FALSE_VALUES_KEY: list(ENV_FLAG_FALSE_VALUES),
         }
-    return {"kind": case.kind, "paired_mode_source": None}
+    else:
+        record = {"kind": case.kind, "paired_mode_source": None}
+    record["required_trace_models"] = list(case.required_trace_models)
+    return record
 
 
 def _progress(prefix: str, current: int, total: int, message: str) -> None:
@@ -8094,6 +8118,43 @@ def _trace_thresholds(case: CaseConfig) -> Any:
     )
 
 
+def _validated_trace_payload_model_label(
+    trace_payload: dict[str, Any],
+    thresholds: Any,
+    label: str,
+) -> str:
+    """Validate one trace payload and return the MLIP model label it proves."""
+    try:
+        validated_trace = trace_check.validate_trace_evidence(
+            trace_payload,
+            thresholds,
+        )
+    except trace_check.TraceCheckError as exc:
+        raise ClusterSuiteError(f"{label}: invalid trace evidence: {exc}") from exc
+    return _as_json_string(validated_trace.get("model"), f"{label}.model")
+
+
+def _require_required_trace_model_labels(
+    required_trace_models: tuple[str, ...],
+    trace_model_labels: list[str],
+    label: str,
+) -> None:
+    """Require case-level trace evidence to cover every requested MLIP label."""
+    if not required_trace_models:
+        return
+    trace_model_label_set = set(trace_model_labels)
+    missing_trace_models = [
+        model_name
+        for model_name in required_trace_models
+        if model_name not in trace_model_label_set
+    ]
+    _require(
+        not missing_trace_models,
+        f"{label}: trace evidence is missing required model labels: "
+        + MODEL_NAME_JOINER.join(missing_trace_models),
+    )
+
+
 def validate_case_outputs(
     case: CaseConfig,
     benchmark_report: Path | None,
@@ -8123,10 +8184,22 @@ def validate_case_outputs(
                 benchmark_payload,
                 _benchmark_thresholds(case),
             )
+    trace_model_labels: list[str] = []
     for trace_path in trace_evidence_paths:
         _require(trace_path.exists(), f"{case.name}: missing trace evidence {trace_path}")
         trace_payload = json.loads(trace_path.read_text(encoding="utf-8"))
-        trace_check.validate_trace_evidence(trace_payload, _trace_thresholds(case))
+        trace_model_labels.append(
+            _validated_trace_payload_model_label(
+                trace_payload,
+                _trace_thresholds(case),
+                f"{case.name}: {trace_path}",
+            )
+        )
+    _require_required_trace_model_labels(
+        case.required_trace_models,
+        trace_model_labels,
+        case.name,
+    )
     if bundle_evidence is not None:
         _require(bundle_evidence.exists(), f"{case.name}: missing bundle evidence {bundle_evidence}")
         bundle_payload = _as_json_object(
