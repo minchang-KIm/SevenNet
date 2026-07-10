@@ -905,6 +905,8 @@ def main() -> None:
         and "validation report git_commit is not a full Git object id" in sync_gate
         and "validation report git_status_short is missing" in sync_gate
         and "validation report git_status_short must be a string or null" in sync_gate
+        and "validation report git_status_short does not match sync worktree snapshot"
+        in sync_gate
         and "remote branch commit is not a full Git object id" in sync_gate
         and "command_missing_field_count" in sync_gate
         and "_validation_command_record_has_valid_shape" in sync_gate
@@ -958,6 +960,8 @@ def main() -> None:
         and "test_run_sync_rejects_validation_report_without_git_status"
         in sync_gate_test
         and "test_run_sync_rejects_validation_report_invalid_git_status"
+        in sync_gate_test
+        and "test_run_sync_rejects_validation_report_changed_git_status_snapshot"
         in sync_gate_test
         and "test_run_sync_requires_full_report_commit_without_local_head"
         in sync_gate_test
@@ -2540,6 +2544,7 @@ def main() -> None:
         and "required validation command fields" in doc
         and "`git_branch`" in doc
         and "`git_status_short`" in doc
+        and "pre-validation worktree snapshot" in doc
         and "valid types and values" in doc
         and "zero failed validation command return codes" in doc
         and "`worktree_status`" in doc

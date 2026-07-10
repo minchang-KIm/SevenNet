@@ -263,12 +263,15 @@ report JSON into `validation_report_summary`; if that summary does not show
 the expected schema version, required validation command fields,
 `status = "passed"` for the same expected branch, `git_branch` matching the
 push branch, a full Git object id for `git_commit`, `git_status_short` as text
-or null worktree provenance, the current HEAD commit when it can be compared, and
-zero failed validation command return codes, the gate reports
+or null worktree provenance that matches the sync gate's pre-validation
+worktree snapshot when that snapshot is available, the current HEAD commit when
+it can be compared, and zero failed validation command return codes, the gate reports
 `validation_report_invalid` and does not push. The required command fields
-must use valid types and values. The report also stores `sync_command_summary`,
-which counts sync command records, failed return codes, missing fields, and
-invalid field values for fast audit. If the target branch cannot be determined,
+must use valid types and values. This pre-validation worktree snapshot check
+prevents a validation report from being reused after local files drift. The
+report also stores `sync_command_summary`, which counts sync command records,
+failed return codes, missing fields, and invalid field values for fast audit.
+If the target branch cannot be determined,
 the report records a replayable `push_branch_precondition` command instead of
 an empty push command. The report also stores `worktree_status`, a parsed
 `git status --short` snapshot with entry count,

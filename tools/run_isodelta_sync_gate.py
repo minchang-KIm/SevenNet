@@ -441,6 +441,7 @@ def _validation_report_summary(
     *,
     expected_branch: str | None,
     expected_commit: str | None,
+    expected_git_status_short: str | None,
 ) -> dict[str, Any]:
     """Validate and summarize the lightweight validation report JSON."""
     summary: dict[str, Any] = {
@@ -453,6 +454,7 @@ def _validation_report_summary(
         "git_branch": None,
         "git_commit": None,
         "git_status_short": None,
+        "expected_git_status_short": expected_git_status_short,
         "command_count": None,
         "command_failure_count": None,
         "command_missing_field_count": None,
@@ -551,6 +553,14 @@ def _validation_report_summary(
         return summary
     if git_status_short is not None and not isinstance(git_status_short, str):
         summary["detail"] = "validation report git_status_short must be a string or null"
+        return summary
+    if (
+        expected_git_status_short is not None
+        and git_status_short != expected_git_status_short
+    ):
+        summary["detail"] = (
+            "validation report git_status_short does not match sync worktree snapshot"
+        )
         return summary
     if command_count is None:
         summary["detail"] = "validation report commands must be a JSON array"
@@ -779,6 +789,7 @@ def run_sync(
                 validation_report_path,
                 expected_branch=resolved_branch,
                 expected_commit=expected_head_commit,
+                expected_git_status_short=worktree_report["raw"],
             )
     else:
         validation_record = None
