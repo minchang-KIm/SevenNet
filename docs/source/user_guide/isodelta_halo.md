@@ -646,6 +646,10 @@ The verifier then compares those prepared required artifact names, paths, and
 SHA-256 digests with the fingerprinted run plan, so a pipeline cannot pass by
 preparing a different dataset or checkpoint path than the one scheduled for the
 paper run.
+The fingerprinted preflight report must also contain matching required artifact
+download records, including path, expected SHA-256, and actual SHA-256. This
+closes the practical gap between "the dataset was prepared" and "the dataset was
+the one preflight actually checked" before the 8-GPU paper run proceeds.
 It also reopens the fingerprinted run plan report, requires final-paper execution modes,
 checks `gpu_check_planned`, verifies required model case plans, and compares
 `run_plan.paper_outputs` against the summary artifact index. That comparison

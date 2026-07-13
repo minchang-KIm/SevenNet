@@ -217,6 +217,9 @@ PIPELINE_PREFLIGHT_GPU_COUNT_ERROR = (
 PIPELINE_PREFLIGHT_ENVIRONMENT_SNAPSHOT_BUNDLE_ERROR = (
     "passed pipeline output bundle must archive the preflight environment snapshot"
 )
+PIPELINE_PREFLIGHT_ARTIFACT_ALIGNMENT_ERROR = (
+    "pipeline preflight required artifacts must match prepared artifacts and run plan"
+)
 PIPELINE_SUITE_GPU_ERROR = (
     f"pipeline suite expected_gpus must be at least {DEFAULT_EXPECTED_GPU_COUNT}"
 )
@@ -6681,6 +6684,148 @@ def _require_pipeline_artifact_plan_alignment(
     return len(planned_names)
 
 
+def _require_pipeline_preflight_required_artifacts(
+    preflight_payload: dict[str, Any],
+) -> dict[str, dict[str, str]]:
+    """Extract required artifact evidence from a passed preflight report."""
+    raw_downloads = preflight_payload.get("downloads")
+    _require(
+        isinstance(raw_downloads, list),
+        "preflight_report.downloads must be a JSON array",
+    )
+    preflight_required_artifacts: dict[str, dict[str, str]] = {}
+    for index, raw_record in enumerate(raw_downloads):
+        record = _as_json_object(raw_record, f"preflight_report.downloads[{index}]")
+        artifact_name = _as_json_string(
+            record.get("name"),
+            f"preflight_report.downloads[{index}].name",
+        )
+        artifact_path = _as_json_string(
+            record.get("path"),
+            f"preflight_report.downloads[{index}].path",
+        )
+        required = _as_json_bool(
+            record.get("required"),
+            f"preflight_report.downloads[{index}].required",
+        )
+        if not required:
+            continue
+        _require(
+            _as_json_bool(
+                record.get("exists_after_prepare"),
+                f"preflight_report.downloads[{index}].exists_after_prepare",
+            ),
+            PIPELINE_PREFLIGHT_ARTIFACT_ALIGNMENT_ERROR,
+        )
+        _as_json_nonnegative_int(
+            record.get("size_bytes"),
+            f"preflight_report.downloads[{index}].size_bytes",
+        )
+        expected_digest = _require_sha256_digest(
+            record.get("sha256"),
+            f"preflight_report.downloads[{index}].sha256",
+        )
+        actual_digest = _require_sha256_digest(
+            record.get("actual_sha256"),
+            f"preflight_report.downloads[{index}].actual_sha256",
+        )
+        _require(
+            actual_digest == expected_digest,
+            PIPELINE_PREFLIGHT_ARTIFACT_ALIGNMENT_ERROR,
+        )
+        _require(
+            artifact_name not in preflight_required_artifacts,
+            PIPELINE_PREFLIGHT_ARTIFACT_ALIGNMENT_ERROR,
+        )
+        preflight_required_artifacts[artifact_name] = {
+            "path": artifact_path,
+            "sha256": expected_digest,
+            "actual_sha256": actual_digest,
+        }
+    _require(
+        preflight_required_artifacts,
+        PIPELINE_PREFLIGHT_ARTIFACT_ALIGNMENT_ERROR,
+    )
+    return preflight_required_artifacts
+
+
+def _require_pipeline_preflight_artifact_alignment(
+    preflight_required_artifacts: dict[str, dict[str, str]],
+    artifact_preparation_report: dict[str, Any],
+    run_plan_report: dict[str, Any],
+) -> int:
+    """Require preflight to observe the same required inputs as prior gates."""
+    prepared_required_artifacts = _as_json_object(
+        artifact_preparation_report.get("required_artifacts"),
+        "artifact_preparation_report.required_artifacts",
+    )
+    planned_required_artifacts = _as_json_object(
+        run_plan_report.get("required_artifacts"),
+        "run_plan_report.required_artifacts",
+    )
+    preflight_names = set(preflight_required_artifacts)
+    prepared_names = set(prepared_required_artifacts)
+    planned_names = set(planned_required_artifacts)
+    _require(
+        preflight_names == prepared_names == planned_names,
+        PIPELINE_PREFLIGHT_ARTIFACT_ALIGNMENT_ERROR,
+    )
+    for artifact_name in sorted(preflight_names):
+        preflight_record = _as_json_object(
+            preflight_required_artifacts.get(artifact_name),
+            f"preflight_report.required_artifacts.{artifact_name}",
+        )
+        prepared_record = _as_json_object(
+            prepared_required_artifacts.get(artifact_name),
+            f"artifact_preparation_report.required_artifacts.{artifact_name}",
+        )
+        planned_record = _as_json_object(
+            planned_required_artifacts.get(artifact_name),
+            f"run_plan_report.required_artifacts.{artifact_name}",
+        )
+        preflight_path = _as_json_string(
+            preflight_record.get("path"),
+            f"preflight_report.required_artifacts.{artifact_name}.path",
+        )
+        prepared_path = _as_json_string(
+            prepared_record.get("path"),
+            f"artifact_preparation_report.required_artifacts.{artifact_name}.path",
+        )
+        planned_path = _as_json_string(
+            planned_record.get("path"),
+            f"run_plan_report.required_artifacts.{artifact_name}.path",
+        )
+        preflight_expected_digest = _require_sha256_digest(
+            preflight_record.get("sha256"),
+            f"preflight_report.required_artifacts.{artifact_name}.sha256",
+        )
+        preflight_actual_digest = _require_sha256_digest(
+            preflight_record.get("actual_sha256"),
+            f"preflight_report.required_artifacts.{artifact_name}.actual_sha256",
+        )
+        prepared_expected_digest = _require_sha256_digest(
+            prepared_record.get("sha256"),
+            f"artifact_preparation_report.required_artifacts.{artifact_name}.sha256",
+        )
+        prepared_actual_digest = _require_sha256_digest(
+            prepared_record.get("actual_sha256"),
+            f"artifact_preparation_report.required_artifacts.{artifact_name}.actual_sha256",
+        )
+        planned_digest = _require_sha256_digest(
+            planned_record.get("sha256"),
+            f"run_plan_report.required_artifacts.{artifact_name}.sha256",
+        )
+        _require(
+            preflight_path == prepared_path == planned_path
+            and preflight_expected_digest == planned_digest
+            and preflight_actual_digest == planned_digest
+            and prepared_expected_digest == planned_digest
+            and prepared_actual_digest == planned_digest,
+            PIPELINE_PREFLIGHT_ARTIFACT_ALIGNMENT_ERROR,
+        )
+    return len(preflight_names)
+
+
 def _require_pipeline_plan_output_alignment(
     run_plan_report: dict[str, Any],
     *,
@@ -6813,7 +6958,7 @@ def _require_pipeline_preflight_gpu_check(
     suite_record: dict[str, Any],
     *,
     original_output_dir: Path,
-) -> tuple[dict[str, Any], Path]:
+) -> tuple[dict[str, Any], Path, dict[str, dict[str, str]]]:
     """Verify the preflight stage proved the requested GPU allocation."""
     preflight_report_path = stage_report_paths.get(PIPELINE_STAGE_PREFLIGHT)
     _require(
@@ -6906,7 +7051,10 @@ def _require_pipeline_preflight_gpu_check(
         preflight_report_path=preflight_report_path,
         original_output_dir=original_output_dir,
     )
-    return gpu_check, preflight_environment_snapshot_path
+    preflight_required_artifacts = _require_pipeline_preflight_required_artifacts(
+        preflight_payload,
+    )
+    return gpu_check, preflight_environment_snapshot_path, preflight_required_artifacts
 
 
 def _require_pipeline_suite_metadata(
@@ -7223,10 +7371,18 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
     (
         preflight_gpu_check,
         preflight_environment_snapshot_path,
+        preflight_required_artifacts,
     ) = _require_pipeline_preflight_gpu_check(
         stage_report_paths,
         suite_record,
         original_output_dir=original_output_dir,
+    )
+    verified_preflight_artifact_alignment_count = (
+        _require_pipeline_preflight_artifact_alignment(
+            preflight_required_artifacts,
+            artifact_preparation_report,
+            run_plan_report,
+        )
     )
     bundle_verification = _require_pipeline_bundle_verification(
         pipeline_payload,
@@ -7282,6 +7438,9 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "run_plan_report": run_plan_report,
         "verified_required_artifact_alignment_count": (
             verified_required_artifact_alignment_count
+        ),
+        "verified_preflight_artifact_alignment_count": (
+            verified_preflight_artifact_alignment_count
         ),
         "preflight_gpu_check": preflight_gpu_check,
         "verified_preflight_environment_snapshot_bundle_count": (

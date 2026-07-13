@@ -2180,11 +2180,14 @@ def main() -> None:
         and "PIPELINE_SUMMARY_SUITE_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS" in cluster_suite
         and "PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR" in cluster_suite
+        and "PIPELINE_PREFLIGHT_ARTIFACT_ALIGNMENT_ERROR" in cluster_suite
         and "PIPELINE_STAGE_SUITE_MANIFEST_ALIGNMENT_KEYS" in cluster_suite
         and "PIPELINE_STAGE_SUITE_ALIGNMENT_KEYS" in cluster_suite
         and "_require_suite_manifest_alignment" in cluster_suite
         and "_require_stage_suite_metadata_alignment" in cluster_suite
         and "_require_pipeline_artifact_plan_alignment" in cluster_suite
+        and "_require_pipeline_preflight_artifact_alignment" in cluster_suite
+        and "verified_preflight_artifact_alignment_count" in cluster_suite
         and "summary.suite.manifest.path" in cluster_suite
         and "suite.manifest.path" in cluster_suite
         and "summary.suite.manifest.size_bytes" in cluster_suite
@@ -2233,6 +2236,7 @@ def main() -> None:
         and "plan_threshold_drift_error" in cluster_suite_test
         and "artifact_plan_name_drift_error" in cluster_suite_test
         and "artifact_plan_path_drift_error" in cluster_suite_test
+        and "preflight_artifact_path_drift_error" in cluster_suite_test
         and "summary_threshold_drift_error" in cluster_suite_test
         and "PREFLIGHT_REPORT_COMMENT" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
@@ -2319,6 +2323,9 @@ def main() -> None:
         in doc
         and "different dataset or checkpoint path than the one scheduled"
         in doc
+        and "preflight report must also contain matching required artifact"
+        in doc
+        and "the one preflight actually checked" in doc
         and "skipped artifact-preparation" in doc
         and "`stages[*].report_path`" in doc
         and "`stage_report_fingerprints[*].report.path`" in doc
