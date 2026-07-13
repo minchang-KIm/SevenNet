@@ -88,6 +88,14 @@ SYNC_COMMAND_REQUIRED_FIELDS = (
 )
 WORKTREE_STATUS_KEY = "worktree_status"
 PUSH_FAILURE_BUNDLE_KEY = "push_failure_bundle"
+PUSH_FAILURE_BUNDLE_REPORT_SCHEMA_VERSION = "isodelta-push-failure-bundle-report-v1"
+PUSH_FAILURE_BUNDLE_REPORT_COMMENT = (
+    "IsoDelta-Halo push-failure bundle sidecar report describing the "
+    "generated git bundle used to hand off a validated branch after "
+    "non-interactive git push failed."
+)
+PUSH_FAILURE_BUNDLE_REPORT_SUFFIX = ".json"
+PUSH_FAILURE_BUNDLE_REPORT_FINGERPRINT_KEY = "sidecar_report_fingerprint"
 PUSH_BRANCH_PRECONDITION_COMMAND_NAME = "push_branch_precondition"
 PUSH_FAILURE_BUNDLE_COMMAND_NAME = "push_failure_bundle"
 PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME = "push_failure_bundle_verify"
@@ -287,6 +295,43 @@ def _file_fingerprint(path: Path) -> dict[str, Any]:
 def _bundle_file_fingerprint(bundle_path: Path) -> dict[str, Any]:
     """Return a SHA-256 fingerprint for a generated git bundle."""
     return _file_fingerprint(bundle_path)
+
+
+def _push_failure_bundle_report_path(bundle_path: Path) -> Path:
+    """Return the self-describing JSON sidecar path for a generated bundle."""
+    return bundle_path.with_name(f"{bundle_path.name}{PUSH_FAILURE_BUNDLE_REPORT_SUFFIX}")
+
+
+def _write_push_failure_bundle_sidecar(
+    *,
+    bundle_path: Path,
+    branch: str,
+    status: str,
+    bundle_returncode: int,
+    verify_returncode: int,
+    fingerprint: dict[str, Any],
+    bundle_command: list[str],
+    bundle_verify_command: list[str] | None,
+) -> dict[str, Any]:
+    """Write JSON context beside a git bundle so the binary artifact is readable."""
+    sidecar_path = _push_failure_bundle_report_path(bundle_path)
+    payload = {
+        "push_failure_bundle_report_schema_version": (
+            PUSH_FAILURE_BUNDLE_REPORT_SCHEMA_VERSION
+        ),
+        GENERATED_REPORT_COMMENT_KEY: PUSH_FAILURE_BUNDLE_REPORT_COMMENT,
+        "status": status,
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "branch": branch,
+        "bundle_path": str(bundle_path),
+        "bundle_returncode": bundle_returncode,
+        "bundle_verify_returncode": verify_returncode,
+        "bundle_fingerprint": fingerprint,
+        "bundle_command": bundle_command,
+        "bundle_verify_command": bundle_verify_command,
+    }
+    sidecar_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return _file_fingerprint(sidecar_path)
 
 
 def _validation_command_record_has_valid_shape(command_record: Any) -> bool:
@@ -720,12 +765,30 @@ def _write_push_failure_bundle(
         if fingerprint and verify_returncode == SUCCESS_RETURN_CODE
         else PUSH_FAILURE_BUNDLE_STATUS_FAILED
     )
+    sidecar_report_fingerprint = (
+        _write_push_failure_bundle_sidecar(
+            bundle_path=bundle_path,
+            branch=branch,
+            status=bundle_status,
+            bundle_returncode=record["returncode"],
+            verify_returncode=verify_returncode,
+            fingerprint=fingerprint,
+            bundle_command=list(record["command"]),
+            bundle_verify_command=(
+                list(verify_record["command"]) if verify_record is not None else None
+            ),
+        )
+        if fingerprint
+        else None
+    )
     report = {
         "path": str(bundle_path),
         "status": bundle_status,
         "returncode": record["returncode"],
         "verify_returncode": verify_returncode,
         "fingerprint": fingerprint,
+        "sidecar_report_path": str(_push_failure_bundle_report_path(bundle_path)),
+        PUSH_FAILURE_BUNDLE_REPORT_FINGERPRINT_KEY: sidecar_report_fingerprint,
     }
     if record["returncode"] == SUCCESS_RETURN_CODE and fingerprint is None:
         report["detail"] = "bundle command succeeded but output file is missing"

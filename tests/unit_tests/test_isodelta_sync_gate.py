@@ -124,14 +124,19 @@ def _validation_report_command(
     return (sys.executable, "-c", script)
 
 
-def _validation_report_fingerprint(validation_report_path: Path) -> dict[str, object]:
-    """Return the expected fingerprint for the test validation report."""
-    report_bytes = validation_report_path.read_bytes()
+def _file_fingerprint(path: Path) -> dict[str, object]:
+    """Return the expected fingerprint for a generated test artifact."""
+    report_bytes = path.read_bytes()
     return {
-        "path": str(validation_report_path),
+        "path": str(path),
         "sha256": hashlib.sha256(report_bytes).hexdigest(),
         "size_bytes": len(report_bytes),
     }
+
+
+def _validation_report_fingerprint(validation_report_path: Path) -> dict[str, object]:
+    """Return the expected fingerprint for the test validation report."""
+    return _file_fingerprint(validation_report_path)
 
 
 def _passed_validation_report_summary(
@@ -1497,6 +1502,7 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
             report_path = root / "sync_report.json"
             validation_report_path = root / "validation_report.json"
             bundle_path = root / "failed_push.bundle"
+            sidecar_path = sync_gate._push_failure_bundle_report_path(bundle_path)
             bundle_script = (
                 "from pathlib import Path; "
                 f"Path({str(bundle_path)!r}).write_text('bundle', encoding='utf-8')"
@@ -1530,10 +1536,14 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                 sync_gate.REPO_ROOT = original_root
                 sync_gate._metadata_command = original_metadata_command
             bundle_exists = bundle_path.exists()
+            sidecar_exists = sidecar_path.exists()
+            sidecar_payload = json.loads(sidecar_path.read_text(encoding="utf-8"))
+            sidecar_fingerprint = _file_fingerprint(sidecar_path)
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, sync_gate.FAILURE_RETURN_CODE)
         self.assertTrue(bundle_exists)
+        self.assertTrue(sidecar_exists)
         self.assertEqual(
             [record["name"] for record in report["commands"]],
             [
@@ -1562,6 +1572,34 @@ class IsoDeltaSyncGateTest(unittest.TestCase):
                 "sha256": hashlib.sha256(b"bundle").hexdigest(),
                 "size_bytes": len(b"bundle"),
             },
+        )
+        self.assertEqual(
+            report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["sidecar_report_path"],
+            str(sidecar_path),
+        )
+        self.assertEqual(
+            report[sync_gate.PUSH_FAILURE_BUNDLE_KEY][
+                sync_gate.PUSH_FAILURE_BUNDLE_REPORT_FINGERPRINT_KEY
+            ],
+            sidecar_fingerprint,
+        )
+        self.assertEqual(
+            sidecar_payload["push_failure_bundle_report_schema_version"],
+            sync_gate.PUSH_FAILURE_BUNDLE_REPORT_SCHEMA_VERSION,
+        )
+        self.assertEqual(
+            sidecar_payload[sync_gate.GENERATED_REPORT_COMMENT_KEY],
+            sync_gate.PUSH_FAILURE_BUNDLE_REPORT_COMMENT,
+        )
+        self.assertEqual(sidecar_payload["branch"], "feature")
+        self.assertEqual(sidecar_payload["bundle_path"], str(bundle_path))
+        self.assertEqual(
+            sidecar_payload["bundle_verify_returncode"],
+            sync_gate.SUCCESS_RETURN_CODE,
+        )
+        self.assertEqual(
+            sidecar_payload["bundle_fingerprint"],
+            report[sync_gate.PUSH_FAILURE_BUNDLE_KEY]["fingerprint"],
         )
 
 

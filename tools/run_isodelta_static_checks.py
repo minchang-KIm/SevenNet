@@ -940,6 +940,12 @@ def main() -> None:
         and "PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME" in sync_gate
         and "_bundle_verify_command" in sync_gate
         and "PUSH_FAILURE_BUNDLE_KEY" in sync_gate
+        and "PUSH_FAILURE_BUNDLE_REPORT_SCHEMA_VERSION" in sync_gate
+        and "PUSH_FAILURE_BUNDLE_REPORT_COMMENT" in sync_gate
+        and "PUSH_FAILURE_BUNDLE_REPORT_FINGERPRINT_KEY" in sync_gate
+        and "_push_failure_bundle_report_path" in sync_gate
+        and "_write_push_failure_bundle_sidecar" in sync_gate
+        and "sidecar_report_fingerprint" in sync_gate
         and "BUNDLE_HASH_READ_CHUNK_BYTES" in sync_gate
         and "_bundle_file_fingerprint" in sync_gate
         and "verify_returncode" in sync_gate
@@ -986,6 +992,10 @@ def main() -> None:
         in sync_gate_test
         and "test_run_sync_can_write_bundle_after_push_failure" in sync_gate_test
         and "PUSH_FAILURE_BUNDLE_VERIFY_COMMAND_NAME" in sync_gate_test
+        and "PUSH_FAILURE_BUNDLE_REPORT_SCHEMA_VERSION" in sync_gate_test
+        and "PUSH_FAILURE_BUNDLE_REPORT_COMMENT" in sync_gate_test
+        and "PUSH_FAILURE_BUNDLE_REPORT_FINGERPRINT_KEY" in sync_gate_test
+        and "sidecar_report_path" in sync_gate_test
         and "hashlib.sha256(b\"bundle\").hexdigest()" in sync_gate_test
         and "test_run_sync_classifies_noninteractive_auth_push_failure" in sync_gate_test
         and "test_run_sync_rejects_incomplete_validation_command_record" in sync_gate_test
@@ -2756,6 +2766,9 @@ def main() -> None:
         and "`--push-failure-bundle`" in doc
         and "`push_failure_bundle`" in doc
         and "`git bundle verify` `verify_returncode`" in doc
+        and "sidecar JSON" in doc
+        and "`sidecar_report_fingerprint`" in doc
+        and "`report_comment`" in doc
         and "SHA-256 digest" in doc
         and "byte size" in doc
         and "non-interactive `git push -u`" in doc
