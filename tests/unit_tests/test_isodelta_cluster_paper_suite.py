@@ -6023,6 +6023,39 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            artifact_plan_name_drift_report = json.loads(
+                json.dumps(artifact_report)
+            )
+            artifact_plan_name_drift_report["artifacts"][0]["name"] = (
+                "wrong-required-artifact"
+            )
+            artifact_report_path.write_text(
+                json.dumps(artifact_plan_name_drift_report),
+                encoding="utf-8",
+            )
+            artifact_plan_name_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            artifact_plan_name_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][artifact_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(artifact_report_path)
+            )
+            pipeline_report_path.write_text(
+                json.dumps(artifact_plan_name_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                artifact_plan_name_drift_error = str(exc)
+            else:
+                artifact_plan_name_drift_error = ""
+            artifact_report_path.write_text(artifact_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             plan_output_drift_report = json.loads(json.dumps(plan_report))
             plan_output_drift_report["paper_outputs"]["case_summary_csv"] = str(
                 output_dir / "tables" / "wrong_case_summary.csv"
@@ -6261,6 +6294,14 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             1,
         )
         self.assertEqual(
+            pipeline_report_verification[
+                "verified_required_artifact_alignment_count"
+            ],
+            pipeline_report_verification["run_plan_report"][
+                "verified_required_artifact_plan_count"
+            ],
+        )
+        self.assertEqual(
             pipeline_report_verification["run_plan_report"]["verified_case_plan_count"],
             len(isodelta_cluster_suite.FINAL_PAPER_REQUIRED_MODELS),
         )
@@ -6351,6 +6392,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PLAN_SUITE_ERROR,
             plan_threshold_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR,
+            artifact_plan_name_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,

@@ -174,6 +174,9 @@ PIPELINE_ARTIFACT_PREPARATION_SUITE_ERROR = (
 PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR = (
     "passed pipeline artifact preparation report must prove all required artifacts"
 )
+PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR = (
+    "pipeline required artifact preparation must match the run plan"
+)
 PIPELINE_PLAN_REPORT_REQUIRED_ERROR = (
     "passed pipeline report must fingerprint a present run plan report"
 )
@@ -6326,12 +6329,13 @@ def _require_pipeline_artifact_preparation_report(
         "artifact_preparation_report.artifacts must be a JSON array",
     )
     verified_required_count = 0
+    prepared_required_artifacts: dict[str, dict[str, str]] = {}
     for index, raw_artifact in enumerate(raw_artifacts):
         artifact = _as_json_object(
             raw_artifact,
             f"artifact_preparation_report.artifacts[{index}]",
         )
-        _as_json_string(
+        artifact_name = _as_json_string(
             artifact.get("name"),
             f"artifact_preparation_report.artifacts[{index}].name",
         )
@@ -6365,6 +6369,14 @@ def _require_pipeline_artifact_preparation_report(
             actual_digest == expected_digest,
             PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR,
         )
+        _require(
+            artifact_name not in prepared_required_artifacts,
+            PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR,
+        )
+        prepared_required_artifacts[artifact_name] = {
+            "sha256": expected_digest,
+            "actual_sha256": actual_digest,
+        }
         verified_required_count += 1
     _require(
         verified_required_count > 0,
@@ -6377,6 +6389,7 @@ def _require_pipeline_artifact_preparation_report(
         "verified_suite_field_count": verified_suite_field_count,
         "verified_artifact_record_count": len(raw_artifacts),
         "verified_required_artifact_count": verified_required_count,
+        "required_artifacts": prepared_required_artifacts,
     }
 
 
@@ -6485,9 +6498,13 @@ def _require_pipeline_plan_report(
     raw_artifacts = plan_payload.get("artifacts")
     _require(isinstance(raw_artifacts, list), "run_plan.artifacts must be a JSON array")
     verified_required_artifact_count = 0
+    planned_required_artifacts: dict[str, str] = {}
     for index, raw_artifact in enumerate(raw_artifacts):
         artifact = _as_json_object(raw_artifact, f"run_plan.artifacts[{index}]")
-        _as_json_string(artifact.get("name"), f"run_plan.artifacts[{index}].name")
+        artifact_name = _as_json_string(
+            artifact.get("name"),
+            f"run_plan.artifacts[{index}].name",
+        )
         required = _as_json_bool(
             artifact.get("required"),
             f"run_plan.artifacts[{index}].required",
@@ -6529,10 +6546,15 @@ def _require_pipeline_plan_report(
             ),
             PIPELINE_PLAN_ARTIFACTS_ERROR,
         )
-        _require_sha256_digest(
+        planned_digest = _require_sha256_digest(
             artifact.get("sha256"),
             f"run_plan.artifacts[{index}].sha256",
         )
+        _require(
+            artifact_name not in planned_required_artifacts,
+            PIPELINE_PLAN_ARTIFACTS_ERROR,
+        )
+        planned_required_artifacts[artifact_name] = planned_digest
         verified_required_artifact_count += 1
     _require(verified_required_artifact_count > 0, PIPELINE_PLAN_ARTIFACTS_ERROR)
     raw_cases = plan_payload.get("cases")
@@ -6584,9 +6606,54 @@ def _require_pipeline_plan_report(
         "verified_manifest_field_count": verified_manifest_field_count,
         "verified_suite_field_count": verified_suite_field_count,
         "verified_required_artifact_plan_count": verified_required_artifact_count,
+        "required_artifacts": planned_required_artifacts,
         "verified_case_plan_count": len(raw_cases),
         "paper_outputs": dict(paper_outputs),
     }
+
+
+def _require_pipeline_artifact_plan_alignment(
+    artifact_preparation_report: dict[str, Any],
+    run_plan_report: dict[str, Any],
+) -> int:
+    """Require prepared required artifacts to match the run-plan artifact scope."""
+    prepared_required_artifacts = _as_json_object(
+        artifact_preparation_report.get("required_artifacts"),
+        "artifact_preparation_report.required_artifacts",
+    )
+    planned_required_artifacts = _as_json_object(
+        run_plan_report.get("required_artifacts"),
+        "run_plan_report.required_artifacts",
+    )
+    prepared_names = set(prepared_required_artifacts)
+    planned_names = set(planned_required_artifacts)
+    _require(
+        prepared_names == planned_names,
+        PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR,
+    )
+    for artifact_name in sorted(planned_names):
+        planned_digest = _require_sha256_digest(
+            planned_required_artifacts.get(artifact_name),
+            f"run_plan_report.required_artifacts.{artifact_name}",
+        )
+        prepared_record = _as_json_object(
+            prepared_required_artifacts.get(artifact_name),
+            f"artifact_preparation_report.required_artifacts.{artifact_name}",
+        )
+        prepared_expected_digest = _require_sha256_digest(
+            prepared_record.get("sha256"),
+            f"artifact_preparation_report.required_artifacts.{artifact_name}.sha256",
+        )
+        prepared_actual_digest = _require_sha256_digest(
+            prepared_record.get("actual_sha256"),
+            f"artifact_preparation_report.required_artifacts.{artifact_name}.actual_sha256",
+        )
+        _require(
+            prepared_expected_digest == planned_digest
+            and prepared_actual_digest == planned_digest,
+            PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR,
+        )
+    return len(planned_names)
 
 
 def _require_pipeline_plan_output_alignment(
@@ -7122,6 +7189,12 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         stage_report_paths,
         suite_record,
     )
+    verified_required_artifact_alignment_count = (
+        _require_pipeline_artifact_plan_alignment(
+            artifact_preparation_report,
+            run_plan_report,
+        )
+    )
     (
         preflight_gpu_check,
         preflight_environment_snapshot_path,
@@ -7182,6 +7255,9 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "readiness_report": readiness_report,
         "artifact_preparation_report": artifact_preparation_report,
         "run_plan_report": run_plan_report,
+        "verified_required_artifact_alignment_count": (
+            verified_required_artifact_alignment_count
+        ),
         "preflight_gpu_check": preflight_gpu_check,
         "verified_preflight_environment_snapshot_bundle_count": (
             verified_preflight_environment_snapshot_bundle_count

@@ -2179,10 +2179,12 @@ def main() -> None:
         and "PIPELINE_SUMMARY_STAGE_ALIGNMENT_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_SUITE_ERROR" in cluster_suite
         and "PIPELINE_SUMMARY_SUITE_ALIGNMENT_KEYS" in cluster_suite
+        and "PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR" in cluster_suite
         and "PIPELINE_STAGE_SUITE_MANIFEST_ALIGNMENT_KEYS" in cluster_suite
         and "PIPELINE_STAGE_SUITE_ALIGNMENT_KEYS" in cluster_suite
         and "_require_suite_manifest_alignment" in cluster_suite
         and "_require_stage_suite_metadata_alignment" in cluster_suite
+        and "_require_pipeline_artifact_plan_alignment" in cluster_suite
         and "summary.suite.manifest.path" in cluster_suite
         and "suite.manifest.path" in cluster_suite
         and "summary.suite.manifest.size_bytes" in cluster_suite
@@ -2229,6 +2231,7 @@ def main() -> None:
         and "readiness_threshold_drift_error" in cluster_suite_test
         and "artifact_output_dir_drift_error" in cluster_suite_test
         and "plan_threshold_drift_error" in cluster_suite_test
+        and "artifact_plan_name_drift_error" in cluster_suite_test
         and "summary_threshold_drift_error" in cluster_suite_test
         and "PREFLIGHT_REPORT_COMMENT" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
@@ -2310,6 +2313,10 @@ def main() -> None:
         and "same suite name, manifest path, manifest SHA-256 digest"
         in doc
         and "trace thresholds, runtime overrides, and artifact SHA gate"
+        in doc
+        and "prepared required artifact names and SHA-256"
+        in doc
+        and "different dataset or checkpoint than the one scheduled"
         in doc
         and "skipped artifact-preparation" in doc
         and "`stages[*].report_path`" in doc
