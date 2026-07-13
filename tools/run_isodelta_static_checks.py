@@ -1012,6 +1012,10 @@ def main() -> None:
         and "ISODELTA_PYTHON_GLOB_PATTERNS" in goal_readiness
         and "ISODELTA_PRODUCTION_GLOB_PATTERNS" in goal_readiness
         and "FORBIDDEN_IMPLEMENTATION_MARKERS" in goal_readiness
+        and "placeholder" in goal_readiness
+        and "temporary implementation" in goal_readiness
+        and "magic number" in goal_readiness
+        and "hardcoded" in goal_readiness
         and "FORBIDDEN_FILE_SNIPPETS" in goal_readiness
         and "_audit_isodelta_python_headers" in goal_readiness
         and "_audit_forbidden_implementation_markers" in goal_readiness
@@ -1026,6 +1030,8 @@ def main() -> None:
         and "test_goal_readiness_rejects_isodelta_python_without_header"
         in goal_readiness_test
         and "test_goal_readiness_rejects_forbidden_production_marker"
+        in goal_readiness_test
+        and "test_goal_readiness_rejects_explicit_temporary_implementation_markers"
         in goal_readiness_test
         and "test_goal_readiness_ignores_marker_string_literals"
         in goal_readiness_test
@@ -2723,6 +2729,11 @@ def main() -> None:
         and "validate one checkout branch" in doc
         and "`tools/*isodelta*.py`" in doc
         and "`tests/unit_tests/test_isodelta*.py`" in doc
+        and "temporary-work" in doc
+        and "`placeholder`" in doc
+        and "`temporary implementation`" in doc
+        and "`magic number`" in doc
+        and "`hardcoded`" in doc
         and "completion-readiness audit" in doc
         and "run_isodelta_sync_gate.py" in doc
         and "`isodelta_sync_report.json`" in doc

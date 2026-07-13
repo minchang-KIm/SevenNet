@@ -327,6 +327,10 @@ scans every `tools/*isodelta*.py` script and
 cannot enter the workflow without a file-level comment. It records the current
 Git branch, commit, and status but does not treat unrelated local workspace
 files as proof that the implementation itself is missing.
+Production IsoDelta comments and docstrings are also scanned for temporary-work
+markers such as `TODO`, `FIXME`, `stub`, `placeholder`,
+`temporary implementation`, `magic number`, and `hardcoded`, so paper tooling
+cannot hide an unfinished shortcut in prose while tests stay green.
 
 This does not replace a full LAMMPS/LibTorch build. It is a fast local guard so
 the implementation does not drift while runtime environments are being prepared.

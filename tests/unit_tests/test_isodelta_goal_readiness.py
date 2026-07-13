@@ -175,6 +175,50 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
         self.assertEqual(len(failed_checks), 1)
         self.assertIn("TODO", failed_checks[0]["detail"])
 
+    def test_goal_readiness_rejects_explicit_temporary_implementation_markers(
+        self,
+    ) -> None:
+        """Production comments should reject user-forbidden temporary markers."""
+        marker_cases = {
+            "run_isodelta_placeholder.py": "placeholder",
+            "run_isodelta_temporary_impl.py": "temporary implementation",
+            "run_isodelta_magic_number.py": "magic number",
+            "run_isodelta_hardcoded.py": "hardcoded",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            tools_dir = root / "tools"
+            tools_dir.mkdir(parents=True)
+            for file_name, marker in marker_cases.items():
+                (tools_dir / file_name).write_text(
+                    f'"""Example tool header."""\n# {marker}\nVALUE = 1\n',
+                    encoding="utf-8",
+                )
+
+            report = goal_readiness.build_goal_readiness_report(
+                root=root,
+                required_file_snippets={},
+                forbidden_file_snippets={},
+                comment_prefix_requirements={},
+                implementation_marker_glob_patterns=("tools/*isodelta*.py",),
+            )
+
+        self.assertEqual(report["status"], goal_readiness.STATUS_FAILED)
+        failed_details = {
+            record["name"]: record["detail"]
+            for record in report["checks"]
+            if not record["passed"]
+            and record["name"].startswith("forbidden_implementation_marker:")
+        }
+        self.assertEqual(len(failed_details), len(marker_cases))
+        for file_name, marker in marker_cases.items():
+            self.assertIn(
+                marker,
+                failed_details[
+                    f"forbidden_implementation_marker:tools/{file_name}"
+                ],
+            )
+
     def test_goal_readiness_ignores_marker_string_literals(self) -> None:
         """Static check tools may mention marker text as data without failing."""
         with tempfile.TemporaryDirectory() as tmpdir:

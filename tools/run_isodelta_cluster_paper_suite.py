@@ -9935,7 +9935,7 @@ def _svg_document(body: str, *, description: str) -> str:
 
 
 def _empty_svg(message: str, *, description: str) -> str:
-    """Return an SVG placeholder when a metric is unavailable."""
+    """Return a minimal SVG that explicitly states a metric is unavailable."""
     return _svg_document(
         f'<text x="{SVG_WIDTH / 2:.2f}" y="{SVG_HEIGHT / 2:.2f}" text-anchor="middle" '
         f'font-size="20">{_svg_escape(message)}</text>',
