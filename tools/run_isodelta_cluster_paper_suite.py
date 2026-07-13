@@ -407,6 +407,7 @@ TIMING_MODES_KEY = "timing_modes"
 ENV_FLAG_FALSE_VALUES_KEY = "env_flag_false_values"
 COMMANDS_KEY = "commands"
 COMMAND_LOG_FINGERPRINTS_KEY = "command_log_fingerprints"
+COMMAND_LOG_SIDECAR_KEY = "sidecar"
 EVIDENCE_FINGERPRINTS_KEY = "evidence_fingerprints"
 EXPERIMENT_REPORT_KEY = "experiment_report"
 EXPERIMENT_REPORT_CHECK_KEY = "experiment_report_check"
@@ -424,6 +425,8 @@ CASE_EVIDENCE_FINGERPRINT_FIELDS = (
     "external_timing_report",
 )
 LOGS_DIR_NAME = "logs"
+COMMAND_LOG_STREAM_NAMES = ("stdout", "stderr")
+COMMAND_LOG_SIDECAR_SUFFIX = ".json"
 CASES_DIR_NAME = "cases"
 TABLES_DIR_NAME = "tables"
 FIGURES_DIR_NAME = "figures"
@@ -489,6 +492,11 @@ PIPELINE_REPORT_COMMENT = (
 OUTPUT_BUNDLE_VERIFICATION_COMMENT = (
     "IsoDelta-Halo output-bundle verification report reopening generated paper "
     "artifacts, source evidence, command logs, and provenance fingerprints."
+)
+COMMAND_LOG_SIDECAR_SCHEMA_VERSION = "isodelta-command-log-sidecar-v1"
+COMMAND_LOG_SIDECAR_COMMENT = (
+    "IsoDelta-Halo command-log sidecar describing one raw stdout or stderr "
+    "stream without modifying the captured command output."
 )
 SLURM_SCRIPT_VERIFICATION_COMMENT = (
     "IsoDelta-Halo SLURM launcher verification report checking scheduler "
@@ -2900,11 +2908,23 @@ def _write_command_streams(
     stderr_path: Path,
     stdout_text: str,
     stderr_text: str,
+    *,
+    command_name: str,
 ) -> None:
     """Persist command streams before returning to the orchestration layer."""
     stdout_path.parent.mkdir(parents=True, exist_ok=True)
     stdout_path.write_text(stdout_text, encoding="utf-8")
     stderr_path.write_text(stderr_text, encoding="utf-8")
+    _write_command_log_sidecar(
+        log_path=stdout_path,
+        command_name=command_name,
+        stream_name="stdout",
+    )
+    _write_command_log_sidecar(
+        log_path=stderr_path,
+        command_name=command_name,
+        stream_name="stderr",
+    )
 
 
 def _command_record(
@@ -2944,7 +2964,13 @@ def run_argv_command(
 ) -> CommandRecord:
     """Run an argv command, capture logs, and return timing metadata."""
     if dry_run:
-        _write_command_streams(stdout_path, stderr_path, "DRY RUN\n", "")
+        _write_command_streams(
+            stdout_path,
+            stderr_path,
+            "DRY RUN\n",
+            "",
+            command_name=name,
+        )
         return _command_record(
             name=name,
             command=argv,
@@ -2972,6 +2998,7 @@ def run_argv_command(
             stderr_path,
             completed.stdout,
             completed.stderr,
+            command_name=name,
         )
         return _command_record(
             name=name,
@@ -2990,6 +3017,7 @@ def run_argv_command(
             stderr_path,
             exc.stdout or "",
             f"Command timed out after {timeout_seconds:g} seconds\n{exc.stderr or ''}",
+            command_name=name,
         )
         return _command_record(
             name=name,
@@ -3016,7 +3044,13 @@ def run_shell_command(
 ) -> CommandRecord:
     """Run a manifest shell command and capture its logs."""
     if dry_run:
-        _write_command_streams(stdout_path, stderr_path, "DRY RUN\n", "")
+        _write_command_streams(
+            stdout_path,
+            stderr_path,
+            "DRY RUN\n",
+            "",
+            command_name=name,
+        )
         return _command_record(
             name=name,
             command=command,
@@ -3045,6 +3079,7 @@ def run_shell_command(
             stderr_path,
             completed.stdout,
             completed.stderr,
+            command_name=name,
         )
         return _command_record(
             name=name,
@@ -3063,6 +3098,7 @@ def run_shell_command(
             stderr_path,
             exc.stdout or "",
             f"Command timed out after {timeout_seconds:g} seconds\n{exc.stderr or ''}",
+            command_name=name,
         )
         return _command_record(
             name=name,
@@ -3255,14 +3291,88 @@ def optional_file_fingerprint(path: Path) -> dict[str, Any]:
     }
 
 
+def command_log_sidecar_path(log_path: Path) -> Path:
+    """Return the JSON sidecar path that describes one raw command log."""
+    return log_path.with_name(f"{log_path.name}{COMMAND_LOG_SIDECAR_SUFFIX}")
+
+
+def _command_log_sidecar_payload(
+    *,
+    log_path: Path,
+    command_name: str,
+    stream_name: str,
+) -> dict[str, Any]:
+    """Build the self-describing metadata payload for one raw command stream."""
+    _require(
+        stream_name in COMMAND_LOG_STREAM_NAMES,
+        f"command log stream must be one of {COMMAND_LOG_STREAM_NAMES}",
+    )
+    return {
+        "command_log_sidecar_schema_version": COMMAND_LOG_SIDECAR_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: COMMAND_LOG_SIDECAR_COMMENT,
+        "command_name": command_name,
+        "stream": stream_name,
+        "log_path": str(log_path),
+        "log_fingerprint": optional_file_fingerprint(log_path),
+    }
+
+
+def _write_command_log_sidecar(
+    *,
+    log_path: Path,
+    command_name: str,
+    stream_name: str,
+) -> Path:
+    """Write the JSON sidecar that makes a raw command log auditable."""
+    sidecar_path = command_log_sidecar_path(log_path)
+    sidecar_path.write_text(
+        json.dumps(
+            _command_log_sidecar_payload(
+                log_path=log_path,
+                command_name=command_name,
+                stream_name=stream_name,
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return sidecar_path
+
+
+def command_log_fingerprint(
+    path: Path,
+    *,
+    command_name: str,
+    stream_name: str,
+) -> dict[str, Any]:
+    """Fingerprint one command log and its sidecar metadata file."""
+    record = optional_file_fingerprint(path)
+    record[COMMAND_LOG_SIDECAR_KEY] = optional_file_fingerprint(
+        command_log_sidecar_path(path)
+    )
+    record["stream"] = stream_name
+    record["command_name"] = command_name
+    return record
+
+
 def command_log_fingerprints(command_records: list[CommandRecord]) -> list[dict[str, Any]]:
     """Fingerprint stdout/stderr logs for every launched command."""
     return [
         {
             "name": record.name,
             "returncode": record.returncode,
-            "stdout": optional_file_fingerprint(Path(record.stdout_path)),
-            "stderr": optional_file_fingerprint(Path(record.stderr_path)),
+            "stdout": command_log_fingerprint(
+                Path(record.stdout_path),
+                command_name=record.name,
+                stream_name="stdout",
+            ),
+            "stderr": command_log_fingerprint(
+                Path(record.stderr_path),
+                command_name=record.name,
+                stream_name="stderr",
+            ),
         }
         for record in command_records
     ]
@@ -3378,6 +3488,93 @@ def _require_fingerprint_match(
     _require(
         actual_size == expected_size,
         f"{label}: byte size mismatch for {path}",
+    )
+
+
+def _require_command_log_sidecar(
+    stream_record: dict[str, Any],
+    label: str,
+    *,
+    command_name: str,
+    stream_name: str,
+    bundle_root: Path,
+    original_output_dir: Path | None,
+) -> None:
+    """Validate the self-describing sidecar for one present command log."""
+    if stream_record.get("exists") is False:
+        return
+    raw_sidecar_record = stream_record.get(COMMAND_LOG_SIDECAR_KEY)
+    if raw_sidecar_record is None:
+        return
+    sidecar_record = _as_json_object(
+        raw_sidecar_record,
+        f"{label}.{COMMAND_LOG_SIDECAR_KEY}",
+    )
+    _require(
+        sidecar_record.get("exists") is True,
+        f"{label}: command log sidecar must exist",
+    )
+    sidecar_path = _resolve_present_fingerprint_path(
+        sidecar_record,
+        f"{label}.command log sidecar",
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
+    )
+    sidecar_payload = _as_json_object(
+        json.loads(sidecar_path.read_text(encoding="utf-8")),
+        f"{label}.command log sidecar",
+    )
+    _require(
+        _as_json_string(
+            sidecar_payload.get("command_log_sidecar_schema_version"),
+            f"{label}.command log sidecar.command_log_sidecar_schema_version",
+        )
+        == COMMAND_LOG_SIDECAR_SCHEMA_VERSION,
+        f"{label}: command log sidecar schema version must match",
+    )
+    _require_report_comment(
+        sidecar_payload,
+        f"{label}.command log sidecar",
+        COMMAND_LOG_SIDECAR_COMMENT,
+    )
+    _require(
+        _as_json_string(
+            sidecar_payload.get("command_name"),
+            f"{label}.command log sidecar.command_name",
+        )
+        == command_name,
+        f"{label}: command log sidecar command_name must match",
+    )
+    _require(
+        _as_json_string(
+            sidecar_payload.get("stream"),
+            f"{label}.command log sidecar.stream",
+        )
+        == stream_name,
+        f"{label}: command log sidecar stream must match",
+    )
+    _require(
+        _as_json_string(
+            sidecar_payload.get("log_path"),
+            f"{label}.command log sidecar.log_path",
+        )
+        == _as_json_string(stream_record.get("path"), f"{label}.path"),
+        f"{label}: command log sidecar log_path must match",
+    )
+    sidecar_log_fingerprint = _as_json_object(
+        sidecar_payload.get("log_fingerprint"),
+        f"{label}.command log sidecar.log_fingerprint",
+    )
+    for key in ("path", "exists", "sha256", "size_bytes"):
+        _require(
+            sidecar_log_fingerprint.get(key) == stream_record.get(key),
+            f"{label}: command log sidecar log_fingerprint.{key} must match",
+        )
+    _require_fingerprint_match(
+        sidecar_log_fingerprint,
+        f"{label}.command log sidecar.log_fingerprint",
+        bundle_root=bundle_root,
+        original_output_dir=original_output_dir,
     )
 
 
@@ -5794,7 +5991,7 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
             command_record.get("name"),
             f"command_log_fingerprints[{index}].name",
         )
-        for stream_name in ("stdout", "stderr"):
+        for stream_name in COMMAND_LOG_STREAM_NAMES:
             stream_record = _as_json_object(
                 command_record.get(stream_name),
                 f"command_log_fingerprints[{index}].{stream_name}",
@@ -5802,6 +5999,14 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
             _require_fingerprint_match(
                 stream_record,
                 f"{command_name}.{stream_name}",
+                bundle_root=bundle_root,
+                original_output_dir=original_output_dir,
+            )
+            _require_command_log_sidecar(
+                stream_record,
+                f"{command_name}.{stream_name}",
+                command_name=command_name,
+                stream_name=stream_name,
                 bundle_root=bundle_root,
                 original_output_dir=original_output_dir,
             )
@@ -8408,7 +8613,11 @@ def _require_external_command_log_fingerprints(
             raw_fingerprint,
             f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}]",
         )
-        for stream_name in ("stdout", "stderr"):
+        command_name = _as_json_string(
+            fingerprint_record.get("name"),
+            f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}].name",
+        )
+        for stream_name in COMMAND_LOG_STREAM_NAMES:
             stream_record = _as_json_object(
                 fingerprint_record.get(stream_name),
                 f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}].{stream_name}",
@@ -8420,6 +8629,14 @@ def _require_external_command_log_fingerprints(
             _require_fingerprint_match(
                 stream_record,
                 f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}].{stream_name}",
+                bundle_root=fingerprint_root,
+                original_output_dir=original_output_dir,
+            )
+            _require_command_log_sidecar(
+                stream_record,
+                f"{COMMAND_LOG_FINGERPRINTS_KEY}[{index}].{stream_name}",
+                command_name=command_name,
+                stream_name=stream_name,
                 bundle_root=fingerprint_root,
                 original_output_dir=original_output_dir,
             )

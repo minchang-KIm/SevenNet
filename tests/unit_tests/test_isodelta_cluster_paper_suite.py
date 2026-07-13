@@ -345,6 +345,7 @@ def _external_timing_report_for_case(
     enabled_stddev = isodelta_cluster_suite._sample_stddev(enabled_times)
     command_records = []
     for repeat_index, elapsed_seconds in enumerate(baseline_times):
+        command_name = f"{case.name}:{isodelta_cluster_suite.EXTERNAL_DISABLED_COMMAND_LABEL}:{repeat_index}"
         if log_dir is None:
             stdout_path = Path(f"{case.name}/disabled_{repeat_index}.stdout.log")
             stderr_path = Path(f"{case.name}/disabled_{repeat_index}.stderr.log")
@@ -354,9 +355,19 @@ def _external_timing_report_for_case(
             stderr_path = log_dir / f"{case.name}_disabled_{repeat_index}.stderr.log"
             stdout_path.write_text(f"{case.name} disabled {repeat_index}\n", encoding="utf-8")
             stderr_path.write_text("", encoding="utf-8")
+            isodelta_cluster_suite._write_command_log_sidecar(
+                log_path=stdout_path,
+                command_name=command_name,
+                stream_name="stdout",
+            )
+            isodelta_cluster_suite._write_command_log_sidecar(
+                log_path=stderr_path,
+                command_name=command_name,
+                stream_name="stderr",
+            )
         command_records.append(
             {
-                "name": f"{case.name}:{isodelta_cluster_suite.EXTERNAL_DISABLED_COMMAND_LABEL}:{repeat_index}",
+                "name": command_name,
                 "command": str(case.disabled_command),
                 "returncode": isodelta_cluster_suite.SUCCESS_RETURN_CODE,
                 "elapsed_seconds": elapsed_seconds,
@@ -369,6 +380,7 @@ def _external_timing_report_for_case(
             }
         )
     for repeat_index, elapsed_seconds in enumerate(enabled_times):
+        command_name = f"{case.name}:{isodelta_cluster_suite.EXTERNAL_ENABLED_COMMAND_LABEL}:{repeat_index}"
         if log_dir is None:
             stdout_path = Path(f"{case.name}/enabled_{repeat_index}.stdout.log")
             stderr_path = Path(f"{case.name}/enabled_{repeat_index}.stderr.log")
@@ -378,9 +390,19 @@ def _external_timing_report_for_case(
             stderr_path = log_dir / f"{case.name}_enabled_{repeat_index}.stderr.log"
             stdout_path.write_text(f"{case.name} enabled {repeat_index}\n", encoding="utf-8")
             stderr_path.write_text("", encoding="utf-8")
+            isodelta_cluster_suite._write_command_log_sidecar(
+                log_path=stdout_path,
+                command_name=command_name,
+                stream_name="stdout",
+            )
+            isodelta_cluster_suite._write_command_log_sidecar(
+                log_path=stderr_path,
+                command_name=command_name,
+                stream_name="stderr",
+            )
         command_records.append(
             {
-                "name": f"{case.name}:{isodelta_cluster_suite.EXTERNAL_ENABLED_COMMAND_LABEL}:{repeat_index}",
+                "name": command_name,
                 "command": str(case.enabled_command),
                 "returncode": isodelta_cluster_suite.SUCCESS_RETURN_CODE,
                 "elapsed_seconds": elapsed_seconds,
@@ -396,11 +418,15 @@ def _external_timing_report_for_case(
         {
             "name": command["name"],
             "returncode": command["returncode"],
-            "stdout": isodelta_cluster_suite.optional_file_fingerprint(
-                Path(str(command["stdout_path"]))
+            "stdout": isodelta_cluster_suite.command_log_fingerprint(
+                Path(str(command["stdout_path"])),
+                command_name=str(command["name"]),
+                stream_name="stdout",
             ),
-            "stderr": isodelta_cluster_suite.optional_file_fingerprint(
-                Path(str(command["stderr_path"]))
+            "stderr": isodelta_cluster_suite.command_log_fingerprint(
+                Path(str(command["stderr_path"])),
+                command_name=str(command["name"]),
+                stream_name="stderr",
             ),
         }
         for command in command_records
@@ -1371,6 +1397,73 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 isodelta_cluster_suite.ClusterSuiteError,
                 "must align by name",
+            ):
+                isodelta_cluster_suite.verify_output_bundle(output_dir)
+
+    def test_verify_output_bundle_rejects_missing_command_log_sidecar(self) -> None:
+        """Bundle verification should bind command logs to their JSON sidecars."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            output_dir = root / "paper_outputs"
+            record = isodelta_cluster_suite.run_shell_command(
+                name="case",
+                command="unused",
+                cwd=output_dir,
+                env={},
+                timeout_seconds=1.0,
+                stdout_path=output_dir / "logs" / "case.stdout",
+                stderr_path=output_dir / "logs" / "case.stderr",
+                dry_run=True,
+            )
+            command_record = {
+                "name": record.name,
+                "command": record.command,
+                "returncode": record.returncode,
+                "elapsed_seconds": record.elapsed_seconds,
+                "stdout_path": record.stdout_path,
+                "stderr_path": record.stderr_path,
+                "cwd": record.cwd,
+                "tracked_env": record.tracked_env,
+            }
+            artifact_fingerprints = _write_required_paper_artifacts(
+                output_dir,
+                command_records=(command_record,),
+            )
+            command_log_fingerprints = isodelta_cluster_suite.command_log_fingerprints(
+                [record]
+            )
+            stdout_sidecar = isodelta_cluster_suite.command_log_sidecar_path(
+                Path(record.stdout_path)
+            )
+            stdout_sidecar.unlink()
+            summary_path = output_dir / isodelta_cluster_suite.SUMMARY_REPORT_NAME
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "suite": {"output_dir": str(output_dir)},
+                        "cases": [_summary_case_record("case")],
+                        "correlations": _summary_correlations(1),
+                        "commands": [command_record],
+                        "evidence_fingerprints": {
+                            "case": {
+                                "benchmark_report": None,
+                                "bundle_evidence": None,
+                                "external_timing_report": None,
+                                "trace_evidence": [],
+                            }
+                        },
+                        "artifacts": _artifact_index(artifact_fingerprints),
+                        "artifact_fingerprints": artifact_fingerprints,
+                        "command_log_fingerprints": command_log_fingerprints,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                isodelta_cluster_suite.ClusterSuiteError,
+                "command log sidecar",
             ):
                 isodelta_cluster_suite.verify_output_bundle(output_dir)
 
@@ -5347,12 +5440,47 @@ artifacts = ["dataset"]
                 stderr_path=root / "stderr.log",
                 dry_run=True,
             )
+            stdout_text = (root / "stdout.log").read_text(encoding="utf-8")
+            stderr_text = (root / "stderr.log").read_text(encoding="utf-8")
+            fingerprints = isodelta_cluster_suite.command_log_fingerprints([record])
+            stdout_sidecar_path = isodelta_cluster_suite.command_log_sidecar_path(
+                root / "stdout.log"
+            )
+            stderr_sidecar_path = isodelta_cluster_suite.command_log_sidecar_path(
+                root / "stderr.log"
+            )
+            stdout_sidecar = json.loads(stdout_sidecar_path.read_text(encoding="utf-8"))
+            stderr_sidecar = json.loads(stderr_sidecar_path.read_text(encoding="utf-8"))
 
         self.assertEqual(record.cwd, str(root))
         self.assertEqual(record.tracked_env[DISABLE_CACHE_ENV], ENV_FLAG_ENABLED)
         self.assertEqual(record.tracked_env["CUDA_VISIBLE_DEVICES"], "0,1")
         self.assertEqual(record.tracked_env["OMP_NUM_THREADS"], "4")
         self.assertIn("SLURM_JOB_ID", record.tracked_env)
+        self.assertEqual(stdout_text, "DRY RUN\n")
+        self.assertEqual(stderr_text, "")
+        self.assertEqual(
+            stdout_sidecar["command_log_sidecar_schema_version"],
+            isodelta_cluster_suite.COMMAND_LOG_SIDECAR_SCHEMA_VERSION,
+        )
+        self.assertEqual(
+            stdout_sidecar[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.COMMAND_LOG_SIDECAR_COMMENT,
+        )
+        self.assertEqual(stdout_sidecar["command_name"], "dry-run-command")
+        self.assertEqual(stdout_sidecar["stream"], "stdout")
+        self.assertEqual(stdout_sidecar["log_fingerprint"]["path"], str(root / "stdout.log"))
+        self.assertEqual(stderr_sidecar["stream"], "stderr")
+        self.assertEqual(stderr_sidecar["command_name"], "dry-run-command")
+        self.assertIn(
+            isodelta_cluster_suite.COMMAND_LOG_SIDECAR_KEY,
+            fingerprints[0]["stdout"],
+        )
+        self.assertTrue(
+            fingerprints[0]["stdout"][
+                isodelta_cluster_suite.COMMAND_LOG_SIDECAR_KEY
+            ]["exists"]
+        )
 
     def test_sevennet_case_runs_experiment_report_checker(self) -> None:
         """SevenNet runs should immediately verify the driver report and logs."""
@@ -8764,6 +8892,16 @@ min_enabled_cache_hits = 1
                 stdout_path.parent.mkdir(parents=True, exist_ok=True)
                 stdout_path.write_text(f"{name} stdout\n", encoding="utf-8")
                 stderr_path.write_text("", encoding="utf-8")
+                isodelta_cluster_suite._write_command_log_sidecar(
+                    log_path=stdout_path,
+                    command_name=name,
+                    stream_name="stdout",
+                )
+                isodelta_cluster_suite._write_command_log_sidecar(
+                    log_path=stderr_path,
+                    command_name=name,
+                    stream_name="stderr",
+                )
                 if name.endswith(":sevennet-experiment"):
                     experiment_dir = Path(argv[argv.index("--output-dir") + 1])
                     benchmark_path = (

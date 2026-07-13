@@ -1925,8 +1925,17 @@ def main() -> None:
         and "_require_command_record_alignment" in cluster_suite
         and "verified_command_record_count" in cluster_suite
         and "must align by name" in cluster_suite
-        and '"stdout": optional_file_fingerprint' in cluster_suite
-        and '"stderr": optional_file_fingerprint' in cluster_suite
+        and "COMMAND_LOG_SIDECAR_SCHEMA_VERSION" in cluster_suite
+        and "COMMAND_LOG_SIDECAR_COMMENT" in cluster_suite
+        and "COMMAND_LOG_SIDECAR_KEY" in cluster_suite
+        and "command_log_sidecar_path" in cluster_suite
+        and "_write_command_log_sidecar" in cluster_suite
+        and "command_log_fingerprint(" in cluster_suite
+        and "_require_command_log_sidecar" in cluster_suite
+        and "command_log_sidecar_schema_version" in cluster_suite
+        and "command log sidecar must exist" in cluster_suite
+        and "test_verify_output_bundle_rejects_missing_command_log_sidecar"
+        in cluster_suite_test
         and "manifest_record" in cluster_suite
         and "generated_artifact_record" in cluster_suite
         and "artifact_fingerprints" in cluster_suite
@@ -2601,6 +2610,10 @@ def main() -> None:
     _require(
         "`command_log_fingerprints`" in doc
         and "stdout/stderr log path" in doc
+        and "sidecar JSON" in doc
+        and "`command_log_sidecar_schema_version`" in doc
+        and "keeps the raw stream untouched" in doc
+        and "nested `log_fingerprint`" in doc
         and "existence flag" in doc
         and "SHA-256 digest" in doc
         and "working directory" in doc
@@ -2647,7 +2660,8 @@ def main() -> None:
     _require(
         "`--verify-output-bundle` also reopens the archived" in doc
         and "nested `command_log_fingerprints`" in doc
-        and "MACE/NequIP stdout/stderr logs cannot drift silently" in doc,
+        and "command-log sidecar JSON metadata" in doc
+        and "MACE/NequIP stdout/stderr logs and their" in doc,
         "IsoDelta-Halo guide must document nested external timing log verification",
     )
     _require(

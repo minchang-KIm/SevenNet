@@ -939,7 +939,14 @@ duplicated MACE evidence mislabeled in the manifest.
 The summary also stores `command_log_fingerprints` for every launched command,
 including each stdout/stderr log path, existence flag, SHA-256 digest, and byte
 size. This lets reviewers confirm that the archived logs match the command
-records used to build the paper tables. The generated `command_timing.csv` and
+records used to build the paper tables. Each present stdout/stderr log also
+gets an adjacent sidecar JSON file such as `case.stdout.log.json`. The sidecar
+keeps the raw stream untouched while recording
+`command_log_sidecar_schema_version`, `report_comment`, command name, stream
+name, original log path, and a nested `log_fingerprint`. `--verify-output-bundle`
+reopens both the raw log and the sidecar, checks the sidecar fingerprint, and
+then requires the sidecar's nested `log_fingerprint` to match the same raw log.
+The generated `command_timing.csv` and
 `command_timing.md` tables mirror those command records with command name,
 return code, elapsed seconds, stdout/stderr paths, and working directory so
 repeat-level timing provenance is inspectable without opening the JSON first.
@@ -1030,7 +1037,8 @@ This catches a corrupted table or graph even when the summary JSON was
 regenerated with a matching hash.
 For `external_pair` cases, `--verify-output-bundle` also reopens the archived
 external timing report and rechecks its nested `command_log_fingerprints`, so
-MACE/NequIP stdout/stderr logs cannot drift silently after collection.
+MACE/NequIP stdout/stderr logs and their command-log sidecar JSON metadata
+cannot drift silently after collection.
 
 For an interrupted cluster job, rerun with `--reuse-passed` instead of starting
 from zero:
