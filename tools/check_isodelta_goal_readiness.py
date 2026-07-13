@@ -25,6 +25,12 @@ from typing import Any
 REPO_ROOT_PARENT_DEPTH = 1
 REPO_ROOT = Path(__file__).resolve().parents[REPO_ROOT_PARENT_DEPTH]
 GOAL_READINESS_SCHEMA_VERSION = "isodelta-goal-readiness-v1"
+GENERATED_REPORT_COMMENT_KEY = "report_comment"
+GOAL_READINESS_REPORT_COMMENT = (
+    "IsoDelta-Halo local goal-readiness report auditing source markers, "
+    "generated-file comments, forbidden temporary-work notes, branch identity, "
+    "and validation-gate wiring for the active implementation goal."
+)
 SUCCESS_RETURN_CODE = 0
 FAILURE_RETURN_CODE = 1
 GIT_METADATA_TIMEOUT_SECONDS = 10.0
@@ -739,6 +745,9 @@ REQUIRED_FILE_SNIPPETS = {
     "tools/check_isodelta_goal_readiness.py": (
         "ISODELTA_PYTHON_GLOB_PATTERNS",
         "ISODELTA_PRODUCTION_GLOB_PATTERNS",
+        "GOAL_READINESS_REPORT_COMMENT",
+        "GENERATED_REPORT_COMMENT_KEY",
+        "GENERATED_REPORT_COMMENT_KEY: GOAL_READINESS_REPORT_COMMENT",
         "FORBIDDEN_IMPLEMENTATION_MARKERS",
         "placeholder",
         "temporary implementation",
@@ -1266,6 +1275,9 @@ REQUIRED_FILE_SNIPPETS = {
     ),
     "tests/unit_tests/test_isodelta_goal_readiness.py": (
         "test_expected_branch_names_codex_work_branch",
+        "test_goal_readiness_report_carries_report_comment",
+        "GOAL_READINESS_REPORT_COMMENT",
+        "GENERATED_REPORT_COMMENT_KEY",
         "test_goal_readiness_accepts_isodelta_python_headers",
         "test_goal_readiness_rejects_isodelta_python_without_header",
         "test_goal_readiness_rejects_forbidden_production_marker",
@@ -1553,6 +1565,7 @@ def build_goal_readiness_report(
     status = STATUS_PASSED if all(record["passed"] for record in checks) else STATUS_FAILED
     return {
         "goal_readiness_schema_version": GOAL_READINESS_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: GOAL_READINESS_REPORT_COMMENT,
         "status": status,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "root": str(root),

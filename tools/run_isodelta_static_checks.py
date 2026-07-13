@@ -1009,6 +1009,10 @@ def main() -> None:
         and "REQUIRED_FILE_SNIPPETS" in goal_readiness
         and "COMMENT_PREFIX_REQUIREMENTS" in goal_readiness
         and 'EXPECTED_BRANCH = "codex/isodelta-halo-runtime"' in goal_readiness
+        and "GOAL_READINESS_REPORT_COMMENT" in goal_readiness
+        and "GENERATED_REPORT_COMMENT_KEY" in goal_readiness
+        and "GENERATED_REPORT_COMMENT_KEY: GOAL_READINESS_REPORT_COMMENT"
+        in goal_readiness
         and "ISODELTA_PYTHON_GLOB_PATTERNS" in goal_readiness
         and "ISODELTA_PRODUCTION_GLOB_PATTERNS" in goal_readiness
         and "FORBIDDEN_IMPLEMENTATION_MARKERS" in goal_readiness
@@ -1027,6 +1031,10 @@ def main() -> None:
         and '"goal_readiness_report": str(args.report_path) if args.report_path is not None else None'
         in goal_readiness
         and "test_isodelta_goal_readiness.py" in validation_runner
+        and "test_goal_readiness_report_carries_report_comment"
+        in goal_readiness_test
+        and "GOAL_READINESS_REPORT_COMMENT" in goal_readiness_test
+        and "GENERATED_REPORT_COMMENT_KEY" in goal_readiness_test
         and "test_goal_readiness_rejects_isodelta_python_without_header"
         in goal_readiness_test
         and "test_goal_readiness_rejects_forbidden_production_marker"
@@ -2724,6 +2732,8 @@ def main() -> None:
         and "`isodelta_validation_report.json`" in doc
         and "check_isodelta_goal_readiness.py" in doc
         and "`isodelta_goal_readiness_report.json`" in doc
+        and "goal_readiness_schema_version" in doc
+        and "sync and validation reports" in doc
         and "codex/isodelta-halo-runtime" in doc
         and "`--expected-branch`" in doc
         and "validate one checkout branch" in doc

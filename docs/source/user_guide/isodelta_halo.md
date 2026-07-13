@@ -319,6 +319,11 @@ python tools/check_isodelta_goal_readiness.py \
   --report-path isodelta_goal_readiness_report.json
 ```
 
+The generated readiness JSON carries top-level `goal_readiness_schema_version`
+and `report_comment` fields before listing status, Git provenance, and every
+check result, so the audit file remains self-describing when archived beside
+sync and validation reports.
+
 This audit checks that the runtime cache files, cluster paper-suite script,
 validation runner, sync gate, CI workflow, tests, and this guide all contain the
 required IsoDelta-Halo feature markers and explanatory file headers. It also

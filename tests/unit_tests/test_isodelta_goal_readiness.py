@@ -50,6 +50,26 @@ class IsoDeltaGoalReadinessTest(unittest.TestCase):
             "codex/isodelta-halo-runtime",
         )
 
+    def test_goal_readiness_report_carries_report_comment(self) -> None:
+        """The generated readiness JSON should describe its audit purpose."""
+        report = goal_readiness.build_goal_readiness_report(
+            root=REPO_ROOT,
+            required_file_snippets={},
+            forbidden_file_snippets={},
+            comment_prefix_requirements={},
+            isodelta_python_glob_patterns=(),
+            implementation_marker_glob_patterns=(),
+        )
+
+        self.assertEqual(
+            report["goal_readiness_schema_version"],
+            goal_readiness.GOAL_READINESS_SCHEMA_VERSION,
+        )
+        self.assertEqual(
+            report[goal_readiness.GENERATED_REPORT_COMMENT_KEY],
+            goal_readiness.GOAL_READINESS_REPORT_COMMENT,
+        )
+
     def test_goal_readiness_report_passes_for_required_snippets_and_prefixes(self) -> None:
         """A source tree with required snippets and comments should pass."""
         with tempfile.TemporaryDirectory() as tmpdir:
