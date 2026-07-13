@@ -2232,6 +2232,7 @@ def main() -> None:
         and "artifact_output_dir_drift_error" in cluster_suite_test
         and "plan_threshold_drift_error" in cluster_suite_test
         and "artifact_plan_name_drift_error" in cluster_suite_test
+        and "artifact_plan_path_drift_error" in cluster_suite_test
         and "summary_threshold_drift_error" in cluster_suite_test
         and "PREFLIGHT_REPORT_COMMENT" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
@@ -2314,9 +2315,9 @@ def main() -> None:
         in doc
         and "trace thresholds, runtime overrides, and artifact SHA gate"
         in doc
-        and "prepared required artifact names and SHA-256"
+        and "prepared required artifact names, paths, and"
         in doc
-        and "different dataset or checkpoint than the one scheduled"
+        and "different dataset or checkpoint path than the one scheduled"
         in doc
         and "skipped artifact-preparation" in doc
         and "`stages[*].report_path`" in doc

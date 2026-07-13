@@ -642,9 +642,10 @@ stage report copied from a different manifest cannot pass by sharing only the
 same output directory or status label.
 It reopens the fingerprinted artifact preparation report, requires `dry_run = false`,
 and checks `missing_required_artifacts` plus each required artifact SHA-256 digest.
-The verifier then compares those prepared required artifact names and SHA-256
-digests with the fingerprinted run plan, so a pipeline cannot pass by preparing
-a different dataset or checkpoint than the one scheduled for the paper run.
+The verifier then compares those prepared required artifact names, paths, and
+SHA-256 digests with the fingerprinted run plan, so a pipeline cannot pass by
+preparing a different dataset or checkpoint path than the one scheduled for the
+paper run.
 It also reopens the fingerprinted run plan report, requires final-paper execution modes,
 checks `gpu_check_planned`, verifies required model case plans, and compares
 `run_plan.paper_outputs` against the summary artifact index. That comparison

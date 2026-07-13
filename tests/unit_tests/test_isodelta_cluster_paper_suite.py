@@ -50,6 +50,7 @@ PIPELINE_MIN_SPEEDUP = 1.05
 PIPELINE_MIN_SPEEDUP_LOWER_BOUND = 1.0
 PAPER_REPEAT_COUNT = isodelta_cluster_suite.FINAL_PAPER_MIN_REPEAT_COUNT
 UNIT_TEST_REQUIRED_ARTIFACT_NAME = "dataset"
+UNIT_TEST_REQUIRED_ARTIFACT_PATH = "paper_outputs/dataset.ext"
 UNIT_TEST_ARTIFACT_SIZE_BYTES = 1
 UNIT_TEST_ARTIFACT_SHA256 = "0" * isodelta_cluster_suite.SHA256_HEX_LENGTH
 TRACE_ATTEMPTS = 4.0
@@ -1113,6 +1114,7 @@ def _pipeline_artifact_preparation_report(
         "artifacts": [
             {
                 "name": UNIT_TEST_REQUIRED_ARTIFACT_NAME,
+                "path": UNIT_TEST_REQUIRED_ARTIFACT_PATH,
                 "required": True,
                 "exists_after_prepare": not missing_required,
                 "size_bytes": UNIT_TEST_ARTIFACT_SIZE_BYTES,
@@ -1160,6 +1162,7 @@ def _pipeline_plan_report(
         "artifacts": [
             {
                 "name": UNIT_TEST_REQUIRED_ARTIFACT_NAME,
+                "path": UNIT_TEST_REQUIRED_ARTIFACT_PATH,
                 "required": True,
                 "has_sha256": True,
                 "sha256_required": True,
@@ -6056,6 +6059,39 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            artifact_plan_path_drift_report = json.loads(
+                json.dumps(artifact_report)
+            )
+            artifact_plan_path_drift_report["artifacts"][0]["path"] = str(
+                output_dir / "wrong-required-artifact.ext"
+            )
+            artifact_report_path.write_text(
+                json.dumps(artifact_plan_path_drift_report),
+                encoding="utf-8",
+            )
+            artifact_plan_path_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            artifact_plan_path_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][artifact_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(artifact_report_path)
+            )
+            pipeline_report_path.write_text(
+                json.dumps(artifact_plan_path_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                artifact_plan_path_drift_error = str(exc)
+            else:
+                artifact_plan_path_drift_error = ""
+            artifact_report_path.write_text(artifact_report_text, encoding="utf-8")
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             plan_output_drift_report = json.loads(json.dumps(plan_report))
             plan_output_drift_report["paper_outputs"]["case_summary_csv"] = str(
                 output_dir / "tables" / "wrong_case_summary.csv"
@@ -6396,6 +6432,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR,
             artifact_plan_name_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR,
+            artifact_plan_path_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PLAN_OUTPUT_ALIGNMENT_ERROR,

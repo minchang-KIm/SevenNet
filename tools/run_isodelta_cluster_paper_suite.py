@@ -6339,6 +6339,10 @@ def _require_pipeline_artifact_preparation_report(
             artifact.get("name"),
             f"artifact_preparation_report.artifacts[{index}].name",
         )
+        artifact_path = _as_json_string(
+            artifact.get("path"),
+            f"artifact_preparation_report.artifacts[{index}].path",
+        )
         required = _as_json_bool(
             artifact.get("required"),
             f"artifact_preparation_report.artifacts[{index}].required",
@@ -6374,6 +6378,7 @@ def _require_pipeline_artifact_preparation_report(
             PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR,
         )
         prepared_required_artifacts[artifact_name] = {
+            "path": artifact_path,
             "sha256": expected_digest,
             "actual_sha256": actual_digest,
         }
@@ -6498,12 +6503,16 @@ def _require_pipeline_plan_report(
     raw_artifacts = plan_payload.get("artifacts")
     _require(isinstance(raw_artifacts, list), "run_plan.artifacts must be a JSON array")
     verified_required_artifact_count = 0
-    planned_required_artifacts: dict[str, str] = {}
+    planned_required_artifacts: dict[str, dict[str, str]] = {}
     for index, raw_artifact in enumerate(raw_artifacts):
         artifact = _as_json_object(raw_artifact, f"run_plan.artifacts[{index}]")
         artifact_name = _as_json_string(
             artifact.get("name"),
             f"run_plan.artifacts[{index}].name",
+        )
+        artifact_path = _as_json_string(
+            artifact.get("path"),
+            f"run_plan.artifacts[{index}].path",
         )
         required = _as_json_bool(
             artifact.get("required"),
@@ -6554,7 +6563,10 @@ def _require_pipeline_plan_report(
             artifact_name not in planned_required_artifacts,
             PIPELINE_PLAN_ARTIFACTS_ERROR,
         )
-        planned_required_artifacts[artifact_name] = planned_digest
+        planned_required_artifacts[artifact_name] = {
+            "path": artifact_path,
+            "sha256": planned_digest,
+        }
         verified_required_artifact_count += 1
     _require(verified_required_artifact_count > 0, PIPELINE_PLAN_ARTIFACTS_ERROR)
     raw_cases = plan_payload.get("cases")
@@ -6632,13 +6644,25 @@ def _require_pipeline_artifact_plan_alignment(
         PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR,
     )
     for artifact_name in sorted(planned_names):
-        planned_digest = _require_sha256_digest(
+        planned_record = _as_json_object(
             planned_required_artifacts.get(artifact_name),
             f"run_plan_report.required_artifacts.{artifact_name}",
+        )
+        planned_path = _as_json_string(
+            planned_record.get("path"),
+            f"run_plan_report.required_artifacts.{artifact_name}.path",
+        )
+        planned_digest = _require_sha256_digest(
+            planned_record.get("sha256"),
+            f"run_plan_report.required_artifacts.{artifact_name}.sha256",
         )
         prepared_record = _as_json_object(
             prepared_required_artifacts.get(artifact_name),
             f"artifact_preparation_report.required_artifacts.{artifact_name}",
+        )
+        prepared_path = _as_json_string(
+            prepared_record.get("path"),
+            f"artifact_preparation_report.required_artifacts.{artifact_name}.path",
         )
         prepared_expected_digest = _require_sha256_digest(
             prepared_record.get("sha256"),
@@ -6649,7 +6673,8 @@ def _require_pipeline_artifact_plan_alignment(
             f"artifact_preparation_report.required_artifacts.{artifact_name}.actual_sha256",
         )
         _require(
-            prepared_expected_digest == planned_digest
+            prepared_path == planned_path
+            and prepared_expected_digest == planned_digest
             and prepared_actual_digest == planned_digest,
             PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR,
         )
