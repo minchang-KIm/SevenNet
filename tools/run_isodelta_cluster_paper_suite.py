@@ -486,6 +486,10 @@ PIPELINE_REPORT_COMMENT = (
     "IsoDelta-Halo pipeline report linking readiness, artifact preparation, "
     "preflight, run-plan, suite execution, and bundle-verification evidence."
 )
+OUTPUT_BUNDLE_VERIFICATION_COMMENT = (
+    "IsoDelta-Halo output-bundle verification report reopening generated paper "
+    "artifacts, source evidence, command logs, and provenance fingerprints."
+)
 SLURM_SCRIPT_VERIFICATION_COMMENT = (
     "IsoDelta-Halo SLURM launcher verification report checking scheduler "
     "headers, portable path variables, Python runtime provenance, shared "
@@ -2827,6 +2831,7 @@ def run_pipeline(
         )
     except ClusterSuiteError as exc:
         verification = {
+            GENERATED_REPORT_COMMENT_KEY: OUTPUT_BUNDLE_VERIFICATION_COMMENT,
             "status": PIPELINE_STATUS_FAILED,
             "summary_json": str(config.output_dir / SUMMARY_REPORT_NAME),
             "detail": str(exc),
@@ -5803,6 +5808,7 @@ def verify_output_bundle(bundle_or_summary_path: Path) -> dict[str, Any]:
             verified_log_count += 1
 
     return {
+        GENERATED_REPORT_COMMENT_KEY: OUTPUT_BUNDLE_VERIFICATION_COMMENT,
         "status": "passed",
         "summary_json": str(summary_path),
         "verified_artifact_count": verified_artifact_count,
@@ -7160,12 +7166,22 @@ def _require_pipeline_bundle_verification(
         f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.status",
     )
     if recorded_status != "passed":
+        _require_report_comment(
+            recorded_verification,
+            OUTPUT_BUNDLE_VERIFICATION_KEY,
+            OUTPUT_BUNDLE_VERIFICATION_COMMENT,
+        )
         _as_json_string(
             recorded_verification.get("detail"),
             f"{OUTPUT_BUNDLE_VERIFICATION_KEY}.detail",
         )
         return recorded_verification
     bundle_root = _pipeline_report_output_dir(pipeline_report_path, original_output_dir)
+    _require_report_comment(
+        recorded_verification,
+        OUTPUT_BUNDLE_VERIFICATION_KEY,
+        OUTPUT_BUNDLE_VERIFICATION_COMMENT,
+    )
     verification = verify_output_bundle(bundle_root)
     recorded_summary_path = Path(
         _as_json_string(

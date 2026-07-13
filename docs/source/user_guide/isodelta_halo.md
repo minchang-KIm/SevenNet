@@ -612,7 +612,10 @@ nonzero even when its diagnostic stage fingerprints are internally consistent.
 It also requires the full final-paper stage sequence, non-skipped stage
 fingerprints, and a passed `output_bundle_verification` object, so changing only
 the top-level status field cannot turn an incomplete run into publication
-evidence. Non-skipped stage fingerprints must point to present report files;
+evidence. The embedded output-bundle verification block must also keep its
+`report_comment`, so the nested publication gate remains self-describing when a
+pipeline report is copied into a paper artifact archive. Non-skipped stage
+fingerprints must point to present report files;
 an absent-file fingerprint is accepted only for a skipped artifact-preparation
 stage. Each `stages[*].report_path` entry must also match the paired
 `stage_report_fingerprints[*].report.path`, so the human-facing stage index
@@ -856,11 +859,12 @@ figures include a `<desc>` element, and JSON artifacts carry an
 `artifact_comment` or `report_comment` field. The stage JSON reports
 (`readiness_report.json`, `artifact_preparation_report.json`,
 `preflight_report.json`, `isodelta_cluster_paper_plan.json`, and
-`pipeline_report.json`) must also keep their `report_comment`; the pipeline
-verifier rejects a passed publication report when any required stage report no
-longer describes its evidence purpose. These comments are part of the evidence
-contract, not decoration: they tell a reviewer what the file means before the
-numbers are interpreted.
+`pipeline_report.json`) plus the embedded output-bundle verification result must
+also keep their `report_comment`; the pipeline verifier rejects a passed
+publication report when any required stage report or nested bundle-verification
+result no longer describes its evidence purpose. These comments are part of the
+evidence contract, not decoration: they tell a reviewer what the file means
+before the numbers are interpreted.
 
 Use `--collect-only` to regenerate tables, correlations, and figures from
 existing benchmark reports, external timing reports, and trace evidence without

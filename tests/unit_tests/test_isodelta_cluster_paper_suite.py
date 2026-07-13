@@ -1289,6 +1289,10 @@ class IsoDeltaClusterPaperSuiteTest(unittest.TestCase):
 
         self.assertEqual(verification["status"], "passed")
         self.assertEqual(
+            verification[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_COMMENT,
+        )
+        self.assertEqual(
             verification["verified_artifact_count"],
             expected_artifact_fingerprint_count,
         )
@@ -6278,6 +6282,26 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            bundle_verification_comment_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            del bundle_verification_comment_drift_pipeline_report[
+                isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY
+            ][isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY]
+            pipeline_report_path.write_text(
+                json.dumps(bundle_verification_comment_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                bundle_verification_comment_drift_error = str(exc)
+            else:
+                bundle_verification_comment_drift_error = ""
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             bundle_count_drift_errors: dict[str, str] = {}
             for count_key in isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_COUNT_KEYS:
                 count_drift_pipeline_report = json.loads(json.dumps(pipeline_report))
@@ -6394,6 +6418,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             ],
         )
         self.assertEqual(verification["status"], "passed")
+        self.assertEqual(
+            verification[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_COMMENT,
+        )
         self.assertEqual(len(stage_fingerprints), len(stage_names))
         self.assertEqual(pipeline_report_verification["status"], "passed")
         self.assertEqual(
@@ -6463,6 +6491,16 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             len(isodelta_cluster_suite.PIPELINE_PLAN_REQUIRED_PAPER_OUTPUT_KEYS),
         )
         self.assertEqual(pipeline_verification["status"], "passed")
+        self.assertEqual(
+            pipeline_verification[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_COMMENT,
+        )
+        self.assertEqual(
+            pipeline_report_verification[
+                isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_KEY
+            ][isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_COMMENT,
+        )
         self.assertEqual(
             pipeline_verification["verified_artifact_index_count"],
             verification["verified_artifact_index_count"],
@@ -6567,6 +6605,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_BUNDLE_SUMMARY_PATH_ALIGNMENT_ERROR,
             bundle_summary_path_drift_error,
+        )
+        self.assertIn(
+            "output_bundle_verification.report_comment",
+            bundle_verification_comment_drift_error,
         )
         for count_key, error in bundle_count_drift_errors.items():
             self.assertIn(count_key, error)
@@ -6879,6 +6921,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertEqual(verification_stage["status"], isodelta_cluster_suite.PIPELINE_STATUS_FAILED)
         self.assertIn("SHA-256 mismatch", verification_stage["detail"])
         self.assertEqual(pipeline_verification["status"], isodelta_cluster_suite.PIPELINE_STATUS_FAILED)
+        self.assertEqual(
+            pipeline_verification[isodelta_cluster_suite.GENERATED_REPORT_COMMENT_KEY],
+            isodelta_cluster_suite.OUTPUT_BUNDLE_VERIFICATION_COMMENT,
+        )
         self.assertIn("SHA-256 mismatch", pipeline_verification["detail"])
         self.assertEqual(len(stage_fingerprints), len(stage_names))
 

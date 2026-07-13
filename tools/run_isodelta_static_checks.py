@@ -2164,6 +2164,7 @@ def main() -> None:
         and "ARTIFACT_PREPARATION_REPORT_COMMENT" in cluster_suite
         and "PREFLIGHT_REPORT_COMMENT" in cluster_suite
         and "PIPELINE_REPORT_COMMENT" in cluster_suite
+        and "OUTPUT_BUNDLE_VERIFICATION_COMMENT" in cluster_suite
         and "RUN_PLAN_REPORT_COMMENT" in cluster_suite
         and "_require_report_comment" in cluster_suite
         and "PIPELINE_READINESS_CHECKS_ERROR" in cluster_suite
@@ -2240,6 +2241,7 @@ def main() -> None:
         and "artifact_plan_path_drift_error" in cluster_suite_test
         and "preflight_suite_drift_error" in cluster_suite_test
         and "preflight_artifact_path_drift_error" in cluster_suite_test
+        and "bundle_verification_comment_drift_error" in cluster_suite_test
         and "summary_threshold_drift_error" in cluster_suite_test
         and "PREFLIGHT_REPORT_COMMENT" in cluster_suite_test
         and "test_verify_pipeline_report_rejects_failed_pipeline_status"
@@ -2312,6 +2314,9 @@ def main() -> None:
         and "SLURM Python provenance" in doc
         and "experiment-report-check evidence counts" in doc
         and "failed or planned `pipeline_report.json` exits" in doc
+        and "embedded output-bundle verification block must also keep its"
+        in doc
+        and "nested publication gate remains self-describing" in doc
         and "full final-paper stage sequence" in doc
         and "non-skipped stage" in doc
         and "present report files" in doc
@@ -2370,6 +2375,8 @@ def main() -> None:
         and "manifest snapshot" in doc
         and "Generated paper artifacts are self-describing" in doc
         and "`artifact_comment` or `report_comment`" in doc
+        and "embedded output-bundle verification result" in doc
+        and "nested bundle-verification" in doc
         and "Every generated table must keep its explanatory comment" in doc
         and "expected `<desc>` description" in doc
         and "at least one finite measured speedup" in doc
