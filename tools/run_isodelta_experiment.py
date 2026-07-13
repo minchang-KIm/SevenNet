@@ -17,7 +17,7 @@ import platform
 from pathlib import Path
 import subprocess
 import sys
-from typing import Callable
+from typing import Any, Callable
 
 
 # All filenames and defaults are named so experimental acceptance criteria stay
@@ -68,6 +68,15 @@ FILE_FINGERPRINT_CHUNK_BYTES = 1_048_576
 GIT_METADATA_TIMEOUT_SECONDS = 10.0
 PATH_SEPARATOR = ", "
 LOG_DIR_NAME = "logs"
+COMMAND_LOG_STREAM_NAMES = ("stdout", "stderr")
+COMMAND_LOG_SIDECAR_SUFFIX = ".json"
+COMMAND_LOG_SIDECAR_FINGERPRINT_KEY = "sidecar_fingerprint"
+COMMAND_LOG_SIDECAR_PATH_KEY = "sidecar_path"
+EXPERIMENT_LOG_SIDECAR_SCHEMA_VERSION = "isodelta-experiment-log-sidecar-v1"
+EXPERIMENT_LOG_SIDECAR_COMMENT = (
+    "IsoDelta-Halo experiment command-log sidecar describing one raw stdout or "
+    "stderr stream without modifying captured output."
+)
 BENCHMARK_DIR_NAME = "benchmark"
 EXPERIMENT_REPORT_NAME = "isodelta_experiment_report.json"
 BENCHMARK_REPORT_NAME = "isodelta_benchmark_report.json"
@@ -164,8 +173,8 @@ class ExperimentCommandResult:
     returncode: int
     stdout_path: str
     stderr_path: str
-    stdout_fingerprint: dict[str, str | int | bool]
-    stderr_fingerprint: dict[str, str | int | bool]
+    stdout_fingerprint: dict[str, Any]
+    stderr_fingerprint: dict[str, Any]
 
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -384,6 +393,73 @@ def file_fingerprint(path: Path) -> dict[str, str | int | bool]:
     }
 
 
+def command_log_sidecar_path(log_path: Path) -> Path:
+    """Return the JSON sidecar path that describes one raw experiment log."""
+    return log_path.with_name(f"{log_path.name}{COMMAND_LOG_SIDECAR_SUFFIX}")
+
+
+def _command_log_sidecar_payload(
+    *,
+    log_path: Path,
+    command_name: str,
+    stream_name: str,
+) -> dict[str, Any]:
+    """Build the self-describing metadata payload for one experiment log."""
+    _require_valid_config(
+        stream_name in COMMAND_LOG_STREAM_NAMES,
+        f"stream_name must be one of {COMMAND_LOG_STREAM_NAMES}",
+    )
+    return {
+        "experiment_log_sidecar_schema_version": EXPERIMENT_LOG_SIDECAR_SCHEMA_VERSION,
+        GENERATED_REPORT_COMMENT_KEY: EXPERIMENT_LOG_SIDECAR_COMMENT,
+        "command_name": command_name,
+        "stream": stream_name,
+        "log_path": str(log_path),
+        "log_fingerprint": file_fingerprint(log_path),
+    }
+
+
+def write_command_log_sidecar(
+    *,
+    log_path: Path,
+    command_name: str,
+    stream_name: str,
+) -> Path:
+    """Write the JSON sidecar that makes a raw experiment log auditable."""
+    sidecar_path = command_log_sidecar_path(log_path)
+    sidecar_path.write_text(
+        json.dumps(
+            _command_log_sidecar_payload(
+                log_path=log_path,
+                command_name=command_name,
+                stream_name=stream_name,
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return sidecar_path
+
+
+def command_log_fingerprint(
+    path: Path,
+    *,
+    command_name: str,
+    stream_name: str,
+) -> dict[str, Any]:
+    """Return a log fingerprint plus its self-describing sidecar fingerprint."""
+    sidecar_path = command_log_sidecar_path(path)
+    return {
+        **file_fingerprint(path),
+        "command_name": command_name,
+        "stream": stream_name,
+        COMMAND_LOG_SIDECAR_PATH_KEY: str(sidecar_path),
+        COMMAND_LOG_SIDECAR_FINGERPRINT_KEY: file_fingerprint(sidecar_path),
+    }
+
+
 def collect_run_provenance() -> dict[str, str | bool | None]:
     """Collect driver provenance so experiment reports can be audited later."""
     git_status_short = _run_metadata_command(["git", "status", "--short"])
@@ -564,8 +640,26 @@ def _run_command(
     command.stdout_path.parent.mkdir(parents=True, exist_ok=True)
     command.stdout_path.write_text(completed.stdout, encoding="utf-8")
     command.stderr_path.write_text(completed.stderr, encoding="utf-8")
-    stdout_fingerprint = file_fingerprint(command.stdout_path)
-    stderr_fingerprint = file_fingerprint(command.stderr_path)
+    write_command_log_sidecar(
+        log_path=command.stdout_path,
+        command_name=command.name,
+        stream_name="stdout",
+    )
+    write_command_log_sidecar(
+        log_path=command.stderr_path,
+        command_name=command.name,
+        stream_name="stderr",
+    )
+    stdout_fingerprint = command_log_fingerprint(
+        command.stdout_path,
+        command_name=command.name,
+        stream_name="stdout",
+    )
+    stderr_fingerprint = command_log_fingerprint(
+        command.stderr_path,
+        command_name=command.name,
+        stream_name="stderr",
+    )
     return ExperimentCommandResult(
         name=command.name,
         argv=command.argv,

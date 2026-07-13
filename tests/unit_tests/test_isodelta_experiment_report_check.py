@@ -44,6 +44,16 @@ def _write_valid_report(root: Path) -> Path:
     stdout_path.parent.mkdir(parents=True)
     stdout_path.write_text("stage stdout\n", encoding="utf-8")
     stderr_path.write_text("", encoding="utf-8")
+    experiment_driver.write_command_log_sidecar(
+        log_path=stdout_path,
+        command_name="stage",
+        stream_name="stdout",
+    )
+    experiment_driver.write_command_log_sidecar(
+        log_path=stderr_path,
+        command_name="stage",
+        stream_name="stderr",
+    )
     report_path = root / "isodelta_experiment_report.json"
     payload = {
         "report_comment": experiment_driver.EXPERIMENT_REPORT_COMMENT,
@@ -62,8 +72,16 @@ def _write_valid_report(root: Path) -> Path:
                 "returncode": 0,
                 "stdout_path": str(stdout_path),
                 "stderr_path": str(stderr_path),
-                "stdout_fingerprint": experiment_driver.file_fingerprint(stdout_path),
-                "stderr_fingerprint": experiment_driver.file_fingerprint(stderr_path),
+                "stdout_fingerprint": experiment_driver.command_log_fingerprint(
+                    stdout_path,
+                    command_name="stage",
+                    stream_name="stdout",
+                ),
+                "stderr_fingerprint": experiment_driver.command_log_fingerprint(
+                    stderr_path,
+                    command_name="stage",
+                    stream_name="stderr",
+                ),
             }
         ],
     }
@@ -109,6 +127,17 @@ class IsoDeltaExperimentReportCheckTest(unittest.TestCase):
             stdout_path.write_text("changed stdout\n", encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "stdout_fingerprint.sha256"):
+                isodelta_experiment_report_check.validate_experiment_report(report_path)
+
+    def test_validate_experiment_report_rejects_missing_stdout_sidecar(self) -> None:
+        """A report should not pass after its stdout sidecar is removed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_path = _write_valid_report(Path(tmpdir))
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+            stdout_path = Path(payload["commands"][0]["stdout_path"])
+            experiment_driver.command_log_sidecar_path(stdout_path).unlink()
+
+            with self.assertRaisesRegex(ValueError, "sidecar"):
                 isodelta_experiment_report_check.validate_experiment_report(report_path)
 
     def test_main_writes_output_evidence_file(self) -> None:

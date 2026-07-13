@@ -1407,23 +1407,37 @@ def main() -> None:
         and "FINGERPRINT_ALGORITHM" in experiment
         and "FILE_FINGERPRINT_CHUNK_BYTES" in experiment
         and "file_fingerprint" in experiment
+        and "EXPERIMENT_LOG_SIDECAR_SCHEMA_VERSION" in experiment
+        and "EXPERIMENT_LOG_SIDECAR_COMMENT" in experiment
+        and "COMMAND_LOG_SIDECAR_FINGERPRINT_KEY" in experiment
+        and "command_log_sidecar_path" in experiment
+        and "write_command_log_sidecar" in experiment
+        and "command_log_fingerprint" in experiment
         and "stdout_fingerprint" in experiment
         and "stderr_fingerprint" in experiment
         and "EXPECTED_FINGERPRINT_ALGORITHM" in experiment_runner_test
+        and "EXPECTED_EXPERIMENT_LOG_SIDECAR_SCHEMA_VERSION"
+        in experiment_runner_test
+        and "sidecar_fingerprint" in experiment_runner_test
+        and "experiment_log_sidecar_schema_version" in experiment_runner_test
         and "EMPTY_SHA256_HEXDIGEST" in experiment_runner_test
         and 'command["stdout_fingerprint"]' in experiment_runner_test
         and 'command["stderr_fingerprint"]' in experiment_runner_test,
-        "experiment driver must fingerprint generated stdout and stderr logs",
+        "experiment driver must fingerprint generated stdout and stderr logs with sidecars",
     )
     _require(
         "EXPERIMENT_REPORT_CHECK_SCHEMA_VERSION" in experiment_report_check
         and "EXPERIMENT_REPORT_CHECK_COMMENT" in experiment_report_check
         and "validate_experiment_report" in experiment_report_check
         and "_check_fingerprint" in experiment_report_check
+        and "_check_command_log_sidecar" in experiment_report_check
         and "_write_evidence" in experiment_report_check
         and "--output" in experiment_report_check
-        and "experiment_driver.file_fingerprint" in experiment_report_check
+        and "experiment_driver.command_log_fingerprint" in experiment_report_check
+        and "COMMAND_LOG_SIDECAR_FINGERPRINT_KEY" in experiment_report_check
         and "stdout_fingerprint.sha256" in experiment_report_check_test
+        and "test_validate_experiment_report_rejects_missing_stdout_sidecar"
+        in experiment_report_check_test
         and "EXPECTED_CHECK_REPORT_COMMENT" in experiment_report_check_test
         and "test_main_writes_output_evidence_file" in experiment_report_check_test
         and "test_main_writes_failure_output_evidence_file"
@@ -1643,6 +1657,14 @@ def main() -> None:
         "run_isodelta_experiment.py" in doc
         and "isodelta_experiment_report.json" in doc,
         "IsoDelta-Halo guide must document the end-to-end experiment driver",
+    )
+    _require(
+        "`experiment_log_sidecar_schema_version`" in doc
+        and "experiment command-log sidecar" in doc
+        and "raw `log_fingerprint`" in doc
+        and "raw stdout/stderr stream stays unmodified" in doc
+        and "experiment log sidecar" in doc,
+        "IsoDelta-Halo guide must document experiment command-log sidecars",
     )
     _require(
         "Trace-specific gates" in doc

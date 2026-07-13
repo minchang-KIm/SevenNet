@@ -416,6 +416,10 @@ and run provenance.
 Each command record also carries `stdout_fingerprint` and `stderr_fingerprint`
 objects with SHA-256 digests and byte sizes for the generated log files, so a
 log edit after the run is visible from the archived experiment report.
+Those fingerprint objects also point to adjacent experiment command-log sidecar
+JSON files. Each sidecar carries
+`experiment_log_sidecar_schema_version`, `report_comment`, command name, stream
+name, original log path, and a nested raw `log_fingerprint`, so the raw stdout/stderr stream stays unmodified while the generated log remains self-describing.
 After moving or archiving the run directory, re-open the report and logs with:
 
 ```bash
@@ -425,7 +429,8 @@ python tools/check_isodelta_experiment_report.py \
 ```
 
 The checker exits nonzero if the driver report comment, provenance schema, or
-any command log fingerprint no longer matches the files on disk. Its optional
+any command log fingerprint or experiment log sidecar no longer matches the
+files on disk. Its optional
 `--output` JSON carries its own `report_comment`, schema version, status, and
 checked log count so the verification step can be archived beside the run.
 The driver rejects empty or impossible evidence settings before launching

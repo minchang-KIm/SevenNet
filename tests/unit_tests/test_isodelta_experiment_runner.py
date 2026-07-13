@@ -37,6 +37,11 @@ EXPECTED_EXPERIMENT_REPORT_COMMENT = (
     "IsoDelta-Halo experiment driver report recording launched benchmark, trace, "
     "and evidence-bundle commands, output paths, return codes, and run provenance."
 )
+EXPECTED_EXPERIMENT_LOG_SIDECAR_SCHEMA_VERSION = "isodelta-experiment-log-sidecar-v1"
+EXPECTED_EXPERIMENT_LOG_SIDECAR_COMMENT = (
+    "IsoDelta-Halo experiment command-log sidecar describing one raw stdout or "
+    "stderr stream without modifying captured output."
+)
 EXPECTED_FINGERPRINT_ALGORITHM = "sha256"
 EMPTY_SHA256_HEXDIGEST = hashlib.sha256(b"").hexdigest()
 MIN_DISTINCT_TRACE_MODELS_FOR_PORTABILITY = 2
@@ -275,9 +280,15 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
             hashlib.sha256(b"binary-smoke stdout").hexdigest(),
         )
         self.assertEqual(failed_command["stdout_fingerprint"]["byte_size"], 19)
+        self.assertTrue(
+            failed_command["stdout_fingerprint"]["sidecar_fingerprint"]["exists"]
+        )
         self.assertEqual(
             failed_command["stderr_fingerprint"]["sha256"],
             hashlib.sha256(b"binary-smoke stderr").hexdigest(),
+        )
+        self.assertTrue(
+            failed_command["stderr_fingerprint"]["sidecar_fingerprint"]["exists"]
         )
         self.assertEqual(
             report["provenance"]["report_schema_version"],
@@ -310,6 +321,18 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
                     runner=fake_runner,
                 )
             report = json.loads(config.experiment_report_path().read_text(encoding="utf-8"))
+            sidecar_payloads = {}
+            for command in report["commands"]:
+                sidecar_payloads[(command["name"], "stdout")] = json.loads(
+                    isodelta_experiment.command_log_sidecar_path(
+                        Path(command["stdout_path"])
+                    ).read_text(encoding="utf-8")
+                )
+                sidecar_payloads[(command["name"], "stderr")] = json.loads(
+                    isodelta_experiment.command_log_sidecar_path(
+                        Path(command["stderr_path"])
+                    ).read_text(encoding="utf-8")
+                )
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(len(executed), 4)
@@ -319,6 +342,8 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
         self.assertEqual(len(report["commands"]), 4)
         self.assertEqual(report["benchmark_report"], str(config.benchmark_report_path()))
         for command in report["commands"]:
+            stdout_sidecar = sidecar_payloads[(command["name"], "stdout")]
+            stderr_sidecar = sidecar_payloads[(command["name"], "stderr")]
             self.assertEqual(command["stdout_fingerprint"]["exists"], True)
             self.assertEqual(command["stderr_fingerprint"]["exists"], True)
             self.assertEqual(
@@ -335,6 +360,29 @@ class IsoDeltaExperimentRunnerTest(unittest.TestCase):
                 EMPTY_SHA256_HEXDIGEST,
             )
             self.assertEqual(command["stderr_fingerprint"]["byte_size"], 0)
+            self.assertTrue(
+                command["stdout_fingerprint"]["sidecar_fingerprint"]["exists"]
+            )
+            self.assertTrue(
+                command["stderr_fingerprint"]["sidecar_fingerprint"]["exists"]
+            )
+            self.assertEqual(
+                stdout_sidecar["experiment_log_sidecar_schema_version"],
+                EXPECTED_EXPERIMENT_LOG_SIDECAR_SCHEMA_VERSION,
+            )
+            self.assertEqual(
+                stdout_sidecar["report_comment"],
+                EXPECTED_EXPERIMENT_LOG_SIDECAR_COMMENT,
+            )
+            self.assertEqual(stdout_sidecar["command_name"], command["name"])
+            self.assertEqual(stdout_sidecar["stream"], "stdout")
+            self.assertEqual(stdout_sidecar["log_path"], command["stdout_path"])
+            self.assertEqual(
+                stdout_sidecar["log_fingerprint"]["sha256"],
+                command["stdout_fingerprint"]["sha256"],
+            )
+            self.assertEqual(stderr_sidecar["stream"], "stderr")
+            self.assertEqual(stderr_sidecar["command_name"], command["name"])
         self.assertIn("git_commit", report["provenance"])
         self.assertIn("python_executable", report["provenance"])
 

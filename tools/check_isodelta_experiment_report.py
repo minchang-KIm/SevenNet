@@ -40,6 +40,8 @@ EXISTS_KEY = "exists"
 ALGORITHM_KEY = "algorithm"
 SHA256_KEY = "sha256"
 BYTE_SIZE_KEY = "byte_size"
+COMMAND_LOG_SIDECAR_FINGERPRINT_KEY = experiment_driver.COMMAND_LOG_SIDECAR_FINGERPRINT_KEY
+COMMAND_LOG_SIDECAR_PATH_KEY = experiment_driver.COMMAND_LOG_SIDECAR_PATH_KEY
 STREAMS_PER_COMMAND = 2
 SUCCESS_RETURN_CODE = 0
 FAILURE_RETURN_CODE = 1
@@ -130,11 +132,20 @@ def _check_fingerprint(
     path_key: str,
     fingerprint_key: str,
     label: str,
+    *,
+    command_name: str,
+    stream_name: str,
 ) -> None:
     """Require a command log fingerprint to match the current filesystem."""
     path_text = _as_string(command.get(path_key), f"{label}.{path_key}")
     expected = _as_mapping(command.get(fingerprint_key), f"{label}.{fingerprint_key}")
-    actual = experiment_driver.file_fingerprint(_resolve_log_path(path_text))
+    recorded_log_path = Path(path_text)
+    log_path = _resolve_log_path(path_text)
+    actual = experiment_driver.command_log_fingerprint(
+        log_path,
+        command_name=command_name,
+        stream_name=stream_name,
+    )
     for key in (EXISTS_KEY, ALGORITHM_KEY, SHA256_KEY, BYTE_SIZE_KEY):
         if key == EXISTS_KEY:
             expected_value = _as_bool(expected.get(key), f"{label}.{fingerprint_key}.{key}")
@@ -146,17 +157,129 @@ def _check_fingerprint(
             expected_value == actual[key],
             f"{label}.{fingerprint_key}.{key} does not match {path_text}",
         )
+    expected_sidecar_path = _as_string(
+        expected.get(COMMAND_LOG_SIDECAR_PATH_KEY),
+        f"{label}.{fingerprint_key}.{COMMAND_LOG_SIDECAR_PATH_KEY}",
+    )
+    actual_sidecar_path = str(experiment_driver.command_log_sidecar_path(recorded_log_path))
+    _require(
+        expected_sidecar_path == actual_sidecar_path,
+        f"{label}.{fingerprint_key}.{COMMAND_LOG_SIDECAR_PATH_KEY} does not match {path_text}",
+    )
+    expected_sidecar = _as_mapping(
+        expected.get(COMMAND_LOG_SIDECAR_FINGERPRINT_KEY),
+        f"{label}.{fingerprint_key}.{COMMAND_LOG_SIDECAR_FINGERPRINT_KEY}",
+    )
+    actual_sidecar = experiment_driver.file_fingerprint(_resolve_log_path(expected_sidecar_path))
+    for key in (EXISTS_KEY, ALGORITHM_KEY, SHA256_KEY, BYTE_SIZE_KEY):
+        if key == EXISTS_KEY:
+            expected_value = _as_bool(
+                expected_sidecar.get(key),
+                f"{label}.{fingerprint_key}.{COMMAND_LOG_SIDECAR_FINGERPRINT_KEY}.{key}",
+            )
+        elif key == BYTE_SIZE_KEY:
+            expected_value = _as_int(
+                expected_sidecar.get(key),
+                f"{label}.{fingerprint_key}.{COMMAND_LOG_SIDECAR_FINGERPRINT_KEY}.{key}",
+            )
+        else:
+            expected_value = _as_string(
+                expected_sidecar.get(key),
+                f"{label}.{fingerprint_key}.{COMMAND_LOG_SIDECAR_FINGERPRINT_KEY}.{key}",
+            )
+        _require(
+            expected_value == actual_sidecar[key],
+            (
+                f"{label}.{fingerprint_key}."
+                f"{COMMAND_LOG_SIDECAR_FINGERPRINT_KEY}.{key} does not match "
+                f"{expected_sidecar_path}"
+            ),
+        )
+    _check_command_log_sidecar(
+        sidecar_path=_resolve_log_path(expected_sidecar_path),
+        expected_log_path=path_text,
+        expected_log_fingerprint=expected,
+        command_name=command_name,
+        stream_name=stream_name,
+        label=f"{label}.{fingerprint_key}",
+    )
+
+
+def _check_command_log_sidecar(
+    *,
+    sidecar_path: Path,
+    expected_log_path: str,
+    expected_log_fingerprint: dict[str, Any],
+    command_name: str,
+    stream_name: str,
+    label: str,
+) -> None:
+    """Require a sidecar JSON file to describe the matching raw log stream."""
+    payload = _load_json_object(sidecar_path)
+    schema_version = _as_string(
+        payload.get("experiment_log_sidecar_schema_version"),
+        f"{label}.sidecar.experiment_log_sidecar_schema_version",
+    )
+    _require(
+        schema_version == experiment_driver.EXPERIMENT_LOG_SIDECAR_SCHEMA_VERSION,
+        f"{label}.sidecar schema version does not match",
+    )
+    report_comment = _as_string(
+        payload.get(GENERATED_REPORT_COMMENT_KEY),
+        f"{label}.sidecar.{GENERATED_REPORT_COMMENT_KEY}",
+    )
+    _require(
+        report_comment == experiment_driver.EXPERIMENT_LOG_SIDECAR_COMMENT,
+        f"{label}.sidecar.{GENERATED_REPORT_COMMENT_KEY} must describe command-log evidence",
+    )
+    _require(
+        _as_string(payload.get("command_name"), f"{label}.sidecar.command_name")
+        == command_name,
+        f"{label}.sidecar.command_name does not match",
+    )
+    _require(
+        _as_string(payload.get("stream"), f"{label}.sidecar.stream") == stream_name,
+        f"{label}.sidecar.stream does not match",
+    )
+    _require(
+        _as_string(payload.get("log_path"), f"{label}.sidecar.log_path")
+        == expected_log_path,
+        f"{label}.sidecar.log_path does not match",
+    )
+    sidecar_log_fingerprint = _as_mapping(
+        payload.get("log_fingerprint"),
+        f"{label}.sidecar.log_fingerprint",
+    )
+    for key in (EXISTS_KEY, ALGORITHM_KEY, SHA256_KEY, BYTE_SIZE_KEY):
+        _require(
+            sidecar_log_fingerprint.get(key) == expected_log_fingerprint.get(key),
+            f"{label}.sidecar.log_fingerprint.{key} does not match",
+        )
 
 
 def _check_command(command: Any, index: int) -> None:
     """Validate one experiment command record."""
     label = f"{COMMANDS_KEY}[{index}]"
     command_record = _as_mapping(command, label)
-    _as_string(command_record.get("name"), f"{label}.name")
+    command_name = _as_string(command_record.get("name"), f"{label}.name")
     _as_sequence(command_record.get(ARGV_KEY), f"{label}.{ARGV_KEY}")
     _as_int(command_record.get(RETURNCODE_KEY), f"{label}.{RETURNCODE_KEY}")
-    _check_fingerprint(command_record, STDOUT_PATH_KEY, STDOUT_FINGERPRINT_KEY, label)
-    _check_fingerprint(command_record, STDERR_PATH_KEY, STDERR_FINGERPRINT_KEY, label)
+    _check_fingerprint(
+        command_record,
+        STDOUT_PATH_KEY,
+        STDOUT_FINGERPRINT_KEY,
+        label,
+        command_name=command_name,
+        stream_name="stdout",
+    )
+    _check_fingerprint(
+        command_record,
+        STDERR_PATH_KEY,
+        STDERR_FINGERPRINT_KEY,
+        label,
+        command_name=command_name,
+        stream_name="stderr",
+    )
 
 
 def validate_experiment_report(report_path: Path) -> dict[str, object]:
