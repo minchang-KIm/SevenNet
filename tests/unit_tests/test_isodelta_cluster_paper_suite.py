@@ -970,6 +970,7 @@ def _pipeline_success_stage_statuses() -> list[str]:
 
 def _pipeline_preflight_report(
     *,
+    suite_record: dict[str, object],
     expected_gpus: int = isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
     detected_gpus: int | None = isodelta_cluster_suite.DEFAULT_EXPECTED_GPU_COUNT,
     skip_gpu_check: bool = False,
@@ -988,6 +989,18 @@ def _pipeline_preflight_report(
         "status": isodelta_cluster_suite.PREFLIGHT_STATUS_PASSED,
         "skip_gpu_check": skip_gpu_check,
         "allow_gpu_mismatch": allow_gpu_mismatch,
+        "suite": {
+            "name": suite_record["name"],
+            "manifest_path": suite_record["manifest_path"],
+            "manifest": suite_record["manifest"],
+            "output_dir": suite_record["output_dir"],
+            "expected_gpus": suite_record["expected_gpus"],
+            "required_models": suite_record["required_models"],
+            "min_trace_count": suite_record["min_trace_count"],
+            "min_distinct_trace_models": suite_record["min_distinct_trace_models"],
+            "require_artifact_sha256": suite_record["require_artifact_sha256"],
+            "runtime_overrides": suite_record["runtime_overrides"],
+        },
         "gpu_check": {
             "expected_gpus": expected_gpus,
             "detected_gpus": detected_gpus,
@@ -6107,6 +6120,43 @@ required_by = ["SevenNet", "MACE", "NequIP"]
                 json.dumps(pipeline_report),
                 encoding="utf-8",
             )
+            preflight_suite_drift_report = json.loads(json.dumps(preflight_report))
+            preflight_suite_drift_report["suite"]["output_dir"] = str(
+                output_dir / "wrong_preflight_output"
+            )
+            preflight_report_path.write_text(
+                json.dumps(preflight_suite_drift_report),
+                encoding="utf-8",
+            )
+            preflight_stage_index = stage_names.index(
+                isodelta_cluster_suite.PIPELINE_STAGE_PREFLIGHT
+            )
+            preflight_suite_drift_pipeline_report = json.loads(
+                json.dumps(pipeline_report)
+            )
+            preflight_suite_drift_pipeline_report[
+                isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
+            ][preflight_stage_index]["report"] = (
+                isodelta_cluster_suite.generated_artifact_record(preflight_report_path)
+            )
+            pipeline_report_path.write_text(
+                json.dumps(preflight_suite_drift_pipeline_report),
+                encoding="utf-8",
+            )
+            try:
+                isodelta_cluster_suite.verify_pipeline_report(pipeline_report_path)
+            except isodelta_cluster_suite.ClusterSuiteError as exc:
+                preflight_suite_drift_error = str(exc)
+            else:
+                preflight_suite_drift_error = ""
+            preflight_report_path.write_text(
+                preflight_report_text,
+                encoding="utf-8",
+            )
+            pipeline_report_path.write_text(
+                json.dumps(pipeline_report),
+                encoding="utf-8",
+            )
             preflight_artifact_path_drift_report = json.loads(
                 json.dumps(preflight_report)
             )
@@ -6119,9 +6169,6 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             )
             preflight_artifact_path_drift_pipeline_report = json.loads(
                 json.dumps(pipeline_report)
-            )
-            preflight_stage_index = stage_names.index(
-                isodelta_cluster_suite.PIPELINE_STAGE_PREFLIGHT
             )
             preflight_artifact_path_drift_pipeline_report[
                 isodelta_cluster_suite.STAGE_REPORT_FINGERPRINTS_KEY
@@ -6377,6 +6424,12 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             pipeline_report_verification["readiness_report"]["verified_check_count"],
             len(isodelta_cluster_suite.FINAL_PAPER_READINESS_CHECK_NAMES),
         )
+        self.assertEqual(
+            pipeline_report_verification["preflight_report"][
+                "verified_suite_field_count"
+            ],
+            len(isodelta_cluster_suite.PIPELINE_STAGE_SUITE_ALIGNMENT_KEYS),
+        )
         self.assertGreaterEqual(
             pipeline_report_verification["artifact_preparation_report"][
                 "verified_required_artifact_count"
@@ -6498,6 +6551,10 @@ required_by = ["SevenNet", "MACE", "NequIP"]
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_ARTIFACT_PLAN_ALIGNMENT_ERROR,
             artifact_plan_path_drift_error,
+        )
+        self.assertIn(
+            isodelta_cluster_suite.PIPELINE_PREFLIGHT_SUITE_ERROR,
+            preflight_suite_drift_error,
         )
         self.assertIn(
             isodelta_cluster_suite.PIPELINE_PREFLIGHT_ARTIFACT_ALIGNMENT_ERROR,
@@ -7244,6 +7301,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             report_paths[2].write_text(
                 json.dumps(
                     _pipeline_preflight_report(
+                        suite_record=suite_record,
                         detected_gpus=None,
                         skip_gpu_check=True,
                         skipped=True,
@@ -7333,6 +7391,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             report_paths[2].write_text(
                 json.dumps(
                     _pipeline_preflight_report(
+                        suite_record=suite_record,
                         environment_snapshot_path=preflight_snapshot_path
                     )
                 ),
@@ -7423,6 +7482,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             report_paths[2].write_text(
                 json.dumps(
                     _pipeline_preflight_report(
+                        suite_record=suite_record,
                         environment_snapshot_path=preflight_snapshot_path
                     )
                 ),
@@ -7510,6 +7570,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             report_paths[2].write_text(
                 json.dumps(
                     _pipeline_preflight_report(
+                        suite_record=suite_record,
                         environment_snapshot_path=preflight_snapshot_path
                     )
                 ),
@@ -7603,6 +7664,7 @@ required_by = ["SevenNet", "MACE", "NequIP"]
             report_paths[2].write_text(
                 json.dumps(
                     _pipeline_preflight_report(
+                        suite_record=suite_record,
                         environment_snapshot_path=preflight_snapshot_path
                     )
                 ),

@@ -635,21 +635,23 @@ Runtime overrides are limited to known keys, and a passed publication report may
 only record `ablation_mode = "paired"`; a one-sided ablation override must stay
 in the ablation-only path instead of being accepted as final paper evidence. It
 also reopens the fingerprinted readiness report and requires every final-paper readiness check to be present and passed.
-The readiness report, artifact-preparation report, and run plan must each carry
-the same suite name, manifest path, manifest SHA-256 digest, manifest byte size,
-output directory, requested GPU count, required model scope, trace thresholds, runtime overrides, and artifact SHA gate as the pipeline suite record, so a
-stage report copied from a different manifest cannot pass by sharing only the
-same output directory or status label.
+The readiness report, artifact-preparation report, preflight report, and run
+plan must each carry the same suite name, manifest path, manifest SHA-256 digest,
+manifest byte size, output directory, requested GPU count, required model scope,
+trace thresholds, runtime overrides, and artifact SHA gate as the pipeline suite
+record, so a stage report copied from a different manifest cannot pass by
+sharing only the same output directory or status label.
 It reopens the fingerprinted artifact preparation report, requires `dry_run = false`,
 and checks `missing_required_artifacts` plus each required artifact SHA-256 digest.
 The verifier then compares those prepared required artifact names, paths, and
 SHA-256 digests with the fingerprinted run plan, so a pipeline cannot pass by
 preparing a different dataset or checkpoint path than the one scheduled for the
 paper run.
-The fingerprinted preflight report must also contain matching required artifact
-download records, including path, expected SHA-256, and actual SHA-256. This
-closes the practical gap between "the dataset was prepared" and "the dataset was
-the one preflight actually checked" before the 8-GPU paper run proceeds.
+The fingerprinted preflight report must also carry that same suite metadata and
+contain matching required artifact download records, including path, expected
+SHA-256, and actual SHA-256. This closes the practical gap between "the dataset
+was prepared" and "the dataset was the one preflight actually checked" before
+the 8-GPU paper run proceeds.
 It also reopens the fingerprinted run plan report, requires final-paper execution modes,
 checks `gpu_check_planned`, verifies required model case plans, and compares
 `run_plan.paper_outputs` against the summary artifact index. That comparison

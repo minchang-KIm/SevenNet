@@ -214,6 +214,9 @@ PIPELINE_PREFLIGHT_GPU_MISMATCH_ERROR = (
 PIPELINE_PREFLIGHT_GPU_COUNT_ERROR = (
     "passed pipeline preflight report must detect the suite expected GPU count"
 )
+PIPELINE_PREFLIGHT_SUITE_ERROR = (
+    "passed pipeline preflight report suite metadata must match the pipeline suite"
+)
 PIPELINE_PREFLIGHT_ENVIRONMENT_SNAPSHOT_BUNDLE_ERROR = (
     "passed pipeline output bundle must archive the preflight environment snapshot"
 )
@@ -6958,7 +6961,7 @@ def _require_pipeline_preflight_gpu_check(
     suite_record: dict[str, Any],
     *,
     original_output_dir: Path,
-) -> tuple[dict[str, Any], Path, dict[str, dict[str, str]]]:
+) -> tuple[dict[str, Any], Path, dict[str, dict[str, str]], dict[str, Any]]:
     """Verify the preflight stage proved the requested GPU allocation."""
     preflight_report_path = stage_report_paths.get(PIPELINE_STAGE_PREFLIGHT)
     _require(
@@ -6989,6 +6992,26 @@ def _require_pipeline_preflight_gpu_check(
     _require(
         preflight_status == PREFLIGHT_STATUS_PASSED,
         "passed pipeline preflight report status must be 'passed'",
+    )
+    preflight_suite = _as_json_object(
+        preflight_payload.get("suite"),
+        "preflight_report.suite",
+    )
+    verified_manifest_field_count = _require_suite_manifest_alignment(
+        _as_json_object(
+            preflight_suite.get("manifest"),
+            "preflight_report.suite.manifest",
+        ),
+        _as_json_object(suite_record.get("manifest"), "suite.manifest"),
+        stage_label="preflight_report.suite.manifest",
+        suite_label="suite.manifest",
+        error_message=PIPELINE_PREFLIGHT_SUITE_ERROR,
+    )
+    verified_suite_field_count = _require_stage_suite_metadata_alignment(
+        preflight_suite,
+        suite_record,
+        stage_label="preflight_report.suite",
+        error_message=PIPELINE_PREFLIGHT_SUITE_ERROR,
     )
     _require(
         not _as_json_bool(
@@ -7054,7 +7077,18 @@ def _require_pipeline_preflight_gpu_check(
     preflight_required_artifacts = _require_pipeline_preflight_required_artifacts(
         preflight_payload,
     )
-    return gpu_check, preflight_environment_snapshot_path, preflight_required_artifacts
+    preflight_report = {
+        "status": preflight_status,
+        "preflight_report": str(preflight_report_path),
+        "verified_manifest_field_count": verified_manifest_field_count,
+        "verified_suite_field_count": verified_suite_field_count,
+    }
+    return (
+        gpu_check,
+        preflight_environment_snapshot_path,
+        preflight_required_artifacts,
+        preflight_report,
+    )
 
 
 def _require_pipeline_suite_metadata(
@@ -7372,6 +7406,7 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         preflight_gpu_check,
         preflight_environment_snapshot_path,
         preflight_required_artifacts,
+        preflight_report,
     ) = _require_pipeline_preflight_gpu_check(
         stage_report_paths,
         suite_record,
@@ -7436,6 +7471,7 @@ def verify_pipeline_report(pipeline_report_path: Path) -> dict[str, Any]:
         "readiness_report": readiness_report,
         "artifact_preparation_report": artifact_preparation_report,
         "run_plan_report": run_plan_report,
+        "preflight_report": preflight_report,
         "verified_required_artifact_alignment_count": (
             verified_required_artifact_alignment_count
         ),

@@ -2152,6 +2152,7 @@ def main() -> None:
         and "PIPELINE_GPU_MISMATCH_ALLOWED_ERROR" in cluster_suite
         and "PIPELINE_PREFLIGHT_GPU_CHECK_REQUIRED_ERROR" in cluster_suite
         and "PIPELINE_PREFLIGHT_GPU_COUNT_ERROR" in cluster_suite
+        and "PIPELINE_PREFLIGHT_SUITE_ERROR" in cluster_suite
         and "PIPELINE_ARTIFACT_PREPARATION_ARTIFACTS_ERROR" in cluster_suite
         and "PIPELINE_PLAN_MODES_ERROR" in cluster_suite
         and "PIPELINE_PLAN_CASES_ERROR" in cluster_suite
@@ -2194,6 +2195,7 @@ def main() -> None:
         and "suite.manifest.size_bytes" in cluster_suite
         and "readiness_report.suite.manifest" in cluster_suite
         and "artifact_preparation_report.suite.manifest" in cluster_suite
+        and "preflight_report.suite.manifest" in cluster_suite
         and "run_plan.suite.manifest" in cluster_suite
         and "require_artifact_sha256" in cluster_suite
         and "output_dir" in cluster_suite
@@ -2236,6 +2238,7 @@ def main() -> None:
         and "plan_threshold_drift_error" in cluster_suite_test
         and "artifact_plan_name_drift_error" in cluster_suite_test
         and "artifact_plan_path_drift_error" in cluster_suite_test
+        and "preflight_suite_drift_error" in cluster_suite_test
         and "preflight_artifact_path_drift_error" in cluster_suite_test
         and "summary_threshold_drift_error" in cluster_suite_test
         and "PREFLIGHT_REPORT_COMMENT" in cluster_suite_test
@@ -2313,7 +2316,7 @@ def main() -> None:
         and "non-skipped stage" in doc
         and "present report files" in doc
         and "manifest path, SHA-256, byte size" in doc
-        and "readiness report, artifact-preparation report, and run plan"
+        and "readiness report, artifact-preparation report, preflight report, and run"
         in doc
         and "same suite name, manifest path, manifest SHA-256 digest"
         in doc
@@ -2323,7 +2326,9 @@ def main() -> None:
         in doc
         and "different dataset or checkpoint path than the one scheduled"
         in doc
-        and "preflight report must also contain matching required artifact"
+        and "preflight report must also carry that same suite metadata"
+        in doc
+        and "contain matching required artifact"
         in doc
         and "the one preflight actually checked" in doc
         and "skipped artifact-preparation" in doc
