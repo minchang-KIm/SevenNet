@@ -4939,6 +4939,46 @@ trace_evidence = ["sevennet_trace.json"]
         ):
             isodelta_cluster_suite.validate_suite_config(config)
 
+    def test_manifest_validation_rejects_model_scoped_artifact_mismatch(self) -> None:
+        """Case artifact references should match the artifact's model scope."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "suite.toml"
+            manifest_path.write_text(
+                """
+[suite]
+name = "model-scoped-artifact-mismatch"
+required_models = ["SevenNet", "MACE"]
+
+[[artifacts]]
+name = "sevennet-dataset"
+path = "sevennet-data.ext"
+required_by = ["SevenNet"]
+
+[[cases]]
+name = "sevennet"
+model = "SevenNet"
+kind = "trace_only"
+trace_evidence = ["sevennet_trace.json"]
+artifacts = ["sevennet-dataset"]
+
+[[cases]]
+name = "mace"
+model = "MACE"
+kind = "external_pair"
+disabled_command = "python run_mace.py --mode baseline"
+enabled_command = "python run_mace.py --mode isodelta"
+artifacts = ["sevennet-dataset"]
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+        with self.assertRaisesRegex(
+            isodelta_cluster_suite.ClusterSuiteError,
+            "artifacts not declared for model MACE",
+        ):
+            isodelta_cluster_suite.validate_suite_config(config)
+
     def test_manifest_validation_requires_sha256_for_required_artifacts_when_enabled(self) -> None:
         """Final paper manifests can require immutable digests for all inputs."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -7956,6 +7996,69 @@ artifacts = ["dataset"]
         self.assertEqual(report["status"], "ready")
         self.assertTrue(all(check["passed"] for check in report["checks"]))
         self.assertEqual(exit_code, 0)
+
+    def test_readiness_check_rejects_required_model_without_artifact_scope(self) -> None:
+        """Every final-paper model should be tied to a materialized input artifact."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_path = root / "source-data.bin"
+            source_path.write_bytes(b"strict cluster input")
+            digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            manifest_path = root / "suite.toml"
+            manifest_path.write_text(
+                f"""
+[suite]
+name = "partial-artifact-scope-suite"
+output_dir = "{(root / "paper_outputs").as_posix()}"
+expected_gpus = 8
+required_models = ["SevenNet", "MACE", "NequIP"]
+require_artifact_sha256 = true
+repeat_count = 3
+min_speedup_95ci_lower_bound = 1.0
+
+[[artifacts]]
+name = "sevennet-dataset"
+path = "{(root / "downloaded.bin").as_posix()}"
+url = "{source_path.as_uri()}"
+sha256 = "{digest}"
+required_by = ["SevenNet"]
+
+[[cases]]
+name = "sevennet-ready"
+model = "SevenNet"
+kind = "sevennet_lammps"
+preflight_command = 'python -c "import sevenn"'
+lammps_command = "mpiexec -n 8 lmp"
+input = "inputs/in.sevennet"
+artifacts = ["sevennet-dataset"]
+
+[[cases]]
+name = "mace-ready"
+model = "MACE"
+kind = "external_pair"
+preflight_command = 'python -c "import mace"'
+disabled_command = "python run_mace.py --mode baseline"
+enabled_command = "python run_mace.py --mode isodelta"
+
+[[cases]]
+name = "nequip-ready"
+model = "NequIP"
+kind = "external_pair"
+preflight_command = 'python -c "import nequip"'
+disabled_command = "python run_nequip.py --mode baseline"
+enabled_command = "python run_nequip.py --mode isodelta"
+""",
+                encoding="utf-8",
+            )
+            config = isodelta_cluster_suite.load_manifest(manifest_path)
+
+            report = isodelta_cluster_suite.build_readiness_report(config)
+            failed_checks = {
+                check["name"] for check in report["checks"] if not check["passed"]
+            }
+
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("required_model_artifact_scope", failed_checks)
 
     def test_readiness_check_rejects_one_sided_sevennet_ablation(self) -> None:
         """Final paper readiness must not accept one-sided SevenNet timings."""

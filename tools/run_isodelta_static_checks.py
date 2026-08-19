@@ -1808,6 +1808,11 @@ def main() -> None:
         and "test_pipeline_stops_when_preflight_fails" in cluster_suite_test
         and "test_pipeline_reports_bundle_verification_failure" in cluster_suite_test
         and "--verify-pipeline-report" in cluster_suite_test
+        and "test_manifest_validation_rejects_model_scoped_artifact_mismatch"
+        in cluster_suite_test
+        and "test_readiness_check_rejects_required_model_without_artifact_scope"
+        in cluster_suite_test
+        and "required_model_artifact_scope" in cluster_suite
         and "stage_path_drift_error" in cluster_suite_test
         and "summary_stage_path_drift_error" in cluster_suite_test
         and "wrong_stage_summary.json" in cluster_suite_test
@@ -2353,6 +2358,8 @@ def main() -> None:
         and "SevenNet, MACE, and NequIP" in doc
         and "`require_artifact_sha256 = true`" in doc
         and "64-character SHA-256 digest" in doc
+        and "non-empty `required_by` list" in doc
+        and "materializable required artifact" in doc
         and "`--readiness-check`" in doc
         and "`--prepare-artifacts`" in doc
         and "`--preflight-only`" in doc

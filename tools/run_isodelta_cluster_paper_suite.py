@@ -82,6 +82,7 @@ FINAL_PAPER_READINESS_CHECK_NAMES = (
     "artifact_sha256_gate",
     "required_artifacts_declared",
     "required_artifacts_materializable",
+    "required_model_artifact_scope",
     "artifact_template_markers_removed",
     "paired_case_preflights",
     "paired_case_repeats",
@@ -1560,6 +1561,7 @@ def validate_suite_config(config: SuiteConfig) -> None:
         "manifest is missing required model cases: " + MODEL_NAME_JOINER.join(missing_models),
     )
     artifact_name_set = set(artifact_names)
+    artifacts_by_name = {artifact.name: artifact for artifact in config.artifacts}
     for artifact in config.artifacts:
         _validate_optional_sha256(artifact.sha256, f"{artifact.name}: sha256")
         _require(
@@ -1583,6 +1585,18 @@ def validate_suite_config(config: SuiteConfig) -> None:
         _require(
             not missing_artifacts,
             f"{case.name}: unknown artifacts: " + MODEL_NAME_JOINER.join(missing_artifacts),
+        )
+        model_scoped_artifact_mismatches = [
+            artifact_name
+            for artifact_name in case.artifacts
+            if artifact_name in artifacts_by_name
+            and artifacts_by_name[artifact_name].required_by
+            and case.model not in artifacts_by_name[artifact_name].required_by
+        ]
+        _require(
+            not model_scoped_artifact_mismatches,
+            f"{case.name}: artifacts not declared for model {case.model}: "
+            + MODEL_NAME_JOINER.join(model_scoped_artifact_mismatches),
         )
         if case.kind == "sevennet_lammps":
             _require(bool(case.lammps_command), f"{case.name}: lammps_command is required")
@@ -1747,6 +1761,36 @@ def build_readiness_report(config: SuiteConfig) -> dict[str, Any]:
             "missing path and URL: " + MODEL_NAME_JOINER.join(missing_artifact_sources)
             if missing_artifact_sources
             else "required artifacts exist locally or have a download URL",
+        )
+    )
+    materializable_required_artifacts = {
+        artifact.name: artifact
+        for artifact in required_artifacts
+        if artifact.path.exists() or artifact.url is not None
+    }
+    paired_models_with_required_artifacts = {
+        case.model
+        for case in paired_cases
+        for artifact_name in case.artifacts
+        if artifact_name in materializable_required_artifacts
+        and (
+            not materializable_required_artifacts[artifact_name].required_by
+            or case.model in materializable_required_artifacts[artifact_name].required_by
+        )
+    }
+    missing_model_artifact_scope = [
+        model
+        for model in FINAL_PAPER_REQUIRED_MODELS
+        if model not in paired_models_with_required_artifacts
+    ]
+    checks.append(
+        _readiness_record(
+            "required_model_artifact_scope",
+            not missing_model_artifact_scope,
+            "missing required artifact scope for models: "
+            + MODEL_NAME_JOINER.join(missing_model_artifact_scope)
+            if missing_model_artifact_scope
+            else "each required model has at least one materializable required artifact",
         )
     )
 

@@ -499,7 +499,11 @@ checks SHA-256 digests when a `sha256` value is present. The default manifest
 gate requires cases for `SevenNet`, `MACE`, and `NequIP`, so a portability
 experiment cannot accidentally omit one model family. Artifact `required_by`
 entries are also checked against the manifest's case model names, which catches
-misspelled model labels before a cluster job starts.
+misspelled model labels before a cluster job starts. If an artifact has a
+non-empty `required_by` list, only cases with one of those model names may
+reference it; leave `required_by` empty only for truly shared inputs. This keeps
+a MACE or NequIP timing row from silently reusing a SevenNet-only dataset or
+checkpoint just because the artifact name looked plausible.
 For final paper runs, keep `require_artifact_sha256 = true` in the generated
 template. With that gate enabled, every required dataset, checkpoint, input
 deck, or runtime bundle must carry a full 64-character SHA-256 digest before the
@@ -794,7 +798,7 @@ python tools/run_isodelta_cluster_paper_suite.py \
   --readiness-check
 ```
 
-The `--readiness-check` mode fails if the manifest is still in template form, requests fewer than 8 GPUs, omits SevenNet/MACE/NequIP, uses `trace_only` instead of paired enabled/disabled cases for the required model families, uses one-sided SevenNet or external_pair ablation for a final-paper timing case, leaves required artifacts without SHA-256 protection, omits case preflight commands, or lacks `min_speedup_95ci_lower_bound` gates for paired timing claims. The JSON output lists every passed and failed readiness item so the cluster job is not submitted until the paper claim is auditable.
+The `--readiness-check` mode fails if the manifest is still in template form, requests fewer than 8 GPUs, omits SevenNet/MACE/NequIP, uses `trace_only` instead of paired enabled/disabled cases for the required model families, uses one-sided SevenNet or external_pair ablation for a final-paper timing case, leaves required artifacts without SHA-256 protection, fails to connect each required model's paired case to at least one materializable required artifact, omits case preflight commands, or lacks `min_speedup_95ci_lower_bound` gates for paired timing claims. The JSON output lists every passed and failed readiness item so the cluster job is not submitted until the paper claim is auditable.
 
 Run the complete suite on the cluster:
 
